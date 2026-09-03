@@ -13,7 +13,7 @@
 
 ## 4. GitHub (после подтверждения владельца)
 
-- [ ] 4.1 Свежий initial commit в `Pri-Fly/github`, создать публичный `StenHigh/prifly`, push `main`; проверить `gh repo view` и зелёный `verify`.
+- [x] 4.1 Свежий initial commit в `Pri-Fly/github`, создать публичный `StenHigh/prifly`, push `main`; проверить `gh repo view` и зелёный `verify` (`8bb73d0` + fix fixture `project-launch`, run `33758316245` success).
 - [ ] 4.2 Настроить environment `release` с required reviewer, variable `PRIFLY_RELEASE_PUBLIC_KEY`, ruleset на теги `v*`; owner добавляет secret `PRIFLY_RELEASE_SIGNING_KEY`; проверить через `gh api`.
 - [ ] 4.3 Tag `v0.6.0`, approve publication, проверить installer с GitHub на darwin/arm64 и linux/amd64 (`prifly version`, `prifly update` = up to date).
 - [ ] 4.4 Перевести `prifly-workflows` и `prifly-aif-workflows` (README-ссылки, installer URL в CI) на GitHub; проверить зелёный CI AIF-репозитория.

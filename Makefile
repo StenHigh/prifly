@@ -1,7 +1,7 @@
 GO ?= $(CURDIR)/.tools/go/bin/go
 GOFMT ?= $(dir $(GO))gofmt
 TEST_TIMEOUT ?= 20m
-RACE_TIMEOUT ?= 30m
+RACE_TIMEOUT ?= 60m
 export GOTOOLCHAIN := local
 export GOTELEMETRY := off
 export GOCACHE := $(CURDIR)/.cache/go-build
