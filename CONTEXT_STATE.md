@@ -51,6 +51,12 @@
 
 ## Следующие шаги
 
+- Релиз `v0.7.0` (2026-09-03) выпущен из GitHub Actions на коммите `d19d537`:
+  именованные отказы приёма отчёта, предпроверка до записи candidate, захват
+  деревьев по объявленным bindings. Change `fix-assisted-submit-diagnostics`
+  заархивирован, spec `cli-protocol` синхронизирована. Обе pilot-сессии
+  оповещены.
+- Следующий change — `improve-cli-discoverability` по очереди ниже.
 - `harden-authority-reliability-and-performance` готов к
   `/openspec-apply-change` (0/51; delta `release-distribution` перебазирована
   на GitHub-текст, `openspec validate --strict` зелёный).
