@@ -54,6 +54,31 @@ func validProblemCode(s string) bool {
 	return true
 }
 
+// leafError returns the error whose own text may be read. DiagnosticError only
+// re-presents its cause, so it adds no text of its own and is transparent here.
+func leafError(err error) error {
+	var occurrence *DiagnosticError
+	if errors.As(err, &occurrence) && occurrence.Err != nil {
+		return leafError(occurrence.Err)
+	}
+	return err
+}
+
+// refusalDetail returns the engine-authored remainder of a `code: detail`
+// refusal. It is kept only for an error with no wrapped cause: a wrapped cause
+// contributes foreign text — a path, a driver message, a parser error — which
+// this envelope never exposes.
+func refusalDetail(err error) string {
+	if errors.Unwrap(err) != nil {
+		return ""
+	}
+	_, detail, found := strings.Cut(err.Error(), ":")
+	if !found {
+		return ""
+	}
+	return strings.TrimSpace(detail)
+}
+
 // ProblemFor does not expose raw parser input, executable argv, environment,
 // worker stderr or arbitrary nested errors. A retry never authorizes a new effect.
 func ProblemFor(err error) (Problem, int) {
@@ -98,10 +123,17 @@ func ProblemFor(err error) (Problem, int) {
 	case persistenceFailure(err):
 		p.Code, p.Message, exit = "persistence_unavailable", "The authority could not persist or read mandatory evidence. Do not assume the operation committed.", 6
 	default:
-		code, _, found := strings.Cut(err.Error(), ":")
-		if found && validProblemCode(code) {
+		// A refusal carries its stable code whether or not it also carries a
+		// message: `code` alone and `code: detail` name the same refusal, and
+		// collapsing the first into invalid_input loses the subject entirely.
+		base := leafError(err)
+		code, _, _ := strings.Cut(base.Error(), ":")
+		if validProblemCode(code) {
 			p.Code = code
 			p.Message = "The selected operation was refused (" + code + "). Inspect status/doctor and the documented capability limits."
+			if detail := refusalDetail(base); detail != "" {
+				p.Violations = []Violation{{"", detail}}
+			}
 			if strings.HasPrefix(code, "unsupported") {
 				exit = 5
 			} else if strings.Contains(code, "conflict") || strings.Contains(code, "drift") {

@@ -1156,47 +1156,80 @@ func (e *Engine) acceptedOutputs(r Run, a *Attempt, step flow.StepDefinition, p 
 	return err
 }
 
-func (e *Engine) resultOutputs(r Run, a *Attempt, step flow.StepDefinition, p *flow.Plan, result Result, deferred bool) (map[string]Artifact, error) {
-	outputs := map[string]Artifact{}
+// outputProblem names the exact port an intake refusal is about, so a host
+// corrects the report it sent instead of guessing which port was wrong.
+func outputProblem(code, port, message string) error {
+	return &flow.Problem{Code: code, Path: "/result/outputs/" + port, Message: message}
+}
+
+// readResultOutputs is the side-effect-free half of output intake: it checks
+// the reported ports against the step and the admitted slots and returns the
+// slot bytes, sealing nothing. Assisted intake runs it before a candidate is
+// recorded, so a report that acceptance would reject is refused while its
+// handoff is still awaiting instead of burning the attempt.
+func (e *Engine) readResultOutputs(r Run, a *Attempt, step flow.StepDefinition, p *flow.Plan, result Result) (map[string][]byte, error) {
 	if len(result.EvidenceRefs) > 0 || len(result.EffectReceiptRefs) > 0 {
 		return nil, errors.New("unsupported_evidence: local output checks do not trust worker-supplied external receipts")
 	}
 	for port, definition := range step.Outputs {
 		if slices.Contains(definition.RequiredFor, result.Verdict) {
 			if _, ok := result.Outputs[port]; !ok {
-				return nil, fmt.Errorf("missing required output: %s", port)
+				return nil, outputProblem("output_required_missing", port, "this output port is required for the reported verdict and was not reported")
 			}
 		}
 	}
+	activation := r.Activations[a.ActivationID]
+	if activation == nil {
+		return nil, local.ErrIntegrity
+	}
+	contents := map[string][]byte{}
 	for port, ref := range result.Outputs {
 		definition, ok := step.Outputs[port]
 		if !ok {
-			return nil, errors.New("undeclared output port")
+			return nil, outputProblem("output_port_undeclared", port, "this step declares no such output port")
 		}
 		slot := a.Context.Outputs[port]
 		if ref.ArtifactID != slot.ArtifactID || ref.Revision != slot.Revision {
-			return nil, errors.New("output artifact identity differs from admitted slot")
-		}
-		activation := r.Activations[a.ActivationID]
-		if activation == nil {
-			return nil, local.ErrIntegrity
+			return nil, outputProblem("output_identity_mismatch", port, "the reported artifact identity differs from the admitted output slot")
 		}
 		limit := r.Executors[executorKey(r, p.Workflow.Definition.Stages[activation.StageID].StepRef, step.ID)].Config.MaxOutputBytes
 		if limit == 0 && a.Session != nil {
 			limit = MaxArtifactBytes
 		}
-		data, err := readLocal(a.Workspace, slot.Path, limit)
+		content, err := readLocal(a.Workspace, slot.Path, limit)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, outputProblem("output_slot_empty", port, "the admitted output slot holds no file")
+		}
 		if err != nil {
 			return nil, err
 		}
-		if rawDigest(data) != ref.Digest {
-			return nil, errors.New("output digest mismatch")
+		if rawDigest(content) != ref.Digest {
+			return nil, outputProblem("output_digest_mismatch", port, "the bytes in the admitted output slot do not match the reported digest")
 		}
 		if definition.Format == "json" {
-			if err := p.ValidateJSON(*definition.SchemaRef, data); err != nil {
+			if err := p.ValidateJSON(*definition.SchemaRef, content); err != nil {
 				return nil, err
 			}
 		}
+		contents[port] = content
+	}
+	return contents, nil
+}
+
+func (e *Engine) resultOutputs(r Run, a *Attempt, step flow.StepDefinition, p *flow.Plan, result Result, deferred bool) (map[string]Artifact, error) {
+	contents, err := e.readResultOutputs(r, a, step, p, result)
+	if err != nil {
+		return nil, err
+	}
+	activation := r.Activations[a.ActivationID]
+	if activation == nil {
+		return nil, local.ErrIntegrity
+	}
+	outputs := map[string]Artifact{}
+	for port, ref := range result.Outputs {
+		definition := step.Outputs[port]
+		slot := a.Context.Outputs[port]
+		data := contents[port]
 		if workspaceTreeBinding(step, port) != nil {
 			if deferred {
 				return nil, errors.New("workspace_tree_deferred_acceptance_unsupported")
@@ -1222,7 +1255,7 @@ func (e *Engine) resultOutputs(r Run, a *Attempt, step flow.StepDefinition, p *f
 			return nil, err
 		}
 		if artifact.Ref() != ref {
-			return nil, errors.New("sealed output identity mismatch")
+			return nil, outputProblem("output_seal_mismatch", port, "the sealed artifact identity differs from the reported one")
 		}
 		if err := e.validatePortArtifact(p, definition.Port, artifact, data); err != nil {
 			return nil, err

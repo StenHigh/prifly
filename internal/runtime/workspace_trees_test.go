@@ -71,7 +71,40 @@ func TestCaptureWorkspaceTreeRefusesUnsafeOrMissingUltraEntries(t *testing.T) {
 	}
 }
 
+// treeDecisionInputs is the smallest sealed decision catalog and sheet that
+// puts a Run on the decision-state contract, so its handoffs are
+// assisted-session/5 while still declaring workspace trees.
+func treeDecisionInputs(t *testing.T) (*DecisionCatalog, *DecisionSheet) {
+	t.Helper()
+	definition := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "plan_profile", Title: "Plan profile", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "fast", Title: "Fast", Value: json.RawMessage(`"fast"`)}}, Recommendation: json.RawMessage(`"fast"`), Automatic: true, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "package_profile"}}
+	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{definition}}
+	catalogDigest, err := DecisionCatalogDigest(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitionDigest, err := DecisionDefinitionDigest(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sheet := DecisionSheet{SchemaVersion: DecisionSheetVersion, CatalogDigest: catalogDigest, PackageProfile: "fast", ProfileSource: "actor", Records: []DecisionRecord{{SchemaVersion: DecisionRecordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, Status: "answered", Source: "actor", Value: json.RawMessage(`"fast"`)}}}
+	if err := ValidateDecisionSheet(catalog, sheet); err != nil {
+		t.Fatal(err)
+	}
+	return &catalog, &sheet
+}
+
 func treeSessionFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy) (*Engine, string) {
+	t.Helper()
+	return treeFixture(t, policy, nil, nil)
+}
+
+func treeDecisionSessionFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy) (*Engine, string) {
+	t.Helper()
+	catalog, sheet := treeDecisionInputs(t)
+	return treeFixture(t, policy, catalog, sheet)
+}
+
+func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *DecisionCatalog, sheet *DecisionSheet) (*Engine, string) {
 	t.Helper()
 	e := contextRegistryRuntime(t)
 	claim, err := e.ClaimWorktree(context.Background(), ClaimRequest{CommandID: "command:tree-claim", Repository: gitRepository(t), OwnerID: "session:pilot", WorkspaceMode: "worktree"})
@@ -122,7 +155,7 @@ func treeSessionFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy) (*
 	e.Config.AdapterBindings["local_process"], e.Config.DefaultPolicyRef = builtinVersionRef(definitions, "core:adapter/local-process", "2.0.0"), builtinVersionRef(definitions, "core:policy/local", "2.0.0")
 	writeRuntimeJSON(t, filepath.Join(e.Root, "prifly.json"), e.Config)
 	writeRuntimeJSON(t, filepath.Join(e.Root, "brief.json"), Brief{"1", "test:brief/tree", "tree", "native plan", []string{"Native plan"}, []string{}, []string{"Seal and improve the native plan"}, []ArtifactRef{}, []string{}, "explicit"})
-	started, err := e.Start(context.Background(), StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/tree.json", BriefFile: "brief.json", Inputs: map[string]string{}, WorkspaceMode: "worktree"})
+	started, err := e.Start(context.Background(), StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/tree.json", BriefFile: "brief.json", Inputs: map[string]string{}, DecisionCatalog: catalog, DecisionSheet: sheet, WorkspaceMode: "worktree"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,6 +295,106 @@ func TestWorkspaceTreeRefusesPreHandoffDriftAndPolicyEscape(t *testing.T) {
 		actual, err := os.ReadFile(filepath.Join(first.RepositoryWorkspace, filepath.FromSlash(path)))
 		if err != nil || string(actual) != "# Unrelated edit\n" {
 			t.Fatalf("runtime overwrote the unrelated file: %q %v", actual, err)
+		}
+	})
+}
+
+// A step that declares a workspace tree is captured by the runtime whatever the
+// session version and whatever the host names. At assisted-session/5 an absent
+// workspace_trees once skipped capture entirely, so the port the runtime owns
+// was then reported missing and the host had no accepted submission form at all.
+func TestWorkspaceTreeCaptureFollowsDeclaredBindingsAtDecisionSessionVersion(t *testing.T) {
+	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
+	e, runID := treeDecisionSessionFixture(t, policy)
+	first := handOver(t, e, runID)
+	if first.SchemaVersion != AssistedSessionDecisionVersion || len(first.WorkspaceTrees) != 1 || first.WorkspaceTrees[0].InputManifest != nil {
+		t.Fatalf("first handoff is not an output-only v5 tree binding: %+v", first)
+	}
+	writeWorkspaceTreeFile(t, first.RepositoryWorkspace, policy.Path, "# Original\n")
+	// An exact-file policy admits one path, so the host names nothing.
+	if _, err := e.SubmitSession(context.Background(), treeSubmission(t, first, "plan", nil)); err != nil {
+		t.Fatalf("a v5 report without locations was refused: %v", err)
+	}
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	second, err := e.SessionTask(context.Background(), runID, "")
+	if err != nil {
+		t.Fatalf("the captured plan never reached the next host: %v", err)
+	}
+	if second.WorkspaceTrees[0].InputManifest == nil || second.WorkspaceTrees[0].InputLocation != policy.Path {
+		t.Fatalf("improve handoff lost the captured input: %+v", second.WorkspaceTrees)
+	}
+	// The same form serves an input+output binding, and repeating the location
+	// the handoff named is equally accepted.
+	writeWorkspaceTreeFile(t, second.RepositoryWorkspace, policy.Path, "# Improved\n")
+	if _, err := e.SubmitSession(context.Background(), treeSubmission(t, second, "improved", []WorkspaceTreeLocation{{OutputPort: "improved", Path: policy.Path}})); err != nil {
+		t.Fatalf("a repeated input location was refused: %v", err)
+	}
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	third, err := e.SessionTask(context.Background(), runID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := driverRun(t, e, runID).Attempts[second.AttemptID].Accepted.Outputs["improved"]
+	artifact, data, err := e.Artifact(ref)
+	if err != nil || !slices.Contains(artifact.Provenance, *second.WorkspaceTrees[0].InputManifest) {
+		t.Fatalf("the improved manifest lost its input provenance: %+v %v", artifact, err)
+	}
+	var manifest WorkspaceTreeManifest
+	if err := decode(data, &manifest); err != nil || len(manifest.Files) != 1 {
+		t.Fatalf("the improved plan is not a complete manifest: %+v %v", manifest, err)
+	}
+	_, captured, err := e.Artifact(manifest.Files[0].Ref)
+	if err != nil || string(captured) != "# Improved\n" {
+		t.Fatalf("the improved bytes were not the ones captured: %q %v", captured, err)
+	}
+	if third.WorkspaceTrees[0].InputManifest == nil {
+		t.Fatalf("implement handoff lost the improved plan: %+v", third.WorkspaceTrees)
+	}
+}
+
+// A location is refused only where it says something the runtime did not: a
+// path other than the one the handoff named, or a missing name where the host
+// genuinely chooses one. Each refusal names the entry it is about.
+func TestWorkspaceTreeLocationRefusalsNameTheReportedEntry(t *testing.T) {
+	exact := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
+	t.Run("input location mismatch", func(t *testing.T) {
+		e, runID := treeSessionFixture(t, exact)
+		first := handOver(t, e, runID)
+		writeWorkspaceTreeFile(t, first.RepositoryWorkspace, exact.Path, "# Original\n")
+		if _, err := e.SubmitSession(context.Background(), treeSubmission(t, first, "plan", nil)); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.Drive(context.Background(), runID); err != nil {
+			t.Fatal(err)
+		}
+		second, err := e.SessionTask(context.Background(), runID, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = e.SubmitSession(context.Background(), treeSubmission(t, second, "improved", []WorkspaceTreeLocation{{OutputPort: "improved", Path: ".ai-factory/OTHER.md"}}))
+		problem, exit := ProblemFor(err)
+		if problem.Code != "workspace_tree_input_location_mismatch" || exit != 2 {
+			t.Fatalf("a different input location was not refused by name: %+v %v", problem, err)
+		}
+		if len(problem.Violations) != 1 || problem.Violations[0].Pointer != "/workspace_trees/0/path" {
+			t.Fatalf("the refusal did not name the reported entry: %+v", problem.Violations)
+		}
+		if task, err := e.SessionTask(context.Background(), runID, ""); err != nil || task.AttemptID != second.AttemptID {
+			t.Fatalf("a refused report closed the handoff: %+v %v", task, err)
+		}
+	})
+	t.Run("chosen child name missing", func(t *testing.T) {
+		e, runID := treeSessionFixture(t, flow.WorkspaceTreeCapturePolicy{Kind: "direct_child_file", Path: ".ai-factory/plans"})
+		first := handOver(t, e, runID)
+		writeWorkspaceTreeFile(t, first.RepositoryWorkspace, ".ai-factory/plans/feature.md", "# Original\n")
+		_, err := e.SubmitSession(context.Background(), treeSubmission(t, first, "plan", nil))
+		problem, _ := ProblemFor(err)
+		if problem.Code != "workspace_tree_location_missing" {
+			t.Fatalf("a policy the host chooses within accepted no name: %+v %v", problem, err)
 		}
 	})
 }

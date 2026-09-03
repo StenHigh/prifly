@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -360,29 +361,47 @@ func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs m
 	return handoffs, cleanup, nil
 }
 
-func selectedTreeLocation(handoff WorkspaceTreeHandoff, supplied map[string]string) (string, error) {
+// treeProblem names the reported location an intake refusal is about. A host
+// that never sees which entry was wrong has no way back except guessing.
+func treeProblem(code, pointer, message string) error {
+	if pointer == "" {
+		pointer = "/workspace_trees"
+	}
+	return &flow.Problem{Code: code, Path: pointer, Message: message}
+}
+
+// selectedTreeLocation resolves the one location a binding may be captured at.
+// A host reports a location only where it actually chooses one: an input tree
+// is already materialized at a fixed path, and an exact-file policy admits a
+// single path, so in both cases the runtime supplies it. Repeating that path is
+// allowed, which keeps one submission form for every binding kind; naming a
+// different one is refused.
+func selectedTreeLocation(handoff WorkspaceTreeHandoff, supplied map[string]string, pointer string) (string, error) {
+	location, exists := supplied[handoff.OutputPort]
 	if handoff.InputManifest != nil {
-		if _, exists := supplied[handoff.OutputPort]; exists {
-			return "", errors.New("workspace_tree_input_location_forbidden")
+		if exists && location != handoff.InputLocation {
+			return "", treeProblem("workspace_tree_input_location_mismatch", pointer, "this port's tree is materialized at the location named by the handoff")
 		}
 		return handoff.InputLocation, nil
 	}
-	location, exists := supplied[handoff.OutputPort]
-	if !exists || !safeRelative(location) {
-		return "", errors.New("workspace_tree_location_missing")
-	}
 	policy := handoff.Capture
+	if !exists && policy.Kind == "exact_file" {
+		return policy.Path, nil
+	}
+	if !exists || !safeRelative(location) {
+		return "", treeProblem("workspace_tree_location_missing", pointer, "this port needs one relative location inside the claimed workspace")
+	}
 	switch policy.Kind {
 	case "exact_file":
 		if location != policy.Path {
-			return "", errors.New("workspace_tree_policy_escape")
+			return "", treeProblem("workspace_tree_policy_escape", pointer, "this port is captured at the exact path named by its declared policy")
 		}
 	case "direct_child_file", "direct_child_tree":
 		if filepath.ToSlash(filepath.Dir(location)) != policy.Path || !directChildName(filepath.Base(location)) || slices.Contains(handoff.ExistingChildren, filepath.Base(location)) {
-			return "", errors.New("workspace_tree_policy_escape")
+			return "", treeProblem("workspace_tree_policy_escape", pointer, "this port is captured as a new direct child of the parent named by its declared policy")
 		}
 	default:
-		return "", errors.New("workspace_tree_policy_escape")
+		return "", treeProblem("workspace_tree_policy_escape", pointer, "this binding has no supported capture policy")
 	}
 	return location, nil
 }
@@ -518,19 +537,22 @@ func (e *Engine) captureWorkspaceTreeOutputs(a *Attempt, step flow.StepDefinitio
 		return Result{}, local.ErrIntegrity
 	}
 	supplied := map[string]string{}
-	for _, location := range locations {
+	pointers := map[string]string{}
+	for index, location := range locations {
+		pointer := "/workspace_trees/" + strconv.Itoa(index)
 		if location.OutputPort == "" || location.Path == "" || supplied[location.OutputPort] != "" {
-			return Result{}, errors.New("workspace_tree_location_invalid")
+			return Result{}, treeProblem("workspace_tree_location_invalid", pointer, "each reported location names one distinct output port and one path")
 		}
 		supplied[location.OutputPort] = location.Path
+		pointers[location.OutputPort] = pointer + "/path"
 	}
 	allowed := map[string]bool{}
 	for _, handoff := range a.Session.WorkspaceTrees {
 		allowed[handoff.OutputPort] = true
 		if _, exists := result.Outputs[handoff.OutputPort]; exists {
-			return Result{}, errors.New("workspace_tree_output_host_supplied")
+			return Result{}, treeProblem("workspace_tree_output_host_supplied", "/result/outputs/"+handoff.OutputPort, "the runtime seals this port's tree itself; a report does not carry its artifact")
 		}
-		location, err := selectedTreeLocation(handoff, supplied)
+		location, err := selectedTreeLocation(handoff, supplied, pointers[handoff.OutputPort])
 		if err != nil {
 			return Result{}, err
 		}
@@ -542,7 +564,7 @@ func (e *Engine) captureWorkspaceTreeOutputs(a *Attempt, step flow.StepDefinitio
 	}
 	for port := range supplied {
 		if !allowed[port] {
-			return Result{}, errors.New("workspace_tree_location_invalid")
+			return Result{}, treeProblem("workspace_tree_location_invalid", pointers[port], "this step declares no workspace tree binding for that output port")
 		}
 	}
 	return result, nil

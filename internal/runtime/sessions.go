@@ -467,6 +467,12 @@ func (e *Engine) PublishSessionArtifact(ctx context.Context, command PublishComm
 }
 
 // SubmitSession accepts a host report for exactly the attempt it was handed.
+// submissionProblem names the field of a malformed report, so a host corrects
+// that field instead of reading the runtime's own schemas to find it.
+func submissionProblem(pointer, message string) error {
+	return &flow.Problem{Code: "submission_shape_invalid", Path: pointer, Message: message}
+}
+
 // It is not a token exchange: the caller must be the enrolled session principal
 // and must return the attempt identity and envelope digest of that handoff.
 func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission) (local.ApplyResult, error) {
@@ -474,23 +480,23 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
 	if (submission.SchemaVersion != AssistedSessionVersion && submission.SchemaVersion != AssistedSessionCostVersion && submission.SchemaVersion != AssistedSessionWorkspaceVersion && submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion) || submission.RunID == "" || submission.AttemptID == "" || submission.EnvelopeDigest == "" {
-		return local.ApplyResult{}, errors.New("a submission names its schema version, run, attempt and envelope digest")
+		return local.ApplyResult{}, submissionProblem("/schema_version", "a submission names a supported schema version, run, attempt and envelope digest")
 	}
 	if submission.DecisionRequest != nil {
 		request := submission.DecisionRequest
 		if submission.SchemaVersion != AssistedSessionDecisionVersion || len(submission.Result) != 0 || len(submission.ReportedCosts) != 0 || len(submission.WorkspaceTrees) != 0 || request.RunID != submission.RunID || request.AttemptID != submission.AttemptID || request.EnvelopeDigest != submission.EnvelopeDigest {
-			return local.ApplyResult{}, errors.New("a decision request is the only v5 session submission and must name its delivery")
+			return local.ApplyResult{}, submissionProblem("/decision_request", "a decision request is the only assisted-session/5 submission and must name its delivery")
 		}
 		return e.RequestDecision(ctx, *request)
 	}
 	if submission.SchemaVersion == AssistedSessionVersion && len(submission.ReportedCosts) != 0 {
-		return local.ApplyResult{}, errors.New("assisted-session/1 cannot report cost")
+		return local.ApplyResult{}, &flow.Problem{Code: "submission_cost_unsupported", Path: "/reported_costs", Message: "assisted-session/1 cannot report cost"}
 	}
 	if err := validateReportedCosts(submission.ReportedCosts); err != nil {
 		return local.ApplyResult{}, err
 	}
 	if len(submission.Result) == 0 || !json.Valid(submission.Result) || len(submission.Result) > local.MaxCommandBytes {
-		return local.ApplyResult{}, errors.New("a submission carries one bounded JSON result")
+		return local.ApplyResult{}, submissionProblem("/result", "a submission carries one bounded JSON result")
 	}
 	control, _, err := e.ensureControl(ctx)
 	if err != nil {
@@ -537,9 +543,13 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 		return local.ApplyResult{}, local.ErrIntegrity
 	}
 	if submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && len(submission.WorkspaceTrees) != 0 {
-		return local.ApplyResult{}, errors.New("this assisted-session version cannot report workspace trees")
+		return local.ApplyResult{}, &flow.Problem{Code: "submission_trees_unsupported", Path: "/workspace_trees", Message: "this assisted-session version cannot report workspace trees"}
 	}
-	if submission.SchemaVersion == AssistedSessionTreeVersion || len(submission.WorkspaceTrees) != 0 {
+	// Capture follows the step's declared bindings, not the wording of the
+	// report: a step that declares trees has them captured by the runtime even
+	// when the host names no location, which is the only form it may use where
+	// the location has a single legal value.
+	if len(step.WorkspaceTrees) != 0 || len(submission.WorkspaceTrees) != 0 {
 		reported, err = e.captureWorkspaceTreeOutputs(attempt, step, reported, submission.WorkspaceTrees)
 		if err != nil {
 			return local.ApplyResult{}, err
@@ -551,6 +561,16 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 		if err := flow.ValidateProtocol("StepResult", canonicalResult); err != nil {
 			return local.ApplyResult{}, err
 		}
+	}
+	// Acceptance checks the same ports later, but it settles the attempt: a
+	// report it rejects is a failed attempt, and a step that never retries has
+	// no second chance. Reading them here keeps a malformed report a refusal
+	// with its handoff still awaiting.
+	if err := plan.ValidateJSON(step.ResultSchemaRef, canonicalResult); err != nil {
+		return local.ApplyResult{}, err
+	}
+	if _, err := e.readResultOutputs(r, attempt, step, plan, reported); err != nil {
+		return local.ApplyResult{}, err
 	}
 	// The identity covers the report itself, so an exact retry is idempotent
 	// while a corrected report is a new command instead of a burnt identity.

@@ -351,7 +351,7 @@ func TestAssistedReportIsRefusedUnderAStopAndAfterSettlement(t *testing.T) {
 	}
 }
 
-func TestAssistedReportClaimingAbsentOutputsFails(t *testing.T) {
+func TestAssistedReportClaimingAbsentOutputsIsRefusedByName(t *testing.T) {
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	ctx := context.Background()
@@ -364,19 +364,24 @@ func TestAssistedReportClaimingAbsentOutputsFails(t *testing.T) {
 	if err := os.Remove(filepath.Join(r.Attempts[task.AttemptID].Workspace, filepath.FromSlash(slot.Path))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.SubmitSession(ctx, submission); err != nil {
-		t.Fatalf("intake should record the report before judging it: %v", err)
+	_, err = e.SubmitSession(ctx, submission)
+	problem, exit := ProblemFor(err)
+	if problem.Code != "output_slot_empty" || exit != 2 {
+		t.Fatalf("a report claiming an output it never produced was not refused by name: %+v %v", problem, err)
+	}
+	if len(problem.Violations) != 1 || problem.Violations[0].Pointer != "/result/outputs/plan" {
+		t.Fatalf("the refusal did not name the port: %+v", problem.Violations)
 	}
 	after, _, err := e.load(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	attempt := after.Attempts[task.AttemptID]
-	if attempt.Settled == nil || attempt.Status != "failed" || attempt.Accepted != nil {
-		t.Fatalf("a report claiming outputs it never produced was accepted: %+v", attempt)
+	if attempt.Accepted != nil || attempt.Settled != nil || attempt.Session.HostState != SessionAwaiting {
+		t.Fatalf("a report claiming outputs it never produced changed the attempt: %+v", attempt)
 	}
 	if attempt.ProcessOutcome != nil {
-		t.Fatalf("the failed assisted settlement invented process facts: %+v", attempt.ProcessOutcome)
+		t.Fatalf("the refused assisted report invented process facts: %+v", attempt.ProcessOutcome)
 	}
 }
 
@@ -497,5 +502,46 @@ func TestProposalOnlyAssistedStepClaimsNoWorktree(t *testing.T) {
 	step.Effects.Class = "network_write"
 	if err := validateAssistedStep(plan, step); err == nil {
 		t.Fatal("an assisted step declared an effect class the contract does not admit")
+	}
+}
+
+// Acceptance settles the attempt, so a report it rejects burns a step that
+// never retries. Intake reads the same ports first: a malformed report is a
+// refusal that names its port and leaves the handoff awaiting a corrected one.
+func TestAssistedIntakeRefusesAMalformedReportWithoutBurningTheHandoff(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	task := handOver(t, e, runID)
+	submission := hostResult(t, e, task, "planned without its output")
+	var body map[string]any
+	if err := json.Unmarshal(submission.Result, &body); err != nil {
+		t.Fatal(err)
+	}
+	body["outputs"] = map[string]any{}
+	stripped, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	submission.Result = stripped
+	_, err = e.SubmitSession(context.Background(), submission)
+	problem, exit := ProblemFor(err)
+	if problem.Code != "output_required_missing" || exit != 2 {
+		t.Fatalf("a report missing a required output was not refused by name: %+v %v", problem, err)
+	}
+	if len(problem.Violations) != 1 || problem.Violations[0].Pointer != "/result/outputs/plan" {
+		t.Fatalf("the refusal did not name the port: %+v", problem.Violations)
+	}
+	r := driverRun(t, e, runID)
+	attempt := r.Attempts[task.AttemptID]
+	if r.Status == "failed" || attempt.Settled != nil || attempt.Session.HostState != SessionAwaiting || len(attempt.Candidate) != 0 {
+		t.Fatalf("a refused report was recorded against the attempt: status=%s attempt=%+v", r.Status, attempt)
+	}
+	if _, err := e.SubmitSession(context.Background(), hostResult(t, e, task, "planned")); err != nil {
+		t.Fatalf("the corrected report was refused under the same envelope: %v", err)
+	}
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	if settled := driverRun(t, e, runID); settled.Status == "failed" {
+		t.Fatalf("the corrected report did not settle the run: %+v", settled.Diagnostics)
 	}
 }
