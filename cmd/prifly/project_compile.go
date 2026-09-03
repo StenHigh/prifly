@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -1406,17 +1407,25 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 			steps[candidate.Ref.ID[strings.LastIndex(candidate.Ref.ID, "/")+1:]] = candidate
 		}
 	}
+	// An extension names components by their short folder name, while every
+	// component file carries a full id inside it. Taking the id is the natural
+	// guess and it is wrong, so the refusal lists the names that would work.
+	known := make([]string, 0, len(steps))
+	for name := range steps {
+		known = append(known, name)
+	}
+	slices.Sort(known)
 	for _, extension := range extensions {
-		if extension.Workflow != projectExtensionWorkflowName(component.Ref.ID) {
-			return usageError("project_extension_unknown_workflow: " + extension.Workflow)
+		if workflowName := projectExtensionWorkflowName(component.Ref.ID); extension.Workflow != workflowName {
+			return usageError("project_extension_unknown_workflow: " + extension.Workflow + " (known: " + workflowName + ")")
 		}
 		step, exists := steps[extension.Step]
 		if !exists {
-			return usageError("project_extension_unknown_step: " + extension.Step)
+			return usageError("project_extension_unknown_step: " + extension.Step + " (known: " + strings.Join(known, ", ") + ")")
 		}
 		var definition flow.StepDefinition
 		if err := json.Unmarshal(step.Bytes, &definition); err != nil || len(definition.Inputs) != 0 {
-			return usageError("project_extension_requires_full_yaml: a simple extension step cannot declare inputs")
+			return usageError("project_extension_requires_full_yaml: an extension inserts a step without inputs; a step that needs inputs belongs in a workflow graph you write yourself, not in extend.yaml")
 		}
 		if err := applyProjectExtension(workflow, extension, projectRefValue(step.Ref)); err != nil {
 			return err

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -631,12 +632,20 @@ func (c *cli) projectExtend(_ context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Both names are short folder names, never the full id written inside the
+	// component; the refusal says which names exist so the difference is read
+	// instead of guessed.
+	known := make([]string, 0, len(refs))
+	for name := range refs {
+		known = append(known, name)
+	}
+	slices.Sort(known)
 	for _, extension := range extensions {
-		if extension.Workflow != projectExtensionWorkflowName(*workflowID) {
-			return usageError("project_extension_unknown_workflow: " + extension.Workflow)
+		if workflowName := projectExtensionWorkflowName(*workflowID); extension.Workflow != workflowName {
+			return usageError("project_extension_unknown_workflow: " + extension.Workflow + " (known: " + workflowName + ")")
 		}
 		if _, exists := refs[extension.Step]; !exists {
-			return usageError("project_extension_unknown_step: " + extension.Step)
+			return usageError("project_extension_unknown_step: " + extension.Step + " (known: " + strings.Join(known, ", ") + ")")
 		}
 		if source, exists := sources[extension.Step]; !exists {
 			return usageError("project_extension_missing_step_source: " + extension.Step)

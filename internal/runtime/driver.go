@@ -693,9 +693,22 @@ func (e *Engine) prepareExecutorWorkspace(executor PinnedExecutor, name string, 
 }
 
 func driverFailureCode(err error, fallback string) string {
+	if err == nil {
+		return fallback
+	}
 	var rejection *local.Rejection
 	if errors.As(err, &rejection) {
 		return rejection.Code
+	}
+	var problem *flow.Problem
+	if errors.As(err, &problem) {
+		return problem.Code
+	}
+	// A refusal raised with a stable code and no message is the same refusal.
+	// Recorded under the generic failure instead, a diagnostic keeps the phase
+	// and loses what the driver already knew went wrong.
+	if code, _, _ := strings.Cut(leafError(err).Error(), ":"); validProblemCode(code) {
+		return code
 	}
 	return fallback
 }

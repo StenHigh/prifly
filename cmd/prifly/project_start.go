@@ -612,10 +612,24 @@ func projectInstalledWorkflowPath(ctx context.Context, engine *prifly.Engine, re
 	if err != nil {
 		return "", err
 	}
+	installed := ""
 	for _, entry := range packages.Packages {
 		if entry.Ref == ref && (entry.Status == "" || entry.Status == prifly.PackageTrusted) {
 			return filepath.ToSlash(filepath.Join(entry.Root, componentPath)), nil
 		}
+		if entry.Ref.ID == ref.ID && entry.Ref.Version == ref.Version {
+			installed = entry.Status
+			if entry.Ref.Digest != ref.Digest {
+				installed = "different bytes"
+			}
+		}
 	}
-	return "", local.ErrNotFound
+	// The engine knows exactly what it was resolving here. Reported as a bare
+	// not_found it reads as a missing file, and the reader looks everywhere
+	// except at the package that was just sealed.
+	reason := "it is not installed"
+	if installed != "" {
+		reason = "the installed one has " + installed
+	}
+	return "", usageError("project_start_package_not_installed: the sealed package " + ref.ID + "@" + ref.Version + " was not found among trusted packages: " + reason + "; read package list")
 }

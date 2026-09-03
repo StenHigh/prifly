@@ -289,7 +289,9 @@ func TestWorkspaceTreeRefusesPreHandoffDriftAndPolicyEscape(t *testing.T) {
 			t.Fatalf("a changed plan reached the next host: %v", err)
 		}
 		r := driverRun(t, e, runID)
-		if r.Status != "failed" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "workspace_tree_preparation_failed" {
+		// The diagnostic names what preparation found, not merely that it ran:
+		// the generic code left a reader with the phase and nothing else.
+		if r.Status != "failed" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "workspace_tree_input_drift" {
 			t.Fatalf("pre-handoff drift was not refused: status=%s diagnostics=%+v", r.Status, r.Diagnostics)
 		}
 		actual, err := os.ReadFile(filepath.Join(first.RepositoryWorkspace, filepath.FromSlash(path)))
@@ -397,4 +399,31 @@ func TestWorkspaceTreeLocationRefusalsNameTheReportedEntry(t *testing.T) {
 			t.Fatalf("a policy the host chooses within accepted no name: %+v %v", problem, err)
 		}
 	})
+}
+
+// A plan left in the workspace by an earlier Run is not this step's output, so
+// preparation refuses to claim it. The diagnostic says which refusal that was.
+func TestExistingOutputFileIsRefusedByName(t *testing.T) {
+	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
+	e, runID := treeSessionFixture(t, policy)
+	claims, err := e.Claims(context.Background())
+	if err != nil || len(claims.Claims) == 0 {
+		t.Fatalf("no claimed workspace: %+v %v", claims, err)
+	}
+	workspace, err := e.claimWorkspacePath(claims.Claims[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeWorkspaceTreeFile(t, workspace, policy.Path, "# Left by an earlier run\n")
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	r := driverRun(t, e, runID)
+	if r.Status != "failed" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "workspace_tree_output_exists" {
+		t.Fatalf("an existing output file was not refused by name: status=%s diagnostics=%+v", r.Status, r.Diagnostics)
+	}
+	actual, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(policy.Path)))
+	if err != nil || string(actual) != "# Left by an earlier run\n" {
+		t.Fatalf("preparation touched the existing file: %q %v", actual, err)
+	}
 }

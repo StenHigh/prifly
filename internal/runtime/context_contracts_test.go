@@ -466,8 +466,13 @@ func TestContextPublicAcceptanceStatesFromNativeExecution(t *testing.T) {
 			t.Fatal("settled input checker", name, err)
 		}
 	}
-	if completedCheck.TokenHash == "" || settledView.Run.CheckExecutions[check.ID].TokenHash != "" || settledView.Run.CheckExecutions[check.ID].Report.Summary != "" {
-		t.Fatal("actual checker read view did not preserve redaction")
+	// The view withholds the checker's credential and carries what the checker
+	// reported: a blank summary would read as a checker that said nothing.
+	if completedCheck.TokenHash == "" || settledView.Run.CheckExecutions[check.ID].TokenHash != "" {
+		t.Fatal("actual checker read view exposed the checker credential")
+	}
+	if settledView.Run.CheckExecutions[check.ID].Report.Summary != completedCheck.Report.Summary {
+		t.Fatal("actual checker read view dropped the reported summary")
 	}
 	// A short native checker need not be slowed down to observe running: its
 	// committed start cut contains the actual process identity and request.
@@ -536,8 +541,8 @@ func TestContextPublicAcceptanceStatesFromNativeExecution(t *testing.T) {
 		if err := validatePublic(t, "CheckExecution", execution); err != nil {
 			t.Fatal("final checker metadata rejected", err)
 		}
-		if execution.TokenHash != "" || execution.Report == nil || execution.Report.Summary != "" || len(execution.Report.Limitations) != 0 {
-			t.Fatal("final metadata view exposed checker credentials or report text")
+		if execution.TokenHash != "" || execution.Report == nil {
+			t.Fatal("final metadata view exposed checker credentials or lost its report")
 		}
 	}
 }

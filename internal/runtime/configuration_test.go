@@ -189,7 +189,7 @@ func TestCoreProjectionSealsDistinctArtifact(t *testing.T) {
 				if r.Status != "failed" || r.Settled == nil || r.Outcome != nil || len(r.Ready) != 0 || len(r.Outputs) != 0 || len(r.Steps) != 0 || len(r.Attempts) != 0 || activation == nil || activation.Status != "failed" || activation.Settled == nil {
 					t.Fatalf("invalid finish projection did not settle without a worker: %+v", r)
 				}
-				if len(r.Diagnostics) != 1 || r.Diagnostics[0].ActivationID != activation.ID || r.Diagnostics[0].AttemptID != "" || r.Diagnostics[0].Code != "output_binding_failed" {
+				if len(r.Diagnostics) != 1 || r.Diagnostics[0].ActivationID != activation.ID || r.Diagnostics[0].AttemptID != "" || r.Diagnostics[0].Code != "projection_schema_invalid" {
 					t.Fatalf("invalid finish has no stage diagnostic: %+v", r.Diagnostics)
 				}
 				before, err := e.View(context.Background(), r.ID)

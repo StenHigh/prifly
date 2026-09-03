@@ -678,3 +678,37 @@ func TestReadOnlyViewsNameTheHeldHandoffAndSealedOutputs(t *testing.T) {
 		t.Fatal("an accepted result sealed no output for the summary to count")
 	}
 }
+
+// The summary is what a worker reported about its own work. Withheld from the
+// view it arrived as an empty string, which reads as a step that produced
+// nothing, and a reader checking its own work is told the opposite of the truth.
+func TestAcceptedSummaryReachesTheView(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	ctx := context.Background()
+	task := handOver(t, e, runID)
+	reported := strings.Repeat("planned in detail. ", 64)
+	if _, err := e.SubmitSession(ctx, hostResult(t, e, task, reported)); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	view, err := e.View(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt := view.Run.Attempts[task.AttemptID]
+	if attempt == nil || attempt.Accepted == nil {
+		t.Fatalf("the accepted result is missing from the view: %+v", attempt)
+	}
+	if attempt.Accepted.Summary != reported {
+		t.Fatalf("the view holds %d of %d reported characters", len(attempt.Accepted.Summary), len(reported))
+	}
+	// The credentials and raw bodies a view never carries stay out of it.
+	if attempt.TokenHash != "" || attempt.Envelope != nil || attempt.Candidate != nil {
+		t.Fatalf("the view exposed attempt credentials or raw bodies: %+v", attempt)
+	}
+	if view.Run.Definitions != nil || view.Run.Executors != nil || view.Run.Workflow != nil {
+		t.Fatal("the view exposed raw definitions or executors")
+	}
+}

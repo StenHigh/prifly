@@ -1938,7 +1938,10 @@ Global: --project DIR  --json  --format text|json|csv
   project compile --repository DIR --package NAME --host codex-cli|codex-app|claude-code --output DIR [--value NAME=JSON]
                                    Seal one declared YAML package; import remains a separate owner decision
   project start --repository DIR --launch ID --host codex-cli|codex-app|claude-code --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--workspace worktree|checkout]
+                [--package-profile NAME] [--preflight-answer ID=JSON] [--decision-policy attended|autonomous] [--expected-decision-catalog-digest DIGEST]
                                    Seal, claim and drive one declared launch to its first honest handoff; direct CLI defaults to worktree
+                                   Answer the declared questions up front with repeated --preflight-answer; project questionnaire lists them and returns the digest
+                                   A package profile is chosen once: with --package-profile, do not also answer the decision that selects it
   capabilities                     Implemented contracts/profiles, not permission grants
   version | doctor | inventory     Versions, integrity, exact local definitions
   ref FILE --id ID --version X.Y.Z [--raw-text]

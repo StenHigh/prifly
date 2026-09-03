@@ -2295,3 +2295,100 @@ func TestHelpNamesTheAuthoringReferences(t *testing.T) {
 		}
 	}
 }
+
+// An extension names components by their short folder name, while every
+// component file carries a full id inside it. Taking that id is the natural
+// guess, so the refusal lists the names that would have worked.
+func TestExtensionRefusalsListTheKnownNames(t *testing.T) {
+	for _, expected := range []string{
+		"project_extension_unknown_workflow",
+		"project_extension_unknown_step",
+		"(known: ",
+		"belongs in a workflow graph you write yourself",
+	} {
+		found := false
+		for _, source := range []string{"project.go", "project_compile.go"} {
+			body, err := os.ReadFile(filepath.Join(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(body), expected) {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("no extension refusal carries %q", expected)
+		}
+	}
+}
+
+// The declared questions can be answered up front, and the flag that does it
+// was absent from the help: seven plausible names were tried before asking.
+func TestHelpNamesTheQuestionnaireFlags(t *testing.T) {
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"help", "project", "start"}, &out, &errout); code != 0 {
+		t.Fatalf("help: %s", errout.String())
+	}
+	for _, flag := range []string{"--preflight-answer", "--package-profile", "--decision-policy", "--expected-decision-catalog-digest"} {
+		if !strings.Contains(out.String(), flag) {
+			t.Fatalf("the help does not name %s: %s", flag, out.String())
+		}
+	}
+}
+
+// The launch path resolves the package it has just sealed. Reported as a bare
+// not_found, a package that is absent, untrusted or byte-different reads as a
+// missing file and sends the reader looking anywhere but at the package.
+func TestSealedPackageLookupNamesThePackage(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("project_start.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	for _, expected := range []string{
+		"project_start_package_not_installed",
+		"was not found among trusted packages",
+		"read package list",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("the sealed-package lookup does not carry %q", expected)
+		}
+	}
+	if strings.Contains(source, "return \"\", local.ErrNotFound") {
+		t.Fatal("the sealed-package lookup still refuses without naming its subject")
+	}
+}
+
+// A declared package whose folder is missing is already named. This pins that,
+// because the same run reported both refusals as one nameless not_found.
+func TestMissingPackageFolderIsNamed(t *testing.T) {
+	repository := t.TempDir()
+	if output, err := exec.Command("git", "init", "-q", repository).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"project", "init", "--repository", repository, "--state-root", authority}, &out, &errout); code != 0 {
+		t.Fatalf("project init: %s", errout.String())
+	}
+	profile := filepath.Join(repository, ".prifly", "project.yaml")
+	body, err := os.ReadFile(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := strings.Replace(string(body), "packages: {}\n", "packages:\n  absent:\n    source: .prifly/workflows/absent\n", 1)
+	if updated == string(body) {
+		t.Fatal("the generated profile no longer declares an empty package map")
+	}
+	if err := os.WriteFile(profile, []byte(updated), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"--json", "--project", authority, "project", "questionnaire", "--repository", repository, "--package", "absent"}, &out, &errout); code == 0 {
+		t.Fatal("a package with no folder was read")
+	}
+	if !strings.Contains(errout.String(), "package source does not exist") {
+		t.Fatalf("the refusal does not name the missing folder: %s", errout.String())
+	}
+}

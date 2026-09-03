@@ -290,8 +290,12 @@ func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 	}
 	asOf, live := e.clock.now(), e.driverLiveFor(id)
 	timing := Timing(r, asOf, live)
-	// Metadata views never dump executable arguments, environment, raw definitions
-	// or publication credentials. The full internal state stays in authority storage.
+	// Views never dump executable arguments, environment, raw definitions or
+	// publication credentials. They do carry what a worker reported about its
+	// own work: withholding an accepted summary left the owner reading an empty
+	// field where the engine held the text, which reads as work that produced
+	// nothing. A view is therefore the owner's to read, not a document to
+	// forward wholesale: the reported text is worker-authored and unvetted.
 	r.Definitions = nil
 	r.ContextResources = nil
 	r.Executors = nil
@@ -300,16 +304,9 @@ func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 		a.TokenHash = ""
 		a.Envelope = nil
 		a.Candidate = nil
-		if a.Accepted != nil {
-			a.Accepted.Summary = ""
-		}
 	}
 	for _, check := range r.CheckExecutions {
 		check.TokenHash = ""
-		if check.Report != nil {
-			check.Report.Summary = ""
-			check.Report.Limitations = []string{}
-		}
 	}
 	version := ReadVersion
 	if r.Profile == flow.CoreProfile {

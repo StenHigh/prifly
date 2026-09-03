@@ -17,7 +17,13 @@ settings:
 # a stage or rewrites bindings.
 exclude: [improve, verify, review]
 
-# Insert a no-input project step into one exact direct route.
+# Insert a project step into one exact direct route. `workflow` and `step` are
+# short component names — the file name without its directory — never the full
+# `id:` written inside those files. The insertion names the route it replaces
+# rather than a point after a stage, so the tail of the graph cannot be silently
+# detached: `from` keeps its route to the new step and the new step routes on to
+# `to`. The inserted step declares no inputs; a step that needs them belongs in
+# a workflow graph you write yourself.
 extensions:
   - id: lint-after-build
     workflow: build
