@@ -1,0 +1,6 @@
+{
+  "launch": "workspace",
+  "host": "codex-cli",
+  "modes": ["worktree", "checkout"],
+  "negative": "checkout_dirty"
+}

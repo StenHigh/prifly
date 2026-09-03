@@ -1,0 +1,2 @@
+# The delivery manifest covers exact bytes, including CSV line endings.
+* -text

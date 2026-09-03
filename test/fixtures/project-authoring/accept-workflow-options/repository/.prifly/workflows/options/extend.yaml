@@ -1,0 +1,3 @@
+settings:
+  options: {quality_enabled: false}
+exclude: [quality]

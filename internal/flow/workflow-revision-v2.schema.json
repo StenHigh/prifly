@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:workflow-revision:2",
+  "$ref": "#/$defs/WorkflowRevisionV2",
+  "$defs": {
+    "WorkflowRevisionV2": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "2"
+        },
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/Version"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "inputs": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/PortName"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkflowInputPortV2"
+          },
+          "maxProperties": 256
+        },
+        "outputs": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/PortName"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkflowOutputPort"
+          },
+          "maxProperties": 256
+        },
+        "allowed_outcomes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Outcome"
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "definition": {
+          "type": "object",
+          "properties": {
+            "entry": {
+              "$ref": "#/$defs/Identifier"
+            },
+            "stages": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/Identifier"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/Stage"
+              },
+              "minProperties": 1,
+              "maxProperties": 10000
+            }
+          },
+          "required": [
+            "entry",
+            "stages"
+          ],
+          "additionalProperties": false
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits"
+        },
+        "policy_ref": {
+          "$ref": "#/$defs/ImmutableRef"
+        }
+      },
+      "required": [
+        "schema_version",
+        "id",
+        "version",
+        "title",
+        "inputs",
+        "outputs",
+        "allowed_outcomes",
+        "definition",
+        "limits",
+        "policy_ref"
+      ],
+      "additionalProperties": false
+    },
+    "WorkflowInputPortV2": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "enum": [
+            "json",
+            "blob"
+          ]
+        },
+        "schema_ref": {
+          "$ref": "#/$defs/ImmutableRef"
+        },
+        "media_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "content_check_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableRef"
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "configuration": {
+          "$ref": "#/$defs/InputConfiguration"
+        }
+      },
+      "required": [
+        "format",
+        "required"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "format": {
+                "const": "json"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "schema_ref"
+            ],
+            "not": {
+              "required": [
+                "media_types"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "format": {
+                "const": "blob"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "media_types"
+            ],
+            "not": {
+              "required": [
+                "schema_ref"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "InputConfiguration": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "enum": [
+            "project",
+            "run"
+          ]
+        },
+        "default": {
+          "$ref": "#/$defs/JsonValue"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

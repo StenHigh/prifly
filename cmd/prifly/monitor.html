@@ -1,0 +1,379 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pri-Fly monitor</title>
+<style>
+ :root { color-scheme: light dark; --line:#8884; --dim:#8888; --time:#9999a8cc; }
+ body { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; padding: 16px; }
+ h1 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+ h2 { font-size: 13px; margin: 18px 0 6px; font-weight: 600; }
+ table { border-collapse: collapse; width: 100%; }
+ th, td { text-align: left; padding: 3px 10px 3px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+ th { font-weight: 600; color: var(--dim); }
+ tr.run { cursor: pointer; }
+ tr.run:hover td { background: #8881; }
+ tr.sel td { background: #8882; }
+ .dim { color: var(--dim); }
+ .ok { color: #2a7; } .bad { color: #c44; } .wait { color: #c92; } .run-live { color: #48c; }
+ .cols { display: grid; grid-template-columns: 1fr; gap: 22px; align-items: start; }
+ .cols > * { min-width: 0; overflow-wrap: anywhere; }
+ @media (min-width: 1000px) { .cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); } }
+ pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
+ .ev { border-bottom: 1px solid var(--line); padding: 3px 0; }
+ .ev b { font-weight: 600; }
+ #events { max-height: 60vh; overflow: auto; }
+ td { overflow-wrap: anywhere; }
+ .pill { border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; margin-right: 6px; }
+ .note { color: var(--dim); margin: 4px 0 10px; }
+ .node { border-bottom: 1px solid var(--line); }
+ .node > summary { cursor: pointer; padding: 3px 0; list-style: none; }
+ .node > summary::-webkit-details-marker { display: none; }
+ .node > summary::before { content: "▸ "; color: var(--dim); }
+ .node[open] > summary::before { content: "▾ "; }
+ .node .body { padding: 4px 0 8px 16px; }
+ .kids { padding-left: 16px; }
+ .dur, .t { color: var(--time); }
+ .unknown { color: #c92; }
+ details.raw > summary { cursor: pointer; color: var(--dim); padding: 2px 0; }
+ pre.raw { background: #8881; padding: 6px 8px; border-radius: 3px; max-height: 320px; overflow: auto; font-size: 12px; }
+ .tabs { margin: 10px 0 6px; }
+ .tabs button { font: inherit; background: none; border: 1px solid var(--line); border-radius: 3px; padding: 2px 8px; margin-right: 6px; cursor: pointer; color: inherit; }
+ .tabs button[aria-pressed="true"] { background: #8882; }
+ .art { cursor: pointer; text-decoration: underline dotted; }
+ .sect { margin: 6px 0 2px; color: var(--dim); }
+</style>
+<h1>Pri-Fly monitor <span class="dim">— read-only view of recorded facts</span></h1>
+<div id="capacity" class="note"></div>
+<div class="cols">
+  <div>
+    <h2>Runs</h2>
+    <table><thead><tr><th>run</th><th>workflow</th><th>status</th><th>state</th><th>work · version</th></tr></thead>
+    <tbody id="runs"></tbody></table>
+  </div>
+  <div>
+    <h2 id="detail-title">Select a run</h2>
+    <div class="tabs">
+      <button id="tab-tree" aria-pressed="true">Stages and time</button>
+      <button id="tab-events" aria-pressed="false">Journal</button>
+    </div>
+    <div id="tasks"></div>
+    <div id="tree"></div>
+    <div id="events" hidden></div>
+  </div>
+</div>
+<script>
+const short = s => (s || "").replace(/^(run|attempt|invocation|activation|step|artifact|command|decision):/, "").slice(0, 10);
+const cls = s => ({completed:"ok", succeeded:"ok", failed:"bad", cancelled:"bad", rejected:"bad",
+                   running:"run-live", ready:"run-live", waiting:"wait", stopping:"wait", uncertain:"bad"}[s] || "");
+let selected = null, cursor = 0, seen = new Set();
+
+async function get(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function refreshRuns() {
+  const { runs } = await get("/api/runs");
+  runs.sort((a, b) => (b.last_observed || "").localeCompare(a.last_observed || ""));
+  const body = document.getElementById("runs");
+  body.innerHTML = "";
+  for (const run of runs) {
+    const tr = document.createElement("tr");
+    tr.className = "run" + (run.run_id === selected ? " sel" : "");
+    // "running" is the recorded status, but work handed to a host and not yet
+    // reported is not running: saying so would use one word for two situations.
+    const handedOver = run.active_attempts > 0 && run.active_attempts === run.awaiting_hosts;
+    const shown = run.status === "running" && handedOver ? "awaiting host" : run.status;
+    const work = [run.active_attempts ? run.active_attempts + " handed out" : "",
+                  run.settled_attempts ? run.settled_attempts + " done" : ""].filter(Boolean).join(", ");
+    tr.innerHTML = `<td>${short(run.run_id)}</td><td>${run.workflow_id}</td>` +
+      `<td class="${handedOver ? "wait" : cls(run.status)}">${shown}${run.outcome ? " → " + run.outcome : ""}</td>` +
+      `<td class="dim">${run.schema_version}</td><td>${work || '<span class="dim">—</span>'}` +
+      `<span class="dim"> · v${run.run_version}/e${run.event_sequence}</span></td>`;
+    tr.dataset.run = run.run_id;
+    body.appendChild(tr);
+  }
+}
+
+// The table is redrawn on every poll, so the handler lives on the table rather
+// than on rows that are replaced under the pointer.
+document.getElementById("runs").addEventListener("click", event => {
+  const row = event.target.closest("tr[data-run]");
+  if (row) select(row.dataset.run);
+});
+
+async function refreshCapacity() {
+  const c = await get("/api/capacity");
+  const held = Object.keys(c.held || {}).length, waiting = Object.keys(c.waiting || {}).length;
+  document.getElementById("capacity").textContent =
+    `authority admits ${c.capacity} at once · ${held} held` + (waiting ? ` · ${waiting} waiting` : "");
+}
+
+function select(id) {
+  selected = id; cursor = 0; seen = new Set(); drawnAt = "";
+  document.getElementById("events").innerHTML = "";
+  document.getElementById("tree").innerHTML = "";
+  document.getElementById("detail-title").textContent = "Run " + short(id);
+  refreshRuns(); refreshDetail();
+}
+
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+// A duration carries how well it is known. Showing a number where the answer is
+// "unknown" or "not applicable" would be the monitor inventing a fact.
+// A partial duration still measured part of the span: known_ms is that part, and
+// hiding it because the whole is not accountable would answer "how long did this
+// take" with silence when part of the answer is recorded.
+function duration(d, withReasons) {
+  if (!d) return "";
+  const why = withReasons && (d.reasons || []).length ? ` <span class="dim">${esc(d.reasons.join(", "))}</span>` : "";
+  const open = d.is_open ? " (still open)" : "";
+  const mark = d.quality && d.quality !== "measured" ? ` <span class="unknown">${d.quality}</span>` : "";
+  // Any time reads in its own lighter grey, so a number is recognisable as a
+  // duration wherever it appears; the quality and the reasons keep their own.
+  const t = body => `<span class="t">${body}</span>${mark}${why}`;
+  if (d.value_ms != null) return t(`${ms(d.value_ms)}${open}`);
+  if (d.known_ms != null) return t(`at least ${ms(d.known_ms)}${open}`);
+  if (d.estimate_ms != null) return t(`about ${ms(d.estimate_ms)}${open}`);
+  return `<span class="unknown">${d.quality || "unknown"}</span>${why}`;
+}
+
+const ms = n => n >= 60000 ? `${(n / 60000).toFixed(1)} min` : n >= 1000 ? `${(n / 1000).toFixed(1)} s` : `${n} ms`;
+
+// Most metrics do not apply to most node kinds. Showing them all flattens what
+// matters into what is merely absent, so the inapplicable ones fold away — they
+// stay reachable, because for debugging "why is this not applicable" is a question.
+const applies = d => d && (d.value_ms != null || d.quality !== "not_applicable");
+
+function objectFor(state, node) {
+  const r = state.run || {};
+  const pools = {stage_activation: r.activations, step_instance: r.steps, attempt: r.attempts,
+                 workflow_invocation: r.invocations, check_execution: r.check_executions, run: null};
+  if (node.kind === "run") return r;
+  const pool = pools[node.kind];
+  return pool ? pool[node.id] : null;
+}
+
+// An envelope or a reported result is recorded as bytes. Reading it as the JSON
+// it is beats showing an escaped string, and a value that is not JSON is left
+// exactly as it was recorded rather than guessed at.
+function parseMaybe(value) {
+  if (value == null) return null;
+  if (typeof value !== "string") return value;
+  try { return JSON.parse(value); } catch { return value; }
+}
+
+function section(key, title, value) {
+  const el = document.createElement("details");
+  el.className = "raw";
+  el.dataset.key = key;
+  el.innerHTML = `<summary>${title}</summary><pre class="raw" data-scroll="${key}">${esc(JSON.stringify(value, null, 2))}</pre>`;
+  return el;
+}
+
+// An artifact reference is an address, not the thing. The content is fetched
+// only when asked for, and what comes back is the sealed bytes themselves.
+function artifacts(key, title, refs) {
+  const el = document.createElement("details");
+  el.className = "raw";
+  el.dataset.key = key;
+  const rows = Object.entries(refs).map(([port, ref]) =>
+    `<tr><td class="dim">${esc(port)}</td><td><span class="art" data-ref='${esc(JSON.stringify(ref))}'>${short(ref.artifact_id)} rev ${ref.revision}</span></td></tr>`).join("");
+  el.innerHTML = `<summary>${title}</summary><table>${rows}</table><div class="content"></div>`;
+  return el;
+}
+
+document.getElementById("tree").addEventListener("click", async event => {
+  const link = event.target.closest(".art");
+  if (!link) return;
+  const ref = JSON.parse(link.dataset.ref);
+  const box = link.closest("details").querySelector(".content");
+  box.textContent = "reading…";
+  try {
+    const q = new URLSearchParams({artifact_id: ref.artifact_id, revision: ref.revision, digest: ref.digest});
+    const a = await get("/api/artifact?" + q);
+    box.innerHTML = `<div class="dim">${a.bytes} bytes${a.truncated ? " · shown truncated" : ""} · ` +
+      `${esc(a.artifact.format || "")} ${esc((a.artifact.media_type || ""))}</div>` +
+      `<pre class="raw">${esc(a.content)}</pre>`;
+  } catch (err) {
+    box.textContent = "read failed: " + err.message;
+  }
+});
+
+function renderNode(node, state, depth) {
+  const el = document.createElement("details");
+  el.className = "node";
+  if (depth < 2) el.open = true;
+  const label = [node.stage_id && `stage ${node.stage_id}`, node.stage_kind, node.verdict && `verdict ${node.verdict}`,
+                 node.outcome && `outcome ${node.outcome}`].filter(Boolean).join(" · ");
+  const elapsed = node.metrics && node.metrics.elapsed;
+  const key = node.kind + ":" + node.id;
+  el.dataset.key = key;
+  el.innerHTML = `<summary><b>${node.kind}</b> <span class="dim">${short(node.id)}</span> ` +
+    `<span class="${cls(node.status)}">${node.status}</span> ${label ? `<span class="dim">${esc(label)}</span>` : ""} ` +
+    `<span class="dur">${duration(elapsed, false)}</span></summary>`;
+  const body = document.createElement("div");
+  body.className = "body";
+  const metrics = Object.entries(node.metrics || {}).filter(([k]) => k !== "elapsed");
+  const shown = metrics.filter(([, v]) => applies(v)), folded = metrics.filter(([, v]) => !applies(v));
+  const rows = list => "<table>" + list.map(([k, v]) =>
+    `<tr><td class="dim">${k}</td><td>${duration(v, true)}</td></tr>`).join("") + "</table>";
+  if (elapsed && (elapsed.reasons || []).length) {
+    body.innerHTML += `<div class="dim">elapsed: ${esc(elapsed.reasons.join(", "))}</div>`;
+  }
+  if (shown.length) body.innerHTML += rows(shown);
+  if (folded.length) {
+    body.innerHTML += `<details class="raw" data-key="${key}:folded"><summary>${folded.length} metric(s) not applicable here</summary>${rows(folded)}</details>`;
+  }
+  const stateTime = Object.entries(node.state_time || {}).filter(([, v]) => applies(v));
+  if (stateTime.length) {
+    body.innerHTML += `<details class="raw" data-key="${key}:state"><summary>time by state</summary>${rows(stateTime)}</details>`;
+  }
+  if ((node.intervals || []).length) {
+    body.innerHTML += `<details class="raw" data-key="${key}:intervals"><summary>${node.intervals.length} recorded interval(s)</summary>` +
+      `<pre class="raw" data-scroll="${key}:intervals">${esc(JSON.stringify(node.intervals, null, 2))}</pre></details>`;
+  }
+  if ((node.reasons || []).length) {
+    body.innerHTML += `<div class="dim">reasons: ${esc(node.reasons.join(", "))}</div>`;
+  }
+  // What a step was given, what was launched for it, and what came back: the
+  // three questions a failing step raises, answered from the recorded attempt
+  // rather than from a retelling of it.
+  const object = objectFor(state, node);
+  if (node.kind === "attempt" && object) {
+    const sent = {envelope_digest: object.envelope_digest, workspace: object.workspace,
+                  context: object.context, envelope: parseMaybe(object.envelope)};
+    const launched = object.session
+      ? {kind: "assisted session", principal: object.session.principal_id, skills: object.session.skill_refs,
+         host_state: object.session.host_state, claim: object.session.claim_id || "(no worktree)",
+         deadline: object.deadline, dispatch_deadline: object.dispatch_deadline}
+      : {kind: "local process", process: object.process, dispatch: object.dispatch, started: object.started,
+         outcome: object.process_outcome, deadline: object.deadline};
+    const returned = {reported: parseMaybe(object.candidate), accepted: object.accepted,
+                      candidate_conflict: object.candidate_conflict, settled: object.settled};
+    body.appendChild(section(key + ":sent", "sent to the step", sent));
+    body.appendChild(section(key + ":launched", "launched", launched));
+    body.appendChild(section(key + ":returned", "returned by the step", returned));
+    const refs = (object.accepted && object.accepted.outputs) || {};
+    if (Object.keys(refs).length) body.appendChild(artifacts(key + ":outputs", "output artifacts", refs));
+  }
+  if (node.kind === "workflow_invocation" && object) {
+    if (Object.keys(object.input_refs || {}).length) body.appendChild(artifacts(key + ":in", "inputs", object.input_refs));
+    if (Object.keys(object.output_refs || {}).length) body.appendChild(artifacts(key + ":out", "outputs", object.output_refs));
+  }
+  if (node.kind === "step_instance" && object && Object.keys(object.outputs || {}).length) {
+    body.appendChild(artifacts(key + ":stepout", "outputs", object.outputs));
+  }
+  if (object) {
+    const raw = document.createElement("details");
+    raw.className = "raw";
+    raw.dataset.key = key + ":object";
+    raw.innerHTML = `<summary>recorded object</summary><pre class="raw" data-scroll="${key}:object">${esc(JSON.stringify(object, null, 2))}</pre>`;
+    body.appendChild(raw);
+  }
+  el.appendChild(body);
+  if ((node.children || []).length) {
+    const kids = document.createElement("div");
+    kids.className = "kids";
+    for (const child of node.children) kids.appendChild(renderNode(child, state, depth + 1));
+    el.appendChild(kids);
+  }
+  return el;
+}
+
+let drawnAt = "";
+
+async function refreshTree() {
+  const state = await get("/api/state?id=" + encodeURIComponent(selected));
+  const box = document.getElementById("tree");
+  // Nothing was recorded since the last draw, so there is nothing to redraw.
+  // Rebuilding an unchanged tree would throw away where the reader is looking.
+  const stamp = `${selected}/${state.run_version}/${state.event_sequence}`;
+  if (stamp === drawnAt && box.firstChild) return;
+  drawnAt = stamp;
+  // The tree is redrawn on every poll, so everything the reader opened — at any
+  // depth — is restored afterwards. Restoring only the top level would collapse
+  // the detail a reader is in the middle of reading, once a second.
+  const open = new Set([...box.querySelectorAll("details[data-key][open]")].map(d => d.dataset.key));
+  const scrolled = new Map([...box.querySelectorAll("[data-scroll]")].map(p => [p.dataset.scroll, p.scrollTop]));
+  const drawn = box.firstChild !== null;
+  const scroll = box.scrollTop;
+  box.innerHTML = "";
+  const header = document.createElement("div");
+  header.className = "note";
+  header.textContent = `read ${state.schema_version} · run version ${state.run_version} · cut ${state.cut}` +
+    (state.driver_live ? " · driver live" : "");
+  box.appendChild(header);
+  const tree = renderNode(state.timing.root, state, 0);
+  box.appendChild(tree);
+  if (drawn) {
+    for (const d of box.querySelectorAll("details[data-key]")) {
+      d.open = open.has(d.dataset.key);
+    }
+    for (const pane of box.querySelectorAll("[data-scroll]")) {
+      const was = scrolled.get(pane.dataset.scroll);
+      if (was) pane.scrollTop = was;
+    }
+  }
+  const diagnostics = (state.run.diagnostics || []);
+  if (diagnostics.length) {
+    const raw = document.createElement("details");
+    raw.className = "raw";
+    raw.dataset.key = "run:diagnostics";
+    raw.innerHTML = `<summary>${diagnostics.length} diagnostic(s)</summary><pre class="raw" data-scroll="run:diagnostics">${esc(JSON.stringify(diagnostics, null, 2))}</pre>`;
+    box.appendChild(raw);
+  }
+  const whole = document.createElement("details");
+  whole.className = "raw";
+  whole.dataset.key = "run:whole";
+  whole.innerHTML = `<summary>whole recorded run</summary><pre class="raw" data-scroll="run:whole">${esc(JSON.stringify(state.run, null, 2))}</pre>`;
+  box.appendChild(whole);
+  box.scrollTop = scroll;
+}
+
+async function refreshDetail() {
+  if (!selected) return;
+  const { tasks } = await get("/api/tasks?id=" + encodeURIComponent(selected));
+  const box = document.getElementById("tasks");
+  box.innerHTML = tasks.length
+    ? "<h2>Outstanding handoffs</h2>" + tasks.map(t =>
+        `<div class="ev"><span class="pill">${short(t.attempt_id)}</span>` +
+        `${(t.skill_refs || []).map(s => s.id).join(", ")}` +
+        `<div class="dim">may: ${(t.permitted_effects || []).join(", ")}` +
+        `${t.claim_path ? " · worktree " + t.claim_path : " · no worktree"}</div></div>`).join("")
+    : "";
+  await refreshTree();
+  const { events } = await get(`/api/events?id=${encodeURIComponent(selected)}&after=${cursor}`);
+  const list = document.getElementById("events");
+  if (events.length && !list.dataset.titled) { list.dataset.titled = "1"; }
+  for (const e of events) {
+    if (seen.has(e.seq)) continue;
+    seen.add(e.seq); cursor = Math.max(cursor, e.seq);
+    const d = e.data || {};
+    const detail = [d.branch_id && "branch " + d.branch_id, d.route && "route " + d.route,
+                    d.verdict && "verdict " + d.verdict, d.outcome && "outcome " + d.outcome,
+                    d.stage_id && "stage " + d.stage_id, d.entered_branch_ids && "[" + d.entered_branch_ids + "]",
+                    d.failure && "failure " + d.failure].filter(Boolean).join(" · ");
+    const row = document.createElement("div");
+    row.className = "ev";
+    row.innerHTML = `<span class="dim">${String(e.seq).padStart(3, " ")}</span> <b>${e.type}</b>` +
+      (detail ? ` <span class="dim">${detail}</span>` : "");
+    list.appendChild(row);
+  }
+}
+
+async function tick() {
+  try { await refreshCapacity(); await refreshRuns(); await refreshDetail(); }
+  catch (err) { document.getElementById("capacity").textContent = "read failed: " + err.message; }
+}
+for (const [button, panel] of [["tab-tree", "tree"], ["tab-events", "events"]]) {
+  document.getElementById(button).onclick = () => {
+    for (const [b, p] of [["tab-tree", "tree"], ["tab-events", "events"]]) {
+      const on = b === button;
+      document.getElementById(b).setAttribute("aria-pressed", String(on));
+      document.getElementById(p).hidden = !on;
+    }
+  };
+}
+tick(); setInterval(tick, 1500);
+</script>

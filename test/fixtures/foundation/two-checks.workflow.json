@@ -1,0 +1,150 @@
+{
+  "schema_version": "1",
+  "id": "example:workflow/foundation-two-checks",
+  "version": "1.0.0",
+  "title": "Две последовательные проверки независимых документов",
+  "inputs": {
+    "first": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/document",
+        "version": "1.0.0",
+        "digest": "sha256:b58b58d8837eee9157ed2f215ef22ce2d52ce9622d686182a2488a2283becc86"
+      },
+      "required": true
+    },
+    "second": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/document",
+        "version": "1.0.0",
+        "digest": "sha256:b58b58d8837eee9157ed2f215ef22ce2d52ce9622d686182a2488a2283becc86"
+      },
+      "required": true
+    }
+  },
+  "outputs": {
+    "report_first": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/report",
+        "version": "1.0.0",
+        "digest": "sha256:717b29fcf46987f93f1ebb4fbc5580edd3691d4413d73032a1c1c72051a5f9b5"
+      },
+      "required_for": [
+        "succeeded",
+        "rejected"
+      ]
+    },
+    "report_second": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/report",
+        "version": "1.0.0",
+        "digest": "sha256:717b29fcf46987f93f1ebb4fbc5580edd3691d4413d73032a1c1c72051a5f9b5"
+      },
+      "required_for": [
+        "succeeded"
+      ]
+    }
+  },
+  "allowed_outcomes": [
+    "succeeded",
+    "rejected"
+  ],
+  "definition": {
+    "entry": "check_first",
+    "stages": {
+      "check_first": {
+        "kind": "step",
+        "step_ref": {
+          "id": "example:step/validate-document",
+          "version": "1.0.0",
+          "digest": "sha256:558a1dc1d079decdc459a51649abae06ed63bb599356e9075424989b3badcf73"
+        },
+        "input_bindings": {
+          "document": {
+            "from": "workflow_input",
+            "port": "first"
+          }
+        },
+        "on": {
+          "pass": "check_second",
+          "fail": "rejected_first"
+        }
+      },
+      "check_second": {
+        "kind": "step",
+        "step_ref": {
+          "id": "example:step/validate-document",
+          "version": "1.0.0",
+          "digest": "sha256:558a1dc1d079decdc459a51649abae06ed63bb599356e9075424989b3badcf73"
+        },
+        "input_bindings": {
+          "document": {
+            "from": "workflow_input",
+            "port": "second"
+          }
+        },
+        "on": {
+          "pass": "done",
+          "fail": "rejected_second"
+        }
+      },
+      "done": {
+        "kind": "finish",
+        "outcome": "succeeded",
+        "output_bindings": {
+          "report_first": {
+            "from": "stage_output",
+            "stage_id": "check_first",
+            "port": "report"
+          },
+          "report_second": {
+            "from": "stage_output",
+            "stage_id": "check_second",
+            "port": "report"
+          }
+        }
+      },
+      "rejected_first": {
+        "kind": "finish",
+        "outcome": "rejected",
+        "output_bindings": {
+          "report_first": {
+            "from": "stage_output",
+            "stage_id": "check_first",
+            "port": "report"
+          }
+        }
+      },
+      "rejected_second": {
+        "kind": "finish",
+        "outcome": "rejected",
+        "output_bindings": {
+          "report_first": {
+            "from": "stage_output",
+            "stage_id": "check_first",
+            "port": "report"
+          },
+          "report_second": {
+            "from": "stage_output",
+            "stage_id": "check_second",
+            "port": "report"
+          }
+        }
+      }
+    }
+  },
+  "limits": {
+    "max_step_instances": 2,
+    "max_control_transitions": 32,
+    "max_parallelism": 1,
+    "max_child_depth": 0
+  },
+  "policy_ref": {
+    "id": "example:policy/local",
+    "version": "1.0.0",
+    "digest": "sha256:395ef7427c2922e1a90017ef471524ecc837336bae78d71d9f7320f1f1a42125"
+  }
+}

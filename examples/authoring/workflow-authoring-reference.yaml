@@ -1,0 +1,213 @@
+# yaml-language-server: $schema=../../schemas/authoring/workflow-v1.schema.json
+# Complete reference for one prifly-workflow/1 source. It documents every
+# authoring field and every currently supported stage kind. The zero digests
+# deliberately make this a reference, not an executable package: copy only
+# the pieces you need and replace refs with exact bytes from `prifly inventory`.
+authoring: prifly-workflow/1 # Required marker; this YAML is lowered before sealing.
+schema_version: "3" # Optional only when v3 sources below are used; otherwise compiler derives it.
+id: example:workflow/full-reference # Required stable identity.
+version: 1.0.0 # Required; increase when sealed bytes change.
+title: Full workflow authoring reference # Optional: defaults to id.
+
+# Optional local names for exact immutable refs. They are never ranges or network lookups.
+refs:
+  value_schema: {id: example:schema/value, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  item_schema: {id: example:schema/item, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  projection_schema: {id: example:schema/projection, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  content_check: {id: example:check/content, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  policy: {id: example:policy/local, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  worker_step: {id: example:step/worker, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  child_workflow: {id: example:workflow/child, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  repeat_body: {id: example:workflow/repeat-body, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  parallel_branch: {id: example:workflow/parallel-branch, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  map_body: {id: example:workflow/map-body, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  compensation_workflow: {id: example:workflow/compensate, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  publication_source: {id: example:source/publication, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  event_schema: {id: example:schema/event, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+
+# Inputs and outputs are optional maps; omit either map entirely when empty.
+inputs:
+  request:
+    schema_ref: value_schema # JSON is inferred from schema_ref.
+    content_check_refs: [content_check] # Optional accepted-byte checks.
+    description: Request supplied when the Run starts.
+    required: true # Default is true; written here for the full reference.
+  attachment:
+    format: blob # Blob ports use media_types instead of schema_ref.
+    media_types: [text/plain]
+    description: Optional file from the owner.
+    required: false
+  repeat_limit:
+    schema_ref: value_schema
+    description: Project may lower this author-defined loop ceiling.
+    required: false
+    configuration: {scope: project, default: 3} # scope is project or run; default is optional.
+
+# Project workflow folders may additionally declare optional features. This
+# compiler-only metadata is removed before sealing; it maps a team-friendly name
+# to a boolean project input while the ordinary Choice below owns both routes.
+# features:
+#   optional_quality: {input: quality_enabled}
+outputs:
+  report:
+    schema_ref: value_schema
+    content_check_refs: [content_check]
+    description: Final typed result.
+    required_for: [succeeded] # Empty list is the safe default.
+  archive:
+    format: blob
+    media_types: [application/zip]
+    description: Optional exported file.
+    required_for: []
+
+# Optional; compiler derives all finish outcomes when this list is omitted.
+allowed_outcomes: [succeeded, completed_with_waivers, no_work, partial, rejected]
+
+# Required global bounds. max_parallelism and max_child_depth have defaults,
+# but they are explicit here because this is the complete reference.
+limits:
+  max_step_instances: 128
+  max_control_transitions: 1024
+  max_parallelism: 4
+  max_child_depth: 4
+policy_ref: policy # Required policy of this workflow.
+entry: start # Required ID of the first stage.
+
+stages:
+  # A worker Step runs one StepDefinition. `on` routes its declared verdicts.
+  start:
+    kind: step
+    step_ref: worker_step
+    input_bindings:
+      request:
+        from: $inputs.request#/subject # $inputs.PORT is workflow_input; # needs a projected schema.
+        projected_schema_ref: projection_schema
+      fixed_mode: {from: literal, schema_ref: value_schema, value: preview} # Literal is explicit.
+    on: {pass: call_child, fail: rejected, needs_revision: rejected, no_work: rejected, skipped: rejected, waived: rejected}
+    compensation:
+      workflow_ref: compensation_workflow
+      input_bindings:
+        prior_effect:
+          from: $compensation#/effect
+          projected_schema_ref: projection_schema
+    description: Produce the first result and, if needed, describe compensation.
+    on_error: rejected
+
+  # Call runs one child workflow and routes its workflow outcome.
+  call_child:
+    kind: call
+    workflow_ref: child_workflow
+    input_bindings: {request: $stages.start.result} # $stages.STAGE.PORT is stage_output.
+    on: {succeeded: choose, completed_with_waivers: choose, no_work: rejected, rejected: rejected, partial: rejected}
+    description: Delegate to a sealed child workflow.
+    on_error: rejected
+
+  # Choice selects a declared route; it never calls a model or infers a branch.
+  choose:
+    kind: choice
+    selection: first_match # Other option: exclusive, which rejects two true branches.
+    branches:
+      - id: ready
+        predicate:
+          op: all # all/any contain predicates; eq/ne compare operands.
+          args:
+            - {op: eq, left: $stages.start.result#/ready, right: true}
+            - {op: exists, ref: $inputs.attachment}
+        next: repeat
+      - id: changed
+        predicate: {op: ne, left: $stages.start.result#/state, right: unchanged}
+        next: repeat
+    default: rejected # Route when no predicate is true.
+    on_unknown: rejected # Route when a predicate cannot be decided.
+    description: Choose only among already declared predicates.
+    on_error: rejected
+
+  # Repeat passes initial data to the first body invocation and iteration output
+  # to every following one. Its maximum can be lowered through a named input.
+  repeat:
+    kind: repeat
+    body_workflow_ref: repeat_body
+    initial_bindings:
+      request: $inputs.request
+      subscription: $subscription.publication_source.handle # v3 durable source handle.
+      cursor: $subscription.publication_source.cursor
+    next_bindings:
+      request: $iteration.result # $iteration.PORT is the prior body output.
+      subscription: $subscription.publication_source.handle
+      cursor: $iteration.next_cursor
+    continue_on: [partial]
+    until: {op: eq, left: $iteration.done, right: true}
+    max_iterations: 3
+    limit_configuration: repeat_limit
+    on_complete: {succeeded: parallel, completed_with_waivers: parallel, no_work: parallel, rejected: rejected, partial: parallel}
+    on_limit: rejected
+    on_unknown: rejected
+    description: Bounded refinement; no "retry until it works" behaviour.
+    on_error: rejected
+
+  # Parallel runs named child workflows and releases only the declared join.
+  parallel:
+    kind: parallel
+    branches:
+      - id: first_reviewer
+        workflow_ref: parallel_branch
+        input_bindings: {request: $stages.start.result}
+      - id: second_reviewer
+        workflow_ref: parallel_branch
+        input_bindings: {request: $stages.start.result}
+    join:
+      mode: quorum # For mode all omit required_successes, use selection all and remainder wait.
+      accept_outcomes: [succeeded, completed_with_waivers]
+      required_successes: 1
+      selection: first_observed
+      remainder: cancel
+    max_parallelism: 2
+    on: {satisfied: map_items, unsatisfied: rejected}
+    description: Two independent reviewers; each reads an explicit binding.
+    on_error: rejected
+
+  # Map invokes a body once per sealed item; the key prevents position-based identity.
+  map_items:
+    kind: map
+    items: $publication.start # v3 publication source; it is not a mutable workspace scan.
+    body_workflow_ref: map_body
+    item_input: item
+    item_key_pointer: /id
+    input_bindings: {request: $inputs.request}
+    max_items: 100
+    max_parallelism: 4
+    join:
+      mode: all
+      accept_outcomes: [succeeded]
+      selection: all
+      remainder: wait
+    on: {satisfied: wait_for_event, unsatisfied: rejected, empty: done}
+    description: Process every sealed item, or follow the explicit empty route.
+    on_error: rejected
+
+  # Wait records a durable request before waiting. A null timeout omits on_timeout.
+  wait_for_event:
+    kind: wait
+    source_ref: publication_source
+    event_type: item_ready
+    event_schema_ref: event_schema
+    correlation_input:
+      from: $inputs.request#/correlation
+      projected_schema_ref: projection_schema
+    timeout_seconds: 300
+    on_event: done
+    on_timeout: rejected
+    description: Continue on the matching event or the declared timeout.
+    on_error: rejected
+
+  # Finish exposes only declared outputs and one terminal outcome.
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {report: $stages.start.result}
+    description: Successful terminal result.
+  rejected:
+    kind: finish
+    outcome: rejected
+    output_bindings: {}
+    description: Terminal declared rejection.

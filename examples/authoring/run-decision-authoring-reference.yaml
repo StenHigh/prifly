@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=../../schemas/authoring/run-decision-v1.schema.json
+# One declared choice for a single Run. The compiler seals it with the package;
+# it cannot add a stage, route, capability or permission.
+authoring: prifly-run-decision/1
+id: plan_profile
+title: Planning depth
+description: Select the artifact layout before package compilation.
+phase: preflight # `runtime` waits through the universal Decision Bridge.
+required: true # Omit only for an optional decision with a declared default.
+choices:
+  - {id: fast, title: Fast, value: fast}
+  - {id: full, title: Full, value: full}
+  - {id: ultra, title: Ultra, value: ultra}
+recommendation: fast # Optional typed recommended value.
+automatic: false # Automatic choice requires ordinary sensitivity and a recommendation.
+sensitivity: ordinary # scope-changing and approval-like choices never auto-select.
+when:
+  profiles: [fast, full, ultra] # Optional profile filter.
+  # answers: {roadmap_linkage: link} # Optional exact prior preflight answer.
+destination:
+  kind: package_profile # Other declared forms: launch_input, session_context.
+  # name: verbosity # Required only for launch_input and session_context.

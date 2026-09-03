@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=../../schemas/authoring/project-profile-v2.schema.json
+# Complete reference for .prifly/project.yaml. The three host roots are fixed:
+# Pri-Fly does not guess the host by checking which folders happen to exist.
+# At launch, the selected host asks the developer to choose worktree or checkout;
+# this is a per-Run choice, not a tracked project.yaml setting.
+schema_version: prifly-project-profile/2
+hosts:
+  codex-cli: .codex/skills # The `prifly-run` skill installed for Codex CLI.
+  codex-app: .agents/skills # The `prifly-run` skill installed for Codex Desktop.
+  claude-code: .claude/skills # The `prifly-run` skill installed for Claude Code.
+packages:
+  example:
+    source: .prifly/workflows/example # One folder with workflow.yaml and its YAML components.
+    origin: # Written by `prifly project workflows add`; omit it for a hand-written folder.
+      repository: https://github.com/StenHigh/prifly.git # Full Git URL without credentials.
+      path: examples/example # Workflow folder inside that repository.
+      ref: v0.4.0 # Tag, branch or commit that was requested.
+      commit: 0000000000000000000000000000000000000000 # Exact commit that was fetched.
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # Tree digest without the root extend.yaml; update refuses local drift.
+      extend_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # Upstream extend.yaml at install time, when it shipped one.
+      catalog: https://github.com/StenHigh/prifly-workflows.git # Catalog that named the entry, when one did.
+launches:
+  example:
+    title: Example workflow # Human-facing chooser label.
+    description: A tracked YAML workflow package. # Human-facing chooser explanation.
+    kind: workflow # The only supported launch kind.
+    workflow: .prifly/workflows/example/workflow.yaml # Marker file inside the package source.

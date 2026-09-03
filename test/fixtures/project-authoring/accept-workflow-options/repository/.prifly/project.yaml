@@ -1,0 +1,14 @@
+schema_version: prifly-project-profile/2
+hosts:
+  codex-cli: .codex/skills
+  codex-app: .agents/skills
+  claude-code: .claude/skills
+packages:
+  options:
+    source: .prifly/workflows/options
+launches:
+  options:
+    title: Optional quality workflow
+    description: Compile declared settings and an optional feature.
+    kind: workflow
+    workflow: .prifly/workflows/options/workflow.yaml

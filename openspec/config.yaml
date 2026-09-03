@@ -1,0 +1,61 @@
+schema: spec-driven
+
+context: |
+  Language: Russian
+  All artifacts must be written in Russian.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Pri-Fly is a Go workflow engine. OpenSpec governs only the evolution of this
+  repository's normative specification and development process; it is not a
+  Pri-Fly runtime feature, package format, or YAML authoring contract.
+
+  Before changing a product capability, consult openspec/SOURCE-OF-TRUTH.md.
+  Until that map records a completed migration, the listed legacy source set is
+  the sole normative source for the capability. Do not copy requirements into a
+  second source merely to make an OpenSpec change look complete.
+
+  Historical release evidence and manifests live only in Git and archived
+  OpenSpec changes. Do not recreate or rewrite them as current documentation.
+
+  Read AGENTS.md and the applicable glossary, development rules, roadmap and
+  published contracts before changing product semantics. A passed document
+  check does not close a roadmap phase or product gate.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - State whether the change affects product runtime or only the repository process.
+    - Name every capability whose normative source ownership will change.
+  specs:
+    - Preserve public versioned identifiers; legacy documentation identifiers belong only in archived crosswalks.
+    - State the authoritative source set and compatibility path during any transition.
+  tasks:
+    - Include a verification command and a check for protected historical evidence.
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
+operations:
+  apply:
+    guidance:
+      - Keep migrations capability-sized; never copy an unrelated capability into a change.
+      - Update entry-point documentation and the source-of-truth map in the same change.
+  archive:
+    guidance:
+      - Confirm the archived change does not alter product runtime or versioned contracts without an explicit capability change.

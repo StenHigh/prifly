@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:context:1",
+  "title": "Pri-Fly YAML context",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "media_type"],
+  "oneOf": [{"required": ["text"]}, {"required": ["source"]}],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "version": {"type": ["string", "number"]},
+    "media_type": {"type": "string", "minLength": 1},
+    "text": {"type": "string"},
+    "source": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["root", "path"],
+          "properties": {
+            "root": {"const": "host_skills"},
+            "path": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+schema_version: prifly-project-profile/2
+hosts:
+  codex-cli: .codex/skills
+  codex-app: .agents/skills
+  claude-code: .claude/skills
+packages: {}
+launches:
+  direct:
+    title: Direct workflow
+    description: A folder root marker is required.
+    kind: workflow
+    workflow: .prifly/workflows/direct/workflow.yaml

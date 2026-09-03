@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=../../schemas/authoring/workflow-catalog-v1.schema.json
+# Complete reference for catalog.yaml at the root of a workflow catalog repository.
+# A catalog is discovery only: it points at workflow repositories, never carries
+# workflow bytes, keys or trust. `prifly project workflows search` reads it and
+# `prifly project workflows add NAME` follows one entry.
+schema_version: prifly-workflow-catalog/1
+title: Example workflow catalog # Optional human-facing catalog title.
+categories:
+  software-delivery: # Category IDs use lowercase letters, digits, - or _.
+    title: Software delivery # Human-facing category title.
+    description: Development cycles for AI-assisted coding hosts. # Optional.
+workflows:
+  example: # Entry name; it becomes the default folder name under .prifly/workflows.
+    title: Example workflow # Human-facing title.
+    description: One sentence about what the workflow does. # Human-facing explanation.
+    category: software-delivery # Must name a declared category.
+    repository: https://github.com/StenHigh/prifly.git # Full Git URL without credentials; https, ssh or file transport.
+    path: examples/example # Folder with workflow.yaml marked prifly-project-workflow/1; "." for the repository root.
+    ref: v0.4.0 # Optional tag, branch or commit; the remote default branch when omitted.
+    commit: 0000000000000000000000000000000000000000 # Optional pin; add refuses when ref resolves to another commit.
+    tags: [example, reference] # Optional free-form keywords for search.

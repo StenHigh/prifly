@@ -1,0 +1,129 @@
+# yaml-language-server: $schema=../../schemas/authoring/step-v1.schema.json
+# Complete reference for one prifly-step/1 source. Copy only the fields that
+# describe this step; the compiler inserts the documented safe defaults before
+# it seals the machine StepDefinition v2 or v5. This file is intentionally verbose.
+authoring: prifly-step/1 # Required marker; authoring is YAML-only.
+schema_version: "5" # Optional: omitted form is v2; workspace_trees requires v5.
+id: example:step/full-reference # Required stable identity.
+version: 1.0.0 # Required; increase when sealed bytes change.
+title: Full step authoring reference # Optional: defaults to id.
+
+# Optional names for exact immutable references used below.
+refs:
+  input_schema: {id: example:schema/input, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  output_schema: {id: example:schema/output, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  plan_manifest: {id: core:schema/workspace-tree-manifest, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  check: {id: example:check/content, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  adapter: {id: example:adapter/session, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  instructions: {id: example:context/instructions, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  context: {id: example:context/supporting, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  result_schema: {id: example:schema/step-result, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  hook_schema: {id: example:schema/progress, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+
+kind: worker # Required: worker, check or command.
+inputs: # Optional: defaults to {}.
+  document:
+    schema_ref: input_schema # JSON also defaults format=json.
+    content_check_refs: [check] # Optional checks for this input's content.
+    description: Work item supplied by the preceding stage.
+    required: false # Optional; true is the default.
+  attachment:
+    format: blob # Use blob together with media_types instead of schema_ref.
+    media_types: [text/plain]
+    description: Optional supporting file.
+    required: true
+  plan_manifest:
+    schema_ref: plan_manifest # Required compatible JSON input for workspace_trees.
+    required: true
+outputs: # Optional: defaults to {}.
+  report:
+    schema_ref: output_schema # JSON also defaults format=json.
+    content_check_refs: [check] # Optional checks before this output is accepted.
+    description: Typed result for later stages.
+    required_for: [pass, fail, needs_revision, no_work, skipped, waived]
+  log:
+    format: blob
+    media_types: [text/plain]
+    description: Human-readable execution log.
+    required_for: [] # Optional: no verdict requires this output by default.
+  plan_manifest:
+    schema_ref: plan_manifest # The same builtin schema is required for tree output.
+    required_for: [pass]
+
+executor:
+  adapter_ref: adapter # Required exact execution adapter.
+  operation: session # Required adapter operation.
+instructions_ref: instructions # Optional primary instruction context.
+context_refs: [context] # Optional supporting contexts; defaults to [].
+required_capabilities: [network] # Optional extra capabilities; defaults to [].
+effects:
+  class: workspace_write # Required: explicitly state none or workspace_write.
+  retry_class: never # Required retry contract; it is never inferred.
+# Optional result checks; defaults to []. A workspace-tree step must keep this
+# empty because its native output is sealed atomically by runtime.
+result_check_refs: []
+result_schema_ref: result_schema # Required schema of the worker-reported result.
+
+# Optional state/event hooks. A state hook additionally requires freshness_ms;
+# an event hook must omit it. Both forms list every Hook field.
+hooks:
+  progress:
+    kind: state
+    schema_ref: hook_schema
+    description: Current progress published by this attempt.
+    classification: internal # public, internal or confidential.
+    read_policy: owner
+    max_payload_bytes: 4096
+    max_count: 1
+    max_per_minute: 60
+    allow_during_stop: false
+    freshness_ms: 1000
+  notice:
+    kind: event
+    schema_ref: hook_schema
+    description: One notable execution event.
+    classification: internal
+    read_policy: owner
+    max_payload_bytes: 4096
+    max_count: 100
+    max_per_minute: 60
+    allow_during_stop: false
+
+# Optional telemetry mappings. Non-diagnostic mappings need field and unit;
+# diagnostic mappings instead need severity, code and message.
+telemetry:
+  - name: progress_percent
+    revision: 1.0.0
+    description: Most recent reported completion percentage.
+    hook: progress
+    kind: gauge # gauge, counter, distribution or diagnostic.
+    field: /percent
+    unit: percent
+    aggregation: last # last, min, max, delta, observations or occurrences.
+    reset: attempt # none or attempt.
+    minimum: 0
+    maximum: 100
+    dimensions: {component: /component}
+  - name: validation_notice
+    revision: 1.0.0
+    description: A structured validation notice.
+    hook: notice
+    kind: diagnostic
+    aggregation: occurrences
+    reset: none
+    dimensions: {}
+    severity: warn # trace, debug, info, warn, error, fatal or unknown.
+    code: validation.notice
+    message: Validation produced a noteworthy result.
+
+# Optional v5 binding for one manifest-backed file or shallow bundle in the
+# claimed Workspace. `path` is exact_file's file path or the parent for a
+# direct-child policy. The host never sends artifact refs; runtime captures and
+# seals the resulting manifest itself. Omit this whole field for a v2 step.
+workspace_trees:
+  - input_port: plan_manifest # Optional manifest input; omit when creating a tree.
+    output_port: plan_manifest # Required compatible manifest output.
+    capture:
+      kind: direct_child_tree # exact_file, direct_child_file, direct_child_tree.
+      path: .ai-factory/plans # Workspace-relative fixed file or declared parent.
+      entrypoint: index.md # Required only for direct_child_tree.

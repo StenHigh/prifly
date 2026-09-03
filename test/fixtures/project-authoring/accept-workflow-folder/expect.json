@@ -1,0 +1,6 @@
+{
+  "command": "compile",
+  "accepted": true,
+  "launch": "sample",
+  "package": "sample"
+}

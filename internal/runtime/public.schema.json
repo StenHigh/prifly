@@ -1,0 +1,3967 @@
+{
+  "$defs": {
+    "CommandReceipt": {
+      "$ref": "#/$defs/local_Receipt"
+    },
+    "Duration": {
+      "$ref": "#/$defs/runtime_Duration"
+    },
+    "FoundationNextView": {
+      "$ref": "#/$defs/runtime_NextView"
+    },
+    "FoundationPreview": {
+      "$ref": "#/$defs/runtime_Preview"
+    },
+    "FoundationRunView": {
+      "$ref": "#/$defs/runtime_RunView"
+    },
+    "FoundationStepReadView": {
+      "$ref": "#/$defs/runtime_StepReadView"
+    },
+    "LocalContextManifest": {
+      "$ref": "#/$defs/runtime_ContextManifest"
+    },
+    "PublishStepPublicationCommand": {
+      "$ref": "#/$defs/runtime_PublishCommand"
+    },
+    "ReleaseRequest": {
+      "$ref": "#/$defs/runtime_ReleaseRequest"
+    },
+    "StepPublication": {
+      "$ref": "#/$defs/runtime_Publication"
+    },
+    "TelemetryMetricDescriptor": {
+      "$ref": "#/$defs/runtime_TelemetryDescriptor"
+    },
+    "TelemetryQuery": {
+      "$ref": "#/$defs/runtime_TelemetryQuery"
+    },
+    "TelemetryReport": {
+      "$ref": "#/$defs/runtime_TelemetryResponse"
+    },
+    "TelemetrySample": {
+      "$ref": "#/$defs/runtime_TelemetrySampleData"
+    },
+    "TimingTree": {
+      "$ref": "#/$defs/runtime_TimingTree"
+    },
+    "flow_Hook": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_during_stop": {
+          "type": "boolean"
+        },
+        "classification": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "freshness_ms": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "max_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "max_payload_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "max_per_minute": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "read_policy": {
+          "type": "string"
+        },
+        "schema_ref": {
+          "$ref": "#/$defs/flow_Ref"
+        }
+      },
+      "required": [
+        "allow_during_stop",
+        "classification",
+        "description",
+        "kind",
+        "max_count",
+        "max_payload_bytes",
+        "max_per_minute",
+        "read_policy",
+        "schema_ref"
+      ],
+      "type": "object"
+    },
+    "flow_Limits": {
+      "additionalProperties": false,
+      "properties": {
+        "max_child_depth": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "max_control_transitions": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "max_parallelism": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "max_step_instances": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_child_depth",
+        "max_control_transitions",
+        "max_parallelism",
+        "max_step_instances"
+      ],
+      "type": "object"
+    },
+    "flow_Ref": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "digest",
+        "id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "local_BlobRef": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "type": "string"
+        },
+        "size": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "digest",
+        "size"
+      ],
+      "type": "object"
+    },
+    "local_DiagnosticStream": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes_read": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bytes_read",
+        "complete",
+        "truncated"
+      ],
+      "type": "object"
+    },
+    "local_ProcessCPU": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "system_ns": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "user_ns": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "coverage",
+        "method",
+        "scope",
+        "system_ns",
+        "user_ns"
+      ],
+      "type": "object"
+    },
+    "local_ProcessIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "boot_id": {
+          "type": "string"
+        },
+        "executable": {
+          "type": "string"
+        },
+        "executable_digest": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "launch_id": {
+          "type": "string"
+        },
+        "owner_pid": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "owner_start": {
+          "type": "string"
+        },
+        "pgid": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "pid": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "start_id": {
+          "type": "string"
+        },
+        "uid": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "boot_id",
+        "executable",
+        "executable_digest",
+        "hostname",
+        "launch_id",
+        "owner_pid",
+        "owner_start",
+        "pgid",
+        "pid",
+        "start_id",
+        "uid"
+      ],
+      "type": "object"
+    },
+    "local_ProcessOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/local_ProcessCPU"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "elapsed_ns": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finished_at": {
+          "$ref": "#/$defs/time_Time"
+        },
+        "group_empty": {
+          "type": "boolean"
+        },
+        "group_empty_at": {
+          "$ref": "#/$defs/time_Time"
+        },
+        "identity": {
+          "$ref": "#/$defs/local_ProcessIdentity"
+        },
+        "leader_exit_observed_at": {
+          "$ref": "#/$defs/time_Time"
+        },
+        "result_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "result_error": {
+          "type": "string"
+        },
+        "signal": {
+          "type": "string"
+        },
+        "signal_errors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "started": {
+          "type": "boolean"
+        },
+        "started_at": {
+          "$ref": "#/$defs/time_Time"
+        },
+        "stderr": {
+          "$ref": "#/$defs/local_DiagnosticStream"
+        },
+        "stdout": {
+          "$ref": "#/$defs/local_DiagnosticStream"
+        },
+        "stop_reason": {
+          "type": "string"
+        },
+        "uncertain": {
+          "type": "boolean"
+        },
+        "wait_returned": {
+          "type": "boolean"
+        },
+        "wait_returned_at": {
+          "$ref": "#/$defs/time_Time"
+        }
+      },
+      "required": [
+        "cpu",
+        "elapsed_ns",
+        "exit_code",
+        "finished_at",
+        "group_empty",
+        "group_empty_at",
+        "identity",
+        "leader_exit_observed_at",
+        "result_bytes",
+        "started",
+        "started_at",
+        "stderr",
+        "stdout",
+        "uncertain",
+        "wait_returned",
+        "wait_returned_at"
+      ],
+      "type": "object"
+    },
+    "local_Receipt": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "command_id": {
+          "type": "string"
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "event_seq": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "rejection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/local_Rejection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_digest": {
+          "type": "string"
+        },
+        "result": {},
+        "run_id": {
+          "type": "string"
+        },
+        "run_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "actor",
+        "command_id",
+        "cut",
+        "event_seq",
+        "request_digest",
+        "result",
+        "run_id",
+        "run_version"
+      ],
+      "type": "object"
+    },
+    "local_Rejection": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "runtime_Activation": {
+      "additionalProperties": false,
+      "properties": {
+        "created": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "settled": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stage_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "step_instance_id": {
+          "type": "string"
+        },
+        "workflow_invocation_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "created",
+        "id",
+        "kind",
+        "stage_id",
+        "status",
+        "workflow_invocation_id"
+      ],
+      "type": "object"
+    },
+    "runtime_ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "digest",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "runtime_Attempt": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "admitted": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "admitted_run_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "budget_reservation_id": {
+          "type": "string"
+        },
+        "candidate": {},
+        "candidate_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidate_conflict": {
+          "type": "boolean"
+        },
+        "context": {
+          "$ref": "#/$defs/runtime_ContextManifest"
+        },
+        "control_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "deadline": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "dispatch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dispatch_deadline": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "envelope": {},
+        "envelope_digest": {
+          "type": "string"
+        },
+        "execution_admission_id": {
+          "type": "string"
+        },
+        "executor_end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "process": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/local_ProcessIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "process_outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/local_ProcessOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "settled": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stage_activation_id": {
+          "type": "string"
+        },
+        "started": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "step_instance_id": {
+          "type": "string"
+        },
+        "token_hash": {
+          "type": "string"
+        },
+        "workspace": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "admitted",
+        "admitted_run_version",
+        "budget_reservation_id",
+        "candidate_conflict",
+        "context",
+        "control_epoch",
+        "deadline",
+        "dispatch_deadline",
+        "envelope",
+        "envelope_digest",
+        "execution_admission_id",
+        "id",
+        "stage_activation_id",
+        "status",
+        "step_instance_id",
+        "token_hash",
+        "workspace"
+      ],
+      "type": "object"
+    },
+    "runtime_Brief": {
+      "additionalProperties": false,
+      "properties": {
+        "assumptions": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completion_criteria": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confirmation": {
+          "type": "string"
+        },
+        "desired_outcome": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "in_scope": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "out_of_scope": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "source_refs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_ArtifactRef"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "assumptions",
+        "completion_criteria",
+        "confirmation",
+        "desired_outcome",
+        "id",
+        "in_scope",
+        "out_of_scope",
+        "schema_version",
+        "source_refs",
+        "subject"
+      ],
+      "type": "object"
+    },
+    "runtime_ContextManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "dependencies": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/flow_Ref"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputs": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_LocalPort"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outputs": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_OutputSlot"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "local-context/1"
+        }
+      },
+      "required": [
+        "dependencies",
+        "inputs",
+        "outputs",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "runtime_Diagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "cause_refs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "observed": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "publication_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "cause_refs",
+        "code",
+        "id",
+        "message",
+        "observed",
+        "origin",
+        "phase",
+        "run_id",
+        "severity"
+      ],
+      "type": "object"
+    },
+    "runtime_Duration": {
+      "additionalProperties": false,
+      "properties": {
+        "estimate_ms": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "is_open": {
+          "type": "boolean"
+        },
+        "known_ms": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quality": {
+          "enum": [
+            "measured",
+            "estimated",
+            "partial",
+            "unavailable",
+            "not_applicable"
+          ]
+        },
+        "reasons": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_ms": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "estimate_ms",
+        "is_open",
+        "known_ms",
+        "quality",
+        "reasons",
+        "value_ms"
+      ],
+      "type": "object"
+    },
+    "runtime_ExecutorConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executable": {
+          "type": "string"
+        },
+        "files": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grace_ms": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "timeout_ms": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "args",
+        "environment",
+        "executable",
+        "files",
+        "grace_ms",
+        "max_output_bytes",
+        "timeout_ms"
+      ],
+      "type": "object"
+    },
+    "runtime_ExecutorPreview": {
+      "additionalProperties": false,
+      "properties": {
+        "argument_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "configuration_digest": {
+          "type": "string"
+        },
+        "effect_class": {
+          "type": "string"
+        },
+        "executable": {
+          "type": "string"
+        },
+        "source_files": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "argument_count",
+        "configuration_digest",
+        "effect_class",
+        "executable",
+        "source_files"
+      ],
+      "type": "object"
+    },
+    "runtime_HookReadView": {
+      "additionalProperties": false,
+      "properties": {
+        "availability": {
+          "type": "string"
+        },
+        "count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "freshness": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "latest_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Publication"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "availability",
+        "count",
+        "freshness",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "runtime_LocalPort": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "#/$defs/runtime_ArtifactRef"
+        }
+      },
+      "required": [
+        "path",
+        "ref"
+      ],
+      "type": "object"
+    },
+    "runtime_NextView": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "admission": {
+          "const": false
+        },
+        "control_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "driver_live": {
+          "type": "boolean"
+        },
+        "read_only": {
+          "const": true
+        },
+        "resume_required": {
+          "type": "boolean"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "run_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "safe_next_actions": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "foundation-next/1"
+        },
+        "work_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "admission",
+        "control_epoch",
+        "cut",
+        "driver_live",
+        "read_only",
+        "resume_required",
+        "run_id",
+        "run_version",
+        "safe_next_actions",
+        "schema_version",
+        "work_id"
+      ],
+      "type": "object"
+    },
+    "runtime_Observation": {
+      "additionalProperties": false,
+      "properties": {
+        "monotonic_ms": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "suspend_basis": {
+          "type": "string"
+        },
+        "utc": {
+          "type": "string"
+        },
+        "utc_trust": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "monotonic_ms",
+        "session",
+        "source",
+        "suspend_basis",
+        "utc",
+        "utc_trust"
+      ],
+      "type": "object"
+    },
+    "runtime_OutputSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "path",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "runtime_PinnedDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {},
+        "kind": {
+          "type": "string"
+        },
+        "raw_digest": {
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "#/$defs/flow_Ref"
+        }
+      },
+      "required": [
+        "bytes",
+        "kind",
+        "raw_digest",
+        "ref"
+      ],
+      "type": "object"
+    },
+    "runtime_PinnedExecutor": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/runtime_ExecutorConfig"
+        },
+        "executable_digest": {
+          "type": "string"
+        },
+        "files": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/local_BlobRef"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "config",
+        "executable_digest",
+        "files"
+      ],
+      "type": "object"
+    },
+    "runtime_Preview": {
+      "additionalProperties": false,
+      "properties": {
+        "admission": {
+          "const": false
+        },
+        "brief": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Brief"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executors": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_ExecutorPreview"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hooks": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "$ref": "#/$defs/flow_Hook"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputs": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_ArtifactRef"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limits": {
+          "$ref": "#/$defs/flow_Limits"
+        },
+        "schema_version": {
+          "const": "foundation-preview/1"
+        },
+        "semantics_profile": {
+          "type": "string"
+        },
+        "sequence": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trust_profile": {
+          "type": "string"
+        },
+        "validation": {
+          "$ref": "#/$defs/runtime_ValidationSummary"
+        },
+        "warnings": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workflow_ref": {
+          "$ref": "#/$defs/flow_Ref"
+        }
+      },
+      "required": [
+        "admission",
+        "executors",
+        "hooks",
+        "limits",
+        "schema_version",
+        "semantics_profile",
+        "sequence",
+        "trust_profile",
+        "validation",
+        "warnings",
+        "workflow_ref"
+      ],
+      "type": "object"
+    },
+    "runtime_Publication": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "event_key": {
+          "type": "string"
+        },
+        "hook": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "received": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "state_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "step_instance_id": {
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "actor_id",
+        "attempt_id",
+        "digest",
+        "hook",
+        "id",
+        "kind",
+        "received",
+        "state_version",
+        "step_instance_id",
+        "value"
+      ],
+      "type": "object"
+    },
+    "runtime_PublishCommand": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "not": {
+            "required": [
+              "event_key"
+            ]
+          },
+          "properties": {
+            "kind": {
+              "const": "state"
+            }
+          },
+          "required": [
+            "expected_state_version"
+          ]
+        },
+        {
+          "not": {
+            "required": [
+              "expected_state_version"
+            ]
+          },
+          "properties": {
+            "event_key": {
+              "pattern": "^[A-Za-z][A-Za-z0-9._:/-]{0,127}$",
+              "type": "string"
+            },
+            "kind": {
+              "const": "event"
+            }
+          },
+          "required": [
+            "event_key"
+          ]
+        }
+      ],
+      "properties": {
+        "attempt_id": {
+          "type": "string"
+        },
+        "command_id": {
+          "type": "string"
+        },
+        "envelope_digest": {
+          "type": "string"
+        },
+        "event_key": {
+          "type": "string"
+        },
+        "expected_state_version": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hook": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "state",
+            "event"
+          ]
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1"
+        },
+        "step_instance_id": {
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "attempt_id",
+        "command_id",
+        "envelope_digest",
+        "hook",
+        "kind",
+        "run_id",
+        "schema_version",
+        "step_instance_id",
+        "value"
+      ],
+      "type": "object"
+    },
+    "runtime_ReleaseRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "type": "string"
+        },
+        "expected_control_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "stop_generations": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_StopGeneration"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "command_id",
+        "expected_control_epoch",
+        "reason",
+        "run_id",
+        "stop_generations"
+      ],
+      "type": "object"
+    },
+    "runtime_Result": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string"
+        },
+        "effect_receipt_refs": {
+          "anyOf": [
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "envelope_digest": {
+          "type": "string"
+        },
+        "evidence_refs": {
+          "anyOf": [
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outputs": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_ArtifactRef"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "step_instance_id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "effect_receipt_refs",
+        "envelope_digest",
+        "evidence_refs",
+        "outputs",
+        "run_id",
+        "schema_version",
+        "step_instance_id",
+        "summary",
+        "verdict"
+      ],
+      "type": "object"
+    },
+    "runtime_Run": {
+      "additionalProperties": false,
+      "properties": {
+        "activations": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/runtime_Activation"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "active_attempt_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attempts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/runtime_Attempt"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authority_id": {
+          "type": "string"
+        },
+        "brief_ref": {
+          "$ref": "#/$defs/runtime_ArtifactRef"
+        },
+        "cancel_requested": {
+          "type": "boolean"
+        },
+        "capacity_profile": {
+          "type": "string"
+        },
+        "control_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "control_transitions": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "core_build": {
+          "type": "string"
+        },
+        "created": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "definitions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_PinnedDefinition"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_Diagnostic"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution_mode": {
+          "type": "string"
+        },
+        "executors": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_PinnedExecutor"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gaps": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_TimingGap"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "has_unresolved_effects": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input_artifacts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_ArtifactRef"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interaction_mode": {
+          "type": "string"
+        },
+        "last_observed": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "enum": [
+                "succeeded",
+                "rejected",
+                "no_work"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output_artifacts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_ArtifactRef"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "package_lock_ref": {
+          "$ref": "#/$defs/flow_Ref"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "publications": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_Publication"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ready_stages": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resume_required": {
+          "type": "boolean"
+        },
+        "root_workflow_invocation_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "foundation-state/1"
+        },
+        "semantics_profile": {
+          "const": "foundation-sequence/1"
+        },
+        "settled": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "running",
+            "waiting",
+            "stopping",
+            "completed",
+            "failed",
+            "cancelled",
+            "uncertain"
+          ]
+        },
+        "steps": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/runtime_Step"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stops": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_Stop"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "transitions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_StateChange"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trust_profile": {
+          "type": "string"
+        },
+        "workflow": {},
+        "workflow_ref": {
+          "$ref": "#/$defs/flow_Ref"
+        }
+      },
+      "required": [
+        "activations",
+        "active_attempt_ids",
+        "attempts",
+        "authority_id",
+        "brief_ref",
+        "cancel_requested",
+        "capacity_profile",
+        "control_epoch",
+        "control_transitions",
+        "core_build",
+        "created",
+        "definitions",
+        "diagnostics",
+        "execution_mode",
+        "executors",
+        "gaps",
+        "has_unresolved_effects",
+        "id",
+        "input_artifacts",
+        "interaction_mode",
+        "last_observed",
+        "outcome",
+        "output_artifacts",
+        "package_lock_ref",
+        "project_id",
+        "publications",
+        "ready_stages",
+        "resume_required",
+        "root_workflow_invocation_id",
+        "schema_version",
+        "semantics_profile",
+        "status",
+        "steps",
+        "stops",
+        "transitions",
+        "trust_profile",
+        "workflow",
+        "workflow_ref"
+      ],
+      "type": "object"
+    },
+    "runtime_RunView": {
+      "additionalProperties": false,
+      "properties": {
+        "as_of": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "driver_live": {
+          "type": "boolean"
+        },
+        "event_sequence": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "run": {
+          "$ref": "#/$defs/runtime_Run"
+        },
+        "run_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "foundation-read/1"
+        },
+        "timing": {
+          "$ref": "#/$defs/runtime_TimingTree"
+        }
+      },
+      "required": [
+        "as_of",
+        "cut",
+        "driver_live",
+        "event_sequence",
+        "run",
+        "run_version",
+        "schema_version",
+        "timing"
+      ],
+      "type": "object"
+    },
+    "runtime_StateChange": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "from": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "from",
+        "id",
+        "kind",
+        "to"
+      ],
+      "type": "object"
+    },
+    "runtime_Step": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "definition_ref": {
+          "$ref": "#/$defs/flow_Ref"
+        },
+        "id": {
+          "type": "string"
+        },
+        "outputs": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_ArtifactRef"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "settled": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stage_activation_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempt_ids",
+        "created",
+        "definition_ref",
+        "id",
+        "outputs",
+        "stage_activation_id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "runtime_StepReadView": {
+      "additionalProperties": false,
+      "properties": {
+        "as_of": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "attempt_status": {
+          "type": "string"
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "event_sequence": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "frozen": {
+          "type": "boolean"
+        },
+        "hooks": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_HookReadView"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "restricted": {
+          "type": "boolean"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "run_status": {
+          "type": "string"
+        },
+        "run_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "foundation-step-read/1"
+        },
+        "step_instance_id": {
+          "type": "string"
+        },
+        "step_status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "as_of",
+        "attempt_id",
+        "attempt_status",
+        "cut",
+        "event_sequence",
+        "frozen",
+        "hooks",
+        "restricted",
+        "run_id",
+        "run_status",
+        "run_version",
+        "schema_version",
+        "step_instance_id",
+        "step_status"
+      ],
+      "type": "object"
+    },
+    "runtime_Stop": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string"
+        },
+        "control_epoch": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "created": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "generation": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "released": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_id",
+        "control_epoch",
+        "created",
+        "generation",
+        "id",
+        "kind",
+        "reason",
+        "status"
+      ],
+      "type": "object"
+    },
+    "runtime_StopGeneration": {
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation",
+        "id"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetryAggregate": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "$ref": "#/$defs/runtime_TelemetryCoverage"
+        },
+        "delta": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "descriptor_id": {
+          "type": "string"
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "method": {
+          "type": "string"
+        },
+        "metric": {
+          "type": "string"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "n": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "p50": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "p95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quality": {
+          "type": "string"
+        },
+        "quantile_method": {
+          "type": "string"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_TelemetryRatio"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasons": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "sum": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "coverage",
+        "delta",
+        "descriptor_id",
+        "dimensions",
+        "evidence",
+        "last",
+        "max",
+        "mean",
+        "method",
+        "metric",
+        "min",
+        "n",
+        "p50",
+        "p95",
+        "quality",
+        "reasons",
+        "scope",
+        "sum",
+        "total",
+        "unit"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetryAsOf": {
+      "additionalProperties": false,
+      "properties": {
+        "event_sequence": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "observed": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "run_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_sequence",
+        "observed",
+        "run_id",
+        "run_version"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetryCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "estimated": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_unknown": {
+          "type": "boolean"
+        },
+        "loss_unknown": {
+          "type": "boolean"
+        },
+        "measured": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "missing_timestamp": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "not_applicable": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "observed": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "open": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "partial": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "unavailable": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "estimated",
+        "expected",
+        "expected_unknown",
+        "loss_unknown",
+        "measured",
+        "missing_timestamp",
+        "not_applicable",
+        "observed",
+        "open",
+        "partial",
+        "unavailable"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetryDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregations": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "availability": {
+          "type": "string"
+        },
+        "definition_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/flow_Ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "temporality": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "aggregations",
+        "availability",
+        "dimensions",
+        "id",
+        "kind",
+        "method",
+        "name",
+        "origin",
+        "revision",
+        "scope",
+        "temporality",
+        "unit"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetryFilters": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "items": {},
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_outcome": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_status": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "step_id": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verdict": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workflow_id": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "runtime_TelemetryPopulation": {
+      "additionalProperties": false,
+      "properties": {
+        "activations": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "attempt_status": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attempts": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "basis": {
+          "type": "string"
+        },
+        "cancelled": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "first_attempts_open": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "full_warning_coverage": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "invocations": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "matched": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "open": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "ratios": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_TelemetryRatio"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_outcome": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_status": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "settled_attempts": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "started_attempts": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "step_verdict": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "steps": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "terminal": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "uncertain": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "unknown_warning_coverage": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "unresolved_effects": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "warned_incomplete": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "activations",
+        "attempt_status",
+        "attempts",
+        "basis",
+        "cancelled",
+        "first_attempts_open",
+        "full_warning_coverage",
+        "invocations",
+        "matched",
+        "open",
+        "ratios",
+        "run_outcome",
+        "run_status",
+        "settled_attempts",
+        "started_attempts",
+        "step_verdict",
+        "steps",
+        "terminal",
+        "uncertain",
+        "unknown_warning_coverage",
+        "unresolved_effects",
+        "warned_incomplete"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetryQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregations": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completed_before": {
+          "type": "string"
+        },
+        "completed_from": {
+          "type": "string"
+        },
+        "created_before": {
+          "type": "string"
+        },
+        "created_from": {
+          "type": "string"
+        },
+        "cursor": {
+          "type": "string"
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "event_before": {
+          "type": "string"
+        },
+        "event_from": {
+          "type": "string"
+        },
+        "filters": {
+          "$ref": "#/$defs/runtime_TelemetryFilters"
+        },
+        "group_by": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "metrics": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "enum": [
+            "catalog",
+            "records",
+            "aggregate"
+          ]
+        },
+        "run_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "telemetry-query/1"
+        }
+      },
+      "required": [
+        "mode",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetryRatio": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "numerator": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "quality": {
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "denominator",
+        "numerator",
+        "quality",
+        "value"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetryRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "type": "string"
+        },
+        "denominator": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "descriptor_id": {
+          "type": "string"
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Duration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generation": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "integer": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "is_open": {
+          "type": "boolean"
+        },
+        "method": {
+          "type": "string"
+        },
+        "metric": {
+          "type": "string"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "order": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "quality": {
+          "type": "string"
+        },
+        "reasons": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subject": {
+          "$ref": "#/$defs/runtime_TelemetrySubject"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "coverage",
+        "descriptor_id",
+        "dimensions",
+        "evidence",
+        "generation",
+        "id",
+        "integer",
+        "is_open",
+        "method",
+        "metric",
+        "observed",
+        "order",
+        "origin",
+        "quality",
+        "reasons",
+        "subject",
+        "unit",
+        "value"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetryResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "access_scope": {
+          "type": "string"
+        },
+        "aggregates": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_TelemetryAggregate"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "as_of": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_TelemetryAsOf"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "as_of_basis": {
+          "type": "string"
+        },
+        "authority_id": {
+          "type": "string"
+        },
+        "calculator_revision": {
+          "type": "string"
+        },
+        "collection_profile": {
+          "type": "string"
+        },
+        "coverage": {
+          "$ref": "#/$defs/runtime_TelemetryCoverage"
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "descriptors": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_TelemetryDescriptor"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limits": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "next_cursor": {
+          "type": "string"
+        },
+        "population": {
+          "$ref": "#/$defs/runtime_TelemetryPopulation"
+        },
+        "principal": {
+          "type": "string"
+        },
+        "query_digest": {
+          "type": "string"
+        },
+        "query_version": {
+          "type": "string"
+        },
+        "record_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "records": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_TelemetryRecord"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retention": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "telemetry-report/1"
+        },
+        "timing_revision": {
+          "type": "string"
+        },
+        "warnings": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "access_scope",
+        "aggregates",
+        "as_of",
+        "as_of_basis",
+        "authority_id",
+        "calculator_revision",
+        "collection_profile",
+        "coverage",
+        "cut",
+        "descriptors",
+        "limits",
+        "population",
+        "principal",
+        "query_digest",
+        "query_version",
+        "record_count",
+        "records",
+        "retention",
+        "schema_version",
+        "timing_revision",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetrySampleData": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "command_id": {
+          "type": "string"
+        },
+        "coverage": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "metric": {
+          "type": "string"
+        },
+        "observed": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "quality": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "telemetry-sample/1"
+        },
+        "status": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "coverage",
+        "method",
+        "metric",
+        "observed",
+        "quality",
+        "schema_version",
+        "unit",
+        "value"
+      ],
+      "type": "object"
+    },
+    "runtime_TelemetrySubject": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "step_instance_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "runtime_TimingBoundaryRef": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "id",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "runtime_TimingGap": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "to": {
+          "$ref": "#/$defs/runtime_Observation"
+        }
+      },
+      "required": [
+        "from",
+        "reason",
+        "to"
+      ],
+      "type": "object"
+    },
+    "runtime_TimingInterval": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/runtime_Duration"
+        },
+        "from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "from_ref": {
+          "$ref": "#/$defs/runtime_TimingBoundaryRef"
+        },
+        "method": {
+          "type": "string"
+        },
+        "metric": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "suspend_basis": {
+          "type": "string"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to_ref": {
+          "$ref": "#/$defs/runtime_TimingBoundaryRef"
+        }
+      },
+      "required": [
+        "duration",
+        "from",
+        "from_ref",
+        "method",
+        "metric",
+        "suspend_basis",
+        "to",
+        "to_ref"
+      ],
+      "type": "object"
+    },
+    "runtime_TimingNode": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "children": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_TimingNode"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "intervals": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_TimingInterval"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "metrics": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_Duration"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasons": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stage_id": {
+          "type": "string"
+        },
+        "stage_kind": {
+          "type": "string"
+        },
+        "state_time": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/runtime_Duration"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempt_count",
+        "children",
+        "id",
+        "intervals",
+        "kind",
+        "metrics",
+        "reasons",
+        "state_time",
+        "status"
+      ],
+      "type": "object"
+    },
+    "runtime_TimingTree": {
+      "additionalProperties": false,
+      "properties": {
+        "as_of": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "calculator_revision": {
+          "type": "string"
+        },
+        "driver_live": {
+          "type": "boolean"
+        },
+        "root": {
+          "$ref": "#/$defs/runtime_TimingNode"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1"
+        }
+      },
+      "required": [
+        "as_of",
+        "calculator_revision",
+        "driver_live",
+        "root",
+        "run_id",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "runtime_ValidationSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "authorized_now": {
+          "type": "string"
+        },
+        "executable_now": {
+          "type": "string"
+        },
+        "graph_valid": {
+          "type": "boolean"
+        },
+        "inputs": {
+          "type": "string"
+        },
+        "profile_supported": {
+          "type": "boolean"
+        },
+        "references_resolved": {
+          "type": "boolean"
+        },
+        "shape_valid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "authorized_now",
+        "executable_now",
+        "graph_valid",
+        "inputs",
+        "profile_supported",
+        "references_resolved",
+        "shape_valid"
+      ],
+      "type": "object"
+    },
+    "time_Time": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  "$id": "urn:prifly:foundation-public:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Generated shapes plus explicit F1 versions. Payload, graph, authority, quotas and cross-field semantic checks additionally run in the core. Baseline v1 schemas remain unchanged.",
+  "title": "Pri-Fly foundation public DTO contracts",
+  "x-prifly-contracts": [
+    "CommandReceipt",
+    "Duration",
+    "FoundationNextView",
+    "FoundationPreview",
+    "FoundationRunView",
+    "FoundationStepReadView",
+    "LocalContextManifest",
+    "PublishStepPublicationCommand",
+    "ReleaseRequest",
+    "StepPublication",
+    "TelemetryMetricDescriptor",
+    "TelemetryQuery",
+    "TelemetryReport",
+    "TelemetrySample",
+    "TimingTree"
+  ]
+}

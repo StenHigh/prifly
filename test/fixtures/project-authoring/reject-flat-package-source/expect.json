@@ -1,0 +1,6 @@
+{
+  "command": "compile",
+  "accepted": false,
+  "package": "legacy",
+  "diagnostic": "package source must be a workflow folder"
+}

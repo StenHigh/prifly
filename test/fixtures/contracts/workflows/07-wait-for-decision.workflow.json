@@ -1,0 +1,125 @@
+{
+  "schema_version": "1",
+  "id": "example:workflow/wait-for-decision",
+  "version": "1.0.0",
+  "title": "07. Correlated human event; a decision artifact is not an Action Approval",
+  "inputs": {
+    "request_id": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/string",
+        "version": "1.0.0",
+        "digest": "sha256:d896d4361ee08a6874a2a06dbaac844b460ecf369617d2f565f43db443946665"
+      },
+      "required": true
+    }
+  },
+  "outputs": {
+    "decision": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/human-decision",
+        "version": "1.0.0",
+        "digest": "sha256:a4fe8ec73623b0a8609eb6590a357414c3a6ef8ed4ae9dde20ab99d8cbb54892"
+      },
+      "required_for": [
+        "succeeded"
+      ]
+    }
+  },
+  "allowed_outcomes": [
+    "succeeded",
+    "rejected"
+  ],
+  "definition": {
+    "entry": "await_decision",
+    "stages": {
+      "await_decision": {
+        "kind": "wait",
+        "source_ref": {
+          "id": "example:adapter/human-event-source",
+          "version": "1.0.0",
+          "digest": "sha256:9129228f23e0650ad899474b2078bcb7e5a1aa8794abc2063554ea1fe11c5039"
+        },
+        "event_type": "example.human_decision",
+        "event_schema_ref": {
+          "id": "example:schema/human-decision",
+          "version": "1.0.0",
+          "digest": "sha256:a4fe8ec73623b0a8609eb6590a357414c3a6ef8ed4ae9dde20ab99d8cbb54892"
+        },
+        "correlation_input": {
+          "from": "workflow_input",
+          "port": "request_id"
+        },
+        "timeout_seconds": 3600,
+        "on_event": "route",
+        "on_timeout": "timed_out"
+      },
+      "route": {
+        "kind": "choice",
+        "selection": "exclusive",
+        "branches": [
+          {
+            "id": "approved",
+            "predicate": {
+              "op": "eq",
+              "left": {
+                "kind": "field",
+                "ref": {
+                  "from": "stage_output",
+                  "stage_id": "await_decision",
+                  "port": "event",
+                  "pointer": "/approved"
+                }
+              },
+              "right": {
+                "kind": "literal",
+                "value": true
+              }
+            },
+            "next": "done"
+          }
+        ],
+        "default": "declined"
+      },
+      "done": {
+        "kind": "finish",
+        "outcome": "succeeded",
+        "output_bindings": {
+          "decision": {
+            "from": "stage_output",
+            "stage_id": "await_decision",
+            "port": "event"
+          }
+        }
+      },
+      "declined": {
+        "kind": "finish",
+        "outcome": "rejected",
+        "output_bindings": {
+          "decision": {
+            "from": "stage_output",
+            "stage_id": "await_decision",
+            "port": "event"
+          }
+        }
+      },
+      "timed_out": {
+        "kind": "finish",
+        "outcome": "rejected",
+        "output_bindings": {}
+      }
+    }
+  },
+  "limits": {
+    "max_step_instances": 10000,
+    "max_control_transitions": 100000,
+    "max_parallelism": 4,
+    "max_child_depth": 8
+  },
+  "policy_ref": {
+    "id": "example:policy/local",
+    "version": "1.0.0",
+    "digest": "sha256:395ef7427c2922e1a90017ef471524ecc837336bae78d71d9f7320f1f1a42125"
+  }
+}

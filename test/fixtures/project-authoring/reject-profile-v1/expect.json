@@ -1,0 +1,5 @@
+{
+  "command": "workflows",
+  "accepted": false,
+  "diagnostic": "schema_version must be prifly-project-profile/2"
+}

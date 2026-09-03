@@ -1,0 +1,5 @@
+{
+  "command": "workflows",
+  "accepted": false,
+  "diagnostic": "must be a prifly-project-workflow/1 folder root"
+}

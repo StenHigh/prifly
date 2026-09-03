@@ -1,0 +1,5 @@
+{
+  "command": "workflows",
+  "accepted": false,
+  "diagnostic": "kind must be workflow"
+}

@@ -1,0 +1,404 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "2"
+    },
+    "id": {
+      "$ref": "urn:prifly:protocol:1#/$defs/Identifier"
+    },
+    "version": {
+      "$ref": "urn:prifly:protocol:1#/$defs/Version"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "kind": {
+      "enum": [
+        "worker",
+        "check",
+        "command"
+      ]
+    },
+    "inputs": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "urn:prifly:protocol:1#/$defs/PortName"
+      },
+      "additionalProperties": {
+        "$ref": "urn:prifly:protocol:1#/$defs/InputPort"
+      },
+      "maxProperties": 256
+    },
+    "outputs": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "urn:prifly:protocol:1#/$defs/PortName"
+      },
+      "additionalProperties": {
+        "$ref": "urn:prifly:protocol:1#/$defs/StepOutputPort"
+      },
+      "maxProperties": 256
+    },
+    "executor": {
+      "type": "object",
+      "properties": {
+        "adapter_ref": {
+          "$ref": "urn:prifly:protocol:1#/$defs/ImmutableRef"
+        },
+        "operation": {
+          "$ref": "urn:prifly:protocol:1#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "adapter_ref",
+        "operation"
+      ],
+      "additionalProperties": false
+    },
+    "instructions_ref": {
+      "$ref": "urn:prifly:protocol:1#/$defs/ImmutableRef"
+    },
+    "context_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:prifly:protocol:1#/$defs/ImmutableRef"
+      },
+      "minItems": 0,
+      "maxItems": 128,
+      "uniqueItems": true
+    },
+    "required_capabilities": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:prifly:protocol:1#/$defs/Identifier"
+      },
+      "minItems": 0,
+      "maxItems": 128,
+      "uniqueItems": true
+    },
+    "effects": {
+      "type": "object",
+      "properties": {
+        "class": {
+          "$ref": "urn:prifly:protocol:1#/$defs/EffectClass"
+        },
+        "retry_class": {
+          "$ref": "urn:prifly:protocol:1#/$defs/RetryClass"
+        }
+      },
+      "required": [
+        "class",
+        "retry_class"
+      ],
+      "additionalProperties": false
+    },
+    "result_check_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:prifly:protocol:1#/$defs/ImmutableRef"
+      },
+      "minItems": 0,
+      "maxItems": 64,
+      "uniqueItems": true
+    },
+    "result_schema_ref": {
+      "$ref": "urn:prifly:protocol:1#/$defs/ImmutableRef"
+    },
+    "hooks": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "urn:prifly:protocol:1#/$defs/PortName"
+      },
+      "maxProperties": 32,
+      "additionalProperties": {
+        "$ref": "#/$defs/Hook"
+      }
+    },
+    "telemetry": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/Mapping"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "version",
+    "title",
+    "kind",
+    "inputs",
+    "outputs",
+    "executor",
+    "context_refs",
+    "required_capabilities",
+    "effects",
+    "result_check_refs",
+    "result_schema_ref"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:step-definition:2",
+  "title": "Pri-Fly StepDefinition v2: foundation state/event hooks and purpose mappings",
+  "$defs": {
+    "Hook": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "state",
+            "event"
+          ]
+        },
+        "schema_ref": {
+          "$ref": "urn:prifly:protocol:1#/$defs/ImmutableRef"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "classification": {
+          "enum": [
+            "public",
+            "internal",
+            "confidential"
+          ]
+        },
+        "read_policy": {
+          "const": "owner"
+        },
+        "max_payload_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "max_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "max_per_minute": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "allow_during_stop": {
+          "type": "boolean"
+        },
+        "freshness_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400000
+        }
+      },
+      "required": [
+        "kind",
+        "schema_ref",
+        "description",
+        "classification",
+        "read_policy",
+        "max_payload_bytes",
+        "max_count",
+        "max_per_minute",
+        "allow_during_stop"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "state"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "freshness_ms"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "freshness_ms"
+              ]
+            }
+          }
+        }
+      ],
+      "description": "Optional observations owned by the current Attempt. State starts unpublished and uses full replacement with scoped CAS. Events require stable occurrence keys. Owner read access is the F1 trust scope; terminal/fenced namespaces are frozen."
+    },
+    "Mapping": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "urn:prifly:protocol:1#/$defs/PortName"
+        },
+        "revision": {
+          "$ref": "urn:prifly:protocol:1#/$defs/Version"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "hook": {
+          "$ref": "urn:prifly:protocol:1#/$defs/PortName"
+        },
+        "kind": {
+          "enum": [
+            "gauge",
+            "counter",
+            "distribution",
+            "diagnostic"
+          ]
+        },
+        "field": {
+          "$ref": "urn:prifly:protocol:1#/$defs/Pointer"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[A-Za-z0-9{}%_./*-]+$"
+        },
+        "aggregation": {
+          "enum": [
+            "last",
+            "min",
+            "max",
+            "delta",
+            "observations",
+            "occurrences"
+          ]
+        },
+        "reset": {
+          "enum": [
+            "none",
+            "attempt"
+          ]
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "dimensions": {
+          "type": "object",
+          "maxProperties": 8,
+          "propertyNames": {
+            "$ref": "urn:prifly:protocol:1#/$defs/PortName"
+          },
+          "additionalProperties": {
+            "$ref": "urn:prifly:protocol:1#/$defs/Pointer"
+          }
+        },
+        "severity": {
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "fatal",
+            "unknown"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "description",
+        "hook",
+        "kind",
+        "aggregation",
+        "reset",
+        "dimensions"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "diagnostic"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "severity",
+              "code",
+              "message"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "field"
+                  ]
+                },
+                {
+                  "required": [
+                    "unit"
+                  ]
+                },
+                {
+                  "required": [
+                    "minimum"
+                  ]
+                },
+                {
+                  "required": [
+                    "maximum"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "field",
+              "unit"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "severity"
+                  ]
+                },
+                {
+                  "required": [
+                    "code"
+                  ]
+                },
+                {
+                  "required": [
+                    "message"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "description": "A bounded declarative worker-reported descriptor scoped to the exact StepDefinition revision. No callbacks, authority metrics or dynamic units. Field and dimension types, instrument/hook combination, reset and aggregation are checked semantically."
+    }
+  }
+}

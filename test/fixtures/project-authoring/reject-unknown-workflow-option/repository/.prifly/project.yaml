@@ -1,0 +1,9 @@
+schema_version: prifly-project-profile/2
+hosts:
+  codex-cli: .codex/skills
+  codex-app: .agents/skills
+  claude-code: .claude/skills
+packages:
+  options:
+    source: .prifly/workflows/options
+launches: {}

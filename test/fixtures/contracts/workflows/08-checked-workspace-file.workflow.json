@@ -1,0 +1,127 @@
+{
+  "schema_version": "1",
+  "id": "example:workflow/checked-workspace-file",
+  "version": "1.0.0",
+  "title": "08. Subworkflow call and explicitly declared effect compensation",
+  "inputs": {
+    "document": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/document",
+        "version": "1.0.0",
+        "digest": "sha256:b58b58d8837eee9157ed2f215ef22ce2d52ce9622d686182a2488a2283becc86"
+      },
+      "required": true
+    },
+    "destination": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/string",
+        "version": "1.0.0",
+        "digest": "sha256:d896d4361ee08a6874a2a06dbaac844b460ecf369617d2f565f43db443946665"
+      },
+      "required": true
+    }
+  },
+  "outputs": {
+    "receipt": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/workspace-receipt",
+        "version": "1.0.0",
+        "digest": "sha256:ca8d5d85924e9dc7e3897e305bdc4d7132247f3f9213de3b4bba632928073610"
+      },
+      "required_for": [
+        "succeeded"
+      ]
+    }
+  },
+  "allowed_outcomes": [
+    "succeeded",
+    "rejected"
+  ],
+  "definition": {
+    "entry": "validate",
+    "stages": {
+      "validate": {
+        "kind": "call",
+        "workflow_ref": {
+          "id": "example:workflow/document-check-child",
+          "version": "1.0.0",
+          "digest": "sha256:4a0ae6972603af3678be5b9ae3c45384f6e700c4e134e3f8f64fbfc5519f42ec"
+        },
+        "input_bindings": {
+          "document": {
+            "from": "workflow_input",
+            "port": "document"
+          }
+        },
+        "on": {
+          "succeeded": "write_file",
+          "rejected": "rejected"
+        }
+      },
+      "write_file": {
+        "kind": "step",
+        "step_ref": {
+          "id": "example:step/stage-file",
+          "version": "1.0.0",
+          "digest": "sha256:54591acdd2bd50c1342753b8c82060c058e7c1765bd931f757fc777556461dfe"
+        },
+        "input_bindings": {
+          "document": {
+            "from": "workflow_input",
+            "port": "document"
+          },
+          "destination": {
+            "from": "workflow_input",
+            "port": "destination"
+          }
+        },
+        "on": {
+          "pass": "done",
+          "fail": "rejected"
+        },
+        "compensation": {
+          "workflow_ref": {
+            "id": "example:workflow/cleanup-child",
+            "version": "1.0.0",
+            "digest": "sha256:4d92731aaca55e22166d77542b918dbb845dd7d2e893e701f75e690daf3fa80e"
+          },
+          "input_bindings": {
+            "effect_context": {
+              "from": "compensation_context"
+            }
+          }
+        }
+      },
+      "done": {
+        "kind": "finish",
+        "outcome": "succeeded",
+        "output_bindings": {
+          "receipt": {
+            "from": "stage_output",
+            "stage_id": "write_file",
+            "port": "receipt"
+          }
+        }
+      },
+      "rejected": {
+        "kind": "finish",
+        "outcome": "rejected",
+        "output_bindings": {}
+      }
+    }
+  },
+  "limits": {
+    "max_step_instances": 10000,
+    "max_control_transitions": 100000,
+    "max_parallelism": 4,
+    "max_child_depth": 8
+  },
+  "policy_ref": {
+    "id": "example:policy/local",
+    "version": "1.0.0",
+    "digest": "sha256:395ef7427c2922e1a90017ef471524ecc837336bae78d71d9f7320f1f1a42125"
+  }
+}

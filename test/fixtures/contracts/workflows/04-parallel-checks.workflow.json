@@ -1,0 +1,128 @@
+{
+  "schema_version": "1",
+  "id": "example:workflow/parallel-checks",
+  "version": "1.0.0",
+  "title": "04. Distinct producers with an explicit settled all-join",
+  "inputs": {
+    "left": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/document",
+        "version": "1.0.0",
+        "digest": "sha256:b58b58d8837eee9157ed2f215ef22ce2d52ce9622d686182a2488a2283becc86"
+      },
+      "required": true
+    },
+    "right": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/document",
+        "version": "1.0.0",
+        "digest": "sha256:b58b58d8837eee9157ed2f215ef22ce2d52ce9622d686182a2488a2283becc86"
+      },
+      "required": true
+    }
+  },
+  "outputs": {
+    "results": {
+      "format": "json",
+      "schema_ref": {
+        "id": "prifly:core/schema/AggregateManifest",
+        "version": "1.0.0",
+        "digest": "sha256:fe27e444a4e844a93e03366d135cb275bf412e3985d44ce92be1944c5d3a7bab"
+      },
+      "required_for": [
+        "succeeded",
+        "rejected"
+      ]
+    }
+  },
+  "allowed_outcomes": [
+    "succeeded",
+    "rejected"
+  ],
+  "definition": {
+    "entry": "checks",
+    "stages": {
+      "checks": {
+        "kind": "parallel",
+        "branches": [
+          {
+            "id": "left_check",
+            "workflow_ref": {
+              "id": "example:workflow/document-check-child",
+              "version": "1.0.0",
+              "digest": "sha256:4a0ae6972603af3678be5b9ae3c45384f6e700c4e134e3f8f64fbfc5519f42ec"
+            },
+            "input_bindings": {
+              "document": {
+                "from": "workflow_input",
+                "port": "left"
+              }
+            }
+          },
+          {
+            "id": "right_check",
+            "workflow_ref": {
+              "id": "example:workflow/document-check-child",
+              "version": "1.0.0",
+              "digest": "sha256:4a0ae6972603af3678be5b9ae3c45384f6e700c4e134e3f8f64fbfc5519f42ec"
+            },
+            "input_bindings": {
+              "document": {
+                "from": "workflow_input",
+                "port": "right"
+              }
+            }
+          }
+        ],
+        "join": {
+          "mode": "all",
+          "accept_outcomes": [
+            "succeeded"
+          ],
+          "selection": "all",
+          "remainder": "wait"
+        },
+        "max_parallelism": 2,
+        "on": {
+          "satisfied": "done",
+          "unsatisfied": "rejected"
+        }
+      },
+      "done": {
+        "kind": "finish",
+        "outcome": "succeeded",
+        "output_bindings": {
+          "results": {
+            "from": "stage_output",
+            "stage_id": "checks",
+            "port": "results"
+          }
+        }
+      },
+      "rejected": {
+        "kind": "finish",
+        "outcome": "rejected",
+        "output_bindings": {
+          "results": {
+            "from": "stage_output",
+            "stage_id": "checks",
+            "port": "results"
+          }
+        }
+      }
+    }
+  },
+  "limits": {
+    "max_step_instances": 10000,
+    "max_control_transitions": 100000,
+    "max_parallelism": 4,
+    "max_child_depth": 8
+  },
+  "policy_ref": {
+    "id": "example:policy/local",
+    "version": "1.0.0",
+    "digest": "sha256:395ef7427c2922e1a90017ef471524ecc837336bae78d71d9f7320f1f1a42125"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:workflow-catalog:1",
+  "title": "Pri-Fly workflow catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "categories", "workflows"],
+  "properties": {
+    "schema_version": {"const": "prifly-workflow-catalog/1"},
+    "title": {"type": "string", "minLength": 1},
+    "categories": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z0-9_-]{1,64}$"},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title"],
+        "properties": {
+          "title": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "workflows": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z0-9_-]{1,64}$"},
+      "maxProperties": 1000,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "description", "category", "repository", "path"],
+        "properties": {
+          "title": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1},
+          "category": {"type": "string", "pattern": "^[a-z0-9_-]{1,64}$"},
+          "repository": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "ref": {"type": "string", "minLength": 1},
+          "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "tags": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    }
+  }
+}

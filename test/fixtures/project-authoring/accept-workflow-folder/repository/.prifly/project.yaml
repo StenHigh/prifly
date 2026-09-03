@@ -1,0 +1,14 @@
+schema_version: prifly-project-profile/2
+hosts:
+  codex-cli: .codex/skills
+  codex-app: .agents/skills
+  claude-code: .claude/skills
+packages:
+  sample:
+    source: .prifly/workflows/sample
+launches:
+  sample:
+    title: Sample workflow
+    description: Compile one declared YAML workflow folder.
+    kind: workflow
+    workflow: .prifly/workflows/sample/workflow.yaml

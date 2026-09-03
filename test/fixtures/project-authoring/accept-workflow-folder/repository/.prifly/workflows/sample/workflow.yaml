@@ -1,0 +1,24 @@
+authoring: prifly-project-workflow/1
+package:
+  id: test:package/authoring-corpus
+  version: 1.0.0
+  description: Minimal accepted project authoring corpus fixture.
+  requires_core_protocol: "1"
+  references:
+    local_policy: core:policy/local@3.0.0
+id: test:workflow/authoring-corpus
+version: 1.0.0
+refs:
+  local_policy: "{{local_policy}}"
+  task_schema: "{{schema_task}}"
+inputs:
+  task:
+    schema_ref: task_schema
+    required: true
+    description: Text supplied by the workflow host.
+outputs: {}
+entry: done
+limits: {max_step_instances: 1, max_control_transitions: 2}
+policy_ref: local_policy
+stages:
+  done: {kind: finish, outcome: no_work}

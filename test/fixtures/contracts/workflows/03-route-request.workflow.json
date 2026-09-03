@@ -1,0 +1,116 @@
+{
+  "schema_version": "1",
+  "id": "example:workflow/route-request",
+  "version": "1.0.0",
+  "title": "03. Deterministic typed choice without an AI router",
+  "inputs": {
+    "mode": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/mode",
+        "version": "1.0.0",
+        "digest": "sha256:d5d460d21c0d606817fcbda927ad8eb7f683c30745ef52f67561e3f68c8c4c9e"
+      },
+      "required": true
+    }
+  },
+  "outputs": {
+    "report": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/report",
+        "version": "1.0.0",
+        "digest": "sha256:717b29fcf46987f93f1ebb4fbc5580edd3691d4413d73032a1c1c72051a5f9b5"
+      },
+      "required_for": [
+        "succeeded",
+        "rejected"
+      ]
+    }
+  },
+  "allowed_outcomes": [
+    "succeeded",
+    "rejected"
+  ],
+  "definition": {
+    "entry": "route",
+    "stages": {
+      "route": {
+        "kind": "choice",
+        "selection": "exclusive",
+        "branches": [
+          {
+            "id": "process",
+            "predicate": {
+              "op": "eq",
+              "left": {
+                "kind": "field",
+                "ref": {
+                  "from": "workflow_input",
+                  "port": "mode"
+                }
+              },
+              "right": {
+                "kind": "literal",
+                "value": "process"
+              }
+            },
+            "next": "accepted"
+          }
+        ],
+        "default": "rejected"
+      },
+      "accepted": {
+        "kind": "finish",
+        "outcome": "succeeded",
+        "output_bindings": {
+          "report": {
+            "from": "literal",
+            "value": {
+              "ok": true,
+              "notes": [
+                "The requested route is process."
+              ]
+            },
+            "schema_ref": {
+              "id": "example:schema/report",
+              "version": "1.0.0",
+              "digest": "sha256:717b29fcf46987f93f1ebb4fbc5580edd3691d4413d73032a1c1c72051a5f9b5"
+            }
+          }
+        }
+      },
+      "rejected": {
+        "kind": "finish",
+        "outcome": "rejected",
+        "output_bindings": {
+          "report": {
+            "from": "literal",
+            "value": {
+              "ok": false,
+              "notes": [
+                "The requested route is discard."
+              ]
+            },
+            "schema_ref": {
+              "id": "example:schema/report",
+              "version": "1.0.0",
+              "digest": "sha256:717b29fcf46987f93f1ebb4fbc5580edd3691d4413d73032a1c1c72051a5f9b5"
+            }
+          }
+        }
+      }
+    }
+  },
+  "limits": {
+    "max_step_instances": 10000,
+    "max_control_transitions": 100000,
+    "max_parallelism": 4,
+    "max_child_depth": 8
+  },
+  "policy_ref": {
+    "id": "example:policy/local",
+    "version": "1.0.0",
+    "digest": "sha256:395ef7427c2922e1a90017ef471524ecc837336bae78d71d9f7320f1f1a42125"
+  }
+}

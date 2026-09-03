@@ -1,0 +1,4 @@
+id: test:context/host-skill
+version: 1.0.0
+media_type: text/markdown
+source: {root: host_skills, path: sample/SKILL.md}

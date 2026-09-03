@@ -1,0 +1,11 @@
+{
+  "command": "compile",
+  "accepted": true,
+  "launch": "options",
+  "package": "options",
+  "inputs": [{"name": "quality_enabled", "required": false, "format": "json"}],
+  "workflow_options": {
+    "workflow": "test:workflow/options",
+    "defaults": {"quality_enabled": false}
+  }
+}

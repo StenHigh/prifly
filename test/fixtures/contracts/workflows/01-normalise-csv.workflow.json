@@ -1,0 +1,117 @@
+{
+  "schema_version": "1",
+  "id": "example:workflow/normalise-csv",
+  "version": "1.0.0",
+  "title": "01. File transformation without AI, Git, or a task source",
+  "inputs": {
+    "source": {
+      "format": "blob",
+      "media_types": [
+        "text/csv"
+      ],
+      "required": true
+    }
+  },
+  "outputs": {
+    "normalised": {
+      "format": "blob",
+      "media_types": [
+        "text/csv"
+      ],
+      "required_for": [
+        "succeeded"
+      ]
+    },
+    "report": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/report",
+        "version": "1.0.0",
+        "digest": "sha256:717b29fcf46987f93f1ebb4fbc5580edd3691d4413d73032a1c1c72051a5f9b5"
+      },
+      "required_for": [
+        "succeeded",
+        "rejected",
+        "no_work"
+      ]
+    }
+  },
+  "allowed_outcomes": [
+    "succeeded",
+    "rejected",
+    "no_work"
+  ],
+  "definition": {
+    "entry": "normalise",
+    "stages": {
+      "normalise": {
+        "kind": "step",
+        "step_ref": {
+          "id": "example:step/normalise-csv",
+          "version": "1.0.0",
+          "digest": "sha256:05e57c1ac184d5d83adc169f5252ce0f732c1b7f93f2f0dd74b44659be617b37"
+        },
+        "input_bindings": {
+          "source": {
+            "from": "workflow_input",
+            "port": "source"
+          }
+        },
+        "on": {
+          "pass": "done",
+          "fail": "rejected",
+          "no_work": "empty"
+        }
+      },
+      "done": {
+        "kind": "finish",
+        "outcome": "succeeded",
+        "output_bindings": {
+          "normalised": {
+            "from": "stage_output",
+            "stage_id": "normalise",
+            "port": "normalised"
+          },
+          "report": {
+            "from": "stage_output",
+            "stage_id": "normalise",
+            "port": "report"
+          }
+        }
+      },
+      "rejected": {
+        "kind": "finish",
+        "outcome": "rejected",
+        "output_bindings": {
+          "report": {
+            "from": "stage_output",
+            "stage_id": "normalise",
+            "port": "report"
+          }
+        }
+      },
+      "empty": {
+        "kind": "finish",
+        "outcome": "no_work",
+        "output_bindings": {
+          "report": {
+            "from": "stage_output",
+            "stage_id": "normalise",
+            "port": "report"
+          }
+        }
+      }
+    }
+  },
+  "limits": {
+    "max_step_instances": 10000,
+    "max_control_transitions": 100000,
+    "max_parallelism": 4,
+    "max_child_depth": 8
+  },
+  "policy_ref": {
+    "id": "example:policy/local",
+    "version": "1.0.0",
+    "digest": "sha256:395ef7427c2922e1a90017ef471524ecc837336bae78d71d9f7320f1f1a42125"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:extension:1",
+  "title": "Pri-Fly workflow extensions",
+  "type": "object",
+  "additionalProperties": false,
+  "minProperties": 1,
+  "properties": {
+    "profile": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "settings": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_-]*$"},
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": true
+      }
+    },
+    "exclude": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+      "uniqueItems": true
+    },
+    "extensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "workflow", "between", "step", "on"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "workflow": {"type": "string", "minLength": 1},
+          "between": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from", "to"],
+            "properties": {
+              "from": {"type": "string", "minLength": 1},
+              "to": {"type": "string", "minLength": 1}
+            }
+          },
+          "step": {"type": "string", "minLength": 1},
+          "on": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}}
+        }
+      }
+    }
+  }
+}

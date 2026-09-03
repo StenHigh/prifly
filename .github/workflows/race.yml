@@ -1,0 +1,30 @@
+name: race
+
+# The race detector suite is long and manual, exactly as it was on GitLab.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+  GOTELEMETRY: off
+
+jobs:
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: prifly-go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: prifly-go-${{ runner.os }}-
+      - name: Race detector suite
+        run: make race GO="$(go env GOROOT)/bin/go"

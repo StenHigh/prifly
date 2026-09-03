@@ -1,0 +1,34 @@
+authoring: prifly-project-workflow/1
+package:
+  id: test:package/options
+  version: 1.0.0
+  description: Project options corpus fixture.
+  requires_core_protocol: "1"
+  references:
+    local_policy: core:policy/local@3.0.0
+id: test:workflow/options
+version: 1.0.0
+refs:
+  local_policy: "{{local_policy}}"
+  flag_schema: "{{schema_flag}}"
+inputs:
+  quality_enabled:
+    schema_ref: flag_schema
+    required: false
+    configuration: {scope: project, default: true}
+outputs: {}
+features: {quality: {input: quality_enabled}}
+entry: choose-quality
+limits: {max_step_instances: 1, max_control_transitions: 2}
+policy_ref: local_policy
+stages:
+  choose-quality:
+    kind: choice
+    selection: exclusive
+    branches:
+      - id: enabled
+        predicate: {op: eq, left: $inputs.quality_enabled, right: true}
+        next: quality
+    default: skipped
+  quality: {kind: finish, outcome: no_work}
+  skipped: {kind: finish, outcome: no_work}

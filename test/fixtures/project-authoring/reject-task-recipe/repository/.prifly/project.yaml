@@ -1,0 +1,12 @@
+schema_version: prifly-project-profile/2
+hosts:
+  codex-cli: .codex/skills
+  codex-app: .agents/skills
+  claude-code: .claude/skills
+packages: {}
+launches:
+  legacy:
+    title: Legacy recipe
+    description: This pre-release source must be rejected.
+    kind: task_recipe
+    workflow: .prifly/workflows/legacy/workflow.yaml

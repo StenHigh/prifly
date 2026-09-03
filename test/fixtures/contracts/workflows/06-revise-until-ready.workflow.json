@@ -1,0 +1,111 @@
+{
+  "schema_version": "1",
+  "id": "example:workflow/revise-until-ready",
+  "version": "1.0.0",
+  "title": "06. Bounded semantic iterations distinct from transport retries",
+  "inputs": {
+    "initial": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/candidate-state",
+        "version": "1.0.0",
+        "digest": "sha256:cddc39b0a77fccc70efc1a66002acd1964e2db2abce21620977655c5ef33c055"
+      },
+      "required": true
+    }
+  },
+  "outputs": {
+    "state": {
+      "format": "json",
+      "schema_ref": {
+        "id": "example:schema/candidate-state",
+        "version": "1.0.0",
+        "digest": "sha256:cddc39b0a77fccc70efc1a66002acd1964e2db2abce21620977655c5ef33c055"
+      },
+      "required_for": [
+        "succeeded"
+      ]
+    }
+  },
+  "allowed_outcomes": [
+    "succeeded",
+    "rejected"
+  ],
+  "definition": {
+    "entry": "revise",
+    "stages": {
+      "revise": {
+        "kind": "repeat",
+        "body_workflow_ref": {
+          "id": "example:workflow/candidate-revision-child",
+          "version": "1.0.0",
+          "digest": "sha256:291b501c789d99c3600fe3beaec7cfc826c001316aa04cde84a8d84f88afbc3e"
+        },
+        "initial_bindings": {
+          "state": {
+            "from": "workflow_input",
+            "port": "initial"
+          }
+        },
+        "next_bindings": {
+          "state": {
+            "from": "iteration_output",
+            "port": "state"
+          }
+        },
+        "continue_on": [
+          "succeeded"
+        ],
+        "until": {
+          "op": "eq",
+          "left": {
+            "kind": "field",
+            "ref": {
+              "from": "iteration_output",
+              "port": "state",
+              "pointer": "/ready"
+            }
+          },
+          "right": {
+            "kind": "literal",
+            "value": true
+          }
+        },
+        "max_iterations": 3,
+        "on_complete": {
+          "succeeded": "done",
+          "rejected": "rejected"
+        },
+        "on_limit": "rejected",
+        "on_unknown": "rejected"
+      },
+      "done": {
+        "kind": "finish",
+        "outcome": "succeeded",
+        "output_bindings": {
+          "state": {
+            "from": "stage_output",
+            "stage_id": "revise",
+            "port": "state"
+          }
+        }
+      },
+      "rejected": {
+        "kind": "finish",
+        "outcome": "rejected",
+        "output_bindings": {}
+      }
+    }
+  },
+  "limits": {
+    "max_step_instances": 10000,
+    "max_control_transitions": 100000,
+    "max_parallelism": 4,
+    "max_child_depth": 8
+  },
+  "policy_ref": {
+    "id": "example:policy/local",
+    "version": "1.0.0",
+    "digest": "sha256:395ef7427c2922e1a90017ef471524ecc837336bae78d71d9f7320f1f1a42125"
+  }
+}

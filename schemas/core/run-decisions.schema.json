@@ -1,0 +1,408 @@
+{
+  "$defs": {
+    "DecisionAnswer": {
+      "$ref": "#/$defs/runtime_DecisionAnswer"
+    },
+    "DecisionCatalog": {
+      "$ref": "#/$defs/runtime_DecisionCatalog"
+    },
+    "DecisionDefinition": {
+      "$ref": "#/$defs/runtime_DecisionDefinition"
+    },
+    "DecisionRecord": {
+      "$ref": "#/$defs/runtime_DecisionRecord"
+    },
+    "DecisionRequest": {
+      "$ref": "#/$defs/runtime_DecisionRequest"
+    },
+    "DecisionSheet": {
+      "$ref": "#/$defs/runtime_DecisionSheet"
+    },
+    "runtime_DecisionAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string"
+        },
+        "definition_digest": {
+          "type": "string"
+        },
+        "expected_run_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "request_digest": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "decision-answer/1"
+        },
+        "value": {}
+      },
+      "required": [
+        "decision_id",
+        "definition_digest",
+        "expected_run_version",
+        "request_digest",
+        "run_id",
+        "schema_version",
+        "value"
+      ],
+      "type": "object"
+    },
+    "runtime_DecisionCatalog": {
+      "additionalProperties": false,
+      "properties": {
+        "decisions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_DecisionDefinition"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "run-decision-catalog/1"
+        }
+      },
+      "required": [
+        "decisions",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "runtime_DecisionChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "id",
+        "title",
+        "value"
+      ],
+      "type": "object"
+    },
+    "runtime_DecisionCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profiles": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "profiles"
+      ],
+      "type": "object"
+    },
+    "runtime_DecisionDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "automatic": {
+          "type": "boolean"
+        },
+        "choices": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_DecisionChoice"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "destination": {
+          "$ref": "#/$defs/runtime_DecisionDestination"
+        },
+        "id": {
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "preflight",
+            "runtime"
+          ]
+        },
+        "recommendation": {},
+        "required": {
+          "type": "boolean"
+        },
+        "schema_version": {
+          "const": "run-decision/1"
+        },
+        "sensitivity": {
+          "enum": [
+            "ordinary",
+            "scope-changing",
+            "approval-like"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "value_schema": {},
+        "when": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_DecisionCondition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "automatic",
+        "destination",
+        "id",
+        "phase",
+        "required",
+        "schema_version",
+        "sensitivity",
+        "title"
+      ],
+      "type": "object"
+    },
+    "runtime_DecisionDestination": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "package_profile",
+            "launch_input",
+            "session_context"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "runtime_DecisionRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string"
+        },
+        "definition_digest": {
+          "type": "string"
+        },
+        "definition_id": {
+          "type": "string"
+        },
+        "observed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_Observation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "decision-record/1"
+        },
+        "source": {
+          "enum": [
+            "actor",
+            "project_default",
+            "package_default",
+            "autonomous_policy",
+            "unanswered"
+          ]
+        },
+        "status": {
+          "enum": [
+            "presented",
+            "answered",
+            "defaulted",
+            "rejected",
+            "pending"
+          ]
+        },
+        "value": {}
+      },
+      "required": [
+        "definition_digest",
+        "definition_id",
+        "schema_version",
+        "source",
+        "status"
+      ],
+      "type": "object"
+    },
+    "runtime_DecisionRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string"
+        },
+        "decision_id": {
+          "type": "string"
+        },
+        "definition_digest": {
+          "type": "string"
+        },
+        "envelope_digest": {
+          "type": "string"
+        },
+        "expected_run_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "decision-request/1"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "decision_id",
+        "definition_digest",
+        "envelope_digest",
+        "expected_run_version",
+        "run_id",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "runtime_DecisionSheet": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_digest": {
+          "type": "string"
+        },
+        "decision_policy": {
+          "type": "string"
+        },
+        "package_profile": {
+          "type": "string"
+        },
+        "profile_source": {
+          "type": "string"
+        },
+        "records": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_DecisionRecord"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "decision-sheet/1"
+        }
+      },
+      "required": [
+        "catalog_digest",
+        "package_profile",
+        "profile_source",
+        "records",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "runtime_Observation": {
+      "additionalProperties": false,
+      "properties": {
+        "monotonic_ms": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "suspend_basis": {
+          "type": "string"
+        },
+        "utc": {
+          "type": "string"
+        },
+        "utc_trust": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "monotonic_ms",
+        "session",
+        "source",
+        "suspend_basis",
+        "utc",
+        "utc_trust"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:prifly:run-decisions:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Versioned data contracts for declared Run decisions. Authority, routing and answer validation remain runtime responsibilities.",
+  "title": "Pri-Fly Run decision contracts",
+  "x-prifly-contracts": [
+    "DecisionAnswer",
+    "DecisionCatalog",
+    "DecisionDefinition",
+    "DecisionRecord",
+    "DecisionRequest",
+    "DecisionSheet"
+  ]
+}

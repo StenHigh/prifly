@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=../../schemas/authoring/context-v1.schema.json
+# A context seals exact instructions. Use text for repository-owned instructions,
+# or host_skills for the current host's AI Factory skill.
+id: example:context/host-skill
+version: 1.0.0
+media_type: text/markdown
+source:
+  root: host_skills # Resolves under the explicit --host root; never auto-detected.
+  path: aif-plan/SKILL.md # Must be a regular file inside that host root.

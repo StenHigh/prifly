@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:run-decision:1",
+  "title": "Pri-Fly Run decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["authoring", "id", "title", "phase", "destination"],
+  "properties": {
+    "authoring": {"const": "prifly-run-decision/1"},
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$"},
+    "title": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "phase": {"enum": ["preflight", "runtime"]},
+    "required": {"type": "boolean", "default": true},
+    "choices": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/choice"}},
+    "value_schema": {"type": "object"},
+    "recommendation": {},
+    "automatic": {"type": "boolean", "default": false},
+    "sensitivity": {"enum": ["ordinary", "scope-changing", "approval-like"], "default": "ordinary"},
+    "destination": {"$ref": "#/$defs/destination"},
+    "when": {"$ref": "#/$defs/condition"}
+  },
+  "anyOf": [
+    {"required": ["choices"]},
+    {"required": ["value_schema"]}
+  ],
+  "$defs": {
+    "choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "value"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$"},
+        "title": {"type": "string", "minLength": 1},
+        "value": {}
+      }
+    },
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["package_profile", "launch_input", "session_context"]},
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$"}
+      },
+      "allOf": [
+        {"if": {"properties": {"kind": {"const": "package_profile"}}}, "then": {"not": {"required": ["name"]}}},
+        {"if": {"properties": {"kind": {"enum": ["launch_input", "session_context"]}}}, "then": {"required": ["name"]}}
+      ]
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profiles": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$"}},
+        "answers": {"type": "object", "minProperties": 1, "propertyNames": {"pattern": "^[a-z][a-z0-9_-]{0,127}$"}, "additionalProperties": {}}
+      },
+      "anyOf": [
+        {"required": ["profiles"]},
+        {"required": ["answers"]}
+      ]
+    }
+  }
+}

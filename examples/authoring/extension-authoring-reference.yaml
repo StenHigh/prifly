@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=../../schemas/authoring/extension-v1.schema.json
+# Complete reference for the optional extend.yaml beside one project workflow.
+# Copy only the sections your project needs. Values are validated by the named
+# workflow input schema during `prifly project compile`.
+
+# Select one package profile declared in workflow.yaml. A profile supplies only
+# that package's sealed YAML substitutions; it is not a Core runtime profile.
+profile: standard
+
+# Set defaults for already declared project-scoped configuration inputs.
+settings:
+  build-or-pass:
+    build_batch_limit: 2
+
+# Turn off only named optional features declared in a workflow's `features` map.
+# The workflow itself owns the enabled and bypass routes; this list never deletes
+# a stage or rewrites bindings.
+exclude: [improve, verify, review]
+
+# Insert a no-input project step into one exact direct route.
+extensions:
+  - id: lint-after-build
+    workflow: build
+    between: {from: build, to: commit}
+    step: lint
+    on: {pass: commit}

@@ -1,0 +1,7 @@
+{
+  "command": "compile",
+  "accepted": false,
+  "authority": true,
+  "package": "options",
+  "diagnostic": "project_option_unknown_feature: missing"
+}
