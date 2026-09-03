@@ -1,0 +1,9 @@
+authoring: prifly-step/1
+id: test:step/work
+version: 1.0.0
+title: Workspace handoff
+kind: worker
+executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
+instructions_ref: "{{context_work}}"
+effects: {class: workspace_write, retry_class: never}
+result_schema_ref: "{{step_result_schema}}"

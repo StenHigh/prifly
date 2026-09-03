@@ -1,0 +1,14 @@
+schema_version: prifly-project-profile/2
+hosts:
+  codex-cli: .codex/skills
+  codex-app: .agents/skills
+  claude-code: .claude/skills
+packages:
+  workspace:
+    source: .prifly/workflows/workspace
+launches:
+  workspace:
+    title: Workspace handoff
+    description: Proves both declared repository workspace modes.
+    kind: workflow
+    workflow: .prifly/workflows/workspace/workflow.yaml

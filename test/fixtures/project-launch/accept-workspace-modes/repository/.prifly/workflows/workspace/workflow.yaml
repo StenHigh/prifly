@@ -1,0 +1,23 @@
+authoring: prifly-project-workflow/1
+package:
+  id: test:package/workspace
+  version: 1.0.0
+  description: Public Project start fixture.
+  requires_core_protocol: "1"
+  references:
+    assisted_adapter: core:adapter/assisted-session@1.0.0
+    local_policy: core:policy/local@3.0.0
+    step_result_schema: core:schema/step-result@1.0.0
+id: test:workflow/workspace
+version: 1.0.0
+refs:
+  step_work: "{{step_work}}"
+  local_policy: "{{local_policy}}"
+inputs: {}
+outputs: {}
+entry: work
+limits: {max_step_instances: 1, max_control_transitions: 2}
+policy_ref: local_policy
+stages:
+  work: {kind: step, step_ref: step_work, input_bindings: {}, on: {pass: done}}
+  done: {kind: finish, outcome: succeeded, output_bindings: {}}

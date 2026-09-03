@@ -1,0 +1,4 @@
+id: test:context/work
+version: 1.0.0
+media_type: text/markdown; charset=utf-8
+source: {root: host_skills, path: work/SKILL.md}
