@@ -66,7 +66,7 @@ bundles и historical evidence не изменены.
 
 ## 7. Безопасность и поставка
 
-- [ ] 7.1 `scripts/install.sh` скачивает `release-manifest.json` того же Release, сверяет SHA-256 архива до установки и отказывает при несовпадении; SECURITY.md называет HTTPS GitLab как единственный trust boundary первой установки; проверить `python3 -B test/e2e/verify-release-ci.py` и sh-тест с подменённым архивом.
+- [ ] 7.1 `scripts/install.sh` скачивает `release-manifest.json` того же Release, сверяет SHA-256 архива до установки и отказывает при несовпадении; SECURITY.md называет HTTPS GitHub как единственный trust boundary первой установки; проверить `python3 -B test/e2e/verify-release-ci.py` и sh-тест с подменённым архивом.
 - [ ] 7.2 Подпись manifest по RFC 8785: `release.Build` пишет `release-manifest.sig` (legacy) и `release-manifest.jcs.sig`; `Update` проверяет JCS-подпись; `verify-release-ci.py` требует обе на два release; проверить `go test ./internal/release -count=1`, тест старого updater против нового manifest и `make release-ci-check`.
 - [ ] 7.3 Monitor: allowlist `Host` (`127.0.0.1:<port>`, `localhost:<port>`), `X-Content-Type-Options: nosniff`, ошибки через `ProblemFor`, `/api/artifact` читает ≤ 1 МиБ потоком; проверить `go test ./cmd/prifly -run 'Monitor' -count=1` с запросом с чужим `Host` → 421/403.
 - [ ] 7.4 `validIdentity` для rejection code, event type и authority key — грамматика идентификатора (`^[a-z][a-z0-9_]{0,63}$` для кодов); `compareVersions` сравнивает numeric prerelease identifiers по semver и hoist regexp; проверить `go test ./internal/local ./internal/release -count=1`.

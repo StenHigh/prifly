@@ -195,7 +195,7 @@ Spike `modernc.org/sqlite` оформляется отдельным ADR с из
 ### 12. Поставка
 
 `install.sh` скачивает `release-manifest.json` из того же Release и сверяет
-SHA-256 архива до установки; trust boundary остаётся HTTPS GitLab, что явно
+SHA-256 архива до установки; trust boundary остаётся HTTPS GitHub, что явно
 записано. Подпись manifest считается по RFC 8785 каноническим bytes
 (`json-canonicalization` уже в зависимостях): два release публикуют и
 legacy `release-manifest.sig`, и `release-manifest.jcs.sig`; новый updater

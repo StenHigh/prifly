@@ -7,14 +7,15 @@ RFC 8785 signature; старый updater проверяет legacy, новый �
 
 ### Requirement: Поставка использует versioned release assets
 Каждый поддержанный public build MUST публиковаться только как asset
-семантически versioned, tagged GitLab Release. Release MUST содержать отдельный
-manifest с version, platform, archive identity и digest, а также signature,
-проверяемую встроенным public key. Подпись MUST вычисляться по RFC 8785
-canonical bytes manifest, чтобы её мог проверить внешний инструмент без
-воспроизведения сериализации Pri-Fly; на переходный период Release MAY
-дополнительно публиковать прежнюю signature form. `latest` разрешён только для
-обнаружения новейшего stable tagged Release; branch, commit, CI job artifact и
-произвольный URL MUST NOT быть источником bytes для updater.
+семантически versioned, tagged GitHub Release репозитория `StenHigh/prifly`.
+Release MUST содержать отдельный manifest с version, platform, archive
+identity и digest, а также signature, проверяемую встроенным public key.
+Подпись MUST вычисляться по RFC 8785 canonical bytes manifest, чтобы её мог
+проверить внешний инструмент без воспроизведения сериализации Pri-Fly; на
+переходный период Release MAY дополнительно публиковать прежнюю signature
+form. `latest` разрешён только для обнаружения новейшего stable tagged Release
+через постоянную ссылку `releases/latest/download`; branch, commit, workflow
+artifact и произвольный URL MUST NOT быть источником bytes для updater.
 
 #### Scenario: Latest Release указывает на корректный archive
 - **WHEN** updater запрашивает обновление для своей OS и architecture
@@ -39,12 +40,12 @@ MUST скачивать release manifest того же Release и сверять
 записанным в нём до установки; несовпадение MUST завершаться отказом без
 частичной установки. Bootstrap MUST не запускать project workflow, не менять
 project authority и не менять shell profile без явного отдельного выбора.
-Документация MUST явно назвать GitLab HTTPS Release asset trust boundary первой
+Документация MUST явно назвать GitHub HTTPS Release asset trust boundary первой
 установки; до работающего binary она MUST NOT обещать cryptographic
 verification сильнее этого trust boundary.
 
 #### Scenario: Пользователь запускает documented install command
-- **WHEN** supported platform получает bootstrap из official GitLab Release
+- **WHEN** supported platform получает bootstrap из official GitHub Release
 - **THEN** в пользовательском каталоге появляется executable `prifly`, а
   существующие project files и authority не меняются
 

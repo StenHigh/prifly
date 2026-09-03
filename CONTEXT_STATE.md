@@ -38,8 +38,8 @@
 
 ## Открытые changes (`openspec list`)
 
-- `harden-authority-reliability-and-performance` — 0/51; его delta
-  release-distribution написана под GitLab-текст, нужен rebase.
+- `harden-authority-reliability-and-performance` — 0/51; delta
+  release-distribution перебазирована на GitHub-текст spec.
 - `add-run-decision-catalog` — 18/20; открыты 4.2 (ручное наблюдение в
   Codex и Claude Code) и 6.3 (bounded live pilot).
 - `add-native-host-question-ux` — 6/7 (task 2.3 — ручное наблюдение UI).
