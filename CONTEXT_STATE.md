@@ -4,11 +4,11 @@
 в `openspec/` (см. `openspec/SOURCE-OF-TRUTH.md`); этот файл только
 ориентирует.
 
-Обновлено: 2026-09-03. Это GitHub-копия Pri-Fly (`StenHigh/prifly`),
+Обновлено: 2026-09-03. Это рабочая копия Pri-Fly (`StenHigh/prifly`),
 начатая свежей историей из GitLab-дерева `main` = `27fa58c`. GitLab-проект
-остаётся нетронутым до удаления.
+`stenhigh/prifly` архивирован (read-only, README указывает на GitHub).
 
-## Переезд на GitHub (change `migrate-hosting-to-github`)
+## Переезд на GitHub (change `migrate-hosting-to-github`, заархивирован)
 
 - Module path `github.com/stenhigh/prifly`; updater и `scripts/install.sh`
   читают `https://github.com/StenHigh/prifly/releases/latest/download/`.
@@ -28,16 +28,16 @@
   владельца; installer с `releases/latest/download` проверен на darwin/arm64
   и linux/amd64, `prifly update` читает signed manifest с GitHub. Каталог и
   `prifly-aif-workflows` (README, installer URL в CI) переведены на GitHub.
-- Ещё не сделано: архивирование/удаление GitLab-проекта — решение владельца
-  (task 4.5). Существующие установки `v0.5.0` смотрят на GitLab и обновлений
-  не увидят — переустановка новой командой. Рабочая копия для дальнейшей
-  работы — `Pri-Fly/github`; `Pri-Fly/isolated` (GitLab) заморожена.
+- GitLab-проект архивирован (его `main` `117e2ff` с указателем на GitHub);
+  релизы `v0.2.0`–`v0.5.0` там остаются доступны. Существующие установки
+  `v0.5.0` смотрят на GitLab и обновлений не увидят — переустановка новой
+  командой. Рабочая копия — `Pri-Fly/github`; `Pri-Fly/isolated` —
+  замороженный GitLab-клон, нужен только как источник `.tools`.
 - Полный `make race` на этой машине под нагрузкой (load ≈ 8) даёт
   `schema_timeout`/`database is locked`; доверять GitHub `race.yml`.
 
 ## Открытые changes (`openspec list`)
 
-- `migrate-hosting-to-github` — задачи 4.x ждут действий владельца.
 - `harden-authority-reliability-and-performance` — 0/51; его delta
   release-distribution написана под GitLab-текст, нужен rebase.
 - `add-run-decision-catalog` — 18/20; открыты 4.2 (ручное наблюдение в
