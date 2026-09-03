@@ -72,13 +72,31 @@
   кодом (`no_active_handoff`) с `run.explain`/`run.drive`, а не `not_found`;
   `--help`/`-h` на подкомандах, `--version`, `help <topic>`; `invalid_usage`
   показывает полученное значение (`received: …`, пути с пробелами);
-  `project local set --executable`; `description` для
+  `project local set --executable`; `prifly schema` печатает список имён;
+  описание пары `result_schema_ref.id` против `schema_version: const "1"`;
+  `description` для
   `WorkspaceTreeLocation.path` и `SessionSubmission.result` в generated
   schemas; именованные каталоги вместо `context/skills/{00,01}`; не создавать
   пустой `outputs/` в claim; `run status` считает выходы Run и шагов
   раздельно; `waiting_host` через versioned bump `CoreNextView` (enum уже без
   `waiting_decision`); `prifly update` печатает адрес проверенного manifest.
-  Затем `pin-skill-reference-trees` (источник контекста-каталог).
+  Затем `pin-skill-reference-trees`: источник контекста-каталог, закрепляемый
+  как tree manifest, плюс отказ при запечатывании навыка с неразрешимой
+  ссылкой. Обходной путь до него: каждый `references/*.md` объявляется
+  отдельным `context_refs` (список).
+- Ответы пилотам 2026-09-03: состояние совместимо между релизами (v0.7.0 не
+  менял ни одну опубликованную схему, ci-check сверяет байты); `external_write`
+  отказывает как граница профиля (`start.go` и контракт assisted-шага), P2-09
+  не имеет горизонта — её предпосылка P2-08 тоже не принята; ActionIntent и
+  ActionAdmission существуют, доставки нет, и класс эффекта шага обязан
+  совпадать с намерением, поэтому промежуточной формы публикации сегодня нет;
+  подтверждение человеком делается через Decision Bridge с объявленным
+  runtime-решением, отдельного порта вопросов не будет.
+- Для бэклога `prifly-aif-workflows`: шаги 5-6 `aif-improve` должны объявить
+  runtime-решение и вызывать мост; `references/**` закрепить отдельными
+  `context_refs`.
+- В шаблон runner-навыка добавить: `decision_bridge: true` — способность
+  поднять запрос, а не открытый вопрос.
 
 ## Нюансы
 
