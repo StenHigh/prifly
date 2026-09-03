@@ -203,6 +203,23 @@ func nullable(value map[string]any) map[string]any {
 func (g *generator) property(def, field string, value any) {
 	g.defs[def].(map[string]any)["properties"].(map[string]any)[field] = value
 }
+
+// describe annotates one generated field. A shape says what a value may look
+// like, never what it means, and a caller who cannot read the meaning here
+// reconstructs it by guessing. The annotation changes no validation.
+func (g *generator) describe(def, field, text string) {
+	definition, ok := g.defs[def].(map[string]any)
+	if !ok {
+		return
+	}
+	properties, ok := definition["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	if value, ok := properties[field].(map[string]any); ok {
+		value["description"] = text
+	}
+}
 func enum(values ...string) map[string]any { return map[string]any{"enum": values} }
 func main() {
 	core := flag.Bool("core", false, "generate core-workflow/1 public contracts")
@@ -778,6 +795,13 @@ func main() {
 	g.property("runtime_Run", "outcome", nullable(enum("succeeded", "rejected", "no_work")))
 	g.property("runtime_Duration", "quality", enum("measured", "estimated", "partial", "unavailable", "not_applicable"))
 	g.property("runtime_Preview", "admission", map[string]any{"const": false})
+	for _, described := range []struct{ def, field, text string }{
+		{"runtime_WorkspaceTreeLocation", "path", "Workspace-relative path of the tree this port is captured from. An exact_file policy admits only the declared capture path and the location may be omitted for it; a direct-child policy needs the chosen child name here."},
+		{"runtime_WorkspaceTreeHandoff", "input_location", "Where the runtime already materialized this port's input tree. A submission may repeat this path or omit it, but may not name another."},
+		{"runtime_SessionSubmission", "result", "The StepResult document itself. It is validated against the step's own result contract, not by this schema: read that contract with prifly schema StepResult."},
+	} {
+		g.describe(described.def, described.field, described.text)
+	}
 	bundle := map[string]any{"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "urn:prifly:foundation-public:1", "title": "Pri-Fly foundation public DTO contracts", "description": "Generated shapes plus explicit F1 versions. Payload, graph, authority, quotas and cross-field semantic checks additionally run in the core. Baseline v1 schemas remain unchanged.", "x-prifly-contracts": names, "$defs": g.defs}
 	if g.core {
 		for def, version := range map[string]string{"runtime_RunView": prifly.CoreReadVersion, "runtime_Run": prifly.CoreStateVersion, "runtime_Preview": "core-preview/1", "runtime_CapabilityManifest": "capabilities/1", "runtime_EffectiveConfiguration": "effective-configuration/1"} {

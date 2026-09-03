@@ -8082,7 +8082,9 @@
             }
           ]
         },
-        "result": {},
+        "result": {
+          "description": "The StepResult document itself. It is validated against the step's own result contract, not by this schema: read that contract with prifly schema StepResult."
+        },
         "run_id": {
           "type": "string"
         },
@@ -9225,6 +9227,7 @@
           ]
         },
         "input_location": {
+          "description": "Where the runtime already materialized this port's input tree. A submission may repeat this path or omit it, but may not name another.",
           "type": "string"
         },
         "input_manifest": {
@@ -9257,6 +9260,7 @@
           "type": "string"
         },
         "path": {
+          "description": "Workspace-relative path of the tree this port is captured from. An exact_file policy admits only the declared capture path and the location may be omitted for it; a direct-child policy needs the chosen child name here.",
           "type": "string"
         }
       },

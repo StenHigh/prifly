@@ -19,6 +19,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,6 +45,7 @@ func main() {
 type cli struct {
 	project, format string
 	out             io.Writer
+	help, version   bool
 }
 
 var updateBinary = func(ctx context.Context, version string) (release.Result, error) {
@@ -89,6 +91,10 @@ func (c *cli) globals(args []string) ([]string, error) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
+		case a == "--help" || a == "-h":
+			// Reading the form of a command opens no authority, so this is
+			// answered before --project is even required.
+			c.help = true
 		case a == "--json":
 			c.format = "json"
 		case a == "--project":
@@ -111,8 +117,20 @@ func (c *cli) globals(args []string) ([]string, error) {
 			rest = append(rest, a)
 		}
 	}
-	if c.project == "" || c.format != "text" && c.format != "json" && c.format != "csv" {
-		return nil, usageError("Use --project DIR and --format text|json|csv")
+	// --version is only the version request when it is the whole invocation:
+	// ref and package verify take a --version of their own, and swallowing it
+	// here would silently drop their argument.
+	if len(rest) == 1 && rest[0] == "--version" {
+		c.version, rest = true, nil
+	}
+	if c.help || c.version {
+		return rest, nil
+	}
+	if c.project == "" {
+		return nil, usageError("--project needs a directory; received " + strconv.Quote(c.project))
+	}
+	if c.format != "text" && c.format != "json" && c.format != "csv" {
+		return nil, usageError("--format is text, json or csv; received " + strconv.Quote(c.format))
 	}
 	return rest, nil
 }
@@ -146,10 +164,157 @@ func (c *cli) emit(value any) error {
 	}
 	return enc.Encode(value)
 }
+
+// helpEntries splits the help text into its command entries. The full text is
+// the only source of usage: a second per-command text would drift from it after
+// the first flag change.
+func helpEntries() [][]string {
+	entries := [][]string{}
+	for _, line := range strings.Split(help, "\n") {
+		switch {
+		case strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "   ") && strings.TrimSpace(line) != "":
+			entries = append(entries, []string{line})
+		case strings.HasPrefix(line, "   ") && len(entries) != 0 && strings.TrimSpace(line) != "":
+			entries[len(entries)-1] = append(entries[len(entries)-1], line)
+		default:
+			entries = append(entries, nil)
+		}
+	}
+	return entries
+}
+
+// helpMatches reports whether one entry documents the asked-for command. A
+// token may list alternatives (`status|next|explain`), so each asked word is
+// matched against the alternatives of the token in its position.
+func helpMatches(entry []string, topic []string) bool {
+	command, _, _ := strings.Cut(strings.TrimSpace(entry[0]), "  ")
+	tokens := strings.Fields(command)
+	if len(tokens) < len(topic) {
+		return false
+	}
+	for i, word := range topic {
+		if !slices.Contains(strings.Split(tokens[i], "|"), word) {
+			return false
+		}
+	}
+	return true
+}
+
+// helpTopic returns the usage of the commands a topic names, or an empty string
+// when the topic names none.
+func helpTopic(topic []string) string {
+	lines := []string{}
+	for _, entry := range helpEntries() {
+		if len(entry) != 0 && helpMatches(entry, topic) {
+			lines = append(lines, entry...)
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func (c *cli) versionView() map[string]any {
+	return map[string]any{"schema_version": "foundation-version/1", "version": prifly.Version, "semantics_profile": flow.Profile, "go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH}
+}
+
+// showHelp answers a help request without opening an authority: reading the
+// form of a command is not an operation on a project.
+func (c *cli) showHelp(topic []string) error {
+	text := help
+	if len(topic) != 0 {
+		if text = helpTopic(topic); text == "" {
+			return usageError("no command matches " + strconv.Quote(strings.Join(topic, " ")) + "; run prifly help for the full list")
+		}
+	}
+	_, err := io.WriteString(c.out, text)
+	return err
+}
+
+// contractNames lists every contract name the schema command answers for.
+func contractNames() ([]string, error) {
+	names, err := prifly.PublicSchemaNames()
+	if err != nil {
+		return nil, err
+	}
+	baseline, err := flow.ProtocolSchemaNames()
+	if err != nil {
+		return nil, err
+	}
+	// Authoring documents are what a project author writes; wire contracts are
+	// what the engine exchanges. Both are read with the same command because an
+	// author looking for a form has no way to know which kind theirs is.
+	authoring, err := prifly.AuthoringSchemaNames()
+	if err != nil {
+		return nil, err
+	}
+	names = append(names, baseline...)
+	names = append(names, authoring...)
+	slices.Sort(names)
+	return slices.Compact(names), nil
+}
+
+// contractNameForReference converts the declared reference form a handed task
+// uses (`core:schema/step-result`) into the contract name (`StepResult`). A
+// caller reading its own task should not have to know the two differ.
+func contractNameForReference(reference string) string {
+	_, tail, found := strings.Cut(reference, "/")
+	if !found {
+		return ""
+	}
+	name := ""
+	for _, word := range strings.Split(tail, "-") {
+		if word == "" {
+			return ""
+		}
+		name += strings.ToUpper(word[:1]) + word[1:]
+	}
+	return name
+}
+
+func contractSchema(name string) ([]byte, error) {
+	b, err := prifly.PublicSchema(name)
+	if err == nil {
+		return b, nil
+	}
+	if b, baselineErr := flow.ProtocolSchema(name); baselineErr == nil {
+		return b, nil
+	}
+	if b, authoringErr := prifly.AuthoringSchema(name); authoringErr == nil {
+		return b, nil
+	}
+	if alias := contractNameForReference(name); alias != "" {
+		if b, aliasErr := prifly.PublicSchema(alias); aliasErr == nil {
+			return b, nil
+		}
+		if b, aliasErr := flow.ProtocolSchema(alias); aliasErr == nil {
+			return b, nil
+		}
+	}
+	return nil, err
+}
+
+// outsideAuthority reports whether a named file cannot be inside the selected
+// authority at all, which is a question about the argument, not about anything
+// the file contains.
+func outsideAuthority(path string) bool {
+	if filepath.IsAbs(path) {
+		return true
+	}
+	return slices.Contains(strings.Split(filepath.ToSlash(filepath.Clean(path)), "/"), "..")
+}
+
 func (c *cli) run(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		_, err := io.WriteString(c.out, help)
-		return err
+	if c.version {
+		return c.emit(c.versionView())
+	}
+	if c.help || len(args) == 0 || args[0] == "help" {
+		topic := args
+		if len(topic) != 0 && topic[0] == "help" {
+			topic = topic[1:]
+		}
+		return c.showHelp(topic)
 	}
 	switch args[0] {
 	case "update":
@@ -165,7 +330,7 @@ func (c *cli) run(ctx context.Context, args []string) error {
 		if len(args) != 1 {
 			return usageError("version takes no arguments")
 		}
-		return c.emit(map[string]any{"schema_version": "foundation-version/1", "version": prifly.Version, "semantics_profile": flow.Profile, "go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH})
+		return c.emit(c.versionView())
 	case "monitor":
 		return c.monitor(ctx, c.project, args[1:])
 	case "init":
@@ -197,13 +362,17 @@ func (c *cli) run(ctx context.Context, args []string) error {
 	case "ref":
 		return c.ref(args[1:])
 	case "schema":
+		if len(args) == 1 {
+			names, err := contractNames()
+			if err != nil {
+				return err
+			}
+			return c.emit(map[string]any{"schema_version": "foundation-contract-index/1", "contracts": names})
+		}
 		if len(args) != 2 {
-			return usageError("schema requires an exact protocol contract name")
+			return usageError("schema takes one contract name, or none to list them")
 		}
-		b, err := prifly.PublicSchema(args[1])
-		if err != nil {
-			b, err = flow.ProtocolSchema(args[1])
-		}
+		b, err := contractSchema(args[1])
 		if err != nil {
 			return err
 		}
@@ -302,6 +471,14 @@ func (c *cli) run(ctx context.Context, args []string) error {
 				}
 				refs[port] = ref
 			}
+		}
+		// This command reads a compiled graph inside the authority. An author
+		// pointing it at a workflow folder elsewhere is asking a different
+		// question, and one command answers it without creating a Run. Only the
+		// named path is judged here: an unsafe path found inside a document is
+		// a different refusal and keeps its own code.
+		if outsideAuthority(*path) {
+			return usageError("unsafe_path: " + args[0] + " reads a compiled workflow inside the selected authority; check an authoring folder with project compile --repository DIR --package NAME --host HOST --output DIR, which seals it without creating a Run")
 		}
 		result, err := e.Preview(prifly.PreviewOptions{WorkflowFile: *path, BriefFile: *brief, InputRefs: refs})
 		if err != nil {
@@ -1648,7 +1825,15 @@ func renderRun(w io.Writer, v prifly.RunView) error {
 			}
 		}
 	}
-	if _, err := fmt.Fprintf(w, "diagnostics=%d outputs=%d unresolved=%t\n", len(v.Run.Diagnostics), len(v.Run.Outputs), v.Run.HasUnresolvedEffects); err != nil {
+	// Two different things were one counter: a Run with sealed step outputs and
+	// no finished stage read as if nothing had been captured at all.
+	sealed := 0
+	for _, attempt := range v.Run.Attempts {
+		if attempt != nil && attempt.Accepted != nil {
+			sealed += len(attempt.Accepted.Outputs)
+		}
+	}
+	if _, err := fmt.Fprintf(w, "diagnostics=%d run_outputs=%d step_outputs=%d unresolved=%t\n", len(v.Run.Diagnostics), len(v.Run.Outputs), sealed, v.Run.HasUnresolvedEffects); err != nil {
 		return err
 	}
 	if v.Run.DecisionSheet != nil {
@@ -1748,6 +1933,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    Read declared launch decisions without creating a Run
   project runners update [--repository DIR]
                                    Replace only exact known generated host runners; customized files are refused
+  project local set --executable PATH [--repository DIR]
+                                   Point the machine-only local.yaml at another prifly binary; the authority stays as project init chose it
   project compile --repository DIR --package NAME --host codex-cli|codex-app|claude-code --output DIR [--value NAME=JSON]
                                    Seal one declared YAML package; import remains a separate owner decision
   project start --repository DIR --launch ID --host codex-cli|codex-app|claude-code --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--workspace worktree|checkout]
@@ -1756,7 +1943,9 @@ Global: --project DIR  --json  --format text|json|csv
   version | doctor | inventory     Versions, integrity, exact local definitions
   ref FILE --id ID --version X.Y.Z [--raw-text]
                                    Canonical JSON/YAML; --raw-text hashes exact UTF-8 resource bytes
-  schema NAME                      Exact baseline, foundation or core JSON Schema
+  schema [NAME]                    One exact wire contract or authoring document, or the list of names when NAME is omitted
+                                   Authoring YAML has worked references in examples/authoring/ of the Pri-Fly repository;
+                                   extension-authoring-reference.yaml shows a complete extend.yaml, extensions included
   validate --workflow FILE          Shape, refs, graph and profile validation
   preview --workflow FILE [--brief FILE] [--input-ref PORT=REF.json]
   run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive]

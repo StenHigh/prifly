@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:project-workflow-folder:1",
+  "title": "Pri-Fly workflow folder root",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["authoring", "package", "id", "version", "entry", "stages", "limits", "policy_ref"],
+  "properties": {
+    "authoring": {"const": "prifly-project-workflow/1"},
+    "package": {"$ref": "#/$defs/package"},
+    "schema_version": {"type": "string", "minLength": 1},
+    "id": {"type": "string", "minLength": 1},
+    "version": {"type": ["string", "number"]},
+    "title": {"type": "string", "minLength": 1},
+    "refs": {"type": "object", "additionalProperties": {}},
+    "inputs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/port"}},
+    "outputs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/port"}},
+    "features": {"$ref": "#/$defs/features"},
+    "decision_catalog": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "allowed_outcomes": {"type": "array", "items": {"type": "string"}},
+    "entry": {"type": "string", "minLength": 1},
+    "stages": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/stage"}},
+    "limits": {"$ref": "#/$defs/limits"},
+    "policy_ref": {"$ref": "#/$defs/reference"}
+  },
+  "$defs": {
+    "package": {
+      "type": "object",
+      "required": ["id", "version", "description", "requires_core_protocol"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "version": {"type": ["string", "number"]},
+        "description": {"type": "string", "minLength": 1},
+        "license": {"type": "string", "minLength": 1},
+        "requires_core_protocol": {"type": "string", "minLength": 1},
+        "requested_capabilities": {"type": "array", "items": {"type": "string"}},
+        "dependencies": {"type": "array", "items": {"type": "string"}},
+        "references": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}}
+      },
+      "additionalProperties": false
+    },
+    "reference": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "object"}]},
+    "port": {"anyOf": [{"$ref": "#/$defs/reference"}, {"type": "object", "additionalProperties": true}]},
+    "features": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_-]*$"},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["input"],
+        "properties": {"input": {"type": "string", "minLength": 1}}
+      }
+    },
+    "stage": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {"kind": {"enum": ["step", "call", "choice", "repeat", "parallel", "map", "wait", "finish"]}},
+      "additionalProperties": true
+    },
+    "limits": {
+      "type": "object",
+      "required": ["max_step_instances", "max_control_transitions"],
+      "properties": {
+        "max_step_instances": {"type": "integer", "minimum": 1},
+        "max_control_transitions": {"type": "integer", "minimum": 1},
+        "max_parallelism": {"type": "integer", "minimum": 1},
+        "max_child_depth": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  }
+}

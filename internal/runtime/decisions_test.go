@@ -3,10 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
-
-	"github.com/stenhigh/prifly/internal/local"
 )
 
 func TestValidateDecisionDefinition(t *testing.T) {
@@ -129,7 +126,7 @@ func TestDecisionBridgeResumesSameAssistedAttempt(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = e.Close() })
-	if _, err := e.SessionTask(context.Background(), runID, task.AttemptID); !errors.Is(err, local.ErrNotFound) {
+	if _, err := e.SessionTask(context.Background(), runID, task.AttemptID); refusalCode(err) != "no_active_handoff" {
 		t.Fatalf("paused delivery remained available: %v", err)
 	}
 	next, err := e.Next(context.Background(), runID)

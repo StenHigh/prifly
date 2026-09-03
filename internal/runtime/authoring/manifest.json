@@ -1,0 +1,13 @@
+{
+  "schema_version": "prifly-yaml-editor-contract/1",
+  "schemas": [
+    {"document": "project-profile-v2", "id": "urn:prifly:yaml-authoring:project-profile:2", "path": "project-profile-v2.schema.json", "patterns": [".prifly/project.yaml"]},
+    {"document": "project-workflow-folder-v1", "id": "urn:prifly:yaml-authoring:project-workflow-folder:1", "path": "project-workflow-folder-v1.schema.json", "patterns": [".prifly/workflows/*/workflow.yaml"]},
+    {"document": "extension-v1", "id": "urn:prifly:yaml-authoring:extension:1", "path": "extension-v1.schema.json", "patterns": [".prifly/workflows/*/extend.yaml"]},
+    {"document": "run-decision-v1", "id": "urn:prifly:yaml-authoring:run-decision:1", "path": "run-decision-v1.schema.json", "patterns": [".prifly/workflows/*/decisions/**/*.yaml"]},
+    {"document": "workflow-v1", "id": "urn:prifly:yaml-authoring:workflow:1", "path": "workflow-v1.schema.json", "patterns": [".prifly/workflows/*/workflows/**/*.yaml"]},
+    {"document": "step-v1", "id": "urn:prifly:yaml-authoring:step:1", "path": "step-v1.schema.json", "patterns": [".prifly/workflows/*/steps/**/*.yaml"]},
+    {"document": "context-v1", "id": "urn:prifly:yaml-authoring:context:1", "path": "context-v1.schema.json", "patterns": [".prifly/workflows/*/contexts/**/*.yaml"]},
+    {"document": "workflow-catalog-v1", "id": "urn:prifly:yaml-authoring:workflow-catalog:1", "path": "workflow-catalog-v1.schema.json", "patterns": ["catalog.yaml"]}
+  ]
+}

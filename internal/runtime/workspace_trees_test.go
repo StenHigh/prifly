@@ -285,7 +285,7 @@ func TestWorkspaceTreeRefusesPreHandoffDriftAndPolicyEscape(t *testing.T) {
 		if err := e.Drive(context.Background(), runID); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.SessionTask(context.Background(), runID, ""); !errors.Is(err, local.ErrNotFound) {
+		if _, err := e.SessionTask(context.Background(), runID, ""); refusalCode(err) != "no_active_handoff" {
 			t.Fatalf("a changed plan reached the next host: %v", err)
 		}
 		r := driverRun(t, e, runID)

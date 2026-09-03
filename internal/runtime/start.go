@@ -224,7 +224,7 @@ func (e *Engine) checkWorkflowCapabilities(plan *flow.Plan) error {
 			return errors.New("unsupported_executor: expected pinned core local process adapter")
 		}
 		if step.Effects.Class != "none" && step.Effects.Class != "workspace_write" {
-			return errors.New("unsupported_effect: F1 does not qualify external_write or destructive")
+			return errors.New("unsupported_effect: F1 does not qualify external_write or destructive; an assisted session step is narrowed further to workspace_write or none")
 		}
 		for _, output := range step.Outputs {
 			if output.Format == "blob" && len(output.MediaTypes) > 1 {

@@ -5321,7 +5321,9 @@
         "envelope_digest": {
           "$ref": "#/$defs/Digest"
         },
-        "result": {},
+        "result": {
+          "description": "The StepResult document itself. It is validated against the step's own result contract, not by this schema: read that contract with prifly schema StepResult."
+        },
         "run_id": {
           "type": "string"
         },

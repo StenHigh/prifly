@@ -64,3 +64,10 @@ func TestProblemForPrefersTypedRefusals(t *testing.T) {
 		t.Fatalf("a typed refusal changed shape: %+v exit %d", problem, exit)
 	}
 }
+
+// refusalCode is what a caller of the engine sees: the stable code the refusal
+// is reported under, whatever error value carried it.
+func refusalCode(err error) string {
+	problem, _ := ProblemFor(err)
+	return problem.Code
+}

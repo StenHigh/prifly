@@ -328,7 +328,7 @@ type projectQuestionnaire struct {
 
 func (c *cli) projectCommand(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return usageError("project requires init, workflows, questionnaire, compile, start, extend or runners")
+		return usageError("project requires init, local, workflows, questionnaire, compile, start, extend or runners")
 	}
 	switch args[0] {
 	case "init":
@@ -343,11 +343,65 @@ func (c *cli) projectCommand(ctx context.Context, args []string) error {
 		return c.projectStart(ctx, args[1:])
 	case "extend":
 		return c.projectExtend(ctx, args[1:])
+	case "local":
+		return c.projectLocal(args[1:])
 	case "runners":
 		return c.projectRunners(ctx, args[1:])
 	default:
-		return usageError("project requires init, workflows, questionnaire, compile, start, extend or runners")
+		return usageError("project requires init, local, workflows, questionnaire, compile, start, extend or runners")
 	}
+}
+
+// projectLocal edits the machine-only file that tells the local CLI where its
+// authority and binary are. Only the binary path is editable here: the file is
+// created by project init, which is also the only place an authority is chosen.
+func (c *cli) projectLocal(args []string) error {
+	if len(args) == 0 || args[0] != "set" {
+		return usageError("project local requires set --executable PATH [--repository DIR]")
+	}
+	f := flags("project local set")
+	repository := f.String("repository", ".", "Git repository that owns the shared Pri-Fly profile")
+	executable := f.String("executable", "", "absolute path to the prifly binary this machine runs")
+	if err := parse(f, args[1:]); err != nil {
+		return err
+	}
+	if *executable == "" {
+		return usageError("project local set requires --executable PATH")
+	}
+	if !filepath.IsAbs(*executable) {
+		return usageError("project_local_executable_relative: --executable needs an absolute path; received " + strconv.Quote(*executable))
+	}
+	root, err := projectRepositoryRoot(context.Background(), *repository)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(root, ".prifly", "local.yaml")
+	current, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return usageError("project_local_missing: run project init before changing .prifly/local.yaml")
+	}
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(current), "\n")
+	replaced := false
+	for i, line := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(line), "prifly_executable:") {
+			continue
+		}
+		if replaced {
+			return usageError("project_local_invalid: .prifly/local.yaml names prifly_executable more than once")
+		}
+		lines[i], replaced = "prifly_executable: "+strconv.Quote(*executable), true
+	}
+	if !replaced {
+		return usageError("project_local_invalid: .prifly/local.yaml does not name prifly_executable")
+	}
+	updated := strings.Join(lines, "\n")
+	if err := os.WriteFile(path, []byte(updated), 0644); err != nil {
+		return err
+	}
+	return c.emit(map[string]any{"schema_version": "prifly-project-local/1", "repository": root, "prifly_executable": *executable})
 }
 
 func (c *cli) projectRunners(ctx context.Context, args []string) error {

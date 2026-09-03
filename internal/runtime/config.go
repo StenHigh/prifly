@@ -536,16 +536,29 @@ func initProfile(root, profile string, projectContext bool) error {
 	return nil
 }
 
+// authorityNotFound separates a path that holds no authority from an object
+// missing inside one. Reported as the same not_found, a mistyped --project
+// sends the reader looking for a Run that was never the problem.
+func authorityNotFound(path string) error {
+	return &flow.Problem{Code: "authority_not_found", Message: "no Pri-Fly authority at " + path + "; select one with --project DIR or create it with prifly init"}
+}
+
 func Open(root string, readOnly bool) (*Engine, error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
 	}
 	root, err = filepath.EvalSymlinks(absolute)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, authorityNotFound(absolute)
+	}
 	if err != nil {
 		return nil, err
 	}
 	b, err := readLocal(root, "prifly.json", MaxDefinitionBytes)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, authorityNotFound(root)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read project configuration (run prifly init first): %w", err)
 	}

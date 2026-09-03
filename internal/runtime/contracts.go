@@ -99,8 +99,32 @@ var runDecisionPublicContracts []byte
 
 // PublicSchema selects a named contract from its versioned public bundle.
 // Baseline contracts (including RunSnapshot v1) remain in flow.ProtocolSchema.
+// publicBundles is the ordered set PublicSchema searches. Listing and lookup
+// read the same set, so a listed name always resolves.
+func publicBundles() [][]byte {
+	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts}
+}
+
+// PublicSchemaNames lists every contract PublicSchema answers for.
+func PublicSchemaNames() ([]string, error) {
+	names := []string{}
+	for _, content := range publicBundles() {
+		var bundle map[string]json.RawMessage
+		if err := json.Unmarshal(content, &bundle); err != nil {
+			return nil, err
+		}
+		var bundled []string
+		if err := json.Unmarshal(bundle["x-prifly-contracts"], &bundled); err != nil {
+			return nil, err
+		}
+		names = append(names, bundled...)
+	}
+	slices.Sort(names)
+	return slices.Compact(names), nil
+}
+
 func PublicSchema(name string) ([]byte, error) {
-	for _, content := range [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts} {
+	for _, content := range publicBundles() {
 		var bundle map[string]json.RawMessage
 		if err := json.Unmarshal(content, &bundle); err != nil {
 			return nil, err

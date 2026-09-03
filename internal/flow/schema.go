@@ -108,6 +108,32 @@ func protocolValidator(name string) (*jsonschema.Schema, error) {
 // ProtocolSchema returns canonical self-contained JSON Schema bytes. A baseline
 // component uses the same local-$ref closure shape as the historical fixtures;
 // unrelated future contracts cannot add dependencies to a running F1 contract.
+// ProtocolSchemaNames lists the baseline contracts ProtocolSchema answers for.
+// A caller that must name an exact contract has to be able to read the set of
+// names from the tool instead of guessing them.
+func ProtocolSchemaNames() ([]string, error) {
+	baseline, err := Parse(protocolSchema, "json")
+	if err != nil {
+		return nil, err
+	}
+	defs, ok := baseline.(map[string]any)["$defs"].(map[string]any)
+	if !ok {
+		return nil, problem("unsupported_contract", "", "baseline protocol schema has no definitions")
+	}
+	names := []string{
+		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
+		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
+		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
+		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5",
+		"WorkflowRevisionV2", "WorkflowRevisionV3",
+	}
+	for name := range defs {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return slices.Compact(names), nil
+}
+
 func ProtocolSchema(name string) ([]byte, error) {
 	if name == "PublicationSourceDefinition" {
 		return PublicationSourceSchema()

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -161,7 +162,10 @@ func validateAssistedStep(plan *flow.Plan, step flow.StepDefinition) error {
 	// convention alone. Both declarations are admitted, and the declaration is
 	// what decides whether a worktree is claimed at all.
 	if step.Effects.Class != "workspace_write" && step.Effects.Class != "none" {
-		return errors.New("unsupported_effect: an assisted session step declares workspace_write or none")
+		// Two boundaries refuse this, and neither is visible in the step's own
+		// declaration: the profile does not qualify the class at all, and the
+		// assisted contract narrows it further.
+		return errors.New("unsupported_effect: an assisted session step declares workspace_write or none; this profile qualifies neither external_write nor destructive, and the assisted contract narrows the rest to workspace_write or none")
 	}
 	if len(step.RequiredCapabilities) > 0 {
 		return errors.New("unsupported_capability: the assisted contract supplies no extra capabilities")
@@ -188,6 +192,18 @@ func assistedSkillRefs(step flow.StepDefinition) []flow.Ref {
 	return refs
 }
 
+// skillFileName names a pinned context file after its reference, so a host
+// reads which entry it holds instead of inferring it from the listing order.
+func skillFileName(ref flow.Ref) string {
+	name := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '.' {
+			return r
+		}
+		return '-'
+	}, ref.ID+"@"+ref.Version)
+	return strings.Trim(name, "-")
+}
+
 // materializeSkills writes the pinned skill bytes into the attempt workspace.
 // The host reads files; it never reaches into authority storage. A reference
 // the Run did not pin is a preparation failure, not a silent omission.
@@ -199,7 +215,7 @@ func (e *Engine) materializeSkills(r Run, workspace string, refs []flow.Ref) ([]
 	if err := os.MkdirAll(filepath.Join(workspace, "context", "skills"), 0700); err != nil {
 		return nil, err
 	}
-	for i, ref := range refs {
+	for _, ref := range refs {
 		var pinned *PinnedResource
 		for j := range r.ContextResources {
 			if r.ContextResources[j].Ref == ref {
@@ -213,8 +229,14 @@ func (e *Engine) materializeSkills(r Run, workspace string, refs []flow.Ref) ([]
 		if rawDigest(pinned.Bytes) != ref.Digest {
 			return nil, local.ErrIntegrity
 		}
-		path := fmt.Sprintf("context/skills/%02d", i)
+		// The file is named after the reference it holds. Numbered files made
+		// the mapping to skill_refs a matter of order, which is not a contract:
+		// a host could only tell a skill from its bridge by reading both.
+		path := "context/skills/" + skillFileName(ref)
 		if err := writeExclusive(filepath.Join(workspace, filepath.FromSlash(path)), pinned.Bytes); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return nil, local.ErrIntegrity
+			}
 			return nil, err
 		}
 		ports = append(ports, LocalPort{Ref: ArtifactRef{}, Path: path})
@@ -355,7 +377,9 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 		}
 		return task, nil
 	}
-	return SessionTask{}, local.ErrNotFound
+	// A Run that holds no handoff is not a Run that does not exist: reporting
+	// both as not_found sends the reader looking for the wrong thing.
+	return SessionTask{}, &flow.Problem{Code: "no_active_handoff", Message: "this run holds no handoff awaiting a host; read its next action or drive it"}
 }
 
 // SessionTasks lists every outstanding handoff, so a caller can see that a Run

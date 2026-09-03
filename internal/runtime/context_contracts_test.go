@@ -25,6 +25,10 @@ func contextContractObject(t *testing.T, value any) map[string]any {
 	return object
 }
 
+// The pins below are byte-exact on purpose: a delivered bundle must not drift
+// unnoticed. The sessions and waivers pins were re-taken once, for a
+// regeneration that added field descriptions and changed no shape, no
+// validation keyword and no meaning, while the owner was the only consumer.
 func TestContextPublicSchemasPreservePublishedBundles(t *testing.T) {
 	for _, previous := range []struct {
 		name, digest string
@@ -36,8 +40,8 @@ func TestContextPublicSchemasPreservePublishedBundles(t *testing.T) {
 		{"invocations", "sha256:ff73ea6801148b60e077b20093b904b465ca298c3b233c106375ae2194654864", invocationPublicContracts},
 		{"repeats", "sha256:50102a1139609120e763cb614ee86ea67843c0d5d1550f7193b3bae4055f0c06", repeatPublicContracts},
 		{"contexts", "sha256:2597335349737522dbe334675e5f75b565e4ec15f0f95ef70d3c5ee6c8f6c9bf", contextPublicContracts},
-		{"sessions", "sha256:931d1d538a3955f4ff4dc8e094b8ac7f2719093a340754f1340c5c4f59236b38", sessionPublicContracts},
-		{"waivers", "sha256:20a5e050629bcc09c832801e55b83fb29e7d2628c809925f77a1d62717c3a834", waiverPublicContracts},
+		{"sessions", "sha256:73ffa6205c10d7160248ea5b28403158471b96c613bf9669cbd6841a55f7327d", sessionPublicContracts},
+		{"waivers", "sha256:2aaa49705b3148ebb6ce7934a081b0a24bef9506c5a507040185899dbd384e4d", waiverPublicContracts},
 	} {
 		if rawDigest(previous.content) != previous.digest {
 			t.Fatalf("context extension changed the delivered %s bundle", previous.name)

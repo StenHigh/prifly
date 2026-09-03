@@ -577,6 +577,16 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 	case "uncertain":
 		actions = append(actions, "doctor")
 	}
+	// An attempt awaiting its host is work this driver cannot do, so the action
+	// stays what the driver sees. Reading the handoff is still the move, and
+	// without it the view looks like a Run with nothing left in it.
+	for _, attemptID := range r.Active {
+		attempt := r.Attempts[attemptID]
+		if attempt != nil && attempt.Session != nil && attempt.Session.HostState == SessionAwaiting && attempt.Settled == nil {
+			actions = append(actions, "session.task")
+			break
+		}
+	}
 	next := NextView{SchemaVersion: "foundation-next/1", RunID: id, RunVersion: v.Snapshot.Version, Cut: v.Cut, Action: kind, WorkID: work, ReadOnly: true, Admission: false, DriverLive: e.driverLiveFor(id), ControlEpoch: r.ControlEpoch, ResumeRequired: r.ResumeRequired, SafeNextActions: actions}
 	if isInvocationState(r.SchemaVersion) {
 		next.SchemaVersion = CoreInvocationNextVersion

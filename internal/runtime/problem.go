@@ -154,6 +154,15 @@ func ProblemFor(err error) (Problem, int) {
 			p.Violations[i].Reason = "Contract validation failed."
 		}
 	}
+	// Reading state is the safe move only when the object is missing inside a
+	// working authority. A missing authority and an absent handoff are answered
+	// somewhere else, and the default would send the reader in a circle.
+	if actions, ok := map[string][]string{
+		"authority_not_found": {"init", "doctor"},
+		"no_active_handoff":   {"run.explain", "run.drive"},
+	}[p.Code]; ok {
+		p.SafeNextActions = actions
+	}
 	var occurrence *DiagnosticError
 	if errors.As(err, &occurrence) && occurrence.ID != "" {
 		p.CorrelationID = occurrence.ID

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -2034,5 +2035,263 @@ launches:
 	}
 	if capture := task.WorkspaceTrees[0].Capture; capture.Kind != "exact_file" || capture.Path != "plans/PLAN.md" || capture.Entrypoint != "" {
 		t.Fatalf("reviewed default did not seal its own capture: %+v", capture)
+	}
+}
+
+// Reading the form of a command is not an operation on a project: a help or
+// version request answers itself instead of opening an authority and reporting
+// that some object was not found.
+func TestHelpAndVersionAnswerWithoutAnAuthority(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		args     []string
+		contains string
+	}{
+		{"subcommand help", []string{"--project", "/nonexistent-authority", "session", "submit", "--help"}, "session submit --file SUBMISSION.json"},
+		{"short flag", []string{"run", "status", "-h"}, "run status|next|explain|events|timing"},
+		{"alternation token", []string{"run", "explain", "--help"}, "run status|next|explain"},
+		{"nested command", []string{"project", "workflows", "add", "--help"}, "project workflows add SOURCE"},
+		{"topic", []string{"help", "session"}, "session submit --file SUBMISSION.json"},
+		{"version flag", []string{"--version"}, "\"version\""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var out, errout bytes.Buffer
+			if code := execute(context.Background(), test.args, &out, &errout); code != 0 {
+				t.Fatalf("a read of the command form was refused: %d %s", code, errout.String())
+			}
+			if !strings.Contains(out.String(), test.contains) {
+				t.Fatalf("output does not document the asked command: %s", out.String())
+			}
+		})
+	}
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"help", "session"}, &out, &errout); code != 0 {
+		t.Fatal(errout.String())
+	}
+	var full bytes.Buffer
+	if code := execute(context.Background(), []string{"help"}, &full, &errout); code != 0 {
+		t.Fatal(errout.String())
+	}
+	if out.Len() >= full.Len() || strings.Contains(out.String(), "run drive") {
+		t.Fatalf("a topic printed the whole help: %d of %d bytes", out.Len(), full.Len())
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"help", "nonexistent"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "invalid_usage") {
+		t.Fatalf("an unknown topic was accepted: %d %s", code, errout.String())
+	}
+}
+
+// A usage refusal repeats what it received: a path the caller's shell truncated
+// looks exactly like a tool defect until the value is visible.
+func TestUsageRefusalRepeatsTheReceivedValue(t *testing.T) {
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"--format", "yaml", "version"}, &out, &errout); code == 0 {
+		t.Fatal("an unsupported format was accepted")
+	}
+	if !strings.Contains(errout.String(), "yaml") {
+		t.Fatalf("the refusal hid the received value: %s", errout.String())
+	}
+}
+
+// A caller that must name an exact contract has to be able to read the set of
+// names, and to use the reference form its own task already carries.
+func TestSchemaListsContractsAndAcceptsDeclaredReferences(t *testing.T) {
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"--json", "schema"}, &out, &errout); code != 0 {
+		t.Fatalf("listing the contracts was refused: %d %s", code, errout.String())
+	}
+	var index struct {
+		SchemaVersion string   `json:"schema_version"`
+		Contracts     []string `json:"contracts"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &index); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"StepResult", "SessionSubmissionV5", "WorkspaceTreeLocation"} {
+		if !slices.Contains(index.Contracts, name) {
+			t.Fatalf("the index omits %s", name)
+		}
+	}
+	for _, name := range index.Contracts {
+		if _, err := contractSchema(name); err != nil {
+			t.Fatalf("a listed contract does not resolve: %s %v", name, err)
+		}
+	}
+	direct, err := contractSchema("StepResult")
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared, err := contractSchema("core:schema/step-result")
+	if err != nil {
+		t.Fatalf("the reference form of a handed contract was refused: %v", err)
+	}
+	if !bytes.Equal(direct, declared) {
+		t.Fatal("the two forms of one contract name returned different bytes")
+	}
+	if _, err := contractSchema("core:schema/not-a-contract"); err == nil {
+		t.Fatal("an unknown reference resolved")
+	}
+}
+
+// Changing the binary a project runs is a declared command: the machine-only
+// file is otherwise edited by hand, and the authority it names must not move.
+func TestProjectLocalSetReplacesOnlyTheExecutable(t *testing.T) {
+	repository := t.TempDir()
+	if output, err := exec.Command("git", "init", "-q", repository).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"project", "init", "--repository", repository, "--state-root", authority}, &out, &errout); code != 0 {
+		t.Fatalf("project init: %d %s", code, errout.String())
+	}
+	path := filepath.Join(repository, ".prifly", "local.yaml")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "prifly")
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"project", "local", "set", "--repository", repository, "--executable", target}, &out, &errout); code != 0 {
+		t.Fatalf("project local set: %d %s", code, errout.String())
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(after), strconv.Quote(target)) {
+		t.Fatalf("the executable was not replaced: %s", after)
+	}
+	for _, line := range strings.Split(string(before), "\n") {
+		if strings.HasPrefix(line, "prifly_executable:") || line == "" {
+			continue
+		}
+		if !strings.Contains(string(after), line) {
+			t.Fatalf("an unrelated line changed: %q", line)
+		}
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"project", "local", "set", "--repository", repository, "--executable", "relative/prifly"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "project_local_executable_relative") {
+		t.Fatalf("a relative path was accepted: %d %s", code, errout.String())
+	}
+	empty := t.TempDir()
+	if output, err := exec.Command("git", "init", "-q", empty).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"project", "local", "set", "--repository", empty, "--executable", target}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "project_local_missing") {
+		t.Fatalf("a project without local.yaml was edited: %d %s", code, errout.String())
+	}
+}
+
+// A mistyped --project and a missing Run are different problems. Reported as
+// one code they send the reader looking for an object that was never at fault.
+func TestMissingAuthorityIsDistinctFromMissingObject(t *testing.T) {
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"init", authority}, &out, &errout); code != 0 {
+		t.Fatalf("init: %d %s", code, errout.String())
+	}
+	for _, test := range []struct{ name, project, code string }{
+		{"nonexistent path", filepath.Join(t.TempDir(), "absent"), "authority_not_found"},
+		{"directory without an authority", t.TempDir(), "authority_not_found"},
+		{"authority without that run", authority, "not_found"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var out, errout bytes.Buffer
+			code := execute(context.Background(), []string{"--json", "--project", test.project, "run", "status", "run:absent"}, &out, &errout)
+			if code == 0 {
+				t.Fatal("the read was accepted")
+			}
+			var problem prifly.Problem
+			if err := json.Unmarshal(errout.Bytes(), &problem); err != nil {
+				t.Fatal(err)
+			}
+			if problem.Code != test.code {
+				t.Fatalf("got %s, want %s: %s", problem.Code, test.code, problem.Message)
+			}
+			if test.code == "authority_not_found" && !slices.Contains(problem.SafeNextActions, "init") {
+				t.Fatalf("the refusal does not point at creating one: %+v", problem.SafeNextActions)
+			}
+		})
+	}
+}
+
+// An author writes YAML, not wire messages, and looks for its form in the same
+// place. The binary carries the authoring schemas because an installed tool has
+// no repository to read them from.
+func TestAuthoringDocumentsAreServedAndMatchTheDistributedFiles(t *testing.T) {
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"--json", "schema"}, &out, &errout); code != 0 {
+		t.Fatalf("listing was refused: %s", errout.String())
+	}
+	var index struct {
+		Contracts []string `json:"contracts"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &index); err != nil {
+		t.Fatal(err)
+	}
+	documents, err := prifly.AuthoringSchemaNames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(documents) == 0 || !slices.Contains(documents, "extension-v1") {
+		t.Fatalf("the authoring set is empty or lost its extension document: %v", documents)
+	}
+	for _, document := range documents {
+		if !slices.Contains(index.Contracts, document) {
+			t.Fatalf("the index omits the authoring document %s", document)
+		}
+		served, err := contractSchema(document)
+		if err != nil {
+			t.Fatalf("a listed authoring document does not resolve: %s %v", document, err)
+		}
+		distributed, err := os.ReadFile(filepath.Join("..", "..", "schemas", "authoring", document+".schema.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(served, distributed) {
+			t.Fatalf("the embedded %s differs from the distributed file", document)
+		}
+	}
+}
+
+// A refusal that only says the path is unsafe leaves an author driving whole
+// Runs to check a folder. It names the command that checks one instead.
+func TestPathOutsideTheAuthorityNamesTheAuthoringCheck(t *testing.T) {
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"init", authority}, &out, &errout); code != 0 {
+		t.Fatalf("init: %s", errout.String())
+	}
+	outside := filepath.Join(t.TempDir(), "workflow.yaml")
+	if err := os.WriteFile(outside, []byte("authoring: prifly-workflow/1\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"--json", "--project", authority, "validate", "--workflow", outside}, &out, &errout); code == 0 {
+		t.Fatal("a path outside the authority was read")
+	}
+	if !strings.Contains(errout.String(), "project compile") {
+		t.Fatalf("the refusal does not name the authoring check: %s", errout.String())
+	}
+}
+
+// The help points at the worked authoring references, which is where the form
+// of an extend.yaml actually lives.
+func TestHelpNamesTheAuthoringReferences(t *testing.T) {
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"help", "schema"}, &out, &errout); code != 0 {
+		t.Fatalf("help: %s", errout.String())
+	}
+	for _, expected := range []string{"examples/authoring/", "extension-authoring-reference.yaml"} {
+		if !strings.Contains(out.String(), expected) {
+			t.Fatalf("the help does not name %s: %s", expected, out.String())
+		}
 	}
 }

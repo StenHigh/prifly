@@ -73,6 +73,10 @@ type Result struct {
 	PreviousVersion string `json:"previous_version"`
 	Version         string `json:"version"`
 	Updated         bool   `json:"updated"`
+	// Source names where this build looked. An installation that predates a
+	// move keeps checking the old address and reports no update forever; the
+	// address is the only thing that makes that visible without the sources.
+	Source string `json:"source"`
 }
 
 type Doer interface {
@@ -137,7 +141,7 @@ func (u Updater) Update(ctx context.Context) (Result, error) {
 		return Result{}, err
 	}
 	if comparison <= 0 {
-		return Result{SchemaVersion: "prifly-update/1", PreviousVersion: u.CurrentVersion, Version: u.CurrentVersion, Updated: false}, nil
+		return Result{SchemaVersion: "prifly-update/1", PreviousVersion: u.CurrentVersion, Version: u.CurrentVersion, Updated: false, Source: u.ReleaseBaseURL}, nil
 	}
 	asset, ok := assetFor(manifest, u.OS, u.Arch)
 	if !ok {
@@ -158,7 +162,7 @@ func (u Updater) Update(ctx context.Context) (Result, error) {
 	if err := replace(executable, binary); err != nil {
 		return Result{}, err
 	}
-	return Result{SchemaVersion: "prifly-update/1", PreviousVersion: u.CurrentVersion, Version: manifest.Version, Updated: true}, nil
+	return Result{SchemaVersion: "prifly-update/1", PreviousVersion: u.CurrentVersion, Version: manifest.Version, Updated: true, Source: u.ReleaseBaseURL}, nil
 }
 
 func (u Updater) managedExecutable() (string, Receipt, error) {

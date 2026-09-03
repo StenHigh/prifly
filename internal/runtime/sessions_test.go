@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -278,7 +279,7 @@ func TestAssistedHandoffCarriesPinnedSkillClaimAndDeadline(t *testing.T) {
 	if task.ClaimPath == "" || task.Deadline == "" || task.EnvelopeDigest == "" {
 		t.Fatalf("the handoff omits its boundary: %+v", task)
 	}
-	skill, err := os.ReadFile(filepath.Join(e.Root, e.Config.Configuration.WorkspaceRoot, strings.TrimPrefix(task.AttemptID, "attempt:"), "context/skills/00"))
+	skill, err := os.ReadFile(filepath.Join(e.Root, e.Config.Configuration.WorkspaceRoot, strings.TrimPrefix(task.AttemptID, "attempt:"), "context/skills", skillFileName(task.SkillRefs[0])))
 	if err != nil || rawDigest(skill) != task.SkillRefs[0].Digest {
 		t.Fatalf("the skill bytes handed over are not the pinned ones: %v", err)
 	}
@@ -543,5 +544,137 @@ func TestAssistedIntakeRefusesAMalformedReportWithoutBurningTheHandoff(t *testin
 	}
 	if settled := driverRun(t, e, runID); settled.Status == "failed" {
 		t.Fatalf("the corrected report did not settle the run: %+v", settled.Diagnostics)
+	}
+}
+
+// A live Run without a held handoff is not a missing Run. The host that asks
+// for work needs to know which of the two it is looking at.
+func TestSessionTaskSeparatesAnAbsentHandoffFromAnAbsentRun(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	ctx := context.Background()
+	if _, err := e.SessionTask(ctx, runID, ""); refusalCode(err) != "no_active_handoff" {
+		t.Fatalf("a run that had not been driven reported a handoff problem as: %v", err)
+	}
+	problem, exit := ProblemFor(&flow.Problem{Code: "no_active_handoff", Message: "read its next action or drive it"})
+	if exit != 2 || !slices.Contains(problem.SafeNextActions, "run.drive") || !slices.Contains(problem.SafeNextActions, "run.explain") {
+		t.Fatalf("the refusal does not point at reading or driving the run: %+v", problem)
+	}
+	task := handOver(t, e, runID)
+	if _, err := e.SessionTask(ctx, runID, task.AttemptID); err != nil {
+		t.Fatalf("a held handoff was not returned: %v", err)
+	}
+	if _, err := e.SessionTask(ctx, "run:absent", ""); refusalCode(err) != "not_found" {
+		t.Fatalf("a missing run was reported as a handoff problem: %v", err)
+	}
+}
+
+// Two boundaries refuse an unqualified effect class and neither is visible in
+// the step's own declaration, so the refusal names both instead of sending the
+// author to swap a policy that was never the constraint.
+func TestUnqualifiedEffectClassRefusalNamesBothBoundaries(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	task := handOver(t, e, runID)
+	r, _, err := e.load(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activation := r.Activations[r.Attempts[task.AttemptID].ActivationID]
+	plan, err := r.planFor(activation.InvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := plan.Steps[activation.StageID]
+	step.Effects.Class = "external_write"
+	err = validateAssistedStep(plan, step)
+	problem, _ := ProblemFor(err)
+	if problem.Code != "unsupported_effect" {
+		t.Fatalf("an unqualified effect class was not refused by name: %+v %v", problem, err)
+	}
+	if len(problem.Violations) != 1 {
+		t.Fatalf("the refusal carries no detail: %+v", problem.Violations)
+	}
+	detail := problem.Violations[0].Reason
+	for _, boundary := range []string{"external_write", "workspace_write or none"} {
+		if !strings.Contains(detail, boundary) {
+			t.Fatalf("the refusal omits the %s boundary: %s", boundary, detail)
+		}
+	}
+}
+
+// Which pinned file is the skill and which is its bridge must be readable from
+// the bundle. Order is not a contract, and a host that relies on it is relying
+// on a coincidence.
+func TestPinnedContextFilesAreNamedAfterTheirReference(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	task := handOver(t, e, runID)
+	if len(task.SkillRefs) == 0 {
+		t.Fatal("the handoff pinned no context")
+	}
+	workspace := filepath.Join(e.Root, e.Config.Configuration.WorkspaceRoot, strings.TrimPrefix(task.AttemptID, "attempt:"), "context", "skills")
+	entries, err := os.ReadDir(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != len(task.SkillRefs) {
+		t.Fatalf("the bundle holds %d files for %d references", len(entries), len(task.SkillRefs))
+	}
+	for _, ref := range task.SkillRefs {
+		name := skillFileName(ref)
+		if !strings.Contains(name, "context") && !strings.Contains(name, strings.Map(func(r rune) rune {
+			if r == ':' || r == '/' {
+				return '-'
+			}
+			return r
+		}, ref.ID)) {
+			t.Fatalf("the file name does not carry its reference: %s from %s", name, ref.ID)
+		}
+		data, err := os.ReadFile(filepath.Join(workspace, name))
+		if err != nil {
+			t.Fatalf("the named file for %s is missing: %v", ref.ID, err)
+		}
+		if rawDigest(data) != ref.Digest {
+			t.Fatalf("the named file for %s holds other bytes", ref.ID)
+		}
+	}
+}
+
+// A Run whose host holds a task has work in it. The read-only view names
+// reading that task, so the reader is not left with a view that looks empty.
+func TestReadOnlyViewsNameTheHeldHandoffAndSealedOutputs(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	ctx := context.Background()
+	before, err := e.Next(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(before.SafeNextActions, "session.task") {
+		t.Fatalf("a run with no handoff offered to read one: %+v", before.SafeNextActions)
+	}
+	task := handOver(t, e, runID)
+	holding, err := e.Next(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(holding.SafeNextActions, "session.task") {
+		t.Fatalf("a held handoff is not offered for reading: %+v", holding.SafeNextActions)
+	}
+	if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "planned")); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	view, err := e.View(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed := 0
+	for _, attempt := range view.Run.Attempts {
+		if attempt != nil && attempt.Accepted != nil {
+			sealed += len(attempt.Accepted.Outputs)
+		}
+	}
+	if sealed == 0 {
+		t.Fatal("an accepted result sealed no output for the summary to count")
 	}
 }
