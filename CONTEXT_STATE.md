@@ -24,11 +24,14 @@
   (required reviewer StenHigh), variable `PRIFLY_RELEASE_PUBLIC_KEY`
   (восстановлен проверкой подписи манифеста v0.5.0), ruleset `release tags`
   (`v*`, bypass только admin).
-- Ещё не сделано (нужен владелец): secret `PRIFLY_RELEASE_SIGNING_KEY` в
-  environment `release`, первый tag `v0.6.0` и approve публикации, перевод
-  `prifly-workflows` и `prifly-aif-workflows` (installer URL в CI AIF-репо
-  пока GitLab), архивирование GitLab. Существующие установки `v0.5.0`
-  смотрят на GitLab и обновлений не увидят — переустановка.
+- Первый релиз с GitHub: tag `v0.6.0`, run `33769043603` после approve
+  владельца; installer с `releases/latest/download` проверен на darwin/arm64
+  и linux/amd64, `prifly update` читает signed manifest с GitHub. Каталог и
+  `prifly-aif-workflows` (README, installer URL в CI) переведены на GitHub.
+- Ещё не сделано: архивирование/удаление GitLab-проекта — решение владельца
+  (task 4.5). Существующие установки `v0.5.0` смотрят на GitLab и обновлений
+  не увидят — переустановка новой командой. Рабочая копия для дальнейшей
+  работы — `Pri-Fly/github`; `Pri-Fly/isolated` (GitLab) заморожена.
 - Полный `make race` на этой машине под нагрузкой (load ≈ 8) даёт
   `schema_timeout`/`database is locked`; доверять GitHub `race.yml`.
 
