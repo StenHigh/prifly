@@ -9,12 +9,12 @@
 ## 3. Документация и spec
 
 - [x] 3.1 Обновить README (бейджи, install-команда, clone URL), SECURITY.md (private vulnerability reporting, модель secrets и `GITHUB_TOKEN`) и delta `release-distribution`; проверить `openspec validate migrate-hosting-to-github --strict`.
-- [ ] 3.2 Прогнать `make ci-check`, `make e2e` и `make race` в рабочей копии `Pri-Fly/github`; проверить `git diff --check` и что published contracts и archive не изменены.
+- [x] 3.2 Прогнать `make ci-check`, `make e2e` и `make race` в рабочей копии `Pri-Fly/github`; проверить `git diff --check` и что published contracts и archive не изменены (ci-check и e2e локально зелёные; полный race локально упирался в нагрузку машины — `schema_timeout`, `database is locked`, 30-минутный лимит, точечный прогон упавших тестов `ok`; полный `race.yml` на GitHub-runner run `33764104892` success за 19 мин).
 
 ## 4. GitHub (после подтверждения владельца)
 
 - [x] 4.1 Свежий initial commit в `Pri-Fly/github`, создать публичный `StenHigh/prifly`, push `main`; проверить `gh repo view` и зелёный `verify` (`8bb73d0` + fix fixture `project-launch`, run `33758316245` success).
-- [ ] 4.2 Настроить environment `release` с required reviewer, variable `PRIFLY_RELEASE_PUBLIC_KEY`, ruleset на теги `v*`; owner добавляет secret `PRIFLY_RELEASE_SIGNING_KEY`; проверить через `gh api`.
+- [ ] 4.2 Настроить environment `release` с required reviewer, variable `PRIFLY_RELEASE_PUBLIC_KEY`, ruleset на теги `v*`; owner добавляет secret `PRIFLY_RELEASE_SIGNING_KEY`; проверить через `gh api` (сделано: environment `release` с reviewer StenHigh, variable `521250b2…35b4`, восстановленный по подписи манифеста v0.5.0, ruleset `release tags` id 22194431; ждёт secret владельца).
 - [ ] 4.3 Tag `v0.6.0`, approve publication, проверить installer с GitHub на darwin/arm64 и linux/amd64 (`prifly version`, `prifly update` = up to date).
 - [ ] 4.4 Перевести `prifly-workflows` и `prifly-aif-workflows` (README-ссылки, installer URL в CI) на GitHub; проверить зелёный CI AIF-репозитория.
 - [ ] 4.5 Архивировать GitLab-проект с README-указателем на GitHub; обновить `CONTEXT_STATE.md` и память.

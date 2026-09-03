@@ -19,12 +19,18 @@
   `test/e2e/verify-release-ci.py` проверяет этот контракт.
 - Spec `release-distribution` синхронизирована с delta change; README и
   SECURITY.md указывают на GitHub.
-- Ещё не сделано (нужен владелец): environment `release` с required
-  reviewer, secret `PRIFLY_RELEASE_SIGNING_KEY`, variable
-  `PRIFLY_RELEASE_PUBLIC_KEY`, ruleset на теги `v*`, первый tag `v0.6.0`,
-  перевод `prifly-workflows` и `prifly-aif-workflows` (installer URL в CI
-  AIF-репо пока GitLab), архивирование GitLab. Существующие установки
-  `v0.5.0` смотрят на GitLab и обновлений не увидят — переустановка.
+- Репозиторий `StenHigh/prifly` создан (initial `8bb73d0`), `verify` и
+  manual `race` на GitHub-runner зелёные. Настроены environment `release`
+  (required reviewer StenHigh), variable `PRIFLY_RELEASE_PUBLIC_KEY`
+  (восстановлен проверкой подписи манифеста v0.5.0), ruleset `release tags`
+  (`v*`, bypass только admin).
+- Ещё не сделано (нужен владелец): secret `PRIFLY_RELEASE_SIGNING_KEY` в
+  environment `release`, первый tag `v0.6.0` и approve публикации, перевод
+  `prifly-workflows` и `prifly-aif-workflows` (installer URL в CI AIF-репо
+  пока GitLab), архивирование GitLab. Существующие установки `v0.5.0`
+  смотрят на GitLab и обновлений не увидят — переустановка.
+- Полный `make race` на этой машине под нагрузкой (load ≈ 8) даёт
+  `schema_timeout`/`database is locked`; доверять GitHub `race.yml`.
 
 ## Открытые changes (`openspec list`)
 
