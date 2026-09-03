@@ -49,7 +49,36 @@
   `add-release-installer-and-update` — перед удалением любого их требования
   архивировать без sync.
 
+## Следующие шаги
+
+- `harden-authority-reliability-and-performance` готов к
+  `/openspec-apply-change` (0/51; delta `release-distribution` перебазирована
+  на GitHub-текст, `openspec validate --strict` зелёный).
+- Ручные наблюдения владельца: `add-run-decision-catalog` 4.2 и 6.3,
+  `add-native-host-question-ux` 2.3; после них — архив с sync.
+- Установки `v0.5.0` не обновятся сами: переустановка командой из README;
+  GitLab-проект владелец скоро удалит, заметок о переходе не делать.
+- Очередь после `fix-assisted-submit-diagnostics` (по отчётам pilot-сессий,
+  2026-09-03): `improve-cli-discoverability` — `prifly schema` без аргумента
+  выдаёт список имён, `submission_schema_ref` в SessionTask, алиасы
+  `core:schema/...`; `authority_not_found` вместо `not_found` при пустом
+  `--project`; `session task` без удерживаемой передачи отвечает отдельным
+  кодом (`no_active_handoff`) с `run.explain`/`run.drive`, а не `not_found`;
+  `--help`/`-h` на подкомандах, `--version`, `help <topic>`; `invalid_usage`
+  показывает полученное значение (`received: …`, пути с пробелами);
+  `project local set --executable`; `description` для
+  `WorkspaceTreeLocation.path` и `SessionSubmission.result` в generated
+  schemas; именованные каталоги вместо `context/skills/{00,01}`; не создавать
+  пустой `outputs/` в claim; `run status` считает выходы Run и шагов
+  раздельно; `waiting_host` через versioned bump `CoreNextView` (enum уже без
+  `waiting_decision`); `prifly update` печатает адрес проверенного manifest.
+  Затем `pin-skill-reference-trees` (источник контекста-каталог).
+
 ## Нюансы
+
+- GitLab `stenhigh/prifly` (id 85838592) архивирован: push туда невозможен,
+  `glab` остаётся залогинен (unarchive — `glab api -X POST
+  projects/85838592/unarchive`). В `Pri-Fly/isolated` ничего не менять.
 
 - Гейты запускать по абсолютному пути: `make -C /Users/sh/PhpstormProjects/Pri-Fly/github …`;
   `.tools` — symlink на toolchain соседней GitLab-копии.
