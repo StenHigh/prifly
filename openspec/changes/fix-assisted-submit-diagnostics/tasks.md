@@ -1,0 +1,17 @@
+## 1. Диагностика отказов
+
+- [ ] 1.1 `ProblemFor`: принимать голый stable code без двоеточия; для валидного кода без wrapped cause (`errors.Unwrap(err) == nil`) сохранять остаток после двоеточия в `violations[0].reason`; свободный текст и `%w`-обёртки не раскрывать. Unit-тесты: голый код, код с остатком, свободный текст → `invalid_input` с пустыми violations, colon-form с `%w` → code без detail (`go test ./internal/runtime -run Problem`).
+- [ ] 1.2 Перевести отказы пути submit в `*flow.Problem` с pointer: `resultOutputs` — `output_required_missing` (`/result/outputs/<port>`), `output_port_undeclared`, `output_identity_mismatch`, `output_digest_mismatch`, `output_seal_mismatch`; shape submission в `SubmitSession` — `submission_shape_invalid`, `submission_trees_unsupported`, `submission_cost_unsupported`. Тесты: Problem несёт code, pointer с именем порта и exit 2; `result_identity_mismatch` остаётся `local.Reject` (`go test ./internal/runtime ./cmd/prifly`).
+
+- [ ] 1.3 Выделить чистую предпроверку result (result schema шага, обязательные для verdict порты, объявленность, identity/revision admitted slot, digest файла slot, JSON schema выхода) и вызывать её в `SubmitSession` до записи `attempt.result_candidate`; acceptance вызывает её же перед sealing. Тесты: отправка с пустым `result.outputs` отклоняется `output_required_missing`, handoff остаётся `awaiting`, исправленный отчёт под той же envelope принят, Run не terminal; managed путь без изменений (`go test ./internal/runtime -run 'Session|Acceptance'`).
+
+## 2. Форма отправки деревьев
+
+- [ ] 2.1 `SubmitSession`: вызывать `captureWorkspaceTreeOutputs`, когда step объявляет `workspace_trees` или submission их прислала, при обеих версиях `/4` и `/5`. Тест: `/5` без `workspace_trees` на input+output binding — захват по declared location, output port заполнен, StepResult валиден (`go test ./internal/runtime -run WorkspaceTree`).
+- [ ] 2.2 `selectedTreeLocation`: для policy `exact_file` отсутствующая location означает declared `capture.path`; для `direct_child_file`/`direct_child_tree` location остаётся обязательной. Тесты: output-only `exact_file` без `workspace_trees` принят и захвачен по declared path, `direct_child_*` без location по-прежнему отклонён именованно (`go test ./internal/runtime -run WorkspaceTree`).
+- [ ] 2.3 `selectedTreeLocation`: путь, равный declared `InputLocation`, принимается; расхождение — `workspace_tree_input_location_mismatch`. Тесты на input+output binding: повторённый путь принят, capture идёт по declared location, provenance и confinement прежние; другой путь отклонён до изменения Run; output-only binding без изменений (`go test ./internal/runtime -run WorkspaceTree`).
+
+## 3. Гейты и подтверждение
+
+- [ ] 3.1 `make ci-check`, `make e2e`, `make race` (или GitHub `race.yml`), `openspec validate fix-assisted-submit-diagnostics --strict`, `git diff --check`; убедиться, что published bundles `internal/runtime/*.schema.json`, `schemas/` и `openspec/changes/archive/` не изменились (`git status --short` по этим путям пуст).
+- [ ] 3.2 Воспроизвести на dev-сборке отправку improve из отчёта pilot (дерево `plan` вход+выход, `assisted-session/5`): без `workspace_trees` и с повторённым `input_location` отправка принимается и `plan` захвачен; отправка с verdict, для которого обязательный порт не отчитан, отклоняется с именем порта, handoff остаётся awaiting; записать exact результат в этот файл.
