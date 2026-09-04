@@ -8,9 +8,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stenhigh/prifly/internal/purity"
 )
 
@@ -130,6 +133,168 @@ var stepResultSchema struct {
 	bytes []byte
 }
 
+// The schema helper process existed because a schema could hang the validator.
+// Two dangers were folded into that one answer. Patterns are no longer one of
+// them: this build compiles with Go's regexp, which is linear. The other is
+// real and stays: a shared reference under allOf/anyOf/oneOf is evaluated once
+// per occurrence, so a small valid schema can expand exponentially while
+// validating a single value, and nothing in this process could stop it.
+//
+// So a value is validated here when its schema's evaluation is bounded, and in
+// the helper - which owns a hard deadline and can be killed - when it is not.
+// PRIFLY_SCHEMA_WORKER=1 sends everything to the helper for one release.
+const schemaWorkerVariable = "PRIFLY_SCHEMA_WORKER"
+
+// maxInProcessEvaluations is the evaluation budget a schema must fit to be
+// checked in this process. A pinned authored schema is far below it; the
+// pathological expansions are astronomically above it, so the boundary needs no
+// precision.
+const maxInProcessEvaluations = 1 << 20
+
+// schemaEvaluationBound counts how many subschema evaluations one value can
+// cost, memoized per referenced definition so that computing the bound is
+// itself linear. It saturates: the answer only has to say "over the budget".
+func schemaEvaluationBound(document any) int64 {
+	visiting := map[string]bool{}
+	memo := map[string]int64{}
+	var walk func(node any, path string) int64
+	resolve := func(ref string) (any, bool) {
+		if ref == "#" {
+			return document, true
+		}
+		pointer, found := strings.CutPrefix(ref, "#")
+		if !found {
+			return nil, false
+		}
+		return JSONPointer(document, pointer)
+	}
+	walk = func(node any, path string) int64 {
+		switch value := node.(type) {
+		case map[string]any:
+			if ref, ok := value["$ref"].(string); ok {
+				if visiting[ref] {
+					// A reference back to an enclosing definition is recursion:
+					// its cost is paid per node of the value, which is already
+					// bounded, not per copy of the schema. What is charged here
+					// is duplication - the same definition reached along several
+					// paths - because that is what multiplies.
+					return 1
+				}
+				if cost, known := memo[ref]; known {
+					return cost
+				}
+				target, found := resolve(ref)
+				if !found {
+					return 1
+				}
+				visiting[ref] = true
+				cost := walk(target, ref)
+				delete(visiting, ref)
+				memo[ref] = cost
+				return cost
+			}
+			total := int64(1)
+			for key, child := range value {
+				if key == "$defs" || key == "definitions" {
+					continue // Reached through the references that use them.
+				}
+				total = saturatingAdd(total, walk(child, path+"/"+key))
+			}
+			return total
+		case []any:
+			total := int64(1)
+			for _, child := range value {
+				total = saturatingAdd(total, walk(child, path))
+			}
+			return total
+		}
+		return 1
+	}
+	return walk(document, "")
+}
+
+func saturatingAdd(a, b int64) int64 {
+	if a >= maxInProcessEvaluations || b >= maxInProcessEvaluations || a+b >= maxInProcessEvaluations {
+		return maxInProcessEvaluations
+	}
+	return a + b
+}
+
+// compiledSchemaCache keeps compiled schemas by their exact bytes. Only
+// compilation is cached: every instance check still runs, because a value that
+// once validated grants no permission to accept another. Eviction is a reset.
+var compiledSchemaCache = struct {
+	sync.Mutex
+	entries map[string]compiledSchemaEntry
+	bytes   int
+}{entries: map[string]compiledSchemaEntry{}}
+
+// bounded says the schema's evaluation fits the in-process budget, so a value
+// may be checked here rather than in the helper.
+type compiledSchemaEntry struct {
+	schema  *jsonschema.Schema
+	bounded bool
+}
+
+const maxCompiledSchemas = 64
+const maxCompiledSchemaBytes = 8 << 20
+
+func compiledSchema(schema []byte) (compiledSchemaEntry, error) {
+	key := string(schema)
+	compiledSchemaCache.Lock()
+	cached, found := compiledSchemaCache.entries[key]
+	compiledSchemaCache.Unlock()
+	if found {
+		return cached, nil
+	}
+	value, err := Parse(schema, "json")
+	if err != nil {
+		return compiledSchemaEntry{}, err
+	}
+	c := newSchemaCompiler()
+	const resource = "urn:prifly:schema"
+	if err := c.AddResource(resource, value); err != nil {
+		return compiledSchemaEntry{}, problem("invalid_schema", "", "schema cannot be loaded from the pinned definition")
+	}
+	compiled, err := c.Compile(resource)
+	if err != nil {
+		return compiledSchemaEntry{}, problem("invalid_schema", "", "schema cannot be compiled without external resources")
+	}
+	entry := compiledSchemaEntry{schema: compiled, bounded: schemaEvaluationBound(value) < maxInProcessEvaluations}
+	compiledSchemaCache.Lock()
+	if len(compiledSchemaCache.entries) >= maxCompiledSchemas || compiledSchemaCache.bytes+len(schema) > maxCompiledSchemaBytes {
+		compiledSchemaCache.entries, compiledSchemaCache.bytes = map[string]compiledSchemaEntry{}, 0
+	}
+	compiledSchemaCache.entries[key] = entry
+	compiledSchemaCache.bytes += len(schema)
+	compiledSchemaCache.Unlock()
+	return entry, nil
+}
+
+// checkSchemaInProcess reports whether it answered. It declines a value whose
+// schema can expand beyond the in-process budget, leaving that check to the
+// helper process that can be stopped.
+func checkSchemaInProcess(schema, value []byte) (error, bool) {
+	if len(schema) == 0 || len(schema) > MaxDocumentBytes || len(value) > MaxDocumentBytes {
+		return problem("document_too_large", "", "schema/value exceeds the document byte allowance"), true
+	}
+	entry, err := compiledSchema(schema)
+	if err != nil {
+		return err, true
+	}
+	if value == nil {
+		return nil, true
+	}
+	if !entry.bounded {
+		return nil, false
+	}
+	parsed, err := Parse(value, "json")
+	if err != nil {
+		return err, true
+	}
+	return validationProblem(entry.schema.Validate(parsed), ""), true
+}
+
 func checkSchema(schema, value []byte) error {
 	stepResultSchema.Do(func() { stepResultSchema.bytes, _ = ProtocolSchema("StepResult") })
 	if len(stepResultSchema.bytes) != 0 && bytes.Equal(schema, stepResultSchema.bytes) {
@@ -138,6 +303,11 @@ func checkSchema(schema, value []byte) error {
 			return nil
 		}
 		return ValidateProtocol("StepResult", value)
+	}
+	if os.Getenv(schemaWorkerVariable) != "1" {
+		if err, answered := checkSchemaInProcess(schema, value); answered {
+			return err
+		}
 	}
 	if value == nil {
 		schemaCompileCache.Lock()
@@ -171,8 +341,13 @@ func (w *schemaOutput) Write(p []byte) (int, error) {
 	return w.buffer.Write(p)
 }
 
+// schemaWorkerRuns counts helper launches. A validation that reaches the helper
+// costs a process; the count is what a test reads to prove it did not.
+var schemaWorkerRuns atomic.Int64
+
 func runSchemaWorker(schema, value []byte) error {
 	purity.Guard("schema.worker")
+	schemaWorkerRuns.Add(1)
 	if len(schema) == 0 || len(schema) > MaxDocumentBytes || len(value) > MaxDocumentBytes {
 		return problem("document_too_large", "", "schema/value exceeds the document byte allowance")
 	}

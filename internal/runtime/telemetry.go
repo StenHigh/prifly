@@ -1443,9 +1443,6 @@ func (c *telemetryCollector) collectPublications(r Run, plans map[flow.Ref]*flow
 		if !ok {
 			return false, local.ErrIntegrity
 		}
-		if _, err := p.ValidatePublication(activation.StageID, publication.Hook, publication.Kind, publication.Value); err != nil {
-			return false, err
-		}
 		identity := publication.AttemptID + "/" + publication.Hook + "/" + publication.Kind + "/" + strconv.FormatInt(publication.Version, 10)
 		if publication.Kind == "event" {
 			identity = publication.AttemptID + "/" + publication.Hook + "/event/" + publication.EventKey
@@ -1455,6 +1452,12 @@ func (c *telemetryCollector) collectPublications(r Run, plans map[flow.Ref]*flow
 			return false, err
 		}
 		digest := rawDigest(b)
+		// The publication was validated against its hook when it was accepted.
+		// A report proves these are still those bytes; it does not re-run the
+		// hook schema over every retained publication of every Run it reads.
+		if publication.Digest != digest {
+			return false, local.ErrIntegrity
+		}
 		if old, ok := seen[identity]; ok {
 			if old != digest {
 				return false, local.ErrIntegrity

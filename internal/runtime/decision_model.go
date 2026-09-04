@@ -18,7 +18,9 @@ func decisionInvariant(r Run) error {
 	if r.DecisionCatalog == nil || r.DecisionSheet == nil {
 		return errors.New("decision invariant: decision state requires catalog and sheet")
 	}
-	if err := ValidateDecisionSheet(*r.DecisionCatalog, *r.DecisionSheet); err != nil {
+	// Reading a Run checks the shape of what is recorded, not the answers: a
+	// recorded answer was validated by the command that accepted it.
+	if err := decisionSheetStructure(*r.DecisionCatalog, *r.DecisionSheet); err != nil {
 		return err
 	}
 	pending := 0
@@ -37,7 +39,7 @@ func decisionInvariant(r Run) error {
 				return errors.New("decision invariant: pending record carries an answer")
 			}
 		} else if record.Status == "answered" || record.Status == "defaulted" {
-			if len(record.Value) == 0 || ValidateDecisionValue(definition, record.Value) != nil {
+			if len(record.Value) == 0 {
 				return errors.New("decision invariant: recorded answer is invalid")
 			}
 		} else {

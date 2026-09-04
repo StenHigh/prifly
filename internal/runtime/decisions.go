@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"sync/atomic"
 
 	"github.com/stenhigh/prifly/internal/flow"
 )
@@ -221,6 +222,7 @@ func ValidateDecisionCatalog(catalog DecisionCatalog) error {
 }
 
 func ValidateDecisionValue(definition DecisionDefinition, value json.RawMessage) error {
+	decisionValueChecks.Add(1)
 	canonical, err := flow.Canonical(value)
 	if err != nil {
 		return err
@@ -254,7 +256,27 @@ schema:
 	return flow.ValidateSchema(flow.Registry{ref: schemaBytes}, ref, canonical)
 }
 
+// decisionValueChecks counts full value validations. Checking a recorded answer
+// canonicalizes it and runs its schema; a test reads this to prove that reading
+// a Run does not repeat the work its writer already did.
+var decisionValueChecks atomic.Int64
+
+// ValidateDecisionSheet checks a sheet completely, including the recorded
+// answers. It belongs to the paths that accept an answer - Start, Request and
+// Answer - which is where a value first enters the Run.
 func ValidateDecisionSheet(catalog DecisionCatalog, sheet DecisionSheet) error {
+	return validateDecisionSheet(catalog, sheet, true)
+}
+
+// decisionSheetStructure checks everything except the answers themselves. It is
+// what reading a Run needs: a recorded answer was validated when it was
+// written, and revalidating every answer on every load and every command was
+// the single most expensive part of holding decisions in state.
+func decisionSheetStructure(catalog DecisionCatalog, sheet DecisionSheet) error {
+	return validateDecisionSheet(catalog, sheet, false)
+}
+
+func validateDecisionSheet(catalog DecisionCatalog, sheet DecisionSheet, values bool) error {
 	if err := ValidateDecisionCatalog(catalog); err != nil {
 		return err
 	}
@@ -287,7 +309,10 @@ func ValidateDecisionSheet(catalog DecisionCatalog, sheet DecisionSheet) error {
 			return errors.New("decision sheet record source is invalid")
 		}
 		if record.Status == "answered" || record.Status == "defaulted" {
-			if record.Source == "unanswered" || len(record.Value) == 0 || ValidateDecisionValue(definition, record.Value) != nil {
+			if record.Source == "unanswered" || len(record.Value) == 0 {
+				return errors.New("decision sheet record value is invalid")
+			}
+			if values && ValidateDecisionValue(definition, record.Value) != nil {
 				return errors.New("decision sheet record value is invalid")
 			}
 		} else if len(record.Value) != 0 || record.Source != "unanswered" {

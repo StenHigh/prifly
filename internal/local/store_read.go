@@ -295,6 +295,16 @@ func (s *Store) Verify(ctx context.Context) error {
 }
 
 func (s *Store) verify(ctx context.Context, conn *sql.Conn) error {
+	return s.verifyFrom(ctx, conn, 0)
+}
+
+// verifyFrom checks everything recorded after a cut. Zero means the whole
+// database, which is what `doctor` asks for and what a store that has never
+// recorded a verified cut still does on open. Above zero it checks only what
+// was written since, seeding each affected Run from the last event it already
+// verified, so opening an authority costs its new records rather than its
+// history.
+func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) error {
 	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
 		return err
 	}
@@ -302,12 +312,16 @@ func (s *Store) verify(ctx context.Context, conn *sql.Conn) error {
 	if err := storageHeader(ctx, conn); err != nil {
 		return err
 	}
-	var check string
-	if err := conn.QueryRowContext(ctx, "PRAGMA quick_check").Scan(&check); err != nil {
-		return err
-	}
-	if check != "ok" {
-		return ErrIntegrity
+	if from == 0 {
+		// A page-level check reads the whole file, so it belongs to the first
+		// verification of a database and to doctor, not to every open.
+		var check string
+		if err := conn.QueryRowContext(ctx, "PRAGMA quick_check").Scan(&check); err != nil {
+			return err
+		}
+		if check != "ok" {
+			return ErrIntegrity
+		}
 	}
 	fkRows, err := conn.QueryContext(ctx, "PRAGMA foreign_key_check")
 	if err != nil {
@@ -325,7 +339,46 @@ func (s *Store) verify(ctx context.Context, conn *sql.Conn) error {
 	last := make(map[string]Snapshot)
 	lastCut := make(map[string]int64)
 	lastSeq := make(map[string]int64)
-	rows, err := conn.QueryContext(ctx, "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest FROM events ORDER BY run_id,seq")
+	seeded := make(map[string]bool)
+	// seed continues a Run from the last event already verified, so an
+	// incremental check still knows what the new events must follow.
+	seed := func(runID string) error {
+		if from == 0 || seeded[runID] {
+			return nil
+		}
+		seeded[runID] = true
+		var seq, cut int64
+		err := conn.QueryRowContext(ctx, "SELECT seq,cut FROM events WHERE run_id=? AND cut<=? ORDER BY seq DESC LIMIT 1", runID, from).Scan(&seq, &cut)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		lastSeq[runID], lastCut[runID] = seq, cut
+		var version int64
+		var state json.RawMessage
+		var digest sql.NullString
+		err = conn.QueryRowContext(ctx, "SELECT seq,run_version,state_after,state_digest FROM events WHERE run_id=? AND cut<=? AND state_after IS NOT NULL ORDER BY seq DESC LIMIT 1", runID, from).Scan(&seq, &version, scanJSON{&state}, &digest)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if !digest.Valid || digestBytes(state) != digest.String {
+			return ErrIntegrity
+		}
+		last[runID] = Snapshot{RunID: runID, Version: version, EventSeq: seq, Data: state}
+		return nil
+	}
+	query := "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest FROM events ORDER BY run_id,seq"
+	arguments := []any{}
+	if from > 0 {
+		query = "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest FROM events WHERE cut>? ORDER BY run_id,seq"
+		arguments = append(arguments, from)
+	}
+	rows, err := conn.QueryContext(ctx, query, arguments...)
 	if err != nil {
 		return err
 	}
@@ -339,6 +392,10 @@ func (s *Store) verify(ctx context.Context, conn *sql.Conn) error {
 		if !s.eventTypes[e.Type] || e.Version != EventVersion {
 			_ = rows.Close()
 			return fmt.Errorf("%w: %s/%d", ErrIncompatible, e.Type, e.Version)
+		}
+		if err := seed(e.RunID); err != nil {
+			_ = rows.Close()
+			return err
 		}
 		if e.Seq != lastSeq[e.RunID]+1 || e.Cut < lastCut[e.RunID] || !json.Valid(e.Data) || digestBytes(e.Data) != e.Digest {
 			_ = rows.Close()
@@ -372,7 +429,20 @@ func (s *Store) verify(ctx context.Context, conn *sql.Conn) error {
 			return ErrIntegrity
 		}
 	}
-	rows, err = conn.QueryContext(ctx, "SELECT run_id,version,event_seq,snapshot,snapshot_digest FROM runs")
+	query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest FROM runs", nil
+	if from > 0 {
+		// Only the Runs this cut touched: reading every snapshot again is the
+		// cost an incremental verification exists to avoid.
+		touched := make([]any, 0, len(last))
+		for runID := range last {
+			touched = append(touched, runID)
+		}
+		if len(touched) == 0 {
+			return s.verifyCommands(ctx, conn, from)
+		}
+		query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest FROM runs WHERE run_id IN ("+placeholders(len(touched))+")", touched
+	}
+	rows, err = conn.QueryContext(ctx, query, arguments...)
 	if err != nil {
 		return err
 	}
@@ -398,7 +468,16 @@ func (s *Store) verify(ctx context.Context, conn *sql.Conn) error {
 	if len(last) != 0 {
 		return ErrIntegrity
 	}
-	rows, err = conn.QueryContext(ctx, "SELECT actor,command_id,run_id,digest,cut,receipt,receipt_digest FROM commands")
+	return s.verifyCommands(ctx, conn, from)
+}
+
+// verifyCommands checks the receipts and authority records of one cut range.
+func (s *Store) verifyCommands(ctx context.Context, conn *sql.Conn, from int64) error {
+	query, arguments := "SELECT actor,command_id,run_id,digest,cut,receipt,receipt_digest FROM commands", []any(nil)
+	if from > 0 {
+		query, arguments = "SELECT actor,command_id,run_id,digest,cut,receipt,receipt_digest FROM commands WHERE cut>?", []any{from}
+	}
+	rows, err := conn.QueryContext(ctx, query, arguments...)
 	if err != nil {
 		return err
 	}
@@ -422,7 +501,11 @@ func (s *Store) verify(ctx context.Context, conn *sql.Conn) error {
 		return err
 	}
 	if s.info.StorageVersion >= 2 {
-		rows, err = conn.QueryContext(ctx, "SELECT state_key,version,cut,data,digest FROM authority_states")
+		query, arguments = "SELECT state_key,version,cut,data,digest FROM authority_states", nil
+		if from > 0 {
+			query, arguments = "SELECT state_key,version,cut,data,digest FROM authority_states WHERE cut>?", []any{from}
+		}
+		rows, err = conn.QueryContext(ctx, query, arguments...)
 		if err != nil {
 			return err
 		}
@@ -444,7 +527,11 @@ func (s *Store) verify(ctx context.Context, conn *sql.Conn) error {
 		if err != nil {
 			return err
 		}
-		rows, err = conn.QueryContext(ctx, "SELECT actor,command_id,state_key,digest,cut,receipt,receipt_digest FROM authority_commands")
+		query, arguments = "SELECT actor,command_id,state_key,digest,cut,receipt,receipt_digest FROM authority_commands", nil
+		if from > 0 {
+			query, arguments = "SELECT actor,command_id,state_key,digest,cut,receipt,receipt_digest FROM authority_commands WHERE cut>?", []any{from}
+		}
+		rows, err = conn.QueryContext(ctx, query, arguments...)
 		if err != nil {
 			return err
 		}
@@ -468,7 +555,11 @@ func (s *Store) verify(ctx context.Context, conn *sql.Conn) error {
 			return err
 		}
 	}
-	rows, err = conn.QueryContext(ctx, "SELECT data,digest FROM samples")
+	query, arguments = "SELECT data,digest FROM samples", nil
+	if from > 0 {
+		query, arguments = "SELECT data,digest FROM samples WHERE cut>?", []any{from}
+	}
+	rows, err = conn.QueryContext(ctx, query, arguments...)
 	if err != nil {
 		return err
 	}

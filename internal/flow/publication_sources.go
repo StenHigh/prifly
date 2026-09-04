@@ -1,11 +1,13 @@
 package flow
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 )
 
 const (
@@ -55,7 +57,36 @@ func (s PublicationSourceDefinition) ArtifactPort() Port {
 // PublicationSourceSchema is a standalone author contract. It is not added to
 // an already published Run bundle because once delivery uses existing wait and
 // inbox state without widening either DTO.
+// sourceSchemaCache keeps the eight pinned source contracts. Each is built by
+// walking the embedded baseline and rewriting a few properties; the bytes are
+// fixed by the version they name, so they are built once per process.
+var sourceSchemaCache = struct {
+	sync.Mutex
+	entries map[string][]byte
+}{entries: map[string][]byte{}}
+
+func cachedSourceSchema(id string, build func() ([]byte, error)) ([]byte, error) {
+	sourceSchemaCache.Lock()
+	cached, found := sourceSchemaCache.entries[id]
+	sourceSchemaCache.Unlock()
+	if found {
+		return bytes.Clone(cached), nil
+	}
+	schema, err := build()
+	if err != nil {
+		return nil, err
+	}
+	sourceSchemaCache.Lock()
+	sourceSchemaCache.entries[id] = schema
+	sourceSchemaCache.Unlock()
+	return bytes.Clone(schema), nil
+}
+
 func PublicationSourceSchema() ([]byte, error) {
+	return cachedSourceSchema("1", buildPublicationSourceSchema)
+}
+
+func buildPublicationSourceSchema() ([]byte, error) {
 	baseline, err := Parse(protocolSchema, "json")
 	if err != nil {
 		return nil, err
@@ -102,6 +133,10 @@ func PublicationSourceSchema() ([]byte, error) {
 // PublicationSourceSchemaV2 describes the finite each_publication lowering.
 // It is a new contract rather than a widening of the delivered once source.
 func PublicationSourceSchemaV2() ([]byte, error) {
+	return cachedSourceSchema("2", buildPublicationSourceSchemaV2)
+}
+
+func buildPublicationSourceSchemaV2() ([]byte, error) {
 	baseline, err := Parse(protocolSchema, "json")
 	if err != nil {
 		return nil, err
@@ -150,6 +185,10 @@ func PublicationSourceSchemaV2() ([]byte, error) {
 // PublicationSourceSchemaV3 adds the explicit new_only initial position for a
 // once source. The delivered retained source remains a separate frozen shape.
 func PublicationSourceSchemaV3() ([]byte, error) {
+	return cachedSourceSchema("3", buildPublicationSourceSchemaV3)
+}
+
+func buildPublicationSourceSchemaV3() ([]byte, error) {
 	baseline, err := Parse(protocolSchema, "json")
 	if err != nil {
 		return nil, err
@@ -196,6 +235,10 @@ func PublicationSourceSchemaV3() ([]byte, error) {
 // PublicationSourceSchemaV4 is the stream counterpart of v3. A separate
 // version keeps retained stream history from silently becoming new-only.
 func PublicationSourceSchemaV4() ([]byte, error) {
+	return cachedSourceSchema("4", buildPublicationSourceSchemaV4)
+}
+
+func buildPublicationSourceSchemaV4() ([]byte, error) {
 	baseline, err := Parse(protocolSchema, "json")
 	if err != nil {
 		return nil, err
@@ -244,23 +287,31 @@ func PublicationSourceSchemaV4() ([]byte, error) {
 // PublicationSourceSchemaV5 makes terminal producer failure an explicit once
 // policy. It starts from v3 so the frozen source shapes cannot change.
 func PublicationSourceSchemaV5() ([]byte, error) {
-	return publicationFailureSourceSchema(PublicationSourceSchemaV3, PublicationFailureSourceVersion, "urn:prifly:publication-source:5", "Pri-Fly once artifact publication source with terminal-failure interruption")
+	return cachedSourceSchema("5", func() ([]byte, error) {
+		return publicationFailureSourceSchema(PublicationSourceSchemaV3, PublicationFailureSourceVersion, "urn:prifly:publication-source:5", "Pri-Fly once artifact publication source with terminal-failure interruption")
+	})
 }
 
 // PublicationSourceSchemaV6 is the stream counterpart of v5.
 func PublicationSourceSchemaV6() ([]byte, error) {
-	return publicationFailureSourceSchema(PublicationSourceSchemaV4, PublicationFailureStreamSourceVersion, "urn:prifly:publication-source:6", "Pri-Fly each-publication source with terminal-failure interruption")
+	return cachedSourceSchema("6", func() ([]byte, error) {
+		return publicationFailureSourceSchema(PublicationSourceSchemaV4, PublicationFailureStreamSourceVersion, "urn:prifly:publication-source:6", "Pri-Fly each-publication source with terminal-failure interruption")
+	})
 }
 
 // PublicationSourceSchemaV7 declares the complete artifact value type. The
 // older source shapes remain JSON-only and cannot silently acquire blob data.
 func PublicationSourceSchemaV7() ([]byte, error) {
-	return publicationBlobSourceSchema(PublicationSourceSchemaV5, PublicationBlobSourceVersion, "urn:prifly:publication-source:7", "Pri-Fly once JSON or blob artifact publication source")
+	return cachedSourceSchema("7", func() ([]byte, error) {
+		return publicationBlobSourceSchema(PublicationSourceSchemaV5, PublicationBlobSourceVersion, "urn:prifly:publication-source:7", "Pri-Fly once JSON or blob artifact publication source")
+	})
 }
 
 // PublicationSourceSchemaV8 is the bounded stream counterpart of v7.
 func PublicationSourceSchemaV8() ([]byte, error) {
-	return publicationBlobSourceSchema(PublicationSourceSchemaV6, PublicationBlobStreamSourceVersion, "urn:prifly:publication-source:8", "Pri-Fly each-publication JSON or blob artifact source")
+	return cachedSourceSchema("8", func() ([]byte, error) {
+		return publicationBlobSourceSchema(PublicationSourceSchemaV6, PublicationBlobStreamSourceVersion, "urn:prifly:publication-source:8", "Pri-Fly each-publication JSON or blob artifact source")
+	})
 }
 
 func publicationFailureSourceSchema(base func() ([]byte, error), version, id, title string) ([]byte, error) {

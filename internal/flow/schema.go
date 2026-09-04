@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"bytes"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
@@ -134,7 +135,32 @@ func ProtocolSchemaNames() ([]string, error) {
 	return slices.Compact(names), nil
 }
 
+// protocolSchemaCache keeps the derived contract documents. Each one is built
+// from the same embedded baseline by walking its reference closure, and the
+// result is a pure function of its name; rebuilding it per call was pure waste.
+var protocolSchemaCache = struct {
+	sync.Mutex
+	entries map[string][]byte
+}{entries: map[string][]byte{}}
+
 func ProtocolSchema(name string) ([]byte, error) {
+	protocolSchemaCache.Lock()
+	cached, found := protocolSchemaCache.entries[name]
+	protocolSchemaCache.Unlock()
+	if found {
+		return bytes.Clone(cached), nil
+	}
+	schema, err := buildProtocolSchema(name)
+	if err != nil {
+		return nil, err
+	}
+	protocolSchemaCache.Lock()
+	protocolSchemaCache.entries[name] = schema
+	protocolSchemaCache.Unlock()
+	return bytes.Clone(schema), nil
+}
+
+func buildProtocolSchema(name string) ([]byte, error) {
 	if name == "PublicationSourceDefinition" {
 		return PublicationSourceSchema()
 	}

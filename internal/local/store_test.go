@@ -1476,3 +1476,88 @@ func TestCreateLinkedRunChecksSourceAndPreservesIt(t *testing.T) {
 		t.Fatalf("linked run does not verify: %v", err)
 	}
 }
+
+// Verification at open used to read the whole database, so a long-lived
+// authority paid for its own history every time it was opened. It now records
+// how far it has checked and continues from there; a database that predates
+// the mark still verifies everything once.
+func TestStoreVerifiesIncrementallyFromItsRecordedCut(t *testing.T) {
+	s, dir := testStore(t)
+	ctx := context.Background()
+	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// A v4 database has no mark: its first open verifies everything and records
+	// one, and the migration itself is a retryable single transaction.
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(dir, "state.sqlite3")+"?mode=rw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := OpenStore(dir, storeTestOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upgraded.Info().StorageVersion != StorageVersion {
+		t.Fatalf("store was not migrated: %+v", upgraded.Info())
+	}
+	var cut, verified int64
+	if err := upgraded.db.QueryRow("SELECT cut,verified_cut FROM authority WHERE singleton=1").Scan(&cut, &verified); err != nil {
+		t.Fatal(err)
+	}
+	if verified != cut || cut == 0 {
+		t.Fatalf("the first open did not record what it verified: cut=%d verified=%d", cut, verified)
+	}
+	applyChange(t, upgraded, storeCommand("update", "run-a", 1), storeChange(`{"value":2}`))
+	if err := upgraded.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Reopening advances the mark, and the complete check still passes.
+	again, err := OpenStore(dir, storeTestOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Close()
+	if err := again.db.QueryRow("SELECT cut,verified_cut FROM authority WHERE singleton=1").Scan(&cut, &verified); err != nil {
+		t.Fatal(err)
+	}
+	if verified != cut {
+		t.Fatalf("reopening did not advance the mark: cut=%d verified=%d", cut, verified)
+	}
+	if err := again.Verify(ctx); err != nil {
+		t.Fatalf("the complete verification no longer passes: %v", err)
+	}
+	view, err := again.Read(ctx, "run-a", 0, 10)
+	if err != nil || string(view.Snapshot.Data) != `{"value":2}` {
+		t.Fatalf("history did not survive incremental verification: %v %s", err, view.Snapshot.Data)
+	}
+}
+
+// Corruption written after the recorded mark is still refused at open.
+func TestStoreOpenRefusesCorruptionAfterTheVerifiedCut(t *testing.T) {
+	s, dir := testStore(t)
+	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	opened, err := OpenStore(dir, storeTestOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyChange(t, opened, storeCommand("update", "run-a", 1), storeChange(`{"value":2}`))
+	if _, err := opened.db.Exec("UPDATE events SET data='{\"tampered\":true}' WHERE seq=(SELECT MAX(seq) FROM events WHERE run_id='run-a')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := opened.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenStore(dir, storeTestOptions); !errors.Is(err, ErrIntegrity) {
+		t.Fatalf("a tampered new event was accepted at open: %v", err)
+	}
+}

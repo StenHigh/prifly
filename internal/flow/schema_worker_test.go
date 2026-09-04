@@ -133,3 +133,80 @@ func TestSchemaCompileCacheDoesNotCacheValidationResults(t *testing.T) {
 	// previous successful schema merely because an external Ref ID is equal.
 	expectProblem(t, checkSchema([]byte(`{"type":"not_a_type"}`), nil), "invalid_schema")
 }
+
+// A pinned schema is checked in this process. The helper is a process per
+// validation, and it is now reserved for the schemas that actually need its
+// deadline: the ones whose evaluation can expand beyond any local budget.
+func TestOrdinarySchemasAreValidatedWithoutAProcess(t *testing.T) {
+	before := schemaWorkerRuns.Load()
+	for _, c := range []struct {
+		schema, value string
+		valid         bool
+	}{
+		{`{"type":"integer"}`, `7`, true},
+		{`{"type":"integer"}`, `"seven"`, false},
+		{`{"type":"object","required":["a"],"properties":{"a":{"type":"string","pattern":"^(a+)+$"}},"additionalProperties":false}`, `{"a":"aaaa"}`, true},
+		{`{"type":"object","required":["a"],"properties":{"a":{"type":"string","pattern":"^(a+)+$"}},"additionalProperties":false}`, `{"a":"b"}`, false},
+		{`{"$defs":{"item":{"type":"integer"}},"type":"array","items":{"$ref":"#/$defs/item"}}`, `[1,2,3]`, true},
+	} {
+		err := checkSchema([]byte(c.schema), []byte(c.value))
+		if c.valid != (err == nil) {
+			t.Fatalf("%s against %s: %v", c.value, c.schema, err)
+		}
+	}
+	if runs := schemaWorkerRuns.Load() - before; runs != 0 {
+		t.Fatalf("ordinary validation launched %d helper processes", runs)
+	}
+	// The expanding fixture still goes to the helper, which can be stopped.
+	defs := map[string]any{"n0": map[string]any{"type": "integer"}}
+	for i := 1; i <= 36; i++ {
+		ref := map[string]any{"$ref": fmt.Sprintf("#/$defs/n%d", i-1)}
+		defs[fmt.Sprintf("n%d", i)] = map[string]any{"allOf": []any{ref, ref}}
+	}
+	schema, err := Canonical(encoded(t, map[string]any{"$defs": defs, "$ref": "#/$defs/n36"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkSchema(schema, nil); err != nil {
+		t.Fatalf("the expanding fixture must still compile: %v", err)
+	}
+	before = schemaWorkerRuns.Load()
+	expectProblem(t, checkSchema(schema, []byte(`7`)), "schema_timeout")
+	if runs := schemaWorkerRuns.Load() - before; runs != 1 {
+		t.Fatalf("an unbounded schema was not sent to the helper: %d runs", runs)
+	}
+}
+
+// Validation must answer, never panic and never run away, whatever value it is
+// handed for a pinned schema.
+func FuzzValidateJSON(f *testing.F) {
+	names, err := ProtocolSchemaNames()
+	if err != nil {
+		f.Fatal(err)
+	}
+	schemas := make([][]byte, 0, len(names))
+	for _, name := range names {
+		schema, err := ProtocolSchema(name)
+		if err != nil || len(schema) > MaxDocumentBytes {
+			continue
+		}
+		schemas = append(schemas, schema)
+	}
+	if len(schemas) == 0 {
+		f.Fatal("no pinned protocol schema to fuzz against")
+	}
+	for _, value := range []string{`{}`, `null`, `[]`, `{"schema_version":"1"}`, `7`, `"text"`} {
+		f.Add(0, value)
+	}
+	f.Fuzz(func(t *testing.T, index int, value string) {
+		schema := schemas[((index%len(schemas))+len(schemas))%len(schemas)]
+		if !json.Valid([]byte(value)) {
+			return
+		}
+		before := schemaWorkerRuns.Load()
+		_ = checkSchema(schema, []byte(value))
+		if schemaWorkerRuns.Load() != before {
+			t.Fatalf("a pinned protocol schema needed the helper process")
+		}
+	})
+}

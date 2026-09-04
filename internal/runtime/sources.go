@@ -6,6 +6,7 @@ import (
 	"mime"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -135,7 +136,23 @@ func sourceContractSchema(id string, properties map[string]any, required []strin
 // sourceBuiltinDefinitions has no dependency on Builtins or the installation
 // registry: callers can include these records in Builtins and historical reads
 // can check the exact implemented contract without consulting mutable files.
+// The definitions are fixed by this build, so they are derived once. Every
+// caller receives the same pinned records rather than rebuilding and rehashing
+// three documents on each project read.
+var builtinSourceDefinitions struct {
+	sync.Once
+	definitions []PinnedDefinition
+	err         error
+}
+
 func sourceBuiltinDefinitions() ([]PinnedDefinition, error) {
+	builtinSourceDefinitions.Do(func() {
+		builtinSourceDefinitions.definitions, builtinSourceDefinitions.err = buildSourceBuiltinDefinitions()
+	})
+	return builtinSourceDefinitions.definitions, builtinSourceDefinitions.err
+}
+
+func buildSourceBuiltinDefinitions() ([]PinnedDefinition, error) {
 	snapshot, err := SourceSnapshotSchema()
 	if err != nil {
 		return nil, err

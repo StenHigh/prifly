@@ -173,7 +173,7 @@ func TestTelemetryWarningCoverageUsesDeclaredClosedChannel(t *testing.T) {
 		r := telemetryHistoryRun(t, base, fmt.Sprintf("warning-%d", i), "completed", 10)
 		a := r.Attempts["attempt:"+fmt.Sprintf("warning-%d", i)]
 		if i > 0 {
-			r.Publications = []Publication{{ID: "publication:" + fmt.Sprint(i), AttemptID: a.ID, StepID: a.StepID, Hook: "warning_raised", Kind: "event", EventKey: "warning:event", Value: json.RawMessage(`{"phase":"working"}`), Received: timingObservation(5), Actor: "publisher"}}
+			r.Publications = []Publication{{ID: "publication:" + fmt.Sprint(i), AttemptID: a.ID, StepID: a.StepID, Hook: "warning_raised", Kind: "event", EventKey: "warning:event", Value: json.RawMessage(`{"phase":"working"}`), Digest: rawDigest([]byte(`{"phase":"working"}`)), Received: timingObservation(5), Actor: "publisher"}}
 		}
 		if i == 2 {
 			a.ProcessOutcome = nil

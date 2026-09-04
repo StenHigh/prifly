@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	StorageVersion = 4
+	StorageVersion = 5
 	// MaxSlotWaiters bounds the admission queue. A queue without a bound is a
 	// second unbounded resource hiding behind a bounded one.
 	MaxSlotWaiters = 64
@@ -448,8 +448,22 @@ func (s *Store) open(dir string, readOnly bool) error {
 	// before it runs. Otherwise a v2 database is verified under v1 rules and its
 	// authority commands are excluded from the shared cut.
 	s.info.StorageVersion = version
-	if err := s.verify(ctx, conn); err != nil {
+	// Opening an authority checks what it has not checked before. Everything
+	// at or below the recorded mark was verified by an earlier open, and the
+	// complete scan stays available through doctor.
+	verified := int64(0)
+	if version >= 5 {
+		if err := conn.QueryRowContext(ctx, "SELECT verified_cut FROM authority WHERE singleton=1").Scan(&verified); err != nil {
+			return err
+		}
+	}
+	if err := s.verifyFrom(ctx, conn, verified); err != nil {
 		return err
+	}
+	if version >= 5 && !readOnly {
+		if _, err := conn.ExecContext(ctx, "UPDATE authority SET verified_cut=cut WHERE singleton=1"); err != nil {
+			return err
+		}
 	}
 	if !readOnly {
 		if err := conn.QueryRowContext(ctx, "PRAGMA journal_mode=WAL").Scan(&s.info.JournalMode); err != nil {
@@ -493,7 +507,7 @@ func (s *Store) initialize(ctx context.Context, conn *sql.Conn, dir string) erro
 		return ErrIncompatible
 	}
 	const schema = `
-CREATE TABLE authority(singleton INTEGER PRIMARY KEY CHECK(singleton=1),id TEXT NOT NULL UNIQUE,epoch INTEGER NOT NULL CHECK(epoch>0),state_directory TEXT NOT NULL,cut INTEGER NOT NULL CHECK(cut>=0),slot_id TEXT NOT NULL DEFAULT '',slot_run TEXT NOT NULL DEFAULT '',slot_capacity INTEGER NOT NULL DEFAULT 1 CHECK(slot_capacity>=1),admission_seq INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE authority(singleton INTEGER PRIMARY KEY CHECK(singleton=1),id TEXT NOT NULL UNIQUE,epoch INTEGER NOT NULL CHECK(epoch>0),state_directory TEXT NOT NULL,cut INTEGER NOT NULL CHECK(cut>=0),slot_id TEXT NOT NULL DEFAULT '',slot_run TEXT NOT NULL DEFAULT '',slot_capacity INTEGER NOT NULL DEFAULT 1 CHECK(slot_capacity>=1),admission_seq INTEGER NOT NULL DEFAULT 0,verified_cut INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE slots(slot_id TEXT PRIMARY KEY,run_id TEXT NOT NULL);
 CREATE TABLE slot_waiters(run_id TEXT PRIMARY KEY,since_seq INTEGER NOT NULL,seen_seq INTEGER NOT NULL);
 CREATE TABLE runs(run_id TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),event_seq INTEGER NOT NULL CHECK(event_seq>0),snapshot BLOB NOT NULL,snapshot_digest TEXT NOT NULL);
@@ -505,7 +519,7 @@ CREATE INDEX samples_cut ON samples(cut,seq);
 CREATE TABLE authority_states(state_key TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),cut INTEGER NOT NULL UNIQUE,data BLOB NOT NULL,digest TEXT NOT NULL);
 CREATE TABLE authority_commands(actor TEXT NOT NULL,command_id TEXT NOT NULL,state_key TEXT NOT NULL,digest TEXT NOT NULL,cut INTEGER NOT NULL UNIQUE,receipt BLOB NOT NULL,receipt_digest TEXT NOT NULL,PRIMARY KEY(actor,command_id));
 PRAGMA application_id=1347569228;
-PRAGMA user_version=4;`
+PRAGMA user_version=5;`
 	if _, err := conn.ExecContext(ctx, schema); err != nil {
 		return err
 	}
@@ -517,6 +531,9 @@ PRAGMA user_version=4;`
 }
 
 func (s *Store) migrate(ctx context.Context, conn *sql.Conn, version int) error {
+	if version == 4 {
+		return s.migrateVerifiedCut(ctx, conn)
+	}
 	if version == 3 {
 		return s.migrateWaiters(ctx, conn)
 	}
@@ -611,6 +628,34 @@ ALTER TABLE authority ADD COLUMN admission_seq INTEGER NOT NULL DEFAULT 0;`); er
 		return err
 	}
 	if _, err := conn.ExecContext(ctx, "PRAGMA user_version=4"); err != nil {
+		return err
+	}
+	_, err := conn.ExecContext(ctx, "COMMIT")
+	return err
+}
+
+// migrateVerifiedCut records how far this authority has been verified. An
+// existing database starts at zero, so its first open still verifies
+// everything it holds and only later opens are incremental.
+func (s *Store) migrateVerifiedCut(ctx context.Context, conn *sql.Conn) error {
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.Background(), "ROLLBACK")
+	var current int
+	if err := conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
+		return err
+	}
+	if current == StorageVersion {
+		return nil
+	}
+	if current != 4 {
+		return ErrIncompatible
+	}
+	if _, err := conn.ExecContext(ctx, "ALTER TABLE authority ADD COLUMN verified_cut INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, "PRAGMA user_version=5"); err != nil {
 		return err
 	}
 	_, err := conn.ExecContext(ctx, "COMMIT")

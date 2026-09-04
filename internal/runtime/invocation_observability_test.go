@@ -240,7 +240,7 @@ func completeInvocationObservationFixture(r *Run) {
 	attempt.ProcessOutcome = &local.ProcessOutcome{Started: true, WaitReturned: true, GroupEmpty: true, ExitCode: telemetryPtr(0)}
 	r.Activations["activation:child-finish"] = &Activation{ID: "activation:child-finish", StageID: "done", InvocationID: child.ID, Kind: "finish", Status: "completed", Created: *child.Settled, Settled: child.Settled}
 	r.Activations["activation:root-finish"] = &Activation{ID: "activation:root-finish", StageID: "done", InvocationID: root.ID, Kind: "finish", Status: "completed", Created: *r.Settled, Settled: r.Settled}
-	r.Publications = []Publication{{ID: "publication:child-warning", AttemptID: attempt.ID, StepID: step.ID, Hook: "warning_raised", Kind: "event", EventKey: "warning:child", Value: json.RawMessage(`{"phase":"working"}`), Received: timingObservation(10000), Actor: "publisher"}}
+	r.Publications = []Publication{{ID: "publication:child-warning", AttemptID: attempt.ID, StepID: step.ID, Hook: "warning_raised", Kind: "event", EventKey: "warning:child", Value: json.RawMessage(`{"phase":"working"}`), Digest: rawDigest([]byte(`{"phase":"working"}`)), Received: timingObservation(10000), Actor: "publisher"}}
 }
 
 func TestInvocationTelemetryChildPopulationAndHistoricalCut(t *testing.T) {

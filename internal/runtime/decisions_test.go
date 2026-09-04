@@ -375,3 +375,48 @@ func TestRuntimeDecisionCannotBeRequired(t *testing.T) {
 		t.Fatalf("a required preflight decision was refused: %v", err)
 	}
 }
+
+// A recorded answer is validated by the command that accepted it. Reading the
+// Run afterwards checks that the sheet is well formed, and does not re-run the
+// answer's schema on every load and every command.
+func TestReadingADecisionRunDoesNotRevalidateAnswers(t *testing.T) {
+	preflight := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "logging", Title: "Logging", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "concise", Title: "Concise", Value: json.RawMessage(`"concise"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "logging"}}
+	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{preflight}}
+	catalogDigest, err := DecisionCatalogDigest(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preflightDigest, err := DecisionDefinitionDigest(preflight)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sheet := DecisionSheet{SchemaVersion: DecisionSheetVersion, CatalogDigest: catalogDigest, ProfileSource: "none", Records: []DecisionRecord{{SchemaVersion: DecisionRecordVersion, DefinitionID: preflight.ID, DefinitionDigest: preflightDigest, Status: "answered", Source: "actor", Value: json.RawMessage(`"concise"`)}}}
+	e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", &catalog, &sheet)
+	ctx := context.Background()
+	before := decisionValueChecks.Load()
+	for range 5 {
+		if _, _, err := e.load(ctx, runID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.View(ctx, runID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if checks := decisionValueChecks.Load() - before; checks != 0 {
+		t.Fatalf("reading the Run revalidated recorded answers %d times", checks)
+	}
+	// The write path still checks the value it is asked to accept.
+	before = decisionValueChecks.Load()
+	if err := ValidateDecisionSheet(catalog, sheet); err != nil {
+		t.Fatal(err)
+	}
+	if decisionValueChecks.Load() == before {
+		t.Fatal("accepting a sheet no longer validates its answers")
+	}
+	// A malformed answer is still refused where it enters.
+	broken := sheet
+	broken.Records = []DecisionRecord{{SchemaVersion: DecisionRecordVersion, DefinitionID: preflight.ID, DefinitionDigest: preflightDigest, Status: "answered", Source: "actor", Value: json.RawMessage(`"verbose"`)}}
+	if err := ValidateDecisionSheet(catalog, broken); err == nil {
+		t.Fatal("an answer outside the declared choices was accepted")
+	}
+}
