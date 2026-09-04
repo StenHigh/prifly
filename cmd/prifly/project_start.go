@@ -21,8 +21,12 @@ type projectStartResult struct {
 	Package        flow.Ref              `json:"package"`
 	PackageProfile string                `json:"package_profile,omitempty"`
 	DecisionSheet  *prifly.DecisionSheet `json:"decision_sheet,omitempty"`
-	Run            prifly.RunView        `json:"run"`
-	Workspace      prifly.WorktreeClaim  `json:"workspace"`
+	// A pointer so an autonomous launch with nothing blocked still reports an
+	// empty list: an absent field would read as "nothing to say" rather than
+	// "the policy can take every declared runtime decision".
+	AutonomyUnanswered *[]prifly.UnansweredDecision `json:"autonomy_unanswered,omitempty"`
+	Run                prifly.RunView               `json:"run"`
+	Workspace          prifly.WorktreeClaim         `json:"workspace"`
 }
 
 type projectPreflight struct {
@@ -49,9 +53,11 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	inputs := bindings{}
 	refFiles := bindings{}
 	answers := stringsFlag{}
+	runtimeAnswers := stringsFlag{}
 	f.Var(inputs, "input", "declared input PORT=FILE")
 	f.Var(refFiles, "input-ref", "declared input PORT=ARTIFACT_REF.json")
-	f.Var(&answers, "preflight-answer", "declared decision ID=JSON")
+	f.Var(&answers, "preflight-answer", "declared preflight decision ID=JSON")
+	f.Var(&runtimeAnswers, "runtime-answer", "declared runtime decision ID=JSON, sealed before the Run starts")
 	if err := parse(f, args); err != nil {
 		return err
 	}
@@ -100,7 +106,7 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if err := projectStartInputs(*details, inputs, refFiles); err != nil {
 		return err
 	}
-	preflight, err := projectStartPreflight(root, profile, packageName, *packageProfile, *decisionPolicy, answers)
+	preflight, err := projectStartPreflight(root, profile, packageName, *packageProfile, *decisionPolicy, answers, runtimeAnswers)
 	if err != nil {
 		return err
 	}
@@ -235,6 +241,10 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if preflight.Declared {
 		result.SchemaVersion = "project-start/2"
 		result.DecisionSheet = &preflight.Sheet
+		if preflight.Sheet.DecisionPolicy == "autonomous" {
+			blocked := prifly.DecisionsAutonomyCannotTake(&preflight.Catalog, &preflight.Sheet)
+			result.AutonomyUnanswered = &blocked
+		}
 	}
 	return c.emit(result)
 }
@@ -276,7 +286,7 @@ func projectStartInputs(launch projectLaunchDetail, inputs, refs bindings) error
 	return nil
 }
 
-func projectStartPreflight(root string, profile projectProfile, packageName, requestedProfile, decisionPolicy string, rawAnswers []string) (projectPreflight, error) {
+func projectStartPreflight(root string, profile projectProfile, packageName, requestedProfile, decisionPolicy string, rawAnswers, rawRuntimeAnswers []string) (projectPreflight, error) {
 	if decisionPolicy != "attended" && decisionPolicy != "autonomous" {
 		return projectPreflight{}, usageError("project_start_invalid_decision_policy: use attended or autonomous")
 	}
@@ -334,6 +344,19 @@ func projectStartPreflight(root string, profile projectProfile, packageName, req
 			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + ": " + err.Error())
 		}
 	}
+	runtime, err := projectParseDecisionAnswers(rawRuntimeAnswers)
+	if err != nil {
+		return projectPreflight{}, err
+	}
+	for id, value := range runtime {
+		definition, exists := definitions[id]
+		if !exists || definition.Phase != "runtime" || !projectDecisionApplies(definition, selected, answers) {
+			return projectPreflight{}, usageError("project_start_unknown_decision: " + id)
+		}
+		if err := projectValidateDecisionValue(definition, value); err != nil {
+			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + ": " + err.Error())
+		}
+	}
 	answerSources := map[string]string{}
 	for _, definition := range source.DecisionCatalog {
 		if definition.Phase != "preflight" || definition.Destination.Kind == "package_profile" || !definition.Required || !projectDecisionApplies(definition, selected, answers) {
@@ -357,10 +380,16 @@ func projectStartPreflight(root string, profile projectProfile, packageName, req
 	}
 	sheet := prifly.DecisionSheet{SchemaVersion: prifly.DecisionSheetVersion, CatalogDigest: digest, PackageProfile: selected, ProfileSource: profileSource, DecisionPolicy: decisionPolicy, Records: []prifly.DecisionRecord{}}
 	for _, definition := range source.DecisionCatalog {
-		if definition.Phase != "preflight" || !projectDecisionApplies(definition, selected, answers) {
+		if definition.Phase != "preflight" && definition.Phase != "runtime" {
+			continue
+		}
+		if !projectDecisionApplies(definition, selected, answers) {
 			continue
 		}
 		value, answered := answers[definition.ID]
+		if definition.Phase == "runtime" {
+			value, answered = runtime[definition.ID]
+		}
 		recordSource := "actor"
 		if source, exists := answerSources[definition.ID]; exists {
 			recordSource = source

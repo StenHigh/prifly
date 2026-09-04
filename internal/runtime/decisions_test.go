@@ -193,6 +193,9 @@ func TestDecisionBridgeAutonomousPolicyUsesDeclaredRecommendation(t *testing.T) 
 	if err != nil || view.Run.PendingDecision != nil || len(view.Run.DecisionLedger) != 1 || view.Run.DecisionLedger[0].Status != "defaulted" || view.Run.DecisionLedger[0].Source != "autonomous_policy" {
 		t.Fatalf("automatic decision was not recorded as policy: %+v %v", view.Run.DecisionLedger, err)
 	}
+	if blocked := DecisionsAutonomyCannotTake(&catalog, &sheet); len(blocked) != 0 {
+		t.Fatalf("a decision the policy just answered was reported as unanswerable: %+v", blocked)
+	}
 }
 
 func TestDecisionBridgeKeepsRestrictedChoiceForHumanAndRefusesUnknown(t *testing.T) {
@@ -227,6 +230,97 @@ func TestDecisionBridgeKeepsRestrictedChoiceForHumanAndRefusesUnknown(t *testing
 	next, err := e.Next(context.Background(), runID)
 	if err != nil || next.Action != "waiting_decision" {
 		t.Fatalf("autonomous policy answered a restricted choice: %+v %v", next, err)
+	}
+	blocked := DecisionsAutonomyCannotTake(&catalog, &sheet)
+	// This fixture is both non-automatic and scope-changing; the reported reason
+	// is the first thing its declaration withholds.
+	if len(blocked) != 1 || blocked[0].DecisionID != restricted.ID || blocked[0].Reason != "automatic_selection_not_allowed" {
+		t.Fatalf("the launch would not have named the decision this Run stopped on: %+v", blocked)
+	}
+}
+
+// The owner answers before leaving, and the step that raises the decision does
+// not stop. This is the same person the bridge would have waited for, so the
+// ledger records them, not the policy.
+func TestDecisionBridgeAppliesTheOwnersSealedAnswer(t *testing.T) {
+	restricted := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "publish_scope", Title: "Publish scope", Phase: "runtime", Choices: []DecisionChoice{{ID: "none", Title: "No publication", Value: json.RawMessage(`false`)}, {ID: "all", Title: "Publish", Value: json.RawMessage(`true`)}}, Sensitivity: "scope-changing", Destination: DecisionDestination{Kind: "session_context", Name: "publish_scope"}}
+	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{restricted}}
+	digest, err := DecisionCatalogDigest(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitionDigest, err := DecisionDefinitionDigest(restricted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sheet := DecisionSheet{SchemaVersion: DecisionSheetVersion, CatalogDigest: digest, ProfileSource: "none", DecisionPolicy: "autonomous", Records: []DecisionRecord{{SchemaVersion: DecisionRecordVersion, DefinitionID: restricted.ID, DefinitionDigest: definitionDigest, Status: "answered", Source: "actor", Value: json.RawMessage(`true`)}}}
+	if blocked := DecisionsAutonomyCannotTake(&catalog, &sheet); len(blocked) != 0 {
+		t.Fatalf("a sealed decision was reported as one the Run would stop on: %+v", blocked)
+	}
+	e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", &catalog, &sheet)
+	task := handOver(t, e, runID)
+	request := DecisionRequest{SchemaVersion: DecisionRequestVersion, RunID: runID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, DecisionID: restricted.ID, DefinitionDigest: definitionDigest, ExpectedRunVersion: task.RunVersion}
+	if _, err := e.SubmitSession(context.Background(), SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: runID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, DecisionRequest: &request}); err != nil {
+		t.Fatal(err)
+	}
+	next, err := e.Next(context.Background(), runID)
+	if err != nil || next.Action == "waiting_decision" {
+		t.Fatalf("a sealed answer still stopped the Run: %+v %v", next, err)
+	}
+	resumed, err := e.SessionTask(context.Background(), runID, task.AttemptID)
+	if err != nil || string(resumed.DecisionContext["publish_scope"]) != "true" {
+		t.Fatalf("the sealed value did not reach the resumed delivery: %+v %v", resumed, err)
+	}
+	// The sheet's own record is already in the ledger from launch; the second
+	// one ties that answer to the attempt that consumed it.
+	view, err := e.View(context.Background(), runID)
+	if err != nil || view.Run.PendingDecision != nil || len(view.Run.DecisionLedger) != 2 {
+		t.Fatalf("the sealed answer was not recorded: %+v %v", view.Run.DecisionLedger, err)
+	}
+	consumed := view.Run.DecisionLedger[1]
+	if consumed.Status != "answered" || consumed.Source != "actor" || consumed.AttemptID != task.AttemptID || string(consumed.Value) != "true" {
+		t.Fatalf("the request was not recorded as answered by the owner: %+v", consumed)
+	}
+}
+
+// Every reason a policy can refuse a decision, and the two policies. The list is
+// a report: it never turns a launch into a refusal, so an entry only promises
+// that this Run would stop there with nobody to answer.
+func TestDecisionsAutonomyCannotTakeNamesEveryDeclaredReason(t *testing.T) {
+	session := DecisionDestination{Kind: "session_context", Name: "value"}
+	taken := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "taken", Title: "Taken", Phase: "runtime", Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}}, Recommendation: json.RawMessage(`true`), Automatic: true, Sensitivity: "ordinary", Destination: session}
+	manual := taken
+	manual.ID, manual.Automatic = "manual", false
+	sensitive := taken
+	sensitive.ID, sensitive.Sensitivity = "sensitive", "scope-changing"
+	unrecommended := taken
+	unrecommended.ID, unrecommended.Recommendation = "unrecommended", nil
+	preflight := taken
+	preflight.ID, preflight.Phase, preflight.Automatic = "preflight", "preflight", false
+	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{taken, manual, sensitive, unrecommended, preflight}}
+	sheet := DecisionSheet{SchemaVersion: DecisionSheetVersion, ProfileSource: "none", DecisionPolicy: "autonomous", Records: []DecisionRecord{}}
+	blocked := DecisionsAutonomyCannotTake(&catalog, &sheet)
+	expected := []UnansweredDecision{
+		{DecisionID: "manual", Reason: "automatic_selection_not_allowed"},
+		{DecisionID: "sensitive", Reason: "sensitivity_above_ordinary"},
+		{DecisionID: "unrecommended", Reason: "no_declared_recommendation"},
+	}
+	if len(blocked) != len(expected) {
+		t.Fatalf("the reported reasons do not match the catalog: %+v", blocked)
+	}
+	for i, want := range expected {
+		if blocked[i] != want {
+			t.Fatalf("entry %d is %+v, expected %+v", i, blocked[i], want)
+		}
+	}
+	attended := sheet
+	attended.DecisionPolicy = "attended"
+	if reported := DecisionsAutonomyCannotTake(&catalog, &attended); len(reported) != 0 {
+		t.Fatalf("attended policy reported decisions it is expected to wait for: %+v", reported)
+	}
+	answerable := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{taken}}
+	if reported := DecisionsAutonomyCannotTake(&answerable, &sheet); len(reported) != 0 {
+		t.Fatalf("a catalog the policy can take reported an entry: %+v", reported)
 	}
 }
 

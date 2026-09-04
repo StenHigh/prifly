@@ -752,7 +752,7 @@ source: {root: host_skills, path: quality/SKILL.md}
 }
 
 func TestCLIProjectStartClaimsDeclaredWorkspaceAndStopsAtHostHandoff(t *testing.T) {
-	start := func(t *testing.T, workspace string) projectStartResult {
+	start := func(t *testing.T, workspace, policy, runtimeAnswer string) projectStartResult {
 		t.Helper()
 		repository := filepath.Join(t.TempDir(), "repository")
 		for _, directory := range []string{
@@ -943,6 +943,12 @@ stages:
 			}
 		}
 		args := []string{"--project", authority, "project", "start", "--repository", repository, "--launch", "pilot", "--host", "codex-cli", "--brief", brief, "--package-profile", "full", "--preflight-answer", "checkpoint=true", "--preflight-answer", `roadmap_linkage="skip"`, "--expected-decision-catalog-digest", questionnaire.CatalogDigest, "--json"}
+		if policy != "" {
+			args = append(args, "--decision-policy", policy)
+		}
+		if runtimeAnswer != "" {
+			args = append(args, "--runtime-answer", runtimeAnswer)
+		}
 		if workspace != "" {
 			args = append(args, "--workspace", workspace)
 		}
@@ -957,8 +963,37 @@ stages:
 		if result.PackageProfile != "full" {
 			t.Fatalf("project start did not seal its explicit package profile: %#v", result)
 		}
-		if result.SchemaVersion != "project-start/2" || result.DecisionSheet == nil || len(result.DecisionSheet.Records) != 2 || result.Run.Run.DecisionCatalog == nil || result.Run.Run.DecisionSheet == nil || result.Run.Run.DecisionSheet.CatalogDigest != result.DecisionSheet.CatalogDigest {
+		sealedRecords := 2
+		if runtimeAnswer != "" {
+			sealedRecords++
+		}
+		if result.SchemaVersion != "project-start/2" || result.DecisionSheet == nil || len(result.DecisionSheet.Records) != sealedRecords || result.Run.Run.DecisionCatalog == nil || result.Run.Run.DecisionSheet == nil || result.Run.Run.DecisionSheet.CatalogDigest != result.DecisionSheet.CatalogDigest {
 			t.Fatalf("project start did not retain its reviewed decision sheet: %#v", result)
+		}
+		// An autonomous launch says which declared runtime decisions its policy
+		// will not take, before the first dispatch. Attended does not: waiting
+		// for the owner is that policy's normal path, not a warning.
+		switch {
+		case policy == "autonomous" && runtimeAnswer != "":
+			// Answered before the Run started, so nothing about it will stop.
+			if result.AutonomyUnanswered == nil || len(*result.AutonomyUnanswered) != 0 {
+				t.Fatalf("a sealed runtime answer was still reported as unanswerable: %#v", result.AutonomyUnanswered)
+			}
+			sealed := false
+			for _, record := range result.DecisionSheet.Records {
+				sealed = sealed || (record.DefinitionID == "continue" && record.Status == "answered" && record.Source == "actor" && string(record.Value) == "true")
+			}
+			if !sealed {
+				t.Fatalf("the runtime answer was not sealed into the decision sheet: %#v", result.DecisionSheet.Records)
+			}
+		case policy == "autonomous":
+			if result.AutonomyUnanswered == nil || len(*result.AutonomyUnanswered) != 1 || (*result.AutonomyUnanswered)[0].DecisionID != "continue" || (*result.AutonomyUnanswered)[0].Reason != "automatic_selection_not_allowed" {
+				t.Fatalf("autonomous launch did not name the decision its policy cannot take: %#v", result.AutonomyUnanswered)
+			}
+		default:
+			if result.AutonomyUnanswered != nil {
+				t.Fatalf("attended launch reported an autonomy list: %#v", result.AutonomyUnanswered)
+			}
 		}
 		e, err := prifly.Open(authority, false)
 		if err != nil {
@@ -989,37 +1024,82 @@ stages:
 			t.Fatalf("request declared decision: %d %s", code, errout.String())
 		}
 		var decisions struct {
-			RunVersion int64                   `json:"run_version"`
-			Pending    *prifly.DecisionRequest `json:"pending"`
+			RunVersion    int64                   `json:"run_version"`
+			Pending       *prifly.DecisionRequest `json:"pending"`
+			PendingDigest string                  `json:"pending_request_digest"`
+			Records       []prifly.DecisionRecord `json:"records"`
 		}
 		out.Reset()
 		errout.Reset()
-		if code := execute(context.Background(), []string{"--project", authority, "run", "decisions", result.Run.Run.ID, "--json"}, &out, &errout); code != 0 || json.Unmarshal(out.Bytes(), &decisions) != nil || decisions.Pending == nil {
-			t.Fatalf("read pending decision: code=%d stdout=%s stderr=%s", code, out.String(), errout.String())
+		if code := execute(context.Background(), []string{"--project", authority, "run", "decisions", result.Run.Run.ID, "--json"}, &out, &errout); code != 0 || json.Unmarshal(out.Bytes(), &decisions) != nil {
+			t.Fatalf("read decisions: code=%d stdout=%s stderr=%s", code, out.String(), errout.String())
+		}
+		// A sealed answer is applied to the request instead of parking it, so
+		// there is no question left for anyone to answer.
+		if runtimeAnswer != "" {
+			if decisions.Pending != nil {
+				t.Fatalf("a sealed runtime answer still parked the Run: %+v", decisions.Pending)
+			}
+			answered := false
+			for _, record := range decisions.Records {
+				answered = answered || (record.DefinitionID == "continue" && record.AttemptID == task.AttemptID && record.Status == "answered" && record.Source == "actor")
+			}
+			if !answered {
+				t.Fatalf("the request was not recorded as answered by the owner: %+v", decisions.Records)
+			}
+			return result
+		}
+		if decisions.Pending == nil {
+			t.Fatalf("no pending decision to answer: stdout=%s", out.String())
 		}
 		out.Reset()
 		errout.Reset()
 		if code := execute(context.Background(), []string{"--project", authority, "run", "decision", result.Run.Run.ID, "answer", "--value", "true", "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "invalid_usage") {
 			t.Fatalf("decision answer without identity was accepted: %d %s", code, errout.String())
 		}
-		requestDigest, err := prifly.DecisionRequestDigest(*decisions.Pending)
+		// The answer is built only from what the read printed. Recomputing the
+		// digest with the Go API proved the engine agreed with itself while the
+		// CLI user had no way to obtain that value at all.
+		expected, err := prifly.DecisionRequestDigest(*decisions.Pending)
 		if err != nil {
 			t.Fatal(err)
 		}
-		out.Reset()
-		errout.Reset()
-		if code := execute(context.Background(), []string{"--project", authority, "run", "decision", result.Run.Run.ID, "answer", "--decision", decisions.Pending.DecisionID, "--request-digest", requestDigest, "--expected-run-version", strconv.FormatInt(decisions.RunVersion, 10), "--value", "true", "--json"}, &out, &errout); code != 0 {
-			t.Fatalf("answer pending decision: %d %s", code, errout.String())
+		if decisions.PendingDigest != expected {
+			t.Fatalf("run decisions did not report the digest its answer requires: %q", decisions.PendingDigest)
+		}
+		version := strconv.FormatInt(decisions.RunVersion, 10)
+		answer := func(decision, digest, runVersion string) (int, string) {
+			out.Reset()
+			errout.Reset()
+			code := execute(context.Background(), []string{"--project", authority, "run", "decision", result.Run.Run.ID, "answer", "--decision", decision, "--request-digest", digest, "--expected-run-version", runVersion, "--value", "true", "--json"}, &out, &errout)
+			return code, errout.String()
+		}
+		// Each identity that can be wrong refuses by naming what is current, so
+		// four refusals in a row cannot say the same thing.
+		for _, mismatch := range []struct{ name, decision, digest, version string }{
+			{"decision", "unknown", decisions.PendingDigest, version},
+			{"version", decisions.Pending.DecisionID, decisions.PendingDigest, strconv.FormatInt(decisions.RunVersion+1, 10)},
+			{"digest", decisions.Pending.DecisionID, "sha256:" + strings.Repeat("0", 64), version},
+		} {
+			code, message := answer(mismatch.decision, mismatch.digest, mismatch.version)
+			if code == 0 || !strings.Contains(message, "invalid_usage") || !strings.Contains(message, "received") {
+				t.Fatalf("a wrong %s was not refused by naming the current one: %d %s", mismatch.name, code, message)
+			}
+		}
+		if code, message := answer(decisions.Pending.DecisionID, decisions.PendingDigest, version); code != 0 {
+			t.Fatalf("answer pending decision: %d %s", code, message)
 		}
 		return result
 	}
 
-	if result := start(t, ""); result.Workspace.Mode != "worktree" {
+	if result := start(t, "", "", ""); result.Workspace.Mode != "worktree" {
 		t.Fatalf("direct CLI did not default to worktree: %+v", result.Workspace)
 	}
-	if result := start(t, "checkout"); result.Workspace.Mode != "checkout" {
+	if result := start(t, "checkout", "", ""); result.Workspace.Mode != "checkout" {
 		t.Fatalf("project start did not retain checkout mode: %+v", result.Workspace)
 	}
+	start(t, "", "autonomous", "")
+	start(t, "", "autonomous", "continue=true")
 }
 
 func TestCLIProjectCompileSelectsDeclaredPackageProfile(t *testing.T) {

@@ -735,7 +735,19 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		if err != nil {
 			return err
 		}
-		return c.emit(map[string]any{"schema_version": "run-decision-ledger/1", "run_id": id, "run_version": view.RunVersion, "package_profile": decisionProfile(view.Run.DecisionSheet), "records": view.Run.DecisionLedger, "pending": view.Run.PendingDecision})
+		ledger := map[string]any{"schema_version": "run-decision-ledger/1", "run_id": id, "run_version": view.RunVersion, "package_profile": decisionProfile(view.Run.DecisionSheet), "records": view.Run.DecisionLedger, "pending": view.Run.PendingDecision}
+		// The answer names the digest of the exact request it answers, and this
+		// is the read that has to supply it: it is derived, so it appears in no
+		// stored field, and every command receipt carries an unrelated digest of
+		// its own payload under the same word.
+		if view.Run.PendingDecision != nil {
+			digest, err := prifly.DecisionRequestDigest(*view.Run.PendingDecision)
+			if err != nil {
+				return err
+			}
+			ledger["pending_request_digest"] = digest
+		}
+		return c.emit(ledger)
 	case "decision":
 		if len(args) < 3 {
 			return usageError("run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N | answer --decision ID --request-digest DIGEST --expected-run-version N --value JSON")
@@ -776,7 +788,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			return c.emit(commandResponse(result))
 		case "answer":
 			decisionID := f.String("decision", "", "pending decision ID")
-			requestDigest := f.String("request-digest", "", "digest of the pending decision request")
+			requestDigest := f.String("request-digest", "", "pending_request_digest from run decisions")
 			expectedVersion := f.Int64("expected-run-version", -1, "current Run version from run decisions")
 			value := f.String("value", "", "typed JSON answer for the pending decision")
 			if err := parse(f, args[3:]); err != nil {
@@ -794,12 +806,21 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 				return usageError("run decision answer --value must be JSON")
 			}
 			request := view.Run.PendingDecision
-			if request == nil || request.DecisionID != *decisionID || view.RunVersion != *expectedVersion {
-				return usageError("run decision answer does not match the current pending decision")
+			if request == nil {
+				return usageError("this Run awaits no decision; run decisions reports what it holds")
+			}
+			if request.DecisionID != *decisionID {
+				return usageError("the pending decision is " + strconv.Quote(request.DecisionID) + "; received " + strconv.Quote(*decisionID))
+			}
+			if view.RunVersion != *expectedVersion {
+				return usageError("the current Run version is " + strconv.FormatInt(view.RunVersion, 10) + "; received " + strconv.FormatInt(*expectedVersion, 10))
 			}
 			digest, err := prifly.DecisionRequestDigest(*request)
-			if err != nil || digest != *requestDigest {
-				return usageError("run decision answer does not match the current pending decision")
+			if err != nil {
+				return err
+			}
+			if digest != *requestDigest {
+				return usageError("the pending request digest is " + digest + ", which run decisions reports as pending_request_digest; received " + strconv.Quote(*requestDigest))
 			}
 			result, err := e.AnswerDecision(ctx, prifly.DecisionAnswer{SchemaVersion: prifly.DecisionAnswerVersion, RunID: id, DecisionID: *decisionID, DefinitionDigest: request.DefinitionDigest, RequestDigest: *requestDigest, ExpectedRunVersion: *expectedVersion, Value: answer})
 			if err != nil {
@@ -2067,6 +2088,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    Seal one declared YAML package; import remains a separate owner decision
   project start --repository DIR --launch ID --host codex-cli|codex-app|claude-code --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--workspace worktree|checkout]
                 [--package-profile NAME] [--preflight-answer ID=JSON] [--decision-policy attended|autonomous] [--expected-decision-catalog-digest DIGEST]
+                [--runtime-answer ID=JSON]
+                                   A runtime answer is sealed before the Run starts: the step that raises that decision gets this value and does not wait
                                    Seal, claim and drive one declared launch to its first honest handoff; direct CLI defaults to worktree
                                    Answer the declared questions up front with repeated --preflight-answer; project questionnaire lists them and returns the digest
                                    A package profile is chosen once: with --package-profile, do not also answer the decision that selects it
@@ -2090,7 +2113,7 @@ Global: --project DIR  --json  --format text|json|csv
   run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N
                                    Compatible executor requests one declared runtime decision
   run decision RUN_ID answer --decision ID --request-digest DIGEST --expected-run-version N --value JSON
-                                   Answer exactly the current pending decision; stale answers are refused
+                                   Answer exactly the current pending decision; --request-digest is pending_request_digest from run decisions, not the request_digest of a command receipt
   run pause|cancel RUN_ID --reason TEXT [--command-id ID]
   run release RUN_ID --expected-epoch N --stop ID:GENERATION --reason TEXT
   run resume RUN_ID --expected-version N --reason TEXT

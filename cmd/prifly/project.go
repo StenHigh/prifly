@@ -90,7 +90,9 @@ developer only at the workflow's declared decision points.
 5. Continue until the Run completes. When ` + "`run next RUN_ID`" + ` says
    ` + "`waiting_decision`" + `, read ` + "`run decisions RUN_ID`" + `, ask the one declared
    question, then call ` + "`run decision RUN_ID answer --decision ID --request-digest DIGEST --expected-run-version N --value JSON`" + `
-   with the exact values from that read, and resume the same session task. Never treat a skill's native question as a Pri-Fly decision
+   with the exact values from that read: ` + "`--request-digest`" + ` is its
+   ` + "`pending_request_digest`" + `, not the ` + "`request_digest`" + ` every command
+   receipt carries for its own payload. Then resume the same session task. Never treat a skill's native question as a Pri-Fly decision
    unless it arrived through that protocol. Other questions declared by the
    workflow, such as accepted improvements or another bounded batch, are for
    the developer; successful exits are silent. A gate's suggested next action is never an

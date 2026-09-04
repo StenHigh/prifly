@@ -75,6 +75,69 @@ func decisionSessionContext(catalog *DecisionCatalog, sheet *DecisionSheet) map[
 	return values
 }
 
+// sealedDecisionAnswer returns the answer the owner gave this decision before
+// the Run started, if they gave one. It is the same person the bridge would
+// otherwise wait for, so the wait has already been satisfied.
+func sealedDecisionAnswer(sheet *DecisionSheet, id string) (json.RawMessage, bool) {
+	if sheet == nil {
+		return nil, false
+	}
+	for _, record := range sheet.Records {
+		if record.DefinitionID == id && record.Status == "answered" && record.Source == "actor" && len(record.Value) != 0 {
+			return record.Value, true
+		}
+	}
+	return nil, false
+}
+
+// autonomousBlock reports why an autonomous policy cannot take this decision,
+// or the empty string when it can. The condition exists once: a second copy of
+// it would drift from the bridge, and a launch would then describe a Run that
+// behaves differently.
+func autonomousBlock(definition DecisionDefinition) string {
+	switch {
+	case !definition.Automatic:
+		return "automatic_selection_not_allowed"
+	case definition.Sensitivity != "ordinary":
+		return "sensitivity_above_ordinary"
+	case len(definition.Recommendation) == 0:
+		return "no_declared_recommendation"
+	}
+	return ""
+}
+
+// UnansweredDecision names one declared runtime decision an autonomous policy
+// will not answer, and the declared reason it will not.
+type UnansweredDecision struct {
+	DecisionID string `json:"decision_id"`
+	Reason     string `json:"reason"`
+}
+
+// DecisionsAutonomyCannotTake lists, in catalog order, the runtime decisions
+// this Run's policy will leave waiting. Under an autonomous policy there is
+// nobody to answer them, so a Run that reaches one stops for good; the launch
+// says which ones those are before the first dispatch rather than parking
+// hours into the work. It reports, it does not refuse: a listed decision may
+// never be requested.
+func DecisionsAutonomyCannotTake(catalog *DecisionCatalog, sheet *DecisionSheet) []UnansweredDecision {
+	blocked := []UnansweredDecision{}
+	if catalog == nil || sheet == nil || sheet.DecisionPolicy != "autonomous" {
+		return blocked
+	}
+	for _, definition := range catalog.Decisions {
+		if definition.Phase != "runtime" || definition.Destination.Kind != "session_context" || !decisionApplies(definition, sheet.PackageProfile, sheet.Records) {
+			continue
+		}
+		if _, sealed := sealedDecisionAnswer(sheet, definition.ID); sealed {
+			continue
+		}
+		if reason := autonomousBlock(definition); reason != "" {
+			blocked = append(blocked, UnansweredDecision{DecisionID: definition.ID, Reason: reason})
+		}
+	}
+	return blocked
+}
+
 func decisionRuntimeAvailable(catalog *DecisionCatalog, sheet *DecisionSheet) bool {
 	if catalog == nil || sheet == nil {
 		return false
@@ -171,7 +234,21 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 		if attempt == nil || attempt.Session == nil || attempt.Session.SchemaVersion != AssistedSessionDecisionVersion || attempt.Session.PrincipalID != e.owner || attempt.Session.HostState != SessionAwaiting || attempt.EnvelopeDigest != request.EnvelopeDigest {
 			return local.Change{}, local.Reject("decision_request_unsupported", "this attempt is not an awaiting decision-bridge session delivery")
 		}
-		if r.DecisionSheet.DecisionPolicy == "autonomous" && definition.Automatic && definition.Sensitivity == "ordinary" && len(definition.Recommendation) != 0 {
+		// The owner's own answer, given before the Run started, outranks any
+		// policy default: waiting for them is what the wait was for.
+		if sealed, exists := sealedDecisionAnswer(r.DecisionSheet, definition.ID); exists {
+			value, err := flow.Canonical(sealed)
+			if err != nil || ValidateDecisionValue(definition, value) != nil {
+				return local.Change{}, local.Reject("invalid_decision_default", "the sealed owner answer is not a declared value of this decision")
+			}
+			if err := advanceDecisionDelivery(attempt, definition.Destination.Name, value, observed); err != nil {
+				return local.Change{}, err
+			}
+			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: DecisionRecordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "answered", Source: "actor", Value: value, Observed: &observed})
+			data, err := canonical(map[string]any{"request": request, "request_digest": digest, "observation": observed, "source": "actor"})
+			return local.Change{Events: []local.EventInput{{Type: "decision.answered", Version: 1, Data: data}}}, err
+		}
+		if r.DecisionSheet.DecisionPolicy == "autonomous" && autonomousBlock(definition) == "" {
 			value, err := flow.Canonical(definition.Recommendation)
 			if err != nil || ValidateDecisionValue(definition, value) != nil {
 				return local.Change{}, local.Reject("invalid_decision_default", "the declared automatic recommendation is invalid")
