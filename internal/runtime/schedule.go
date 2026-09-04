@@ -563,6 +563,14 @@ func (e *Engine) FireDueSlots(ctx context.Context, id string) ([]SlotDecision, e
 		return nil, err
 	}
 	decided := []SlotDecision{}
+	// Which Runs of this schedule are still live is read once. Re-reading every
+	// slot's Run for every slot decided made one call load the same states many
+	// times over. A Run that ends while this call runs stays counted until the
+	// next one, which can only make the overlap limit more careful, never less.
+	live, err := e.liveScheduleRuns(ctx, *entry)
+	if err != nil {
+		return decided, err
+	}
 	// One iteration decides at most one slot, so the whole backlog a single call
 	// may take on is bounded by the same number that bounds the backlog itself.
 	for range MaxDueSlots + 1 {
@@ -573,10 +581,6 @@ func (e *Engine) FireDueSlots(ctx context.Context, id string) ([]SlotDecision, e
 		entry := record.entry(id)
 		if entry == nil {
 			return decided, local.Reject("not_found", "the schedule disappeared under this call")
-		}
-		live, err := e.liveScheduleRuns(ctx, *entry)
-		if err != nil {
-			return decided, err
 		}
 		if pending := entry.pending(); pending != nil {
 			// A slot was reserved and its Run was not confirmed. Finishing it
@@ -639,6 +643,7 @@ func (e *Engine) FireDueSlots(ctx context.Context, id string) ([]SlotDecision, e
 		if err := e.confirmSlotRun(ctx, version+1, id, decision.SlotID, decision.RunID); err != nil {
 			return decided, err
 		}
+		live[decision.RunID] = true
 		decided[len(decided)-1].Disposition = "fired"
 	}
 	return decided, local.Reject("schedule_backlog", fmt.Sprintf("this schedule is further behind than one call may decide (%d slots)", MaxDueSlots))

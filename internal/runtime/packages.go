@@ -256,7 +256,7 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 	} else if len(control.TrustRoots) != 0 {
 		return local.AuthorityApplyResult{}, local.Reject("signature_required", "this installation records trust roots, so a package arrives with a detached signature")
 	}
-	return e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: request.CommandID, Actor: e.owner, Key: AuthorityPackagesKey, Payload: command}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
+	result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: request.CommandID, Actor: e.owner, Key: AuthorityPackagesKey, Payload: command}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		record := PackageRecord{SchemaVersion: AuthorityPackagesVersion, AuthorityID: e.Installation.ID, Packages: []PackageEntry{}}
 		if s.Version > 0 {
 			if err := decode(s.Data, &record); err != nil {
@@ -341,6 +341,15 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 		}
 		return local.AuthorityChange{Data: data, Result: ab}, nil
 	})
+	if err == nil && result.Receipt.Rejection == nil {
+		// The imported package is available to this engine immediately. Callers
+		// used to close and reopen the authority to see it, which re-verified
+		// the store and re-read every package to learn one new name.
+		if err := e.loadPackages(); err != nil {
+			return result, err
+		}
+	}
+	return result, err
 }
 
 func readPackageManifest(source string) ([]byte, packageManifest, error) {

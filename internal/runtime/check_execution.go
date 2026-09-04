@@ -433,8 +433,9 @@ func (e *Engine) executePendingCheck(ctx context.Context, loaded Run, _ local.Re
 		deadline := time.Now().Add(remaining)
 		timer := time.NewTimer(remaining)
 		defer timer.Stop()
-		ticker := time.NewTicker(30 * time.Millisecond)
+		ticker := time.NewTicker(watchInterval)
 		defer ticker.Stop()
+		version, sequence := int64(0), int64(0)
 		for {
 			select {
 			case <-watchDone:
@@ -456,19 +457,30 @@ func (e *Engine) executePendingCheck(ctx context.Context, loaded Run, _ local.Re
 					deadline = next
 					timer.Reset(time.Until(deadline))
 				}
+				// The Run is read only when it changed; an idle check costs one
+				// indexed row per tick instead of a full state decode.
 				readCtx, readCancel := context.WithTimeout(context.Background(), time.Second)
-				current, _, err := e.load(readCtx, r.ID)
+				currentVersion, currentSequence, err := e.Store.Revision(readCtx, r.ID)
+				if err == nil && (currentVersion != version || currentSequence != sequence) {
+					version, sequence = currentVersion, currentSequence
+					var current Run
+					current, _, err = e.load(readCtx, r.ID)
+					if err == nil {
+						if current.cancelRequestedFor(check.Request.InvocationID) {
+							readCancel()
+							cancel(context.Canceled)
+							return
+						}
+						if current.ActiveCheckID != check.ID || current.HasUnresolvedEffects {
+							readCancel()
+							cancel(local.Reject("check_ownership_lost", "check no longer owns the execution obligation"))
+							return
+						}
+					}
+				}
 				readCancel()
 				if err != nil {
 					cancel(local.Reject("control_observation_failed", "cannot observe check cancellation state"))
-					return
-				}
-				if current.cancelRequestedFor(check.Request.InvocationID) {
-					cancel(context.Canceled)
-					return
-				}
-				if current.ActiveCheckID != check.ID || current.HasUnresolvedEffects {
-					cancel(local.Reject("check_ownership_lost", "check no longer owns the execution obligation"))
 					return
 				}
 			}

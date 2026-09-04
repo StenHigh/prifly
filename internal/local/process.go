@@ -166,6 +166,13 @@ func ProbeProcess(id ProcessIdentity) ProcessProbe {
 // ProcessExecutableDigest hashes a regular executable. A live external binary is
 // checked again at launch, but this cooperative profile does not defeat malicious
 // mutation between hashing and exec or pin an interpreter's dynamic libraries.
+// executableDigests remembers a hashed executable for the life of this process.
+// One project commonly points many step definitions at the same binary, and
+// hashing a 26 MiB executable once per definition was the largest single cost
+// of starting a Run. The key is the file's identity and both timestamps, so a
+// replaced or touched file is a different key and is hashed again.
+var executableDigests sync.Map
+
 func ProcessExecutableDigest(path string) (string, error) {
 	if !filepath.IsAbs(path) {
 		return "", errors.New("executable must be absolute")
@@ -184,6 +191,12 @@ func ProcessExecutableDigest(path string) (string, error) {
 	if !before.Mode().IsRegular() || before.Mode().Perm()&0111 == 0 {
 		return "", errors.New("executable must be a regular executable file")
 	}
+	identity, addressable := executableIdentity(before)
+	if addressable {
+		if cached, found := executableDigests.Load(identity); found {
+			return cached.(string), nil
+		}
+	}
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
@@ -195,7 +208,11 @@ func ProcessExecutableDigest(path string) (string, error) {
 	if before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
 		return "", errors.New("executable changed while hashing")
 	}
-	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
+	digest := "sha256:" + hex.EncodeToString(h.Sum(nil))
+	if identity, stillAddressable := executableIdentity(after); stillAddressable && addressable && identity != "" {
+		executableDigests.Store(identity, digest)
+	}
+	return digest, nil
 }
 
 func validateProcessSpec(spec ProcessSpec) error {
@@ -291,6 +308,14 @@ type processResultMessage struct {
 // JSON objects; stdout/stderr = diagnostics. Root validates candidate equality.
 // Return error describes driver/observation failure; nonzero worker exits are
 // evidence in Outcome and do not manufacture a StepResult or verdict.
+// The process group is polled closely while a step is young, then at a calmer
+// interval. Termination is still bounded by its own timers, not by this rate.
+const (
+	processPollInterval   = 20 * time.Millisecond
+	processPollCloseWatch = 200 * time.Millisecond
+	processPollSettled    = 200 * time.Millisecond
+)
+
 func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObservation) error) (out ProcessOutcome, retErr error) {
 	if err := validateProcessSpec(spec); err != nil {
 		return out, err
@@ -452,8 +477,13 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 	emit("start_returned", "", "observed", out.StartedAt, nil)
 	runtimeLimit := time.NewTimer(spec.MaxRuntime - time.Since(startCall))
 	defer runtimeLimit.Stop()
-	ticker := time.NewTicker(20 * time.Millisecond)
+	// A step that finishes quickly is worth watching closely; one that runs for
+	// minutes is not, and polling it every 20ms burned a measurable share of a
+	// core reading /proc for a process nobody was waiting on that closely.
+	ticker := time.NewTicker(processPollInterval)
 	defer ticker.Stop()
+	slowPoll := time.AfterFunc(processPollCloseWatch, func() { ticker.Reset(processPollSettled) })
+	defer slowPoll.Stop()
 	var stopAt time.Time
 	var killAt time.Time
 	signalGroup := func(sig syscall.Signal, phase, reason string, at time.Time) {
@@ -476,6 +506,10 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 		}
 		stopAt = time.Now()
 		out.StopReason = reason
+		// Stopping is the one phase where the poll rate is a bound on behaviour:
+		// the escalation from term to kill and the observation that the group is
+		// gone both happen on this tick.
+		ticker.Reset(processPollInterval)
 		// The unreaped Cmd is the authority here. Serialized identities recovered
 		// after a crash never reach this signaling path.
 		signalGroup(syscall.SIGTERM, "term", reason, stopAt)

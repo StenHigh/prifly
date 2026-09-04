@@ -8,8 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -705,6 +707,10 @@ var planCache = struct {
 // cheap to recompile and one process runs few distinct workflows.
 const maxCachedPlans = 64
 
+// planCompilations counts actual compilations. A test reads it to prove that
+// driving a Run compiles its workflow once, not once per command.
+var planCompilations atomic.Int64
+
 func compiledPlan(key string, compile func() (*flow.Plan, error)) (*flow.Plan, error) {
 	planCache.Lock()
 	cached, found := planCache.entries[key]
@@ -712,6 +718,8 @@ func compiledPlan(key string, compile func() (*flow.Plan, error)) (*flow.Plan, e
 	if found {
 		return cached, nil
 	}
+	planCompilations.Add(1)
+
 	p, err := compile()
 	if err != nil {
 		return nil, err
@@ -730,10 +738,18 @@ func compiledPlan(key string, compile func() (*flow.Plan, error)) (*flow.Plan, e
 func (r Run) planKey() string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s|%s|%s|", r.SchemaVersion, r.Profile, rawDigest(r.Workflow))
+	// The same pinned set is the same plan whatever order it was recorded in.
+	pins := make([]string, 0, len(r.Definitions)+len(r.ContextResources))
 	for _, d := range r.Definitions {
-		fmt.Fprintf(h, "%s@%s:%s|", d.Ref.ID, d.Ref.Version, d.Ref.Digest)
+		pins = append(pins, "d:"+d.Ref.ID+"@"+d.Ref.Version+":"+d.Ref.Digest)
 	}
-	fmt.Fprintf(h, "%v", r.ContextResources)
+	for _, resource := range r.ContextResources {
+		pins = append(pins, "r:"+resource.Ref.ID+"@"+resource.Ref.Version+":"+resource.Ref.Digest+":"+resource.RawDigest+":"+resource.ByteEncoding+":"+resource.MediaType)
+	}
+	slices.Sort(pins)
+	for _, pin := range pins {
+		fmt.Fprintf(h, "%s|", pin)
+	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 

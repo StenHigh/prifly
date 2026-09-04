@@ -103,3 +103,13 @@ func readProcessGroup(pgid int) ([]processRecord, error) {
 	}
 	return group, nil
 }
+
+// executableIdentity names a file by what changes when its contents change:
+// where it lives, which inode it is, how large it is, and both timestamps.
+func executableIdentity(info os.FileInfo) (string, bool) {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return "", false
+	}
+	return fmt.Sprintf("%d/%d/%d/%d.%d/%d.%d", stat.Dev, stat.Ino, stat.Size, stat.Mtim.Sec, stat.Mtim.Nsec, stat.Ctim.Sec, stat.Ctim.Nsec), true
+}

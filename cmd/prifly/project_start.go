@@ -202,14 +202,9 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 			}
 			return err
 		}
+		// The engine holds the imported package already; closing and reopening
+		// the authority only to see it re-verified the store for nothing.
 		imported = true
-		if err := engine.Close(); err != nil {
-			return err
-		}
-		engine, err = prifly.Open(c.project, false)
-		if err != nil {
-			return err
-		}
 	}
 	workflowPath, err = projectInstalledWorkflowPath(ctx, engine, compiled.Package, workflowPath)
 	if err != nil {

@@ -909,8 +909,9 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 		deadline := time.Now().Add(remaining)
 		timer := time.NewTimer(remaining)
 		defer timer.Stop()
-		ticker := time.NewTicker(30 * time.Millisecond)
+		ticker := time.NewTicker(watchInterval)
 		defer ticker.Stop()
+		version, sequence := int64(0), int64(0)
 		for {
 			select {
 			case <-watchDone:
@@ -936,15 +937,23 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 					deadline = next
 					timer.Reset(time.Until(deadline))
 				}
+				// Ask what the stored state is before reading it: an idle wait
+				// then costs one indexed row, not a full state decode.
 				readCtx, readCancel := context.WithTimeout(context.Background(), time.Second)
-				current, _, err := e.load(readCtx, r.ID)
+				currentVersion, currentSequence, err := e.Store.Revision(readCtx, r.ID)
+				if err == nil && (currentVersion != version || currentSequence != sequence) {
+					version, sequence = currentVersion, currentSequence
+					var current Run
+					current, _, err = e.load(readCtx, r.ID)
+					if err == nil && current.cancelRequestedFor(activation.InvocationID) {
+						readCancel()
+						cancel(context.Canceled)
+						return
+					}
+				}
 				readCancel()
 				if err != nil {
 					cancel(local.Reject("control_observation_failed", "cannot observe current cancellation state"))
-					return
-				}
-				if current.cancelRequestedFor(activation.InvocationID) {
-					cancel(context.Canceled)
 					return
 				}
 			}
@@ -1067,6 +1076,11 @@ func (e *Engine) observeOnce(ctx context.Context, runID, attemptID string, o loc
 	})
 	return err
 }
+
+// watchInterval is how often a running attempt or check asks whether its Run
+// changed. It is a control latency, not a deadline: the deadline has its own
+// timer, and asking more often only re-read state nobody had written.
+const watchInterval = 250 * time.Millisecond
 
 const maxLateResultsPerRun = 32
 const maxLateResultsPerAttempt = 4

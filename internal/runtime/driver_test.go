@@ -2188,3 +2188,36 @@ func TestResultEvidenceRunQuotaCountsOnlyLateIntake(t *testing.T) {
 		t.Fatalf("unrelated diagnostic exhausted intake allowance: %v", err)
 	}
 }
+
+// Driving a Run used to compile its workflow inside every command, which parses
+// the definition, resolves every reference and validates each schema. A Run is
+// compiled from the exact set it pinned, and every command after that reads the
+// compiled plan. Two Runs of one workflow still compile twice: each pins its own
+// package lock, so their pinned sets are not the same set.
+func TestDriveCompilesAWorkflowOncePerRun(t *testing.T) {
+	e, runID := driverProject(t, "pass", 10000)
+	ctx := context.Background()
+	before := planCompilations.Load()
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.View(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	r := driverRun(t, e, runID)
+	if r.Status != "completed" {
+		t.Fatalf("the fixture did not run to completion: %s", r.Status)
+	}
+	compiled := planCompilations.Load() - before
+	if compiled > 1 {
+		t.Fatalf("driving one Run compiled its workflow %d times", compiled)
+	}
+	// The same Run driven again compiles nothing at all.
+	before = planCompilations.Load()
+	if _, err := e.View(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	if again := planCompilations.Load() - before; again != 0 {
+		t.Fatalf("reading a driven Run recompiled it %d times", again)
+	}
+}

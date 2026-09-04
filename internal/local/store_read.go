@@ -74,6 +74,23 @@ func (s *Store) ReadAt(ctx context.Context, runID string, cut, after int64, limi
 // is bounded like every other read: a Run with more of them than the limit
 // reports that the rest was not read, so a caller can say its answer is partial
 // instead of quietly dropping history.
+// Revision reports what a Run's stored state currently is, without reading it.
+// A watchdog asks this on every tick and reads the Run itself only when the
+// answer changed, which keeps an idle wait off the decoding path entirely.
+func (s *Store) Revision(ctx context.Context, runID string) (int64, int64, error) {
+	conn, err := s.begin(ctx, false)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rollbackClose(conn)
+	var version, sequence int64
+	err = conn.QueryRowContext(ctx, "SELECT version,event_seq FROM runs WHERE run_id=?", runID).Scan(&version, &sequence)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, ErrNotFound
+	}
+	return version, sequence, err
+}
+
 func (s *Store) ReadEventsOfType(ctx context.Context, runID, eventType string, after int64, limit int) ([]Event, bool, error) {
 	limit, err := readLimit(limit)
 	if err != nil {

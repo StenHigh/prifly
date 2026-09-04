@@ -66,6 +66,35 @@ func (e *Engine) putArtifact(data []byte, format string, schema *flow.Ref, id st
 	return e.publishPreparedArtifact(artifact, reg)
 }
 
+// artifactMetadata reads and verifies one accepted artifact's descriptor. It is
+// deliberately not cached: the descriptor records who produced the artifact and
+// what it came from, and a reader that trusted an earlier read would not notice
+// that the recorded descriptor had been altered underneath it.
+func (e *Engine) artifactMetadata(ref ArtifactRef) (Artifact, error) {
+	encoded, err := canonical(ref)
+	if err != nil {
+		return Artifact{}, err
+	}
+	if err := flow.ValidateProtocol("ArtifactRef", encoded); err != nil {
+		return Artifact{}, err
+	}
+	metadata, err := readLocal(e.Root, artifactMetadataPath(ref.ArtifactID), MaxDefinitionBytes)
+	if err != nil {
+		return Artifact{}, err
+	}
+	if err := flow.ValidateProtocol("ArtifactRevision", metadata); err != nil {
+		return Artifact{}, err
+	}
+	var artifact Artifact
+	if err := decode(metadata, &artifact); err != nil {
+		return Artifact{}, err
+	}
+	if artifact.Ref() != ref || artifact.Revision != 1 || artifact.SizeBytes < 0 || artifact.SizeBytes > MaxArtifactBytes {
+		return Artifact{}, local.ErrIntegrity
+	}
+	return artifact, nil
+}
+
 // prepareArtifact validates and seals bytes without publishing a new accepted
 // identity. The returned metadata is detached from caller-owned maps/slices.
 // A pending acceptance may retain it, but Artifact cannot resolve its reference
@@ -205,26 +234,9 @@ func (e *Engine) validatePreparedArtifact(data []byte, artifact Artifact, reg fl
 // mutable installation registry. Admission and reuse validate against their own
 // pinned plan; a changed installed schema must not rewrite historical meaning.
 func (e *Engine) Artifact(ref ArtifactRef) (Artifact, []byte, error) {
-	encoded, err := canonical(ref)
+	artifact, err := e.artifactMetadata(ref)
 	if err != nil {
 		return Artifact{}, nil, err
-	}
-	if err := flow.ValidateProtocol("ArtifactRef", encoded); err != nil {
-		return Artifact{}, nil, err
-	}
-	metadata, err := readLocal(e.Root, artifactMetadataPath(ref.ArtifactID), MaxDefinitionBytes)
-	if err != nil {
-		return Artifact{}, nil, err
-	}
-	if err := flow.ValidateProtocol("ArtifactRevision", metadata); err != nil {
-		return Artifact{}, nil, err
-	}
-	var artifact Artifact
-	if err := decode(metadata, &artifact); err != nil {
-		return Artifact{}, nil, err
-	}
-	if artifact.Ref() != ref || artifact.Revision != 1 || artifact.SizeBytes < 0 || artifact.SizeBytes > MaxArtifactBytes {
-		return Artifact{}, nil, local.ErrIntegrity
 	}
 	data, err := e.Blobs.Read(local.BlobRef{Digest: artifact.Digest, Size: artifact.SizeBytes})
 	if err != nil {

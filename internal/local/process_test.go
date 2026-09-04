@@ -393,3 +393,45 @@ func TestProcessHelper(t *testing.T) {
 	_ = fd.Close()
 	os.Exit(0)
 }
+
+// Hashing an executable is remembered for the life of the process, and a file
+// that changed is a different file: it is hashed again and reports its new
+// digest, so a pinned digest still refuses a swapped binary.
+func TestExecutableDigestIsRememberedUntilTheFileChanges(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "worker")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	first, err := ProcessExecutableDigest(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := ProcessExecutableDigest(path)
+	if err != nil || again != first {
+		t.Fatalf("an unchanged executable reported a different digest: %q %q %v", first, again, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if identity, ok := executableIdentity(info); !ok || identity == "" {
+		t.Fatal("the executable has no addressable identity")
+	}
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	// A same-size replacement within one filesystem timestamp tick is exactly
+	// the case a naive cache would miss, so the file is given a new timestamp.
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := ProcessExecutableDigest(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed == first {
+		t.Fatal("a replaced executable kept the digest of the file it replaced")
+	}
+}
