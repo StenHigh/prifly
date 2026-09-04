@@ -1378,7 +1378,13 @@ func TestTelemetryRegressionScansItsWholePopulation(t *testing.T) {
 	// size the byte budget is what stops first: a thousand of these would be
 	// refused before any deadline could matter. This is the largest population
 	// that fits, which is what the report has to answer for quickly.
-	const population = 120
+	population := 120
+	// Under the race detector the same query cannot finish inside the engine's
+	// cooperative deadline, so the regression keeps its correctness check on a
+	// population that fits and leaves the timing to an ordinary build.
+	if underRaceDetector {
+		population = 24
+	}
 	for i := range population {
 		telemetrySaveRun(t, e, telemetryHistoryRun(t, base, fmt.Sprintf("scale-%d", i), "completed", 10), 0)
 	}
@@ -1392,7 +1398,7 @@ func TestTelemetryRegressionScansItsWholePopulation(t *testing.T) {
 	if report.Population.Matched < population {
 		t.Fatalf("the report did not read the whole population: %+v", report.Population)
 	}
-	if elapsed > 20*time.Second {
+	if !underRaceDetector && elapsed > 20*time.Second {
 		t.Fatalf("reading %d Runs took %s", population, elapsed)
 	}
 	t.Logf("telemetry over %d runs: %s", population, elapsed)
