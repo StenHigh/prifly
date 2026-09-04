@@ -33,11 +33,11 @@ func (s *Store) ReadAt(ctx context.Context, runID string, cut, after int64, limi
 	if err != nil {
 		return view, err
 	}
-	view.Snapshot, err = snapshotAt(ctx, conn, runID, view.Cut)
+	view.Snapshot, err = snapshotAt(ctx, conn, runID, view.Cut, s.packedColumn("state_packed"))
 	if err != nil {
 		return view, err
 	}
-	rows, err := conn.QueryContext(ctx, `SELECT seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after,state_digest,state_packed FROM events WHERE run_id=? AND seq>? AND seq<=? ORDER BY seq LIMIT ?`, runID, after, view.Snapshot.EventSeq, limit+1)
+	rows, err := conn.QueryContext(ctx, `SELECT seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after,state_digest,`+s.packedColumn("state_packed")+` FROM events WHERE run_id=? AND seq>? AND seq<=? ORDER BY seq LIMIT ?`, runID, after, view.Snapshot.EventSeq, limit+1)
 	if err != nil {
 		return view, err
 	}
@@ -150,9 +150,9 @@ func (s *Store) ReadAllAt(ctx context.Context, cut int64, limit int) ([]Snapshot
 	}
 	// At the current cut every Run's latest state is already the runs row; only
 	// a historical cut has to find the last state each Run had recorded by then.
-	query, arguments := `SELECT run_id,version,event_seq,snapshot,snapshot_digest,snapshot_packed FROM runs ORDER BY run_id LIMIT ?`, []any{limit + 1}
+	query, arguments := `SELECT run_id,version,event_seq,snapshot,snapshot_digest,`+s.packedColumn("snapshot_packed")+` FROM runs ORDER BY run_id LIMIT ?`, []any{limit + 1}
 	if cut != current {
-		query, arguments = `SELECT e.run_id,e.run_version,e.seq,e.state_after,e.state_digest,e.state_packed
+		query, arguments = `SELECT e.run_id,e.run_version,e.seq,e.state_after,e.state_digest,`+s.packedColumn("e.state_packed")+`
 FROM events e WHERE e.state_after IS NOT NULL AND e.cut<=? AND NOT EXISTS
 (SELECT 1 FROM events n WHERE n.run_id=e.run_id AND n.state_after IS NOT NULL AND n.seq>e.seq AND n.cut<=?)
 ORDER BY e.run_id LIMIT ?`, []any{cut, cut, limit + 1}
@@ -316,6 +316,16 @@ func (s *Store) SlotCapacity(ctx context.Context) (int64, error) {
 	return capacity, err
 }
 
+// packedColumn names the column that records whether a stored document was
+// packed, or the constant 0 for a database written before packing existed. A
+// read-only open does not migrate, so both shapes have to stay readable.
+func (s *Store) packedColumn(column string) string {
+	if s.info.StorageVersion < 6 {
+		return "0"
+	}
+	return column
+}
+
 func readLimit(limit int) (int, error) {
 	if limit == 0 {
 		limit = 100
@@ -346,11 +356,11 @@ func readCut(ctx context.Context, conn *sql.Conn, requested int64) (int64, error
 	return requested, nil
 }
 
-func snapshotAt(ctx context.Context, conn *sql.Conn, runID string, cut int64) (Snapshot, error) {
+func snapshotAt(ctx context.Context, conn *sql.Conn, runID string, cut int64, packedColumn string) (Snapshot, error) {
 	state := Snapshot{RunID: runID}
 	var digest string
 	var packed bool
-	err := conn.QueryRowContext(ctx, "SELECT run_version,seq,state_after,state_digest,state_packed FROM events WHERE run_id=? AND cut<=? AND state_after IS NOT NULL ORDER BY seq DESC LIMIT 1", runID, cut).Scan(&state.Version, &state.EventSeq, scanJSON{&state.Data}, &digest, &packed)
+	err := conn.QueryRowContext(ctx, "SELECT run_version,seq,state_after,state_digest,"+packedColumn+" FROM events WHERE run_id=? AND cut<=? AND state_after IS NOT NULL ORDER BY seq DESC LIMIT 1", runID, cut).Scan(&state.Version, &state.EventSeq, scanJSON{&state.Data}, &digest, &packed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, ErrNotFound
 	}
@@ -443,7 +453,7 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 		var state json.RawMessage
 		var digest sql.NullString
 		var packed bool
-		err = conn.QueryRowContext(ctx, "SELECT seq,run_version,state_after,state_digest,state_packed FROM events WHERE run_id=? AND cut<=? AND state_after IS NOT NULL ORDER BY seq DESC LIMIT 1", runID, from).Scan(&seq, &version, scanJSON{&state}, &digest, &packed)
+		err = conn.QueryRowContext(ctx, "SELECT seq,run_version,state_after,state_digest,"+s.packedColumn("state_packed")+" FROM events WHERE run_id=? AND cut<=? AND state_after IS NOT NULL ORDER BY seq DESC LIMIT 1", runID, from).Scan(&seq, &version, scanJSON{&state}, &digest, &packed)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -459,10 +469,10 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 		last[runID] = Snapshot{RunID: runID, Version: version, EventSeq: seq, Data: state}
 		return nil
 	}
-	query := "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest,state_packed FROM events ORDER BY run_id,seq"
+	query := "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest," + s.packedColumn("state_packed") + " FROM events ORDER BY run_id,seq"
 	arguments := []any{}
 	if from > 0 {
-		query = "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest,state_packed FROM events WHERE cut>? ORDER BY run_id,seq"
+		query = "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest," + s.packedColumn("state_packed") + " FROM events WHERE cut>? ORDER BY run_id,seq"
 		arguments = append(arguments, from)
 	}
 	rows, err := conn.QueryContext(ctx, query, arguments...)
@@ -521,7 +531,7 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 			return ErrIntegrity
 		}
 	}
-	query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest,snapshot_packed FROM runs", nil
+	query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest,"+s.packedColumn("snapshot_packed")+" FROM runs", nil
 	if from > 0 {
 		// Only the Runs this cut touched: reading every snapshot again is the
 		// cost an incremental verification exists to avoid.
@@ -532,7 +542,7 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 		if len(touched) == 0 {
 			return s.verifyCommands(ctx, conn, from)
 		}
-		query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest,snapshot_packed FROM runs WHERE run_id IN ("+placeholders(len(touched))+")", touched
+		query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest,"+s.packedColumn("snapshot_packed")+" FROM runs WHERE run_id IN ("+placeholders(len(touched))+")", touched
 	}
 	rows, err = conn.QueryContext(ctx, query, arguments...)
 	if err != nil {

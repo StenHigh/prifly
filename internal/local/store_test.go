@@ -1480,6 +1480,52 @@ func TestCreateLinkedRunChecksSourceAndPreservesIt(t *testing.T) {
 	}
 }
 
+// A read-only open does not migrate, so every read has to work on the shape the
+// database already has. The packed columns were selected unconditionally, and an
+// authority written by an earlier release answered every read with a
+// persistence failure instead of its Runs.
+func TestStoreReadsAnUnmigratedDatabaseReadOnly(t *testing.T) {
+	s, dir := testStore(t)
+	ctx := context.Background()
+	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(dir, "state.sqlite3")+"?mode=rw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	options := storeTestOptions
+	options.ReadOnly = true
+	reader, err := OpenStore(dir, options)
+	if err != nil {
+		t.Fatalf("a read-only open of an unmigrated database failed: %v", err)
+	}
+	defer reader.Close()
+	if reader.Info().StorageVersion != 4 {
+		t.Fatalf("a read-only open migrated the database: %+v", reader.Info())
+	}
+	view, err := reader.Read(ctx, "run-a", 0, 10)
+	if err != nil {
+		t.Fatalf("reading a Run failed: %v", err)
+	}
+	if string(view.Snapshot.Data) != `{"value":1}` {
+		t.Fatalf("the Run read back changed: %s", view.Snapshot.Data)
+	}
+	if _, _, err := reader.ReadAll(ctx, 10); err != nil {
+		t.Fatalf("reading every Run failed: %v", err)
+	}
+	if err := reader.Verify(ctx); err != nil {
+		t.Fatalf("verifying an unmigrated database failed: %v", err)
+	}
+}
+
 // Verification at open used to read the whole database, so a long-lived
 // authority paid for its own history every time it was opened. It now records
 // how far it has checked and continues from there; a database that predates
