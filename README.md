@@ -125,6 +125,39 @@ credential helper или SSH пользователя, никогда из URL. 
 сценарии AI Factory — в
 [`StenHigh/prifly-aif-workflows`](https://github.com/StenHigh/prifly-aif-workflows).
 
+### Разные настройки одного сценария
+
+Для запуска разных profiles или правок `extend.yaml` в одном проекте явно
+смените только marker в `.prifly/project.yaml`:
+
+```yaml
+schema_version: prifly-project-profile/3
+```
+
+Остальные поля оставьте прежними. Если в файле подключена editor schema v2,
+переключите её на [`project-profile-v3.schema.json`](schemas/authoring/project-profile-v3.schema.json).
+`init`, `start` и обновление workflow не переводят существующий `/2` автоматически.
+В `/2` прежняя версия с другими bytes по-прежнему отвергается как конфликт.
+
+В `/3` compiler сохраняет авторские версии в YAML, но выпускает для package и
+его компонентов точные версии сборки `0.0.0-b1.…`. Выбранный profile, настройки
+и содержимое файлов определяют сборку: одинаковые входы дают те же ссылки,
+разные варианты могут сосуществовать. Прежние Runs продолжают использовать
+свои закреплённые определения. `build-provenance.json` внутри sealed package
+связывает авторские версии с точными compiled refs; это данные о сборке, не
+подпись и не разрешение доверять новому варианту. Для ссылки из другого
+package используйте полный compiled ref из результата компиляции: авторское
+`ID@version` не означает «последний вариант».
+
+Для `/3` JSON-ответы `project-compile/2` и `project-start/3` показывают
+`author_package` (авторские ID/version) и `build_key` рядом с `package`
+(точный compiled ref). У `/2` прежние версии ответов и поля не меняются.
+
+Это первый этап нового profile: пока сохраняются Git-проект, все три host roots,
+явный `--host` при compile/start и обязательный `--brief` при start. Сам marker
+`/3` ещё не включает запуск без Git или ИИ — этот путь остаётся в
+[плане](openspec/changes/make-project-launch-workflow-neutral/tasks.md).
+
 ## Что умеет Pri-Fly
 
 | | |

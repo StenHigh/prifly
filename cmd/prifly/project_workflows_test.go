@@ -498,7 +498,7 @@ func TestCLIProjectWorkflowsUpdateAndRemove(t *testing.T) {
 	if code != 0 || json.Unmarshal([]byte(out), &result) != nil {
 		t.Fatalf("update %d: %s %s", code, out, errout)
 	}
-	if result.UpToDate || result.Current.Commit != upstream || result.Previous.Commit == upstream || !result.ExtendUpstreamChanged || !result.PackageVersionUnchanged || len(result.Next) != 1 || !strings.Contains(result.Next[0], "package remove") {
+	if result.UpToDate || result.Current.Commit != upstream || result.Previous.Commit == upstream || !result.ExtendUpstreamChanged || !result.PackageVersionUnchanged || len(result.Next) != 1 || !strings.Contains(result.Next[0], "explicitly to prifly-project-profile/3") || strings.Contains(result.Next[0], "package remove") {
 		t.Fatalf("unexpected update result: %+v", result)
 	}
 	if data, err := os.ReadFile(filepath.Join(folder, "README.md")); err != nil || string(data) != "# sample v2\n" {
@@ -555,5 +555,33 @@ func TestCLIProjectWorkflowsUpdateAndRemove(t *testing.T) {
 	}
 	if _, err := flow.Parse(profile, "yaml"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCLIProjectWorkflowsUpdateExplainsCompiledVariant(t *testing.T) {
+	source := newWorkflowRepositoryFixture(t, "flows/sample")
+	repository, _ := newProjectFixture(t)
+	profilePath := filepath.Join(repository, ".prifly", "project.yaml")
+	profile, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, repository, ".prifly/project.yaml", strings.Replace(string(profile), "prifly-project-profile/2", "prifly-project-profile/3", 1))
+	if code, _, errout := runCLI(t, "project", "workflows", "add", source, "--repository", repository); code != 0 {
+		t.Fatalf("add %d: %s", code, errout)
+	}
+	writeFixtureFile(t, source, "flows/sample/README.md", "# changed without an author version bump\n")
+	gitFixture(t, source, "commit", "-qam", "upstream change without version bump")
+	code, out, errout := runCLI(t, "project", "workflows", "update", "sample", "--repository", repository)
+	var result projectWorkflowUpdateResult
+	if code != 0 || json.Unmarshal([]byte(out), &result) != nil || result.UpToDate || !result.PackageVersionUnchanged || result.Package.Version != "1.0.0" || len(result.Next) != 1 {
+		t.Fatalf("variant update: %d %s %s", code, out, errout)
+	}
+	if !strings.Contains(result.Next[0], "distinct sealed build") || !strings.Contains(result.Next[0], "existing packages and Runs remain unchanged") || strings.Contains(result.Next[0], "remove") || strings.Contains(result.Next[0], "Migrate") {
+		t.Fatalf("variant update must preserve previous builds, not request removal or migration: %+v", result.Next)
+	}
+	parsed, err := readProjectProfile(repository)
+	if err != nil || parsed.SchemaVersion != "prifly-project-profile/3" {
+		t.Fatalf("update changed the explicit profile: %v %+v", err, parsed)
 	}
 }

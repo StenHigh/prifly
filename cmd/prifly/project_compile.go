@@ -40,6 +40,9 @@ type projectPackageSource struct {
 	Profiles              map[string]map[string]any
 	DecisionCatalog       []prifly.DecisionDefinition
 	Documents             []projectPackageDocument
+	RootValue             any
+	ResolvedDependencies  []flow.Ref
+	Build                 *projectBuildProvenance
 }
 
 type projectPackageDocument struct {
@@ -55,11 +58,13 @@ type projectPackageDocument struct {
 }
 
 type projectCompileComponent struct {
-	Kind     string                `json:"kind"`
-	Ref      flow.Ref              `json:"ref"`
-	Path     string                `json:"path"`
-	Bytes    []byte                `json:"-"`
-	Resource *flow.ContextResource `json:"-"`
+	Kind      string                `json:"kind"`
+	Ref       flow.Ref              `json:"ref"`
+	Path      string                `json:"path"`
+	Bytes     []byte                `json:"-"`
+	Resource  *flow.ContextResource `json:"-"`
+	Root      bool                  `json:"-"`
+	AuthorRef flow.Ref              `json:"-"`
 }
 
 type projectPendingDocument struct {
@@ -79,6 +84,8 @@ type projectCompileResult struct {
 	Package       flow.Ref                  `json:"package"`
 	Output        string                    `json:"output"`
 	Components    []projectCompileComponent `json:"components"`
+	AuthorPackage *projectBuildIdentity     `json:"author_package,omitempty"`
+	BuildKey      string                    `json:"build_key,omitempty"`
 }
 
 func (c *cli) projectCompile(ctx context.Context, args []string) error {
@@ -186,16 +193,12 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 			_ = os.RemoveAll(outputRoot)
 		}
 	}()
-	components, err := compileProjectPackage(root, skillsRoot, outputRoot, source, registry, compiledValues)
-	if err != nil {
-		return err
-	}
-	packageRef, err := writeProjectPackageManifest(outputRoot, source, components, packages)
+	result, err := compileAndSealProjectPackage(root, skillsRoot, outputRoot, profile.SchemaVersion, selectedProfile, source, registry, packages, compiledValues, options)
 	if err != nil {
 		return err
 	}
 	complete = true
-	return c.emit(projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: packageRef, Output: outputRoot, Components: components})
+	return c.emit(result)
 }
 
 func parseProjectCompileValues(values []string) (map[string]any, error) {
@@ -555,6 +558,7 @@ func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error
 	if err != nil {
 		return projectPackageSource{}, err
 	}
+	source.RootValue = workflowValue
 	return source, nil
 }
 
@@ -827,7 +831,7 @@ func projectFolderWorkflowDefinition(value any) (map[string]any, error) {
 	return result, nil
 }
 
-func compileProjectPackage(root, skillsRoot, output string, source projectPackageSource, registry flow.Registry, values map[string]any) ([]projectCompileComponent, error) {
+func compileProjectPackage(root, skillsRoot, output string, source projectPackageSource, values map[string]any, options projectWorkflowOptions) ([]projectCompileComponent, error) {
 	pending := []projectPendingDocument{}
 	components := []projectCompileComponent{}
 	for _, declaration := range source.Documents {
@@ -867,7 +871,12 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 		if filepath.Ext(path) != ".yaml" && filepath.Ext(path) != ".yml" {
 			return nil, usageError("project_package_invalid: document sources must be .yaml")
 		}
-		documents, err := projectYAMLDocuments(path)
+		var documents []any
+		if declaration.FolderRoot && source.RootValue != nil {
+			documents = []any{source.RootValue}
+		} else {
+			documents, err = projectYAMLDocuments(path)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -889,10 +898,6 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 		for index, value := range documents {
 			pending = append(pending, projectPendingDocument{document: declaration, value: value, index: index})
 		}
-	}
-	options, err := projectReadWorkflowOptions(root, source, values)
-	if err != nil {
-		return nil, err
 	}
 	if err := projectApplyWorkflowOptions(pending, options); err != nil {
 		return nil, err
@@ -939,9 +944,6 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 			return nil, usageError("project_compile_unresolved_values: " + strings.Join(names, ", "))
 		}
 		pending = next
-	}
-	if err := projectValidatePackageWorkflows(components, registry); err != nil {
-		return nil, err
 	}
 	return components, nil
 }
@@ -1177,12 +1179,11 @@ func projectAddComponent(output string, document projectPackageDocument, compone
 		directory, suffix = "contexts", ".txt"
 	}
 	component.Path = fmt.Sprintf("%s/%03d%s", directory, index, suffix)
-	path := filepath.Join(output, filepath.FromSlash(component.Path))
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, component.Bytes, 0644); err != nil {
-		return err
+	component.Root = document.FolderRoot
+	if output != "" {
+		if err := writeProjectComponent(output, component); err != nil {
+			return err
+		}
 	}
 	*components = append(*components, component)
 	values[alias] = projectRefValue(component.Ref)
@@ -1471,13 +1472,9 @@ func projectValidatePackageWorkflows(components []projectCompileComponent, base 
 }
 
 func writeProjectPackageManifest(output string, source projectPackageSource, components []projectCompileComponent, packages prifly.PackageRecord) (flow.Ref, error) {
-	dependencies := make([]flow.Ref, 0, len(source.Dependencies))
-	for _, logical := range source.Dependencies {
-		ref, err := projectLogicalPackageRef(packages, logical)
-		if err != nil {
-			return flow.Ref{}, usageError("project_compile_dependency: " + err.Error())
-		}
-		dependencies = append(dependencies, ref)
+	dependencies, err := projectResolvedDependencies(source, packages)
+	if err != nil {
+		return flow.Ref{}, err
 	}
 	files := make([]map[string]any, 0, len(components))
 	manifestComponents := make([]map[string]any, 0, len(components))
@@ -1503,6 +1500,19 @@ func writeProjectPackageManifest(output string, source projectPackageSource, com
 			return flow.Ref{}, err
 		}
 		files = append(files, map[string]any{"path": projectDecisionCatalogFile, "digest": fmt.Sprintf("sha256:%x", sha256.Sum256(data)), "size_bytes": len(data), "media_type": "application/json", "role": "data"})
+	}
+	if source.Build != nil {
+		data, err := projectCanonicalJSON(source.Build)
+		if err != nil {
+			return flow.Ref{}, err
+		}
+		if err := validateProjectBuild(data, components); err != nil {
+			return flow.Ref{}, err
+		}
+		if err := os.WriteFile(filepath.Join(output, projectBuildFile), data, 0644); err != nil {
+			return flow.Ref{}, err
+		}
+		files = append(files, map[string]any{"path": projectBuildFile, "digest": fmt.Sprintf("sha256:%x", sha256.Sum256(data)), "size_bytes": len(data), "media_type": "application/json", "role": "data"})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i]["path"].(string) < files[j]["path"].(string) })
 	manifest := map[string]any{"schema_version": "1", "id": source.ID, "version": source.Version, "description": source.Description, "requires_core_protocol": source.RequiresCoreProtocol, "dependencies": dependencies, "components": manifestComponents, "files": files, "requested_capabilities": source.RequestedCapabilities, "license": source.License}

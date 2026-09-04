@@ -27,7 +27,7 @@ Frameworks → Schemas and DTDs → JSON Schema Mappings**.
 
 | Файл | Schema |
 |---|---|
-| `.prifly/project.yaml` | `project-profile-v2.schema.json` |
+| `.prifly/project.yaml` | `project-profile.schema.json` (markers `/2` и `/3`) |
 | `.prifly/workflows/NAME/workflow.yaml` | `project-workflow-folder-v1.schema.json` |
 | `.prifly/workflows/NAME/extend.yaml` | `extension-v1.schema.json` |
 | `.prifly/workflows/NAME/decisions/**/*.yaml` | `run-decision-v1.schema.json` |
@@ -43,11 +43,25 @@ Schema ловит форму документа и опечатки в изве�
 prifly project compile --repository . --package NAME --host codex-cli --output ../NAME.package
 ```
 
-Profile v2 фиксирует три skills roots: `codex-cli`, `codex-app` и
+Для привязки строго к одной версии используйте `project-profile-v2.schema.json`
+или `project-profile-v3.schema.json` в modeline. Единственный автоматический
+pattern у общей schema: редактор не должен одновременно требовать оба marker.
+Переход `/2` → `/3` выполняется явной правкой `schema_version` в shared
+`project.yaml`, с обновлением version-specific modeline при его наличии.
+
+В первом срезе оба profile фиксируют три skills roots: `codex-cli`, `codex-app` и
 `claude-code`. Выберите тот host, из которого запускается сценарий: compiler
 не угадывает его по папкам. Context может взять AI Factory skill только через
 `source: {root: host_skills, path: SKILL/PATH}` из выбранного root; exact bytes
 попадают в sealed package.
+
+Profile `/3` назначает package и owned components детерминированные compiled
+versions `0.0.0-b1.…`, поэтому разные profiles/settings/context bytes могут
+сосуществовать в одной authority. Авторские версии YAML не меняются; соответствие
+хранится в `build-provenance.json` sealed package. Внешняя ссылка использует
+exact compiled ref, не author `ID@version` как alias «последней» сборки.
+`/2` сохраняет прежние refs и отказы конфликтующих вариантов. Запуск без Git,
+host или RunBrief этим первым срезом ещё не вводится.
 
 `extend.yaml` может содержать три независимые части: `settings` задаёт значения
 уже объявленных project-scoped inputs, `exclude` выключает named optional

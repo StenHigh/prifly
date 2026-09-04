@@ -1,6 +1,6 @@
 # Словарь Pri-Fly
 
-Редакция 1.33. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
+Редакция 1.34. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
 
 Используем привычный отраслевой термин, когда его смысл подходит. Собственные понятия Pri-Fly определяем явно; сходство названий не означает совместимости с Temporal, Argo, OpenTelemetry или другим продуктом. Английское название закрепляет понятие, русский текст объясняет его. Краткие имена существующего Go-кода перечислены как соответствия, а не как новые сущности.
 
@@ -145,6 +145,13 @@ roots `<repository>/.codex/skills/`, `<repository>/.agents/skills/` и
 Launcher механически передаёт свой host compiler; он не выбирается по наличию
 папки. Точный layout и границы — в [сценариях, пакетах, контексте и YAML authoring](../workflow-and-context/spec.md).
 
+Profile `/3` вводит отдельную identity compiled package; переход с `/2` —
+явная правка `schema_version` shared `project.yaml`, не результат init/start
+или обновления сценария. Первый срез `/3` сохраняет layout `/2`: Git,
+обязательные три host roots, explicit host при compile/start и RunBrief при
+start. Optional hosts и запуск без Git/brief — следующий срез, не свойство
+одного нового marker. `/2` сохраняет прежнюю compilation и exact refs.
+
 <a id="project-workflow-folder"></a>
 ### Project workflow folder — Папка сценария проекта
 
@@ -158,6 +165,28 @@ identity, exact external refs и graph; compiler рекурсивно читае
 может назвать raw text только из `.prifly/` либо selected versioned host skills
 root этого repository; compiler seal-ит exact bytes. Результат — тот же immutable
 package, не второй runtime language и не automatic authority import.
+
+Авторская identity — `id` и `version` исходного package/компонента; она описывает
+редактируемый источник, но не alias последней сборки. Для `/3` compiler
+сохраняет ID и назначает детерминированную compiled version package и каждому
+owned component. Build key — SHA-256 canonical effective authoring closure:
+profile, values/settings/extensions, exact external refs, hashes ресурсов,
+manifest metadata и catalog с версией алгоритма b1. Все данные generated
+provenance определяются этим входом; время и absolute machine paths исключены.
+Compiled version имеет форму `0.0.0-b1.` и lower-case base32 полного SHA-256
+без padding: для package используется build key, для component — hash tuple
+`[build key, kind, author ID, author version]`. Внутренние refs связываются с
+compiled components; внешние exact refs не меняются. Сортировка compiled
+versions не определяет «последний» авторский release.
+
+`build-provenance.json` (`prifly-build-provenance/1`) — schema-validated inert
+file в manifest пакета, не новая runtime сущность. Он связывает author refs
+с compiled refs/root; CLI проверяет mapping по фактическим exports перед
+выбором root. Final package digest не включается в собственный provenance.
+Внешний consumer новой сборки использует её exact compiled ref, а не author
+`ID@version`. Legacy package без provenance читается по прежнему exact root
+contract. История, collision checks и отдельный trust для каждого exact
+manifest сохраняются; сведения о сборке не являются подписью.
 
 <a id="project-launch"></a>
 ### Project launch — Точка запуска проекта

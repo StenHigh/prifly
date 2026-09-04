@@ -177,7 +177,7 @@ join, timeout, configuration scope или security semantics.
 
 ### Requirement: YAML authoring имеет локальный editor contract
 Repository MUST публиковать versioned local JSON Schema documents и manifest
-для Project profile v2, workflow folder root, extension list, workflow, step и
+для Project profiles `/2` и `/3`, workflow folder root, extension list, workflow, step и
 context YAML. Contract MUST называть document kind, version marker, known
 top-level fields и portable local schema association. Он MUST работать без
 сети, AI Factory, credentials или обязательного editor dependency.
@@ -207,8 +207,11 @@ MUST не объявляться semantic authority: compiler MUST продол�
   compiler contract
 
 ### Requirement: Project authoring имеет один YAML route
-До первого public release Project execution profile MUST принимать только
-`prifly-project-profile/2`. Каждый declared package MUST ссылаться только на
+Project execution profile MUST принимать `prifly-project-profile/2` и `/3`.
+Первый срез `/3` меняет compilation identity, сохраняя обязательные Git,
+host roots и RunBrief. Переход с `/2` MUST быть явной правкой shared profile,
+не побочным эффектом init/start или workflow add/update. Fresh init пока
+создаёт `/2`. Каждый declared package MUST ссылаться только на
 directory `.prifly/workflows/NAME/` с root `workflow.yaml`, а каждый Project
 launch MUST быть `workflow`, ссылающимся на такой root. Profile v1, его
 отдельные source roots, `task_recipe`, direct machine workflow и file source
@@ -248,7 +251,7 @@ compile`. Corpus MUST подтверждать accepted workflow folder и от�
 
 ### Requirement: Project source компилируется из declared files
 Tracked `.prifly/` project source MUST использовать только Project execution
-profile v2 и declared workflow folders. Root `workflow.yaml` folder MUST
+profile `/2` или `/3` и declared workflow folders. Root `workflow.yaml` folder MUST
 объявлять package identity, external refs, graph и known component directories;
 compiler рекурсивно читает только YAML documents из этих declared locations.
 Placeholder MUST заменять только whole YAML scalar exact ref или explicit
@@ -261,7 +264,7 @@ mutation или Run.
 - **THEN** compile отказывает без угадывания ref или изменения authority
 
 ### Requirement: Project context resolves the selected host skills root
-`prifly-project-profile/2` SHALL объявлять repository-relative skills roots
+`prifly-project-profile/2` и первый срез `/3` SHALL объявлять repository-relative skills roots
 для `codex-cli`, `codex-app` и `claude-code`; compilation MUST назвать один
 из них явно. Context source MAY назвать
 regular file относительно skills root явного host compilation через YAML mapping
@@ -282,8 +285,49 @@ bytes; host identity MUST NOT менять YAML graph или давать пол
 
 #### Scenario: Два host используют один Project workflow
 - **WHEN** Codex CLI и Claude Code компилируют одну Project workflow folder
-- **THEN** каждый закрепляет bytes своего declared skills root, а YAML graph
-  и package identity остаются одинаковыми
+- **THEN** каждый закрепляет bytes своего declared skills root без изменения
+  авторского YAML; в `/3` одинаковые bytes дают одинаковую сборку независимо
+  от host label, разные bytes дают разные compiled identities
+
+### Requirement: Сборки одного авторского package сосуществуют
+Compiler `/3` MUST сохранять авторские IDs, но назначать package и всем owned
+components детерминированные compiled versions алгоритма b1. Build key MUST
+покрывать effective profile/values/settings/exclude/extensions, normalized
+definition closure, exact external refs, context bytes, manifest metadata и
+decision catalog. Порядок файлов и absolute source paths MUST NOT влиять на
+сборку. Version MUST использовать `0.0.0-b1.` и lower-case base32 полного
+SHA-256 без padding: package из build key, component из canonical tuple
+`[build key, kind, author ID, author version]`.
+
+Compile и start MUST использовать один resolver и один прочитанный набор
+исходников. Owned refs MUST перепривязываться; external refs, literal values,
+configuration defaults и instance data внутри schemas MUST NOT переписываться.
+`build-provenance.json` MUST быть inert manifest file закрытого формата
+`prifly-build-provenance/1`, проверяемого по
+[schema](../../../cmd/prifly/project_build.schema.json). Он MUST связывать
+author refs с compiled exports/root и не включать собственный package digest.
+Перед выбором root CLI MUST проверять schema, полную mapping, derivation
+versions и соответствие exports. Эти сведения MUST NOT заменять trust admission.
+External consumers MUST получать exact compiled refs, не author alias latest.
+`/2` MUST сохранять legacy compilation без provenance, а collision/revocation
+и pinned history MUST сохраняться в обоих путях.
+
+#### Scenario: Разные варианты запускаются в одной authority
+- **WHEN** пользователь компилирует, импортирует и запускает A, B, A одного package
+- **THEN** A и B сосуществуют, повтор A воспроизводит refs, а старый активный
+  Run после restart сохраняет свои definitions и context bytes
+
+#### Scenario: Настройка меняет сборку
+- **WHEN** меняется только extend setting, exclude или вставка шага
+- **THEN** новая сборка устанавливается рядом без переименования авторского package
+
+#### Scenario: Bytes sealed identity подменены
+- **WHEN** та же sealed identity подана с другими bytes или revoked build импортирован повторно
+- **THEN** import отказывает; collision checks и отзыв не обходятся новой compilation
+
+#### Scenario: Изменился только вопрос или описание
+- **WHEN** author меняет только decision catalog либо manifest description
+- **THEN** `/3` получает новую identity, не заменяя прежнюю сборку
 
 ### Requirement: YAML authoring явно объявляет Workspace artifact tree transform
 
@@ -629,8 +673,10 @@ commit для ref не изменился и digest совпадает, кома
 byte-for-byte, атомарно заменить папку и обновить `origin`. Результат MUST
 сообщать, изменился ли upstream `extend.yaml` и остался ли `package.version`
 прежним. Sealed packages, locks, Runs и evidence в authority MUST NOT
-меняться; конфликт exact identity при следующем запуске остаётся честным
-отказом, а не тихой заменой.
+меняться. `/3` MUST создавать новую exact сборку при изменении исходников
+с прежней авторской версией. `/2` MUST сохранять legacy identity conflict и
+объяснять явный переход на `/3`; подмена уже sealed identity MUST оставаться
+отказом в обоих путях, а не тихой заменой.
 
 #### Scenario: Папка изменена локально
 - **WHEN** digest установленной папки без `extend.yaml` отличается от origin
@@ -642,8 +688,8 @@ byte-for-byte, атомарно заменить папку и обновить 
 
 #### Scenario: Upstream не поднял версию package
 - **WHEN** новая папка отличается по bytes, но `package.version` тот же
-- **THEN** `update` применяет папку и явно называет, что следующий запуск
-  столкнётся с уже sealed package той же identity
+- **THEN** `update` применяет папку и объясняет: `/3` создаст отдельную сборку,
+  а `/2` столкнётся с конфликтом, если прежняя identity уже установлена
 
 ### Requirement: Remove убирает folder из tracked profile, а не из authority
 `prifly project workflows remove NAME` MUST удалить `.prifly/workflows/NAME`,

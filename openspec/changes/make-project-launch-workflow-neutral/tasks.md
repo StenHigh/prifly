@@ -1,10 +1,10 @@
 ## 1. Высший приоритет — разные настройки одного workflow без конфликтов
 
-- [ ] 1.1 Ввести распознавание profile `/3` и его b1 build-key/provenance contract из design, сохранив `/2` legacy compilation; обновить glossary и добавить golden vectors для порядка файлов, путей, profiles, context/supporting bytes, catalog и manifest metadata. Проверка: одинаковый вход даёт одинаковые refs, изменение только description/question даёт новую сборку, encoding проходит Version schema.
-- [ ] 1.2 Применить общую identity-сборку `/3` к package и owned closure в обоих входах compile/start, перепривязать refs и root lookup; проверка: compile/start возвращают одинаковый root, provenance schema/mapping совпадает с exports, изменённая mapping отвергается, внешние refs не изменены, legacy package без provenance читается прежним способом.
-- [ ] 1.3 Добавить один neutral lifecycle regression A → B → A в одной authority с import/start, settings/exclude/insert и изменением context; проверка: разные сборки сосуществуют, возврат настроек переиспользует прежние refs, default YAML не меняется.
-- [ ] 1.4 Проверить старый активный Run после нового варианта и restart, tamper rejection и revoked reimport; проверка: прежние bytes сохранены, новый вариант не наследует trust, отзыв не снимается. Не использовать отдельную authority на каждый вариант.
-- [ ] 1.5 Обновить сообщения compile/start/update и документацию author version против compiled version; проверка: пользователь видит понятную версию сценария и exact сборку, новые fixture checks проходят через public CLI. Сохранить результат focused тестов и отдельный commit этого среза.
+- [x] 1.1 Ввести распознавание profile `/3` и его b1 build-key/provenance contract из design, сохранив `/2` legacy compilation; обновить glossary и добавить golden vectors для порядка файлов, путей, profiles, context/supporting bytes, catalog и manifest metadata. Проверка: одинаковый вход даёт одинаковые refs, изменение только description/question даёт новую сборку, encoding проходит Version schema.
+- [x] 1.2 Применить общую identity-сборку `/3` к package и owned closure в обоих входах compile/start, перепривязать refs и root lookup; проверка: compile/start возвращают одинаковый root, provenance schema/mapping совпадает с exports, изменённая mapping отвергается, внешние refs не изменены, legacy package без provenance читается прежним способом.
+- [x] 1.3 Добавить один neutral lifecycle regression A → B → A в одной authority с import/start, settings/exclude/insert и изменением context; проверка: разные сборки сосуществуют, возврат настроек переиспользует прежние refs, default YAML не меняется.
+- [x] 1.4 Проверить старый активный Run после нового варианта и restart, tamper rejection и revoked reimport; проверка: прежние bytes сохранены, новый вариант не наследует trust, отзыв не снимается. Не использовать отдельную authority на каждый вариант.
+- [x] 1.5 Обновить сообщения compile/start/update и документацию author version против compiled version; проверка: пользователь видит понятную версию сценария и exact сборку, новые fixture checks проходят через public CLI. Сохранить результат focused тестов и отдельный commit этого среза.
 
 ## 2. Высший приоритет — полноценный запуск без Git и ИИ
 
@@ -36,3 +36,55 @@
 ## 5. Правило проверки каждого среза
 
 - [ ] 5.1 Перед закрытием каждого среза запустить конкретные добавленные/затронутые Go tests через `.tools/go/bin/go test ./cmd/prifly ./internal/runtime ./internal/flow -run '<точные имена>' -count=1`, сузив packages до затронутых; проверить, что тесты действительно исполнились, а не дали `no tests to run`. Записать команды, счётчики и границы доказательства; публикацию коммитов группировать, чтобы не расходовать CI на каждый промежуточный шаг.
+
+## Срез 1 — проверка реализации, 2026-09-05
+
+Один in-memory render используется для build identity и sealing в обоих
+CLI входах. b1 различает package и всю owned closure; refs не переписываются
+в literal/default/schema instance data. Закрытая provenance schema проверяет
+root, полные author/compiled mappings и derivation versions. Обновлены
+glossary, текущие требования только этого среза, README и editor reference;
+полная синхронизация оставшихся delta остаётся задачей 4.5.
+
+Нейтральный public CLI fixture использует одну authority. A остаётся реально
+активным в ожидании host; B, повтор A и варианты settings/exclude/insert/context
+проходят session submit + drive до succeeded. Повторное открытие authority
+сохраняет bytes прежних definitions/context и handoff A. Переименование и
+перенос leaf YAML в глубокую known directory, а также другой host label с
+идентичными skills воспроизводят A. Отдельные import-only варианты меняют
+только description или только текст вопроса; оба устанавливаются рядом.
+Проверены обычный trust admission нового exact manifest, tamper,
+identity-conflict и невозможность снять revocation повторным import.
+
+Focused команды (рабочая директория — корень GitHub checkout):
+
+```sh
+GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local .tools/go/bin/go test ./cmd/prifly -run '^(TestCLIProject|TestProjectBuild|TestProjectWorkflow|TestProjectProfileOrigin)' -count=1 -json
+GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local .tools/go/bin/go test ./cmd/prifly ./internal/runtime -run '^(TestAuthoringDocumentsAreServedAndMatchTheDistributedFiles|TestGlossaryBindings)$' -count=1 -json
+GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local .tools/go/bin/go test ./cmd/prifly -run '^TestCLIProjectCompiledVariantsLifecycle$' -count=1 -v
+GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local .tools/go/bin/go test ./cmd/prifly -run '^TestProjectBuildProvenanceRejectsIdentityTampering$' -count=1 -v
+make fmt-check refusal-check
+openspec validate --all --strict --no-interactive
+git diff --check
+git diff --name-only 5b5c4ca -- openspec/changes/archive
+```
+
+Первый прогон: **27/27 top-level, 15/15 subtests**, 12.557 s. Контрактный:
+**2/2 top-level, 8/8 subtests**, cmd 1.337 s, runtime 0.552 s. После добавления
+metadata-only import assertions повторён только lifecycle: **1/1**, 5.395 s.
+После добавления unknown-field assertion повторён только provenance test:
+**1/1 + 4/4 subtests**, 0.640 s. Итого **29 уникальных top-level tests и
+24 subtests**, без отказов; повторные запуски не посчитаны как новые тесты.
+OpenSpec: **19/19**. Formatting/refusal/diff checks чистые; archive diff пуст.
+
+**Что в этот срез не входит:** optional Git/host/RunBrief, executable bindings
+и их supporting files, neutral runner, новые вопросы/preview, внешний AIF
+и живое наблюдение Codex/Claude. Поддержанные сегодня source files покрыты
+через exact context bytes; contract новых supporting files вводится в 2.4 и
+должен включить свои bytes в build key, не меняя ключ старого входа. Fixture
+остаётся Git-проектом с brief и scripted host, имеет capacity 2 и явно
+освобождает пока безусловно созданный, но не используемый `effects:none`
+claim. Это проверка coexistence/history, а не квалификация no-Git/no-AI или
+UI. `make check`/`make e2e` отложены до candidate по 4.4; release, установка
+на компьютер и обновление полигона здесь не выполняются. 5.1 остаётся
+открытой как обязательство следующих срезов.

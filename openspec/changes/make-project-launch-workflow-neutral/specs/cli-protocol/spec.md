@@ -52,6 +52,19 @@ workspace MUST давать stable diagnostic до registration, claim или Ru
 
 ## ADDED Requirements
 
+### Requirement: Project результат различает авторскую версию и сборку
+При compilation profile `/3` CLI MUST выдавать `project-compile/2`, а при
+start — `project-start/3`. Оба результата MUST содержать `author_package`
+с авторскими `id`/`version`, `build_key` и exact compiled ref в `package`.
+Результат start MUST сохранять Run, Workspace и применимые Decision Sheet и
+autonomy summary; compile и start одного входа MUST согласовывать root и
+сборку. Legacy `/2` MUST сохранять существующие response versions и поля.
+
+#### Scenario: Команда запускает другой вариант
+- **WHEN** один author package компилируется и запускается с profile `/3`
+- **THEN** оба ответа показывают понятную авторскую версию и одну exact сборку,
+  а потребитель не принимает author version за alias последнего варианта
+
 ### Requirement: Общий runner не содержит правил отраслевого процесса
 Текущий `prifly-run` SHALL исполнять только общий protocol выбранного launch:
 объявленные inputs, ready tasks, effects, typed decisions, control и outputs.

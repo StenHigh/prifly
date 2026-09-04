@@ -1018,8 +1018,8 @@ func readProjectProfile(root string) (projectProfile, error) {
 		return projectProfile{}, usageError("project_profile_invalid: profile must be an object")
 	}
 	schema, _ := object["schema_version"].(string)
-	if schema != "prifly-project-profile/2" {
-		return projectProfile{}, usageError("project_profile_invalid: schema_version must be prifly-project-profile/2")
+	if schema != "prifly-project-profile/2" && schema != projectVariantProfileVersion {
+		return projectProfile{}, usageError("project_profile_invalid: schema_version must be prifly-project-profile/2 or prifly-project-profile/3")
 	}
 	for key := range object {
 		switch key {

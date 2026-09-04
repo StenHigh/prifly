@@ -3,6 +3,11 @@
 # Pri-Fly does not guess the host by checking which folders happen to exist.
 # At launch, the selected host asks the developer to choose worktree or checkout;
 # this is a per-Run choice, not a tracked project.yaml setting.
+# /2 keeps the released author-version compilation contract. To compile several
+# variants in one authority, explicitly choose prifly-project-profile/3 and the
+# project-profile-v3 editor schema. IDs/versions in authored workflow files stay
+# unchanged; compile/start report author_package alongside the exact build.
+# This first /3 slice still requires Git, these host roots and a RunBrief.
 schema_version: prifly-project-profile/2
 hosts:
   codex-cli: .codex/skills # The `prifly-run` skill installed for Codex CLI.

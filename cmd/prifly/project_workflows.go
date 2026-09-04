@@ -1413,7 +1413,11 @@ func (c *cli) projectWorkflowsUpdate(ctx context.Context, args []string) error {
 	result.ExtendUpstreamChanged = upstreamExtend != origin.ExtendDigest
 	result.PackageVersionUnchanged = inspection.source.Version == installed.source.Version && next.Digest != origin.Digest
 	if result.PackageVersionUnchanged {
-		result.Next = []string{"Upstream changed bytes without a new package.version: the next project start refuses the identity conflict until the previously sealed package is removed (prifly package remove --id " + inspection.source.ID + " --version " + inspection.source.Version + ") or the author bumps the version."}
+		if profile.SchemaVersion == projectVariantProfileVersion {
+			result.Next = []string{"Upstream kept the author package.version. The next compile creates a distinct sealed build; existing packages and Runs remain unchanged."}
+		} else {
+			result.Next = []string{"Upstream changed bytes without a new package.version: the next project start refuses an existing identity conflict. Migrate the shared profile explicitly to prifly-project-profile/3 to keep both builds, or ask the author to bump the version."}
+		}
 	}
 	return c.emit(result)
 }

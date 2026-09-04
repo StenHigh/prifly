@@ -19,6 +19,8 @@ type projectStartResult struct {
 	Repository     string                `json:"repository"`
 	Launch         string                `json:"launch"`
 	Package        flow.Ref              `json:"package"`
+	AuthorPackage  *projectBuildIdentity `json:"author_package,omitempty"`
+	BuildKey       string                `json:"build_key,omitempty"`
 	PackageProfile string                `json:"package_profile,omitempty"`
 	DecisionSheet  *prifly.DecisionSheet `json:"decision_sheet,omitempty"`
 	// A pointer so an autonomous launch with nothing blocked still reports an
@@ -168,7 +170,7 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	workflowPath, err := projectCompiledLaunchWorkflow(root, launch, compiled.Components)
+	workflowPath, err := projectCompiledLaunchPath(root, launch, compiled)
 	if err != nil {
 		return err
 	}
@@ -245,6 +247,10 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 			blocked := prifly.DecisionsAutonomyCannotTake(&preflight.Catalog, &preflight.Sheet)
 			result.AutonomyUnanswered = &blocked
 		}
+	}
+	if compiled.AuthorPackage != nil {
+		result.SchemaVersion = "project-start/3"
+		result.AuthorPackage, result.BuildKey = compiled.AuthorPackage, compiled.BuildKey
 	}
 	return c.emit(result)
 }
@@ -554,6 +560,10 @@ func (c *cli) compileDeclaredProjectPackage(ctx context.Context, root string, pr
 		return projectCompileResult{}, err
 	}
 	values := map[string]any{}
+	options, err := projectReadWorkflowOptions(root, source, values)
+	if err != nil {
+		return projectCompileResult{}, err
+	}
 	for alias, logical := range source.References {
 		ref, err := projectLogicalRef(registry, logical)
 		if err != nil {
@@ -573,16 +583,12 @@ func (c *cli) compileDeclaredProjectPackage(ctx context.Context, root string, pr
 			_ = os.RemoveAll(output)
 		}
 	}()
-	components, err := compileProjectPackage(root, skillsRoot, output, source, registry, values)
-	if err != nil {
-		return projectCompileResult{}, err
-	}
-	packageRef, err := writeProjectPackageManifest(output, source, components, packages)
+	result, err := compileAndSealProjectPackage(root, skillsRoot, output, profile.SchemaVersion, packageProfile, source, registry, packages, values, options)
 	if err != nil {
 		return projectCompileResult{}, err
 	}
 	complete = true
-	return projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: packageRef, Output: output, Components: components}, nil
+	return result, nil
 }
 
 func projectCompiledLaunchWorkflow(root string, launch projectLaunch, components []projectCompileComponent) (string, error) {
