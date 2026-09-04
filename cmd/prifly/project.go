@@ -102,6 +102,72 @@ developer only at the workflow's declared decision points.
    separately asks for that action.
 `
 
+// projectRunnerSkillTemplateBeforeRequestDigest is the exact template v0.8.0
+// wrote. A past release has to be kept as text: the accepted set used to be
+// derived from the template above by removing its most recent blocks, so
+// editing the template silently stopped recognising what every earlier release
+// had installed, and `project runners update` refused the very files it exists
+// to replace. Freeze the current text here before changing it.
+const projectRunnerSkillTemplateBeforeRequestDigest = `---
+name: prifly-run
+description: Start and host one declared Pri-Fly project workflow.
+---
+
+# Pri-Fly project host
+
+You are the host of the Pri-Fly run. Do not ask the developer to operate
+Pri-Fly's internal session protocol: do that work yourself and ask the
+developer only at the workflow's declared decision points.
+
+1. Read .prifly/local.yaml to find authority_root and prifly_executable. Use
+   that exact executable as PRIFLY_BIN; do not assume prifly is on PATH. List
+   available launches with PRIFLY_BIN project workflows --repository "$PWD"
+   --json. If the developer did not name one exact launch ID, show this list
+   and wait for a choice. Never infer a default from the task wording.
+2. This host is {{host}}. Do not read skills from another host directory or
+   infer host from directories on disk. Before starting a selected launch, read
+   ` + "`PRIFLY_BIN project questionnaire --repository \"$PWD\" --launch ID --json`" + `.
+   Run one continuous questionnaire: first worktree or checkout, then package
+   profile when listed, then only preflight decisions whose ` + "`when`" + ` clause matches
+   that profile and the preceding typed answers, then attended or autonomous policy, and finally a summary and
+   explicit confirmation. A supplied exact choice may prefill its question;
+   never infer a missing one. Autonomous may use only entries marked automatic;
+   it does not authorize an undeclared or scope-changing choice. Until the
+   confirmation, do not compile, claim a repository, register a package or
+   create a Run.
+3. For a selected workflow, read all listed inputs, require every required
+   value and ask only for values that are missing; optional values are passed
+   only when the developer supplies them. After the one confirmation invoke
+   exactly
+   ` + "`PRIFLY_BIN --project \"$authority_root\" project start --repository \"$PWD\" --launch ID --host {{host}} --brief FILE --workspace worktree|checkout`" + `
+   plus the selected ` + "`--package-profile`" + `, ` + "`--decision-policy`" + ` and repeatable
+   ` + "`--preflight-answer ID=JSON`" + ` values, and the questionnaire's
+   ` + "`--expected-decision-catalog-digest`" + `, with normal ` + "`--input`" + ` or ` + "`--input-ref`" + ` bindings. This command seals the
+   declared package and drives only to the first honest handoff; it does not
+   start a model, provider or background agent.
+4. For every outstanding session task, read its pinned skill and sealed
+   context from ` + "`workspace`" + `. Treat ` + "`decision_sheet`" + ` and
+   ` + "`decision_context`" + ` as exact choices already made by the developer:
+   carry applicable values into the skill invocation and never ask the same
+   declared question again. A package profile is part of the sheet; follow the
+   pinned package instructions for its argument form. For a workspace-write task, make repository
+   changes only in ` + "`repository_workspace`" + `; never put context or outputs there.
+   Submit the typed result, then drive the Run. When two reviewer tasks
+   are present, handle both; use separate agent sessions only when the host
+   platform actually provides them.
+5. Continue until the Run completes. When ` + "`run next RUN_ID`" + ` says
+   ` + "`waiting_decision`" + `, read ` + "`run decisions RUN_ID`" + `, ask the one declared
+   question, then call ` + "`run decision RUN_ID answer --decision ID --request-digest DIGEST --expected-run-version N --value JSON`" + `
+   with the exact values from that read, and resume the same session task. Never treat a skill's native question as a Pri-Fly decision
+   unless it arrived through that protocol. Other questions declared by the
+   workflow, such as accepted improvements or another bounded batch, are for
+   the developer; successful exits are silent. A gate's suggested next action is never an
+   automatic command. TaskInput is a local, provider-neutral intake boundary,
+   not a GitLab/GitHub/Jira adapter: do not claim automatic tracker reading or
+   edit the external issue unless the developer
+   separately asks for that action.
+`
+
 // projectPreviousRunnerSkillTemplate is the exact runner emitted before the
 // decision questionnaire. It remains here solely so update can recognize it;
 // init never writes it again.
@@ -1326,6 +1392,10 @@ func projectRunnerSkillBeforeDecisionBridge(host projectHost) string {
 	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, projectRunnerQuestions(host))
 }
 
+func projectRunnerSkillBeforeRequestDigest(host projectHost) string {
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeRequestDigest, projectRunnerQuestions(host)) + projectDecisionBridgeInstructions + projectCatalogInstructions
+}
+
 func projectPreviousRunnerSkill(host projectHost) string {
 	questions := projectPreviousCodexQuestionInstructions
 	if host.ID == "claude-code" {
@@ -1347,7 +1417,19 @@ func projectRunnerSkillFromTemplate(host projectHost, template, questions string
 }
 
 func projectRunnerSkillAccepted(host projectHost, skill string) bool {
-	return skill == projectRunnerSkill(host) || skill == projectRunnerSkillBeforeCatalog(host) || skill == projectRunnerSkillBeforeDecisionBridge(host) || skill == projectPreviousRunnerSkill(host)
+	for _, known := range projectKnownRunnerSkills(host) {
+		if skill == known {
+			return true
+		}
+	}
+	return skill == projectRunnerSkill(host)
+}
+
+// projectKnownRunnerSkills lists every runner an earlier release installed, in
+// no particular order. A file matching one of them is generated, not authored,
+// so it may be replaced.
+func projectKnownRunnerSkills(host projectHost) []string {
+	return []string{projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host)}
 }
 
 func checkProjectRunners(root string) error {
@@ -1374,6 +1456,14 @@ func existingProjectProfile(root, profile string) (bool, error) {
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return false, usageError("project_profile_invalid: .prifly must be a real directory")
+	}
+	if _, err := os.Lstat(filepath.Join(profile, "project.yaml")); errors.Is(err, os.ErrNotExist) {
+		// Reporting "run project init first" to project init said nothing about
+		// what it found. A half-removed profile is a repository state, and the
+		// two ways out of it are the two the owner has.
+		return false, usageError("project_profile_incomplete: .prifly exists without project.yaml; restore it from version control, or remove .prifly to initialize the repository again")
+	} else if err != nil {
+		return false, err
 	}
 	if _, err := readProjectProfile(root); err != nil {
 		return false, err
@@ -1444,10 +1534,11 @@ func updateProjectRunners(root string) ([]string, error) {
 		switch string(data) {
 		case projectRunnerSkill(host):
 			continue
-		case projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host):
-			updates = append(updates, runnerUpdate{host: host, path: path})
 		default:
-			return nil, usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+			if !projectRunnerSkillAccepted(host, string(data)) {
+				return nil, usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+			}
+			updates = append(updates, runnerUpdate{host: host, path: path})
 		}
 	}
 	updated := make([]string, 0, len(updates))

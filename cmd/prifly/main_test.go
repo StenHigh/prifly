@@ -2132,7 +2132,9 @@ func TestHelpAndVersionAnswerWithoutAnAuthority(t *testing.T) {
 		{"alternation token", []string{"run", "explain", "--help"}, "run status|next|explain"},
 		{"nested command", []string{"project", "workflows", "add", "--help"}, "project workflows add SOURCE"},
 		{"topic", []string{"help", "session"}, "session submit --file SUBMISSION.json"},
-		{"version flag", []string{"--version"}, "\"version\""},
+		{"version flag", []string{"--version"}, "prifly " + prifly.Version},
+		{"version flag as json", []string{"--json", "--version"}, "\"version\""},
+		{"version command", []string{"version"}, "\"semantics_profile\""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var out, errout bytes.Buffer

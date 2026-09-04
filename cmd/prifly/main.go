@@ -405,6 +405,13 @@ func outsideAuthority(path string) bool {
 
 func (c *cli) run(ctx context.Context, args []string) error {
 	if c.version {
+		// `tool --version` is expected to answer in one line. The `version`
+		// command still reports the build environment the same way every other
+		// command reports its view.
+		if c.format == "text" {
+			_, err := fmt.Fprintln(c.out, "prifly "+prifly.Version)
+			return err
+		}
 		return c.emit(c.versionView())
 	}
 	if c.help || len(args) == 0 || args[0] == "help" {
