@@ -1673,3 +1673,39 @@ ORDER BY e.run_id LIMIT ?`, 1, 1, 10)
 		t.Fatalf("historical population read: %v %+v", err, historicalRuns)
 	}
 }
+
+// A refusal code, an event type and an authority key are read by other programs
+// and printed to people, so each has a shape. Every type this build declares
+// has to satisfy the one it belongs to.
+func TestRecordedNamesHaveAGrammar(t *testing.T) {
+	for _, code := range []string{"not_found", "capacity_conflict", "unsupported_storage_version", "a"} {
+		if !validCode(code) {
+			t.Fatalf("a documented refusal code was refused: %s", code)
+		}
+	}
+	for _, code := range []string{"", "Not_Found", "not found", "attempt.settled", "a" + strings.Repeat("b", 64), "9lives"} {
+		if validCode(code) {
+			t.Fatalf("a code outside the grammar was accepted: %q", code)
+		}
+	}
+	for _, typ := range []string{"run.created", "attempt.settled", "state.changed", "diagnostic.recorded"} {
+		if !validEventType(typ) {
+			t.Fatalf("a recorded event type was refused: %s", typ)
+		}
+	}
+	for _, typ := range []string{"", "Run.Created", "run..created", "run.", ".created", "run created"} {
+		if validEventType(typ) {
+			t.Fatalf("an event type outside the grammar was accepted: %q", typ)
+		}
+	}
+	for _, key := range []string{"control", "packages", "authority:controls"} {
+		if !validAuthorityKey(key) {
+			t.Fatalf("an authority key was refused: %s", key)
+		}
+	}
+	for _, key := range []string{"", "Control", "authority::controls", "authority:", "authority controls"} {
+		if validAuthorityKey(key) {
+			t.Fatalf("an authority key outside the grammar was accepted: %q", key)
+		}
+	}
+}

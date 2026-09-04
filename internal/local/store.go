@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -377,7 +378,7 @@ func OpenStore(dir string, opts StoreOptions) (*Store, error) {
 	db.SetMaxIdleConns(8)
 	s := &Store{db: db, eventTypes: make(map[string]bool), softLimitBytes: opts.SoftLimitBytes}
 	for _, typ := range opts.EventTypes {
-		if !validIdentity(typ) {
+		if !validEventType(typ) {
 			_ = db.Close()
 			return nil, errors.New("invalid supported event type")
 		}
@@ -929,7 +930,7 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 			}
 		}
 	}
-	if rejection != nil && (!validIdentity(rejection.Code) || len(rejection.Message) > 4096) {
+	if rejection != nil && (!validCode(rejection.Code) || len(rejection.Message) > 4096) {
 		return out, errors.New("invalid rejection contract")
 	}
 	limited := rejection == nil && change.RequireStorageBudget
@@ -1157,7 +1158,7 @@ func (s *Store) CreateLinkedRun(ctx context.Context, cmd LinkedRunCommand, trans
 			return out, errors.New("linked run creation cannot alter an existing run or admission slots")
 		}
 	}
-	if rejection != nil && (!validIdentity(rejection.Code) || len(rejection.Message) > 4096) {
+	if rejection != nil && (!validCode(rejection.Code) || len(rejection.Message) > 4096) {
 		return out, errors.New("invalid rejection contract")
 	}
 	var cut int64
@@ -1441,7 +1442,7 @@ func linkedRunCommandDigest(cmd LinkedRunCommand) (string, error) {
 }
 
 func authorityCommandDigest(cmd AuthorityCommand) (string, error) {
-	if !validIdentity(cmd.ID) || !validIdentity(cmd.Actor) || !validIdentity(cmd.Key) || len(cmd.Payload) > MaxCommandBytes || !json.Valid(cmd.Payload) || cmd.ExpectedVersion != nil && (*cmd.ExpectedVersion < 0 || *cmd.ExpectedVersion > 1<<53-1) {
+	if !validIdentity(cmd.ID) || !validIdentity(cmd.Actor) || !validAuthorityKey(cmd.Key) || len(cmd.Payload) > MaxCommandBytes || !json.Valid(cmd.Payload) || cmd.ExpectedVersion != nil && (*cmd.ExpectedVersion < 0 || *cmd.ExpectedVersion > 1<<53-1) {
 		return "", errors.New("invalid authority command envelope")
 	}
 	b, err := json.Marshal(struct {
@@ -1569,6 +1570,19 @@ func loadAuthoritySnapshot(ctx context.Context, conn *sql.Conn, key string) (Aut
 func validIdentity(value string) bool {
 	return len(value) > 0 && len(value) <= 256 && !strings.ContainsAny(value, "\x00\r\n")
 }
+
+// A refusal code, an event type and an authority key are read by other programs
+// and printed to people, so each has a shape rather than "any text without
+// control characters". They differ only in which separator their names use.
+var (
+	codePattern         = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	eventTypePattern    = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}(\.[a-z][a-z0-9_]{0,31}){0,3}$`)
+	authorityKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}(:[a-z][a-z0-9_]{0,31}){0,3}$`)
+)
+
+func validCode(value string) bool         { return codePattern.MatchString(value) }
+func validEventType(value string) bool    { return eventTypePattern.MatchString(value) }
+func validAuthorityKey(value string) bool { return authorityKeyPattern.MatchString(value) }
 
 // RawMessage is a defined byte slice (an alias of jsontext.Value in Go 1.27),
 // which database/sql cannot scan NULL into directly. Keep one explicit copying

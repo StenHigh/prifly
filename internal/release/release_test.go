@@ -1,10 +1,12 @@
 package release
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,17 +19,18 @@ import (
 )
 
 type releaseFixture struct {
-	directory   string
-	executable  string
-	publicKey   string
-	manifest    []byte
-	signature   []byte
-	archiveName string
-	archive     []byte
-	archives    map[string][]byte
-	candidates  map[string]string
-	os          string
-	arch        string
+	directory    string
+	executable   string
+	publicKey    string
+	manifest     []byte
+	signature    []byte
+	jcsSignature []byte
+	archiveName  string
+	archive      []byte
+	archives     map[string][]byte
+	candidates   map[string]string
+	os           string
+	arch         string
 }
 
 func fixture(t *testing.T) releaseFixture {
@@ -72,6 +75,10 @@ func fixture(t *testing.T) releaseFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	jcsSignature, err := os.ReadFile(filepath.Join(assets, "release-manifest.jcs.sig"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	archives := map[string][]byte{}
 	for _, asset := range manifest.Assets {
 		archive, err := os.ReadFile(filepath.Join(assets, asset.Archive))
@@ -85,7 +92,7 @@ func fixture(t *testing.T) releaseFixture {
 	if !ok {
 		t.Fatalf("test host %s/%s is absent from release matrix", runtime.GOOS, runtime.GOARCH)
 	}
-	return releaseFixture{directory: directory, executable: executable, publicKey: hex.EncodeToString(public), manifest: manifestBytes, signature: signature, archiveName: archiveName, archive: archive, archives: archives, candidates: candidates, os: runtime.GOOS, arch: runtime.GOARCH}
+	return releaseFixture{directory: directory, executable: executable, publicKey: hex.EncodeToString(public), manifest: manifestBytes, signature: signature, jcsSignature: jcsSignature, archiveName: archiveName, archive: archive, archives: archives, candidates: candidates, os: runtime.GOOS, arch: runtime.GOARCH}
 }
 
 func jsonReceipt() ([]byte, error) {
@@ -103,6 +110,8 @@ func server(t *testing.T, f releaseFixture, mutate func(string, []byte) []byte) 
 			body = f.manifest
 		case "/release-manifest.sig":
 			body = f.signature
+		case "/release-manifest.jcs.sig":
+			body = f.jcsSignature
 		default:
 			var ok bool
 			body, ok = f.archives[strings.TrimPrefix(r.URL.Path, "/")]
@@ -400,6 +409,69 @@ func TestBuildCopiesInstallerAndReleaseCIIsManual(t *testing.T) {
 	for _, required := range []string{"build-linux-amd64:", "build-darwin-arm64:", "environment: release", "contents: write", "release-manifest.json"} {
 		if !strings.Contains(string(ci), required) {
 			t.Fatalf("release CI omits %q", required)
+		}
+	}
+}
+
+// The manifest is signed twice: over the bytes this build marshalled, and over
+// the RFC 8785 canonical form any reader can compute from the document itself.
+// An updater from either side of that change verifies the release it is given.
+func TestManifestCarriesBothSignatures(t *testing.T) {
+	f := fixture(t)
+	if len(f.jcsSignature) == 0 || string(f.jcsSignature) == string(f.signature) {
+		t.Fatalf("the canonical signature is missing or identical to the legacy one")
+	}
+	// An updater that only knows the legacy signature still verifies this
+	// manifest, because it is still published.
+	s, _ := server(t, f, nil)
+	defer s.Close()
+	if err := verify(bytes.TrimRight(f.manifest, "\n"), f.signature, f.publicKey); err != nil {
+		t.Fatalf("an older updater can no longer verify this manifest: %v", err)
+	}
+	// This build verifies the canonical form, and rejects a canonical signature
+	// that does not belong to this manifest.
+	canonical, err := jsoncanonicalizer.Transform(bytes.TrimRight(f.manifest, "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verify(canonical, f.jcsSignature, f.publicKey); err != nil {
+		t.Fatalf("this build cannot verify the canonical signature: %v", err)
+	}
+	if err := verify(canonical, f.signature, f.publicKey); err == nil {
+		t.Fatal("the legacy signature was accepted for the canonical form")
+	}
+	// A release that predates the canonical signature is still updated from.
+	older, _ := server(t, f, nil)
+	defer older.Close()
+	u := updater(f, older.URL)
+	u.CurrentVersion = "1.0.0"
+	result, err := u.Update(context.Background())
+	if err != nil || !result.Updated {
+		t.Fatalf("update against a release with both signatures failed: %+v %v", result, err)
+	}
+}
+
+// Prerelease ordering is semver's, not the string's: rc.9 comes before rc.10,
+// a numeric identifier ranks below an alphanumeric one, and a release ranks
+// above every prerelease of the same version.
+func TestPrereleaseOrderingFollowsSemver(t *testing.T) {
+	for _, c := range []struct {
+		left, right string
+		want        int
+	}{
+		{"1.2.0-rc.9", "1.2.0-rc.10", -1},
+		{"1.2.0-rc.10", "1.2.0-rc.9", 1},
+		{"1.2.0-rc.2", "1.2.0-rc.2", 0},
+		{"1.2.0-alpha", "1.2.0-alpha.1", -1},
+		{"1.2.0-alpha.1", "1.2.0-alpha.beta", -1},
+		{"1.2.0-1", "1.2.0-alpha", -1},
+		{"1.2.0-rc.1", "1.2.0", -1},
+		{"1.2.0", "1.2.0-rc.1", 1},
+		{"1.3.0", "1.2.9", 1},
+	} {
+		got, err := compareVersions(c.left, c.right)
+		if err != nil || got != c.want {
+			t.Fatalf("%s vs %s: %d (want %d) %v", c.left, c.right, got, c.want, err)
 		}
 	}
 }

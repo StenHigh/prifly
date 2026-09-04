@@ -46,6 +46,7 @@ def main() -> int:
         "prifly-darwin-arm64.tar.gz",
         "release-manifest.json",
         "release-manifest.sig",
+        "release-manifest.jcs.sig",
         'test -n "${PRIFLY_RELEASE_SIGNING_KEY:-}"',
         'test -n "${PRIFLY_RELEASE_PUBLIC_KEY:-}"',
         "secrets.PRIFLY_RELEASE_SIGNING_KEY",

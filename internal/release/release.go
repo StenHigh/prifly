@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"io"
 	"net/http"
 	"os"
@@ -122,10 +123,6 @@ func (u Updater) Update(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	signature, err := u.fetch(ctx, u.assetURL("release-manifest.sig"), 4096)
-	if err != nil {
-		return Result{}, err
-	}
 	manifest, canonical, err := parseManifest(manifestBytes)
 	if err != nil {
 		return Result{}, err
@@ -133,8 +130,27 @@ func (u Updater) Update(ctx context.Context) (Result, error) {
 	if !manifest.Stable {
 		return Result{}, errors.New("latest release is not a stable release")
 	}
-	if err := verify(canonical, signature, u.PublicKeyHex); err != nil {
+	// The canonical form of the published document is what this build verifies:
+	// it is computed from the manifest itself rather than from an assumption
+	// about how the publisher serialized it. A release made before that
+	// signature existed is still verified by the signature it does have.
+	jcs, err := jsoncanonicalizer.Transform(canonical)
+	if err != nil {
 		return Result{}, err
+	}
+	jcsSignature, jcsErr := u.fetch(ctx, u.assetURL("release-manifest.jcs.sig"), 4096)
+	if jcsErr == nil {
+		if err := verify(jcs, jcsSignature, u.PublicKeyHex); err != nil {
+			return Result{}, err
+		}
+	} else {
+		signature, err := u.fetch(ctx, u.assetURL("release-manifest.sig"), 4096)
+		if err != nil {
+			return Result{}, err
+		}
+		if err := verify(canonical, signature, u.PublicKeyHex); err != nil {
+			return Result{}, err
+		}
 	}
 	comparison, err := compareVersions(manifest.Version, u.CurrentVersion)
 	if err != nil {
@@ -451,12 +467,23 @@ func Build(options BuildOptions) (Manifest, error) {
 		return Manifest{}, err
 	}
 	signature := base64.StdEncoding.EncodeToString(ed25519.Sign(ed25519.PrivateKey(private), canonical)) + "\n"
+	// The legacy signature covers the exact bytes this build marshalled, which
+	// only a reader that marshals them the same way can reproduce. The second
+	// signature covers the RFC 8785 canonical form of the same manifest, which
+	// any reader can compute from the published document itself. Both are
+	// published so an updater from either side of this change can verify.
+	jcs, err := jsoncanonicalizer.Transform(canonical)
+	if err != nil {
+		return Manifest{}, err
+	}
+	jcsSignature := base64.StdEncoding.EncodeToString(ed25519.Sign(ed25519.PrivateKey(private), jcs)) + "\n"
 	for _, asset := range []struct {
 		path, content string
 		mode          os.FileMode
 	}{
 		{filepath.Join(options.Output, "release-manifest.json"), string(append(canonical, '\n')), 0644},
 		{filepath.Join(options.Output, "release-manifest.sig"), signature, 0644},
+		{filepath.Join(options.Output, "release-manifest.jcs.sig"), jcsSignature, 0644},
 	} {
 		if err := writeNew(asset.path, []byte(asset.content), asset.mode); err != nil {
 			return Manifest{}, err
@@ -585,8 +612,43 @@ func compareVersions(left, right string) (int, error) {
 	if b.pre == "" {
 		return -1, nil
 	}
-	if a.pre < b.pre {
-		return -1, nil
+	return comparePrerelease(a.pre, b.pre), nil
+}
+
+// comparePrerelease follows semver: identifiers are compared one at a time, a
+// numeric identifier is compared as a number and ranks below an alphanumeric
+// one, and a shorter prerelease ranks below a longer one with the same prefix.
+// Comparing the two as plain strings put rc.10 before rc.9.
+func comparePrerelease(left, right string) int {
+	a, b := strings.Split(left, "."), strings.Split(right, ".")
+	for i := 0; i < len(a) && i < len(b); i++ {
+		if a[i] == b[i] {
+			continue
+		}
+		x, errX := strconv.Atoi(a[i])
+		y, errY := strconv.Atoi(b[i])
+		switch {
+		case errX == nil && errY == nil:
+			if x != y {
+				return compareInt(x, y)
+			}
+		case errX == nil:
+			return -1
+		case errY == nil:
+			return 1
+		default:
+			return strings.Compare(a[i], b[i])
+		}
 	}
-	return 1, nil
+	return compareInt(len(a), len(b))
+}
+
+func compareInt(left, right int) int {
+	switch {
+	case left < right:
+		return -1
+	case left > right:
+		return 1
+	}
+	return 0
 }

@@ -1367,3 +1367,33 @@ func TestTelemetrySamplesRecordedWithCommand(t *testing.T) {
 		t.Fatalf("a repeat was applied as a command or claimed a transaction: %+v %v", repeat, err)
 	}
 }
+
+// A report reads every Run in the population. This is the regression that keeps
+// that read linear: the population this build qualifies for must be answered
+// inside the bound a person waits at a terminal, not eventually.
+func TestTelemetryRegressionScansItsWholePopulation(t *testing.T) {
+	e, _, command := publicationFixture(t, nil)
+	base, _ := publicationRun(t, e, command)
+	// The scan is bounded by records and by bytes, and for Runs of a realistic
+	// size the byte budget is what stops first: a thousand of these would be
+	// refused before any deadline could matter. This is the largest population
+	// that fits, which is what the report has to answer for quickly.
+	const population = 120
+	for i := range population {
+		telemetrySaveRun(t, e, telemetryHistoryRun(t, base, fmt.Sprintf("scale-%d", i), "completed", 10), 0)
+	}
+	// A selector names at most 64 Runs, so the population is the whole recorded
+	// history rather than a list: that is the read this regression is about.
+	query := telemetryQuery("aggregate", "core.command_duration")
+	query.Limit = 1000
+	started := time.Now()
+	report := telemetryReport(t, e, query)
+	elapsed := time.Since(started)
+	if report.Population.Matched < population {
+		t.Fatalf("the report did not read the whole population: %+v", report.Population)
+	}
+	if elapsed > 20*time.Second {
+		t.Fatalf("reading %d Runs took %s", population, elapsed)
+	}
+	t.Logf("telemetry over %d runs: %s", population, elapsed)
+}

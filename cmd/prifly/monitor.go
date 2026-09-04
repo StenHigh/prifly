@@ -43,13 +43,17 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 
 	mux := http.NewServeMux()
 	write := func(w http.ResponseWriter, value any, err error) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
+			// The monitor answers in the same envelope every other reader gets,
+			// so a refusal here reads as the refusal it is rather than as a
+			// bare sentence assembled for this page alone.
+			problem, _ := prifly.ProblemFor(err)
 			w.WriteHeader(http.StatusBadGateway)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			_ = json.NewEncoder(w).Encode(problem)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(value)
 	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +62,7 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		_, _ = w.Write(monitorPage)
 	})
 	mux.HandleFunc("/api/runs", func(w http.ResponseWriter, r *http.Request) {
@@ -149,10 +154,9 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 		}
 		// A monitor page is not the place to move a large blob through; the
 		// truncation is reported rather than silently applied.
-		const limit = 1 << 20
 		body, truncated := string(data), false
-		if len(data) > limit {
-			body, truncated = string(data[:limit]), true
+		if len(data) > monitorArtifactLimit {
+			body, truncated = string(data[:monitorArtifactLimit]), true
 		}
 		write(w, map[string]any{"artifact": artifact, "bytes": len(data), "truncated": truncated, "content": body}, nil)
 	})
@@ -187,7 +191,7 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Handler: monitorHost(*addr)(mux), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -199,6 +203,35 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	return nil
+}
+
+// monitorArtifactLimit bounds what one artifact request may return.
+const monitorArtifactLimit = 1 << 20
+
+// The monitor serves a local page over loopback, and a browser will send this
+// server whatever Host a page asks it to. Answering only for the address this
+// process is listening on keeps another page on the machine, or a name that
+// resolves to loopback, from reading an authority through the browser.
+func monitorHost(listen string) func(http.Handler) http.Handler {
+	_, port, err := net.SplitHostPort(strings.TrimSpace(listen))
+	allowed := map[string]bool{}
+	if err == nil {
+		for _, name := range []string{"127.0.0.1", "[::1]", "localhost"} {
+			allowed[name+":"+port] = true
+		}
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !allowed[r.Host] {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("X-Content-Type-Options", "nosniff")
+				w.WriteHeader(http.StatusMisdirectedRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "this monitor answers only for the address it listens on"})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func loopbackOnly(addr string) bool {
