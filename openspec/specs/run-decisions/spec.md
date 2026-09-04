@@ -16,6 +16,13 @@ MUST validate-ить каталог вместе с выбранным package p
 definition в sealed Run inputs. Он MUST NOT извлекать решение из prose skill,
 создавать новое решение по имени step или разрешать неизвестный ID.
 
+Каталог MUST объявлять обязательность только там, где она enforced. Ответ на
+решение фазы `preflight` MUST требоваться до старта Run. Решение фазы
+`runtime` MUST NOT объявляться обязательным: authority не может обязать
+executor поднять запрос и принимает отчёт без него, поэтому такая пометка
+обещала бы gate, которого нет. Compiler MUST отказывать такому каталогу до
+sealing.
+
 #### Scenario: Package объявляет выбор уровня планирования
 - **WHEN** workflow package объявляет решения `plan_profile` со значениями
   `fast`, `full` и `ultra`
@@ -31,6 +38,11 @@ definition в sealed Run inputs. Он MUST NOT извлекать решение
 #### Scenario: В authoring source есть неописанный вопрос
 - **WHEN** compiler встречает ссылку на absent decision ID
 - **THEN** он отказывает до sealing и не создаёт Run
+
+#### Scenario: Runtime-решение объявлено обязательным
+- **WHEN** каталог помечает решение фазы `runtime` как required
+- **THEN** compiler отказывает до sealing и называет, что обязательность
+  доступна только фазе `preflight`
 
 ### Requirement: Решение package profile выбирается для каждого Run до compilation
 Выбор profile MUST быть explicit per-Run launch value и происходить до
