@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"sync"
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
@@ -372,13 +373,12 @@ func (r Run) admissionsBlockedFor(invID string) bool {
 
 // chargeInvocation checks every ancestor before changing any counter. Step
 // charges count materialized StepInstances, not Attempt admissions; control
-// charges include call entry/return even when no worker is created.
+// charges include call entry/return even when no worker is created. The Run's
+// state and profile were already established when it was read; a budget charge
+// re-establishing them on every call bought nothing.
 func (r *Run) chargeInvocation(invID string, controls, steps int64) error {
 	if controls < 0 || steps < 0 {
 		return fmt.Errorf("invalid_invocation: negative budget charge")
-	}
-	if !supportedRun(*r) {
-		return fmt.Errorf("incompatible_run: unsupported budget state/profile")
 	}
 	if !isInvocationState(r.SchemaVersion) {
 		if invID != r.RootInvocationID {
@@ -418,7 +418,41 @@ func (r *Run) chargeInvocation(invID string, controls, steps int64) error {
 // only already-pinned definition bytes and must not compile schemas or launch
 // the schema helper under that lock. This identity/bounds reader is not a
 // replacement for the executable admission checks in Start and the driver.
+// budgetWorkflowCache keeps workflow revisions parsed for budget accounting.
+// Verifying a pinned definition canonicalizes and decodes the whole workflow,
+// which several charges per command repeated on identical bytes. The key is a
+// digest of the exact bytes with their reference, so a hit means these bytes
+// were already verified against this reference.
+var budgetWorkflowCache = struct {
+	sync.Mutex
+	entries map[string]flow.WorkflowRevision
+}{entries: map[string]flow.WorkflowRevision{}}
+
+// maxCachedBudgetWorkflows bounds the cache; eviction resets it, as for plans.
+const maxCachedBudgetWorkflows = 64
+
 func pinnedBudgetWorkflow(data []byte, ref flow.Ref) (flow.WorkflowRevision, error) {
+	key := rawDigest(data) + "|" + ref.ID + "@" + ref.Version + ":" + ref.Digest
+	budgetWorkflowCache.Lock()
+	cached, found := budgetWorkflowCache.entries[key]
+	budgetWorkflowCache.Unlock()
+	if found {
+		return cached, nil
+	}
+	workflow, err := parsePinnedBudgetWorkflow(data, ref)
+	if err != nil {
+		return workflow, err
+	}
+	budgetWorkflowCache.Lock()
+	if len(budgetWorkflowCache.entries) >= maxCachedBudgetWorkflows {
+		clear(budgetWorkflowCache.entries)
+	}
+	budgetWorkflowCache.entries[key] = workflow
+	budgetWorkflowCache.Unlock()
+	return workflow, nil
+}
+
+func parsePinnedBudgetWorkflow(data []byte, ref flow.Ref) (flow.WorkflowRevision, error) {
 	var workflow flow.WorkflowRevision
 	canonical, err := flow.Canonical(data)
 	if err != nil {

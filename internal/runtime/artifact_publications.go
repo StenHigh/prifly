@@ -94,11 +94,11 @@ func (e *Engine) commitArtifactPublication(r *Run, snapshot local.Snapshot, obs 
 		return local.Change{}, err
 	}
 	deliveryEvents = append(deliveryEvents, streamEvents...)
-	optional, err := canonicalState(map[string]any{"publications": r.Publications, "artifact_publications": r.ArtifactPublications, "diagnostics": r.Diagnostics})
+	exhausted, err := optionalPublicationBudgetExhausted(r, map[string]any{"publications": r.Publications, "artifact_publications": r.ArtifactPublications, "diagnostics": r.Diagnostics})
 	if err != nil {
 		return local.Change{}, err
 	}
-	if len(optional) > maxPublicationBytes {
+	if exhausted {
 		return local.Change{}, local.Reject("publication_budget_exhausted", "optional publication budget is exhausted; control reserve remains available")
 	}
 	event, err := canonical(map[string]any{

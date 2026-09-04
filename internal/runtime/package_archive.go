@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/purity"
 )
 
 // An archive is read as data, never as instructions about where to write. Every
@@ -142,6 +143,7 @@ func (c AuthorityControl) verifySignature(signature PackageSignature, manifestDi
 // that collides after normalisation rejects the whole archive rather than
 // producing a partly written tree.
 func extractPackageArchive(path, into string) (string, error) {
+	purity.Guard("os.open")
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err

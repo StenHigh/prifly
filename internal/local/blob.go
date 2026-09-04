@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/stenhigh/prifly/internal/purity"
 )
 
 const MaxBlobBytes int64 = 100 << 20
@@ -57,6 +59,7 @@ func (b *BlobStore) Close() error { return b.root.Close() }
 // Its successful return is the earliest point at which SQL may reference them.
 // A failed SQL commit must not remove this blob: another run may already use it.
 func (b *BlobStore) Put(src io.Reader, limit int64) (BlobRef, error) {
+	purity.Guard("blob.put")
 	if b.readOnly {
 		return BlobRef{}, ErrReadOnly
 	}
@@ -125,6 +128,7 @@ func (b *BlobStore) Import(rootDir, relative string, limit int64) (BlobRef, erro
 // Read verifies the exact bytes returned, including size. Callers needing only
 // an integrity check should use Inspect, which does not allocate the whole blob.
 func (b *BlobStore) Read(ref BlobRef) ([]byte, error) {
+	purity.Guard("blob.read")
 	f, err := b.open(ref)
 	if err != nil {
 		return nil, err
@@ -141,6 +145,7 @@ func (b *BlobStore) Read(ref BlobRef) ([]byte, error) {
 }
 
 func (b *BlobStore) Inspect(ref BlobRef) error {
+	purity.Guard("blob.inspect")
 	f, err := b.open(ref)
 	if err != nil {
 		return err
@@ -161,6 +166,7 @@ func (b *BlobStore) Inspect(ref BlobRef) error {
 // The caller chooses an existing destination root and parent directories.
 // Exporting to a worker workspace never gives it a link to authority bytes.
 func (b *BlobStore) Export(ref BlobRef, rootDir, relative string) error {
+	purity.Guard("blob.export")
 	if b.readOnly {
 		return ErrReadOnly
 	}

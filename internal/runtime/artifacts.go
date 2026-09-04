@@ -14,6 +14,7 @@ import (
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/purity"
 )
 
 var ErrArtifactIdentity = errors.New("artifact identity already names different content or metadata")
@@ -371,6 +372,7 @@ func (e *Engine) publishArtifactMetadata(id string, metadata []byte) error {
 }
 
 func (e *Engine) artifactMetadataRoot() (*os.Root, error) {
+	purity.Guard("os.open")
 	project, err := os.OpenRoot(e.Root)
 	if err != nil {
 		return nil, err

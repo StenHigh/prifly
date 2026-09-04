@@ -15,6 +15,7 @@ import (
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/purity"
 )
 
 // CheckExecution owns one automatic-check admission and process. The report's
@@ -255,6 +256,7 @@ func (e *Engine) verifyCheckWorkspace(check *CheckExecution, executor PinnedExec
 	if err != nil || !safeRelative(relative) || !filepath.IsAbs(check.Workspace) {
 		return nil, local.ErrUnsafePath
 	}
+	purity.Guard("os.open")
 	root, err := os.OpenRoot(filepath.Join(e.Root, e.Config.Configuration.WorkspaceRoot))
 	if err != nil {
 		return nil, err

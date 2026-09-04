@@ -179,11 +179,11 @@ func (e *Engine) publishArtifactClosureAs(ctx context.Context, command PublishCo
 		if err != nil {
 			return local.Change{}, err
 		}
-		optional, err := canonicalState(map[string]any{"publications": currentRun.Publications, "artifact_publications": currentRun.ArtifactPublications, "artifact_closures": currentRun.ArtifactClosures, "diagnostics": currentRun.Diagnostics})
+		exhausted, err := optionalPublicationBudgetExhausted(currentRun, map[string]any{"publications": currentRun.Publications, "artifact_publications": currentRun.ArtifactPublications, "artifact_closures": currentRun.ArtifactClosures, "diagnostics": currentRun.Diagnostics})
 		if err != nil {
 			return local.Change{}, err
 		}
-		if len(optional) > maxPublicationBytes {
+		if exhausted {
 			return local.Change{}, local.Reject("publication_budget_exhausted", "optional publication budget is exhausted; control reserve remains available")
 		}
 		event, err := canonical(map[string]any{

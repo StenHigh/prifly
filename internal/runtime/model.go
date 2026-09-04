@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -689,24 +690,72 @@ func (r Run) registry() flow.Registry {
 	}
 	return reg
 }
+
+// planCache keeps compiled plans. Compiling parses the workflow, resolves every
+// pinned definition and validates their schemas — work that a command must not
+// repeat, least of all inside a transaction. Every input is immutable pinned
+// state, so the same key names the same plan, and a compiled plan is read-only
+// and shared between goroutines.
+var planCache = struct {
+	sync.Mutex
+	entries map[string]*flow.Plan
+}{entries: map[string]*flow.Plan{}}
+
+// maxCachedPlans bounds the cache. Eviction is a deliberate reset: a plan is
+// cheap to recompile and one process runs few distinct workflows.
+const maxCachedPlans = 64
+
+func compiledPlan(key string, compile func() (*flow.Plan, error)) (*flow.Plan, error) {
+	planCache.Lock()
+	cached, found := planCache.entries[key]
+	planCache.Unlock()
+	if found {
+		return cached, nil
+	}
+	p, err := compile()
+	if err != nil {
+		return nil, err
+	}
+	planCache.Lock()
+	if len(planCache.entries) >= maxCachedPlans {
+		clear(planCache.entries)
+	}
+	planCache.entries[key] = p
+	planCache.Unlock()
+	return p, nil
+}
+
+// planKey names everything a compile reads: the workflow bytes, the semantics
+// it is compiled under and the exact pinned definitions and context resources.
+func (r Run) planKey() string {
+	h := sha256.New()
+	fmt.Fprintf(h, "%s|%s|%s|", r.SchemaVersion, r.Profile, rawDigest(r.Workflow))
+	for _, d := range r.Definitions {
+		fmt.Fprintf(h, "%s@%s:%s|", d.Ref.ID, d.Ref.Version, d.Ref.Digest)
+	}
+	fmt.Fprintf(h, "%v", r.ContextResources)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func (r Run) plan() (*flow.Plan, error) {
 	if !supportedRun(r) {
 		return nil, fmt.Errorf("incompatible_run: unsupported state/semantics profile")
 	}
-	var p *flow.Plan
-	var err error
 	if isContextState(r.SchemaVersion) {
 		if err := contextPinnedInvariant(r); err != nil {
 			return nil, err
 		}
-		resources, resourceErr := resourcesFromPins(r.ContextResources)
-		if resourceErr != nil {
-			return nil, resourceErr
-		}
-		p, err = flow.CompileCore(r.Workflow, "json", r.registry(), resources)
-	} else {
-		p, err = flow.CompileProfile(r.Workflow, "json", r.registry(), r.Profile)
 	}
+	p, err := compiledPlan(r.planKey(), func() (*flow.Plan, error) {
+		if isContextState(r.SchemaVersion) {
+			resources, resourceErr := resourcesFromPins(r.ContextResources)
+			if resourceErr != nil {
+				return nil, resourceErr
+			}
+			return flow.CompileCore(r.Workflow, "json", r.registry(), resources)
+		}
+		return flow.CompileProfile(r.Workflow, "json", r.registry(), r.Profile)
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -194,6 +194,16 @@ func (e *Engine) acceptArtifactPublicationChecks(ctx context.Context, loaded Run
 	if err != nil {
 		return err
 	}
+	// The published artifact is read here, not from inside the decision: the
+	// transform compares this exact identity with the pending record it owns.
+	record := loaded.PendingArtifactPublication
+	if record == nil {
+		return local.ErrIntegrity
+	}
+	checked, _, err := e.Artifact(record.Artifact)
+	if err != nil {
+		return err
+	}
 	_, err = e.apply(ctx, e.owner, newID("command"), loaded.ID, "artifact.publication_checked", map[string]any{"pending_artifact_publication_id": pending.ID, "evidence": evidence}, &view.Snapshot.Version, local.CommandCAS, func(r *Run, snapshot local.Snapshot, obs Observation) (local.Change, error) {
 		current := r.PendingArtifactPublication
 		if current == nil || current.ID != pending.ID || r.ActiveCheckID != "" || r.HasUnresolvedEffects {
@@ -218,8 +228,8 @@ func (e *Engine) acceptArtifactPublicationChecks(ctx context.Context, loaded Run
 				return local.Change{}, local.Reject("publication_check_changed", "declared publication check is no longer a passing exact binding")
 			}
 		}
-		artifact, _, err := e.Artifact(current.Artifact)
-		if err != nil || artifact.Format != current.Format || artifact.SchemaRef == nil || *artifact.SchemaRef != current.SchemaRef || artifact.MediaType != current.MediaType || artifact.SizeBytes != current.SizeBytes {
+		artifact := checked
+		if current.Artifact != record.Artifact || artifact.Format != current.Format || artifact.SchemaRef == nil || *artifact.SchemaRef != current.SchemaRef || artifact.MediaType != current.MediaType || artifact.SizeBytes != current.SizeBytes {
 			return local.Change{}, fmt.Errorf("pending publication artifact drift: %w", local.ErrIntegrity)
 		}
 		command := PublishCommand{CommandID: current.CommandID, RunID: r.ID, AttemptID: current.AttemptID, StepID: current.StepID, Hook: current.Hook, ItemKey: current.ItemKey, ExpectedDigest: current.Artifact.Digest, ExpectedSizeBytes: &current.SizeBytes}

@@ -197,7 +197,34 @@ func (e *Engine) actionTool(ref flow.Ref) (PinnedDefinition, flow.ToolDescriptor
 	return PinnedDefinition{}, flow.ToolDescriptor{}, nil, local.Reject("tool_not_found", "action proposal must name an installed sealed tool descriptor")
 }
 
-func (r Run) actionProposalAttempt(principal string, intent ActionIntent, descriptor flow.ToolDescriptor, observation Observation) (*Attempt, error) {
+// proposalContract is the pinned step contract a proposal was checked against.
+// It is read before the command is applied, so the transform compares instead
+// of compiling the workflow inside the transaction.
+type proposalContract struct {
+	ActivationID string
+	StageID      string
+	EffectClass  string
+	RetryClass   string
+}
+
+func (e *Engine) proposalStepContract(r Run, intent ActionIntent) (proposalContract, error) {
+	attempt := r.Attempts[intent.OriginatingAttempt]
+	if attempt == nil {
+		return proposalContract{}, local.Reject("action_forbidden", "proposal does not belong to an active Step Attempt")
+	}
+	activation := r.Activations[attempt.ActivationID]
+	if activation == nil {
+		return proposalContract{}, local.Reject("action_forbidden", "proposal does not belong to an active Step Attempt")
+	}
+	plan, err := r.planFor(activation.InvocationID)
+	if err != nil {
+		return proposalContract{}, err
+	}
+	step := plan.Steps[activation.StageID]
+	return proposalContract{ActivationID: activation.ID, StageID: activation.StageID, EffectClass: step.Effects.Class, RetryClass: step.Effects.RetryClass}, nil
+}
+
+func (r Run) actionProposalAttempt(principal string, intent ActionIntent, descriptor flow.ToolDescriptor, contract proposalContract, observation Observation) (*Attempt, error) {
 	if !isActionIntentState(r.SchemaVersion) {
 		return nil, local.Reject("unsupported_action_intent", "this Run was created before durable action proposals")
 	}
@@ -218,12 +245,10 @@ func (r Run) actionProposalAttempt(principal string, intent ActionIntent, descri
 	if r.HasUnresolvedEffects || r.admissionsBlockedFor(activation.InvocationID) || r.cancelRequestedFor(activation.InvocationID) {
 		return nil, local.Reject("dispatch_blocked", "current controls or an unresolved effect forbid a new action proposal")
 	}
-	plan, err := r.planFor(activation.InvocationID)
-	if err != nil {
-		return nil, err
+	if activation.ID != contract.ActivationID || activation.StageID != contract.StageID {
+		return nil, local.Reject("action_forbidden", "proposal no longer belongs to the step it was prepared for")
 	}
-	step := plan.Steps[activation.StageID]
-	if descriptor.AdapterRef != assistedAdapter(r.Definitions) || descriptor.Operation != intent.Operation || descriptor.ArgumentsSchemaRef != intent.ArgumentsSchemaRef || descriptor.EffectClass != intent.EffectClass || descriptor.RetryClass != intent.RetryClass || step.Effects.Class != intent.EffectClass || step.Effects.RetryClass != intent.RetryClass {
+	if descriptor.AdapterRef != assistedAdapter(r.Definitions) || descriptor.Operation != intent.Operation || descriptor.ArgumentsSchemaRef != intent.ArgumentsSchemaRef || descriptor.EffectClass != intent.EffectClass || descriptor.RetryClass != intent.RetryClass || contract.EffectClass != intent.EffectClass || contract.RetryClass != intent.RetryClass {
 		return nil, local.Reject("action_contract_conflict", "proposal differs from its pinned tool or owning step contract")
 	}
 	return attempt, nil
@@ -329,6 +354,13 @@ func (e *Engine) ProposeSessionAction(ctx context.Context, command ProposeAction
 			return local.ApplyResult{}, err
 		}
 	}
+	// The owning step's contract is read here; the transform then only checks
+	// that the proposal still belongs to that exact activation and stage.
+	proposed, _, err := e.load(ctx, command.RunID)
+	if err != nil {
+		return local.ApplyResult{}, err
+	}
+	contract, contractErr := e.proposalStepContract(proposed, intent)
 	digest := rawDigest(intentData)
 	pins := []local.ControlPin(nil)
 	if packagePin != nil {
@@ -338,7 +370,10 @@ func (e *Engine) ProposeSessionAction(ctx context.Context, command ProposeAction
 		if packageBlocked != nil {
 			return local.Change{}, packageBlocked
 		}
-		if _, err := r.actionProposalAttempt(e.owner, intent, descriptor, observation); err != nil {
+		if contractErr != nil {
+			return local.Change{}, contractErr
+		}
+		if _, err := r.actionProposalAttempt(e.owner, intent, descriptor, contract, observation); err != nil {
 			return local.Change{}, err
 		}
 		if prior, exists := r.ActionIntents[intent.ID]; exists {
@@ -385,8 +420,11 @@ func (e *Engine) AdmitSessionAction(ctx context.Context, command AdmitActionComm
 		return local.ApplyResult{}, err
 	}
 	var packagePin *local.ControlPin
+	admitted := proposalContract{}
+	var contractErr error
 	if run, _, loadErr := e.load(ctx, command.RunID); loadErr == nil {
 		if intent, exists := run.ActionIntents[command.Payload.IntentID]; exists {
+			admitted, contractErr = e.proposalStepContract(run, intent.Intent)
 			var packageBlocked error
 			packagePin, packageBlocked, err = e.packageAdmissionGate(ctx, []flow.Ref{intent.Tool.Ref}, false)
 			if err != nil {
@@ -440,7 +478,10 @@ func (e *Engine) AdmitSessionAction(ctx context.Context, command AdmitActionComm
 		if err != nil {
 			return local.Change{}, local.ErrIntegrity
 		}
-		if _, err := r.actionProposalAttempt(e.owner, intent.Intent, descriptor, observation); err != nil {
+		if contractErr != nil {
+			return local.Change{}, contractErr
+		}
+		if _, err := r.actionProposalAttempt(e.owner, intent.Intent, descriptor, admitted, observation); err != nil {
 			return local.Change{}, err
 		}
 		targets = append([]ResourceIdentity{}, intent.Intent.Targets...)

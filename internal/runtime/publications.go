@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -275,11 +276,11 @@ func (e *Engine) Publish(ctx context.Context, token string, c PublishCommand) (l
 				mapped = append(mapped, d)
 			}
 		}
-		optional, err := canonicalState(map[string]any{"publications": r.Publications, "diagnostics": mapped})
+		exhausted, err := optionalPublicationBudgetExhausted(r, map[string]any{"publications": r.Publications, "diagnostics": mapped})
 		if err != nil {
 			return local.Change{}, err
 		}
-		if len(optional) > maxPublicationBytes {
+		if exhausted {
 			return local.Change{}, local.Reject("publication_budget_exhausted", "optional publication budget is exhausted; control reserve remains available")
 		}
 		// The event is metadata only. Payload is a classified own-namespace value
@@ -323,6 +324,40 @@ func (e *Engine) publisherReceipt(ctx context.Context, token string, c PublishCo
 	return result, nil
 }
 
+// optionalPublicationBound is an upper bound on the canonical size of the
+// optional record set. Canonicalizing every retained publication on every
+// publish was the most expensive step of a publish-heavy run, so the exact
+// size is computed only when this bound says the budget could be at stake.
+// Escaping can expand a byte at most sixfold (\uXXXX), and the fixed
+// allowance covers each record's keys, identifiers and observation.
+func optionalPublicationBound(r *Run) int {
+	const escapeExpansion = 6
+	const recordOverhead = 1024
+	total := recordOverhead
+	for _, pub := range r.Publications {
+		total += escapeExpansion*len(pub.Value) + recordOverhead
+	}
+	for _, d := range r.Diagnostics {
+		total += escapeExpansion*(len(d.Message)+len(d.Code)) + recordOverhead
+	}
+	total += (len(r.ArtifactPublications) + len(r.ArtifactClosures)) * recordOverhead
+	return total
+}
+
+// optionalPublicationBudgetExhausted reports whether the optional records now
+// exceed their reserve. The exact canonical size decides; the bound only says
+// when that question is worth asking.
+func optionalPublicationBudgetExhausted(r *Run, exact map[string]any) (bool, error) {
+	if optionalPublicationBound(r) <= maxPublicationBytes {
+		return false, nil
+	}
+	optional, err := canonicalState(exact)
+	if err != nil {
+		return false, err
+	}
+	return len(optional) > maxPublicationBytes, nil
+}
+
 // Counter reset scope is the Attempt, not a changed dimension or temporary
 // omission. Compare all retained observations so remove/re-add cannot reset it.
 func checkCounterProgress(previous []Publication, mappings []flow.Mapping, c PublishCommand) error {
@@ -341,31 +376,70 @@ func checkCounterProgress(previous []Publication, mappings []flow.Mapping, c Pub
 	if len(current) == 0 {
 		return nil
 	}
+	fields := slices.Sorted(maps.Keys(current))
 	for _, old := range previous {
 		if old.AttemptID != c.AttemptID || old.Hook != c.Hook || old.Kind != "state" {
 			continue
 		}
-		oldValue, err := flow.Parse(old.Value, "json")
+		before, err := recordedCounters(old, fields)
 		if err != nil {
-			return local.ErrIntegrity
+			return err
 		}
-		for field, now := range current {
-			if n, exists := flow.JSONPointer(oldValue, field); exists {
-				before, ok := n.(json.Number)
-				if !ok {
-					return local.ErrIntegrity
-				}
-				n, err := before.Float64()
-				if err != nil {
-					return local.ErrIntegrity
-				}
-				if n > now {
-					return local.Reject("counter_decreased", "cumulative counter cannot decrease within an Attempt")
-				}
+		for field, was := range before {
+			if was > current[field] {
+				return local.Reject("counter_decreased", "cumulative counter cannot decrease within an Attempt")
 			}
 		}
 	}
 	return nil
+}
+
+// recordedCounters reads the counter fields of one already recorded
+// publication. The same bytes always give the same numbers, so they are
+// memoized by the publication's digest: re-parsing every earlier publication on
+// every publish made this check quadratic in a long-lived attempt.
+var counterCache = struct {
+	sync.Mutex
+	entries map[string]map[string]float64
+}{entries: map[string]map[string]float64{}}
+
+const maxCachedCounterReads = 4096
+
+func recordedCounters(pub Publication, fields []string) (map[string]float64, error) {
+	key := pub.Digest + "|" + strings.Join(fields, ",")
+	counterCache.Lock()
+	cached, found := counterCache.entries[key]
+	counterCache.Unlock()
+	if found {
+		return cached, nil
+	}
+	value, err := flow.Parse(pub.Value, "json")
+	if err != nil {
+		return nil, local.ErrIntegrity
+	}
+	read := map[string]float64{}
+	for _, field := range fields {
+		n, exists := flow.JSONPointer(value, field)
+		if !exists {
+			continue
+		}
+		number, ok := n.(json.Number)
+		if !ok {
+			return nil, local.ErrIntegrity
+		}
+		recorded, err := number.Float64()
+		if err != nil {
+			return nil, local.ErrIntegrity
+		}
+		read[field] = recorded
+	}
+	counterCache.Lock()
+	if len(counterCache.entries) >= maxCachedCounterReads {
+		clear(counterCache.entries)
+	}
+	counterCache.entries[key] = read
+	counterCache.Unlock()
+	return read, nil
 }
 
 type HookReadView struct {

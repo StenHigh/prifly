@@ -20,6 +20,7 @@ import (
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/purity"
 )
 
 var EventTypes = []string{"run.created", "stage.activated", "attempt.admitted", "attempt.dispatching", "attempt.started", "attempt.result_candidate", "attempt.cost_reported", "attempt.observed", "attempt.settled", "attempt.resolved", "check.resolved", "run.finished", "run.restricted", "stop.released", "run.resumed", "run.recovered", "step.publication", "artifact.publication_prepared", "artifact.publication_checked", "artifact.publication_checks_failed", "action.intent_proposed", "action.admitted", "diagnostic.recorded", "stage.failed", "stage.error_handled", "stage.choice_decided", "invocation.created", "invocation.finished", "stage.call_returned", "stage.repeat_entered", "stage.repeat_decided", "stage.parallel_entered", "stage.join_decided", "stage.map_entered", "stage.map_empty", "stage.wait_entered", "stage.wait_resolved", "wait.event_received", "wait.reserved", "guard.observed", "guard.processed", "run.context_pinned", "check.admitted", "check.dispatching", "check.started", "check.observed", "check.settled", "check.recovered", "acceptance.prepared", "acceptance.passed", "acceptance.failed", "attempt.accepted", "decision.requested", "decision.defaulted", "decision.answered"}
@@ -186,6 +187,7 @@ func safeRelative(path string) bool {
 	return path != "" && path != "." && filepath.IsLocal(path) && filepath.Clean(path) == path && !strings.Contains(path, "\\") && !strings.ContainsRune(path, 0)
 }
 func readLocal(rootDir, path string, limit int64) ([]byte, error) {
+	purity.Guard("read.local")
 	if !safeRelative(path) {
 		return nil, local.ErrUnsafePath
 	}
@@ -226,6 +228,7 @@ func readLocal(rootDir, path string, limit int64) ([]byte, error) {
 	return b, err
 }
 func writeExclusive(path string, data []byte) error {
+	purity.Guard("write.local")
 	root, err := os.OpenRoot(filepath.Dir(path))
 	if err != nil {
 		return err
@@ -260,6 +263,7 @@ func writeExclusive(path string, data []byte) error {
 // Definition paths are data, never permission to relocate authority files into
 // a workspace or follow a directory symlink. os.Root also fences path races.
 func checkDirectory(root, path string) error {
+	purity.Guard("os.open")
 	r, err := os.OpenRoot(root)
 	if err != nil {
 		return err

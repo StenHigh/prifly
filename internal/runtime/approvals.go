@@ -333,6 +333,18 @@ func (e *Engine) DecideControlApproval(ctx context.Context, c ApprovalDecision) 
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
 	}
+	// Who already voted is read here, not from inside the decision: a transform
+	// compares and mutates, it does not go to storage. A vote recorded after
+	// this read is caught in the transform, which refuses to decide on a list
+	// it cannot account for.
+	voters := map[string]string{}
+	for _, recorded := range existing.VoteRefs {
+		cast, err := e.recordedVote(recorded)
+		if err != nil {
+			return local.AuthorityApplyResult{}, err
+		}
+		voters[recorded.ID] = cast.ActorID
+	}
 	command, err := canonical(map[string]any{"operation": "approval.decide", "command_id": c.CommandID, "approval_id": c.ApprovalID, "decision": c.Decision, "vote_ref": artifact.Ref(), "reason": c.Reason})
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
@@ -360,11 +372,11 @@ func (e *Engine) DecideControlApproval(ctx context.Context, c ApprovalDecision) 
 			return nil, local.Reject("independence_violated", "the requester of this decision cannot also approve it")
 		}
 		for _, recorded := range approval.VoteRefs {
-			cast, err := e.recordedVote(recorded)
-			if err != nil {
-				return nil, err
+			actor, read := voters[recorded.ID]
+			if !read {
+				return nil, local.Reject("approval_changed", "a vote was recorded after this decision was prepared")
 			}
-			if control.humanFor(cast.ActorID) == human {
+			if control.humanFor(actor) == human {
 				return nil, local.Reject("duplicate_vote", "this human has already voted on this approval")
 			}
 		}

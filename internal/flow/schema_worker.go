@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/stenhigh/prifly/internal/purity"
 )
 
 const schemaWorkerArgument = "--prifly-schema-worker-v1"
@@ -170,6 +172,7 @@ func (w *schemaOutput) Write(p []byte) (int, error) {
 }
 
 func runSchemaWorker(schema, value []byte) error {
+	purity.Guard("schema.worker")
 	if len(schema) == 0 || len(schema) > MaxDocumentBytes || len(value) > MaxDocumentBytes {
 		return problem("document_too_large", "", "schema/value exceeds the document byte allowance")
 	}

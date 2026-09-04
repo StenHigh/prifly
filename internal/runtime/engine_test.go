@@ -5,20 +5,58 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/purity"
 )
+
+// knownImpureTransforms is the baseline this build still carries. Both are
+// deliberate and named here so that every other impure transform fails the
+// run rather than joining an unexamined pile.
+var knownImpureTransforms = []string{
+	// A plan compiled for the first time inside the command that pinned it:
+	// run.created and context pinning have no earlier point at which its key
+	// exists. Every later command reads the compiled plan from the cache.
+	"runtime.Run.plan(",
+	// A stream delivery is sealed while its assignment is being decided. That
+	// belongs to publication redesign, not to this change.
+	"runtime.(*Engine).createStreamAssignment(",
+}
 
 func TestMain(m *testing.M) {
 	if handled, code := flow.SchemaWorker(os.Args[1:], os.Stdin, os.Stdout); handled {
 		os.Exit(code)
 	}
-	os.Exit(m.Run())
+	// A transform decides from its snapshot and its command. Any file read,
+	// artifact seal or subprocess reached from inside one is a fact the caller
+	// should have computed first. Violations are collected rather than
+	// panicked so one run reports every one of them with its stack.
+	var impure sync.Map
+	purity.Impure = func(operation string) {
+		var buffer [8 << 10]byte
+		frames := string(buffer[:runtime.Stack(buffer[:], false)])
+		for _, known := range knownImpureTransforms {
+			if strings.Contains(frames, known) {
+				return
+			}
+		}
+		impure.Store(operation+"\n"+frames, true)
+	}
+	code := m.Run()
+	impure.Range(func(key, _ any) bool {
+		code = 1
+		fmt.Fprintf(os.Stderr, "impure transform: %s\n", key)
+		return true
+	})
+	os.Exit(code)
 }
 
 // This fixture is a real empty installation and an independently authored

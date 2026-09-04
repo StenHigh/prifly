@@ -750,7 +750,7 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 		if transform == nil {
 			return out, errors.New("command transform is required")
 		}
-		change, err = transform(state)
+		change, err = applyTransform(transform, state)
 		if err != nil && !errors.As(err, &rejection) {
 			return out, err
 		}
@@ -760,7 +760,7 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 		if cmd.Control == nil {
 			return out, errors.New("control mutation requires an authority control pin")
 		}
-		controlData, err = cmd.ControlMutation(control)
+		controlData, err = applyControlMutation(cmd.ControlMutation, control)
 		if err != nil && !errors.As(err, &rejection) {
 			return out, err
 		}
@@ -981,7 +981,7 @@ func (s *Store) CreateLinkedRun(ctx context.Context, cmd LinkedRunCommand, trans
 		if transform == nil {
 			return out, errors.New("linked run transform is required")
 		}
-		change, err = transform(source)
+		change, err = applyTransform(transform, source)
 		if err != nil && !errors.As(err, &rejection) {
 			return out, err
 		}
@@ -1117,7 +1117,7 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 		if transform == nil {
 			return out, errors.New("authority transform is required")
 		}
-		change, err = transform(state)
+		change, err = applyAuthorityTransform(transform, state)
 		if err != nil && !errors.As(err, &rejection) {
 			return out, err
 		}

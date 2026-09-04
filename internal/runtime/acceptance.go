@@ -595,6 +595,15 @@ func (e *Engine) acceptCheckedResult(ctx context.Context, loaded Run, view local
 			return e.rejectAcceptance(ctx, loaded, view, "checked_output_unavailable", "")
 		}
 	}
+	// Publication is storage work, not a decision, so it happens here and the
+	// transform only records what was published. Bytes that a refused
+	// acceptance never references leave no accepted result behind, exactly as
+	// a refused settlement does.
+	for _, output := range outputs {
+		if _, err := e.publishPreparedArtifact(output, loaded.registry()); err != nil {
+			return err
+		}
+	}
 	commandID := newID("command")
 	_, err = e.apply(ctx, e.owner, commandID, loaded.ID, "attempt.accepted", map[string]any{"pending_acceptance_id": pending.ID, "attempt_id": producer.ID, "candidate_ref": pending.CandidateRef, "evidence_refs": evidenceRefs}, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, obs Observation) (local.Change, error) {
 		current := r.PendingAcceptance
@@ -604,11 +613,6 @@ func (e *Engine) acceptCheckedResult(ctx context.Context, loaded Run, view local
 		attempt := r.Attempts[current.ProducerAttemptID]
 		if attempt == nil || attempt.Accepted != nil || attempt.CandidateConflict || !bytes.Equal(attempt.Candidate, data) {
 			return local.Change{}, local.Reject("result_candidate_changed", "checked result candidate changed")
-		}
-		for _, output := range outputs {
-			if _, err := e.publishPreparedArtifact(output, r.registry()); err != nil {
-				return local.Change{}, err
-			}
 		}
 		attempt.Accepted = &result
 		step, activation := r.Steps[attempt.StepID], r.Activations[attempt.ActivationID]
