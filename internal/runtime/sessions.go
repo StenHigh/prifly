@@ -81,9 +81,7 @@ func hasReportedCostStateFields(r Run) bool {
 	return false
 }
 
-func isReportedCostState(version string) bool {
-	return version == CoreReportedCostStateVersion || isArtifactPublicationState(version)
-}
+func isReportedCostState(version string) bool { return atLeast(version, CoreReportedCostStateVersion) }
 
 // SessionHandoff is what the Run knows about work given to a host. Absence of a
 // report is never success: it becomes a disconnected fact that recovery reads.

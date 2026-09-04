@@ -46,29 +46,19 @@ type RepeatDecision struct {
 
 // isInvocationState is a closed version whitelist. An unknown future version
 // must never inherit either tree semantics or the legacy root-only fallback.
-func isInvocationState(version string) bool {
-	return version == CoreInvocationStateVersion || isRepeatState(version)
-}
+func isInvocationState(version string) bool { return atLeast(version, CoreInvocationStateVersion) }
 
-func isRepeatState(version string) bool {
-	return version == CoreRepeatStateVersion || isContextState(version)
-}
+func isRepeatState(version string) bool { return atLeast(version, CoreRepeatStateVersion) }
 
 // Context state carries pinned resources and checks; session state adds the
 // assisted host facts on top of it. Older Runs keep their delivered version.
-func isContextState(version string) bool {
-	return version == CoreContextStateVersion || isSessionState(version)
-}
+func isContextState(version string) bool { return atLeast(version, CoreContextStateVersion) }
 
-func isSessionState(version string) bool {
-	return version == CoreSessionStateVersion || isWaiverState(version)
-}
+func isSessionState(version string) bool { return atLeast(version, CoreSessionStateVersion) }
 
 // Waiver state carries everything the earlier versions carried and adds the
 // recorded quality reductions; parallel state adds branch fan-out on top of it.
-func isWaiverState(version string) bool {
-	return version == CoreWaiverStateVersion || isParallelState(version)
-}
+func isWaiverState(version string) bool { return atLeast(version, CoreWaiverStateVersion) }
 
 // repeatBodies validates the saved count and exact identities without compiling
 // definitions or reading artifacts. Historical bodies remain valid lineage

@@ -483,42 +483,7 @@ func (e *Engine) publisherStatus(ctx context.Context, token string, c PublishCom
 		return StepReadView{}, err
 	}
 	asOf := e.clock.now()
-	version := stepReadVersion
-	if isArtifactPublicationState(r.SchemaVersion) {
-		version = CoreArtifactPublicationStepReadVersion
-	}
-	if isArtifactClosureState(r.SchemaVersion) {
-		version = CoreArtifactClosureStepReadVersion
-	}
-	if isPublicationSubscriptionState(r.SchemaVersion) {
-		version = CorePublicationSubscriptionStepReadVersion
-	}
-	if isPublicationChecksState(r.SchemaVersion) {
-		version = CorePublicationChecksStepReadVersion
-	}
-	if isPublicationNewOnlyState(r.SchemaVersion) {
-		version = CorePublicationNewOnlyStepReadVersion
-	}
-	if isPublicationFailureState(r.SchemaVersion) {
-		version = CorePublicationFailureStepReadVersion
-	}
-	if isDecisionState(r.SchemaVersion) {
-		version = CoreDecisionStepReadVersion
-	} else if isWorkspaceTreeState(r.SchemaVersion) {
-		version = CoreWorkspaceTreeStepReadVersion
-	} else if isWorkspaceState(r.SchemaVersion) {
-		version = CoreWorkspaceStepReadVersion
-	} else if isForkState(r.SchemaVersion) {
-		version = CoreForkStepReadVersion
-	} else if isActionDeliveryState(r.SchemaVersion) {
-		version = CoreActionDeliveryStepReadVersion
-	} else if isActionGrantAdmissionState(r.SchemaVersion) {
-		version = CoreActionGrantAdmissionStepReadVersion
-	} else if isActionAdmissionState(r.SchemaVersion) {
-		version = CoreActionAdmissionStepReadVersion
-	} else if isActionIntentState(r.SchemaVersion) {
-		version = CoreActionIntentStepReadVersion
-	}
+	version := stepReadVersionFor(r.SchemaVersion)
 	out := StepReadView{version, r.ID, a.StepID, a.ID, read.Snapshot.Version, read.Snapshot.EventSeq, read.Cut, asOf, r.Status, r.Steps[a.StepID].Status, a.Status, r.restrictedFor(activation.InvocationID) || r.CancelRequested, r.terminal() || r.Status == "uncertain" || a.Settled != nil || !slices.Contains(r.Active, a.ID) || r.HasUnresolvedEffects || a.Dispatch == nil || a.Dispatch.Session != asOf.Session, map[string]HookReadView{}}
 	for name, hook := range plan.Steps[activation.StageID].Hooks {
 		view := HookReadView{Kind: hook.Kind, Availability: "unpublished", Freshness: "unknown"}

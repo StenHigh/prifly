@@ -7,7 +7,7 @@ import (
 )
 
 func isArtifactPublicationState(version string) bool {
-	return version == CoreArtifactPublicationStateVersion || isArtifactClosureState(version)
+	return atLeast(version, CoreArtifactPublicationStateVersion)
 }
 
 func artifactConsumption(hook flow.Hook) string {

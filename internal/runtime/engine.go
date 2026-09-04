@@ -356,78 +356,7 @@ func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 	for _, check := range r.CheckExecutions {
 		check.TokenHash = ""
 	}
-	version := ReadVersion
-	if r.Profile == flow.CoreProfile {
-		version = CoreReadVersion
-	}
-	if isInvocationState(r.SchemaVersion) {
-		version = CoreInvocationReadVersion
-	}
-	if r.SchemaVersion == CoreRepeatStateVersion {
-		version = CoreRepeatReadVersion
-	}
-	if isContextState(r.SchemaVersion) {
-		version = CoreContextReadVersion
-	}
-	if isSessionState(r.SchemaVersion) {
-		version = CoreSessionReadVersion
-	}
-	if isWaiverState(r.SchemaVersion) {
-		version = CoreWaiverReadVersion
-	}
-	if isParallelState(r.SchemaVersion) {
-		version = CoreParallelReadVersion
-	}
-	// The same chain stopped at parallel here. A Run must report the read
-	// contract its own state version belongs to, not an earlier one that does
-	// not describe the fields it carries.
-	if isMapState(r.SchemaVersion) {
-		version = CoreMapReadVersion
-	}
-	if isWaitState(r.SchemaVersion) {
-		version = CoreWaitReadVersion
-	}
-	if isGuardState(r.SchemaVersion) {
-		version = CoreGuardReadVersion
-	}
-	if isReportedCostState(r.SchemaVersion) {
-		version = CoreReportedCostReadVersion
-	}
-	if isArtifactPublicationState(r.SchemaVersion) {
-		version = CoreArtifactPublicationReadVersion
-	}
-	if isArtifactClosureState(r.SchemaVersion) {
-		version = CoreArtifactClosureReadVersion
-	}
-	if isPublicationSubscriptionState(r.SchemaVersion) {
-		version = CorePublicationSubscriptionReadVersion
-	}
-	if isPublicationChecksState(r.SchemaVersion) {
-		version = CorePublicationChecksReadVersion
-	}
-	if isPublicationNewOnlyState(r.SchemaVersion) {
-		version = CorePublicationNewOnlyReadVersion
-	}
-	if isPublicationFailureState(r.SchemaVersion) {
-		version = CorePublicationFailureReadVersion
-	}
-	if isDecisionState(r.SchemaVersion) {
-		version = CoreDecisionReadVersion
-	} else if isWorkspaceTreeState(r.SchemaVersion) {
-		version = CoreWorkspaceTreeReadVersion
-	} else if isWorkspaceState(r.SchemaVersion) {
-		version = CoreWorkspaceReadVersion
-	} else if isForkState(r.SchemaVersion) {
-		version = CoreForkReadVersion
-	} else if isActionDeliveryState(r.SchemaVersion) {
-		version = CoreActionDeliveryReadVersion
-	} else if isActionGrantAdmissionState(r.SchemaVersion) {
-		version = CoreActionGrantAdmissionReadVersion
-	} else if isActionAdmissionState(r.SchemaVersion) {
-		version = CoreActionAdmissionReadVersion
-	} else if isActionIntentState(r.SchemaVersion) {
-		version = CoreActionIntentReadVersion
-	}
+	version := readVersionFor(r.SchemaVersion, r.Profile)
 	return RunView{version, read.Snapshot.Version, read.Snapshot.EventSeq, read.Cut, asOf, live, r, timing}, nil
 }
 func (e *Engine) Events(ctx context.Context, id string, after int64, limit int) (local.ReadView, error) {

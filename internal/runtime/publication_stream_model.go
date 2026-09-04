@@ -108,7 +108,7 @@ type PublicationAssignment struct {
 }
 
 func isPublicationSubscriptionState(version string) bool {
-	return version == CorePublicationSubscriptionStateVersion || isPublicationChecksState(version)
+	return atLeast(version, CorePublicationSubscriptionStateVersion)
 }
 
 func publicationSubscriptionID(runID, repeatActivationID string, source flow.Ref) string {

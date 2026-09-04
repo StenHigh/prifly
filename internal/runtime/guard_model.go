@@ -99,9 +99,7 @@ type GuardObservation struct {
 }
 
 // isGuardState is the version from which a Run can hold guard registrations.
-func isGuardState(version string) bool {
-	return version == CoreGuardStateVersion || isReportedCostState(version)
-}
+func isGuardState(version string) bool { return atLeast(version, CoreGuardStateVersion) }
 
 func guardID(runID, kind, stageID string, index int) string {
 	return derivedID("guard", runID, kind, stageID, strconv.Itoa(index))

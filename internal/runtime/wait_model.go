@@ -100,9 +100,7 @@ type WaitProgress struct {
 
 // Wait state carries the durable registrations and the inbox; guard state adds
 // the live start/stop rules on top of everything they carried.
-func isWaitState(version string) bool {
-	return version == CoreWaitStateVersion || isGuardState(version)
-}
+func isWaitState(version string) bool { return atLeast(version, CoreWaitStateVersion) }
 
 func waitRegistrationID(runID, activationID string, generation int64) string {
 	return derivedID("registration", runID, activationID, fmt.Sprint(generation))

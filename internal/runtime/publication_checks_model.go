@@ -1,5 +1,5 @@
 package runtime
 
 func isPublicationChecksState(version string) bool {
-	return version == CorePublicationChecksStateVersion || isPublicationNewOnlyState(version)
+	return atLeast(version, CorePublicationChecksStateVersion)
 }

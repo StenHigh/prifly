@@ -2,7 +2,7 @@ package runtime
 
 import "errors"
 
-func isDecisionState(version string) bool { return version == CoreDecisionStateVersion }
+func isDecisionState(version string) bool { return atLeast(version, CoreDecisionStateVersion) }
 
 func hasDecisionStateFields(r Run) bool {
 	return r.DecisionCatalog != nil || r.DecisionSheet != nil || len(r.DecisionLedger) != 0 || r.PendingDecision != nil

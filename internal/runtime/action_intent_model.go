@@ -1,29 +1,23 @@
 package runtime
 
-func isActionIntentState(version string) bool {
-	return version == CoreActionIntentStateVersion || isActionAdmissionState(version)
-}
+func isActionIntentState(version string) bool { return atLeast(version, CoreActionIntentStateVersion) }
 
 func isActionAdmissionState(version string) bool {
-	return version == CoreActionAdmissionStateVersion || isActionGrantAdmissionState(version) || isActionDeliveryState(version)
+	return atLeast(version, CoreActionAdmissionStateVersion)
 }
 
 func isActionGrantAdmissionState(version string) bool {
-	return version == CoreActionGrantAdmissionStateVersion || isActionDeliveryState(version)
+	return atLeast(version, CoreActionGrantAdmissionStateVersion)
 }
 
 func isActionDeliveryState(version string) bool {
-	return version == CoreActionDeliveryStateVersion || isForkState(version)
+	return atLeast(version, CoreActionDeliveryStateVersion)
 }
 
-func isForkState(version string) bool {
-	return version == CoreForkStateVersion || isWorkspaceState(version)
-}
+func isForkState(version string) bool { return atLeast(version, CoreForkStateVersion) }
 
-func isWorkspaceState(version string) bool {
-	return version == CoreWorkspaceStateVersion || isWorkspaceTreeState(version) || isDecisionState(version)
-}
+func isWorkspaceState(version string) bool { return atLeast(version, CoreWorkspaceStateVersion) }
 
 func isWorkspaceTreeState(version string) bool {
-	return version == CoreWorkspaceTreeStateVersion
+	return atLeast(version, CoreWorkspaceTreeStateVersion)
 }

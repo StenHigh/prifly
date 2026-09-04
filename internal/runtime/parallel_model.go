@@ -77,13 +77,11 @@ type JoinDecision struct {
 
 // isParallelState covers every version that can own branch invocations. A map
 // is a fan-out, so its own version admits parallel stages too.
-func isParallelState(version string) bool {
-	return version == CoreParallelStateVersion || isMapState(version)
-}
+func isParallelState(version string) bool { return atLeast(version, CoreParallelStateVersion) }
 
 // isMapState is narrower: from this version on, a Run can hold a sealed
 // collection. Later versions carry everything the earlier ones carried.
-func isMapState(version string) bool { return version == CoreMapStateVersion || isWaitState(version) }
+func isMapState(version string) bool { return atLeast(version, CoreMapStateVersion) }
 
 // fanOut names the two stage kinds that own branch invocations and settle on a
 // join. Everything after entry is the same for both.

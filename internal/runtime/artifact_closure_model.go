@@ -8,7 +8,7 @@ import (
 )
 
 func isArtifactClosureState(version string) bool {
-	return version == CoreArtifactClosureStateVersion || isPublicationSubscriptionState(version)
+	return atLeast(version, CoreArtifactClosureStateVersion)
 }
 
 // artifactClosureInvariant validates the exact state cut without reading the
