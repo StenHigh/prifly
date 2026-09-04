@@ -271,7 +271,9 @@ def main():
             assert len(run["activations"]) == 1
             activation = next(iter(run["activations"].values()))
             assert activation["kind"] == "finish" and activation["status"] == "failed" and activation.get("settled")
-            diagnostics = [d for d in run["diagnostics"] if d["code"] == "output_binding_failed"]
+            # The diagnostic names the refusal preparation found, not the phase:
+            # a projection that fails its schema says so.
+            diagnostics = [d for d in run["diagnostics"] if d["code"] == "projection_schema_invalid"]
             assert len(diagnostics) == 1
             diagnostic = diagnostics[0]
             assert diagnostic["severity"] == "error" and diagnostic["category"] == "workflow" and diagnostic["phase"] == "preparation"
@@ -291,7 +293,7 @@ def main():
             repeated_history = cli("invalid-projection-events-after-reopen", "run", "events", run["id"], "--limit", "1000")["view"]
             assert not repeated_history["more"] and encoded(repeated_history["events"]) == encoded(history["events"])
             assert artifact_records == sorted(p.name for p in (target / ".prifly/artifact-refs").iterdir())
-            report["cases"].append({"case": "invalid-finish-projection", "run_id": run["id"], "status": "failed", "diagnostic_code": "output_binding_failed", "steps": 0, "attempts": 0, "repeat_drive_inert": True})
+            report["cases"].append({"case": "invalid-finish-projection", "run_id": run["id"], "status": "failed", "diagnostic_code": "projection_schema_invalid", "steps": 0, "attempts": 0, "repeat_drive_inert": True})
 
             # Choices are core control stages. A selected producer runs as an
             # ordinary process; an unselected branch has no Step or Attempt.
