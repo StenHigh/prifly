@@ -89,6 +89,45 @@ prifly project init --repository .
 prifly project workflows --repository . --json
 ```
 
+Новый profile `/3` работает и в обычной папке: Git, ИИ и описание задачи не
+нужны сами по себе. `init` не создаёт Git или AI folders; история хранится
+отдельно, а machine-local пути — в ignored `.prifly/local.yaml`.
+
+Путь `/3`, описанный здесь, относится к текущим исходникам. До включения этих
+изменений в Release используйте binary, собранный из этого checkout.
+
+Первый пример без ИИ — [CSV → проверка → отчёт](examples/workflows/csv-report/README.md).
+Он показывает готовый YAML, настройку установленного Node.js и фактический
+результат. Для собственного package порядок тот же:
+
+```sh
+prifly project local set --allow-executable worker=/absolute/path/to/worker
+prifly project compile --package NAME --output ../NAME.package
+prifly project start --launch NAME --input source=./input.csv --allow-execution
+```
+
+`NAME`, имя программы и inputs берутся из вашего YAML. `--allow-executable`
+разрешает локальную программу; `--allow-execution` подтверждает выбранные
+programs, arguments и supporting files этого запуска. Compile ничего не
+исполняет и не импортирует. Программа должна поддерживать существующий Pri-Fly
+worker protocol — произвольный shell script не становится worker автоматически.
+Рабочая папка шага не является sandbox: используйте доверенные программы.
+
+Чтобы подключить ИИ, явно добавьте только нужный host:
+
+```sh
+prifly project runners add --host codex-app
+# Альтернативы: codex-cli или claude-code; --host можно повторить.
+```
+
+То же можно сделать при fresh init через `--host`. Host-bound sources требуют
+этот `--host` при compile, assisted шаги — при start. Git-запись через assisted
+шаг требует explicit `--workspace worktree` или `checkout`; обычной обработке
+файлов эти параметры не нужны. RunBrief передаётся, когда нужен объявленному
+входу сценария, а не сочиняется для каждого Run. Нейтральный command-only путь
+запускается через CLI; переработка общего host runner — отдельный следующий
+[срез](openspec/changes/make-project-launch-workflow-neutral/tasks.md).
+
 Для contributor-проверки:
 
 ```sh
@@ -127,8 +166,8 @@ credential helper или SSH пользователя, никогда из URL. 
 
 ### Разные настройки одного сценария
 
-Для запуска разных profiles или правок `extend.yaml` в одном проекте явно
-смените только marker в `.prifly/project.yaml`:
+Новые проекты уже используют `/3`. Для существующего `/2` и запуска разных
+profiles или правок `extend.yaml` явно смените marker в `.prifly/project.yaml`:
 
 ```yaml
 schema_version: prifly-project-profile/3
@@ -153,10 +192,11 @@ package используйте полный compiled ref из результат
 `author_package` (авторские ID/version) и `build_key` рядом с `package`
 (точный compiled ref). У `/2` прежние версии ответов и поля не меняются.
 
-Это первый этап нового profile: пока сохраняются Git-проект, все три host roots,
-явный `--host` при compile/start и обязательный `--brief` при start. Сам marker
-`/3` ещё не включает запуск без Git или ИИ — этот путь остаётся в
-[плане](openspec/changes/make-project-launch-workflow-neutral/tasks.md).
+В `/3` `hosts` можно опустить или оставить только нужные. `/2` сохраняет
+прежние требования: Git, все три host roots, explicit `--host`, обязательный
+`--brief` и default worktree. Clone/copy bootstrap не переписывает shared YAML
+и сохранённые host runners; обновление runners остаётся явной командой
+`prifly project runners update`.
 
 ## Что умеет Pri-Fly
 
@@ -166,7 +206,7 @@ package используйте полный compiled ref из результат
 | **Ведёт локальную authority** | история Run, решения, receipts и evidence на вашей машине, вне репозитория |
 | **Различает исходы** | успешный, неудачный и неопределённый; повтор не считается безопасным по умолчанию, а неопределённое обязательство закрывает владелец явной командой |
 | **Читаемый YAML** | сценарии, шаги, схемы и контексты компилируются в неизменяемый контракт запуска |
-| **Решения Run** | объявленные вопросы задаются до старта одним диалогом, а динамические ждут через универсальный Decision Bridge |
+| **Решения Run** | объявленные preflight-вопросы видны до старта, а runtime-вопросы сохраняются и ждут ответа через Decision Bridge |
 | **Независимость** | не привязан к AI Factory, GitLab, GitHub, Jira или провайдеру модели |
 
 Точные границы реализованного, roadmap и контрактов — не в README, а в

@@ -45,6 +45,7 @@ type generator struct {
 	workspaces            bool
 	workspaceTrees        bool
 	decisionState         bool
+	neutralStart          bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -254,6 +255,7 @@ var profileContracts = []struct {
 	{"workspace", "generate declared repository workspace state/read version 23 contracts", func(g *generator) { g.workspaces = true }},
 	{"workspace-tree", "generate workspace-tree state/read version 24 contracts", func(g *generator) { g.workspaceTrees = true }},
 	{"decision-state", "generate decision catalog state/read version 25 contracts", func(g *generator) { g.decisionState = true }},
+	{"neutral-start", "generate optional RunBrief state/read version 26 contracts", func(g *generator) { g.neutralStart = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -266,6 +268,9 @@ var documentContracts = []struct {
 	{"step-definition-v4", "generate StepDefinition v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV4") }},
 	{"step-definition-v5", "generate StepDefinition v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV5") }},
 	{"workflow-revision-v3", "generate WorkflowRevision v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV3") }},
+	{"run-start-v2", "generate RunStart v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("RunStartV2") }},
+	{"package-manifest-v2", "generate PackageManifest v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("PackageManifestV2") }},
+	{"execution-bindings", "generate explicit execution bindings contract", func() ([]byte, error) { return prifly.PublicSchema("ExecutionBindings") }},
 	{"publication-source", "generate once artifact publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchema() }},
 	{"publication-source-v2", "generate each-publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV2() }},
 	{"publication-source-v3", "generate once new-only source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV3() }},
@@ -723,6 +728,12 @@ func main() {
 		contracts["DecisionSheet"] = reflect.TypeFor[prifly.DecisionSheet]()
 		contracts["DecisionRecord"] = reflect.TypeFor[prifly.DecisionRecord]()
 	}
+	if g.neutralStart {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V26"] = contracts[name+"V25"]
+			delete(contracts, name+"V25")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -924,6 +935,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-decisions:25"
 			bundle["title"] = "Pri-Fly Run decision contracts"
 			bundle["description"] = "Decision state/read version 25 seals a declared catalog and its answered preflight sheet with one Run. The catalog names values only; it grants no authority, changes no graph and cannot capture an executor's undeclared native dialog. Earlier bundles remain unchanged."
+		}
+		if g.neutralStart {
+			neutralStartConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-neutral-start:26"
+			bundle["title"] = "Pri-Fly neutral Start contracts"
+			bundle["description"] = "Start v2 admits exact workflow, typed inputs and policy without a synthetic RunBrief. State/read 26 preserve its absence; prior contracts still require a brief. ExecutionEnvelope v1 remains unchanged and does not contain a brief field."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

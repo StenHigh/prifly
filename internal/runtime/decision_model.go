@@ -9,6 +9,9 @@ func hasDecisionStateFields(r Run) bool {
 }
 
 func decisionInvariant(r Run) error {
+	if isNeutralState(r.SchemaVersion) && !hasDecisionStateFields(r) {
+		return nil
+	}
 	if !isDecisionState(r.SchemaVersion) {
 		if hasDecisionStateFields(r) {
 			return errors.New("decision invariant: older state carries decision fields")

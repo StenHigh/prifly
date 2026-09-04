@@ -30,7 +30,7 @@ func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		updated, err := updateProjectRunners(root)
+		updated, err := updateProjectRunners(root, projectHosts...)
 		if err != nil {
 			t.Fatalf("variant %d could not be updated: %v", index, err)
 		}

@@ -2,16 +2,25 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:prifly:yaml-authoring:project-profile",
   "title": "Pri-Fly project profile v2 or v3",
-  "description": "Первый срез v3: детерминированные compiled identities; Git и все три host roots пока обязательны.",
+  "description": "Project /3 допускает отсутствие hosts; опубликованный /2 по-прежнему требует все три host roots.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "hosts", "packages", "launches"],
+  "required": ["schema_version", "packages", "launches"],
+  "oneOf": [
+    {
+      "required": ["hosts"],
+      "properties": {
+        "schema_version": {"const": "prifly-project-profile/2"},
+        "hosts": {"required": ["codex-cli", "codex-app", "claude-code"]}
+      }
+    },
+    {"properties": {"schema_version": {"const": "prifly-project-profile/3"}}}
+  ],
   "properties": {
     "schema_version": {"enum": ["prifly-project-profile/2", "prifly-project-profile/3"]},
     "hosts": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["codex-cli", "codex-app", "claude-code"],
       "properties": {
         "codex-cli": {"const": ".codex/skills"},
         "codex-app": {"const": ".agents/skills"},

@@ -105,12 +105,27 @@ func writeProjectComponent(output string, component projectCompileComponent) err
 // identity. A second compilation could read changed skills or extend settings.
 func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, selectedProfile string, source projectPackageSource, registry flow.Registry, packages prifly.PackageRecord, values map[string]any, options projectWorkflowOptions) (projectCompileResult, error) {
 	variant := profileVersion == projectVariantProfileVersion
+	if !variant {
+		object, _ := source.RootValue.(map[string]any)
+		if _, exists := object["execution_bindings"]; exists {
+			return projectCompileResult{}, usageError("project_compile_profile_required: execution bindings require profile /3")
+		}
+		for _, document := range source.Documents {
+			if document.Kind == "check" {
+				return projectCompileResult{}, usageError("project_compile_profile_required: checks require profile /3")
+			}
+		}
+	}
 	intermediateOutput := output
 	if variant {
 		intermediateOutput = ""
 	}
 	parameters := maps.Clone(values)
 	components, err := compileProjectPackage(root, skillsRoot, intermediateOutput, source, values, options)
+	if err != nil {
+		return projectCompileResult{}, err
+	}
+	source.ExecutionBindings, err = projectReadExecution(root, source, components, values)
 	if err != nil {
 		return projectCompileResult{}, err
 	}
@@ -124,6 +139,9 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 		}
 		components, source.Build, err = projectBuildVariant(source, components, selectedProfile, parameters, options)
 		if err != nil {
+			return projectCompileResult{}, err
+		}
+		if err := projectSealExecution(source.ExecutionBindings, components); err != nil {
 			return projectCompileResult{}, err
 		}
 		source.Version, err = projectBuildPackageVersion(source.Build.BuildKey)
@@ -145,7 +163,7 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	if err != nil {
 		return projectCompileResult{}, err
 	}
-	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components}
+	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings}
 	if source.Build != nil {
 		result.SchemaVersion = "project-compile/2"
 		result.AuthorPackage = &source.Build.AuthorPackage
@@ -239,6 +257,9 @@ func projectBuildVariant(source projectPackageSource, components []projectCompil
 		"requested_capabilities": source.RequestedCapabilities, "dependencies": source.ResolvedDependencies,
 		"decision_catalog": source.DecisionCatalog, "package_profile": profile, "values": values,
 		"settings": options.Settings, "exclude": options.Exclude, "extensions": options.Extensions, "documents": inputDocuments,
+	}
+	if source.ExecutionBindings != nil {
+		input["execution_bindings"] = source.ExecutionBindings
 	}
 	data, err := projectCanonicalJSON(input)
 	if err != nil {

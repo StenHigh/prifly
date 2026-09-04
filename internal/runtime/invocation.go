@@ -91,6 +91,13 @@ func (r Run) MarshalJSON() ([]byte, error) {
 	if len(r.Ready) != 0 {
 		return nil, faultf("invalid_invocation", "invocation state has a legacy Run frontier")
 	}
+	if isNeutralState(r.SchemaVersion) && r.Brief == (ArtifactRef{}) {
+		return json.Marshal(struct {
+			*wireRun
+			Ready *[]string    `json:"ready_stages,omitempty"`
+			Brief *ArtifactRef `json:"brief_ref,omitempty"`
+		}{wireRun: (*wireRun)(&r)})
+	}
 	return json.Marshal(struct {
 		*wireRun
 		Ready *[]string `json:"ready_stages,omitempty"`

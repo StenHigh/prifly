@@ -1,0 +1,12 @@
+authoring: prifly-step/1
+id: example:step/report
+version: 1.0.0
+title: Write report
+kind: worker
+inputs:
+  rows: {schema_ref: "{{schema_rows}}"}
+outputs:
+  report: {format: blob, media_types: [text/plain], required_for: [pass]}
+executor: {adapter_ref: "{{adapter}}", operation: process}
+effects: {class: none, retry_class: never}
+result_schema_ref: "{{result}}"

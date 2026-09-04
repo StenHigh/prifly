@@ -28,7 +28,7 @@ type projectStartResult struct {
 	// "the policy can take every declared runtime decision".
 	AutonomyUnanswered *[]prifly.UnansweredDecision `json:"autonomy_unanswered,omitempty"`
 	Run                prifly.RunView               `json:"run"`
-	Workspace          prifly.WorktreeClaim         `json:"workspace"`
+	Workspace          *prifly.WorktreeClaim        `json:"workspace,omitempty"`
 }
 
 type projectPreflight struct {
@@ -39,15 +39,16 @@ type projectPreflight struct {
 }
 
 // project start is intentionally the only executable Project entry point. It
-// seals declared YAML into a disposable package, then hands the first task to
-// an existing host; it never starts a provider or background worker.
+// seals declared YAML into a disposable package and uses the existing engine.
+// An assisted step waits for its host; a managed step uses its approved worker.
 func (c *cli) projectStart(ctx context.Context, args []string) error {
 	f := flags("project start")
-	repository := f.String("repository", ".", "Git repository that owns the shared Pri-Fly profile")
+	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
 	host := f.String("host", "", "host entry point that selects project skills")
 	brief := f.String("brief", "", "confirmed RunBrief JSON file")
-	workspace := f.String("workspace", "worktree", "worktree or checkout")
+	workspace := f.String("workspace", "", "explicit worktree or checkout for assisted repository writes")
+	allowExecution := f.Bool("allow-execution", false, "approve the selected workflow programs, arguments and supporting files")
 	packageProfile := f.String("package-profile", "", "per-Run package profile")
 	decisionPolicy := f.String("decision-policy", "attended", "attended or autonomous declared-decision policy")
 	expectedCatalog := f.String("expected-decision-catalog-digest", "", "catalog digest returned by project questionnaire")
@@ -63,16 +64,16 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if err := parse(f, args); err != nil {
 		return err
 	}
-	if *launchID == "" || *host == "" || *brief == "" {
-		return usageError("project start requires --launch, --host and --brief")
+	if *launchID == "" {
+		return usageError("project start requires --launch")
 	}
-	if *workspace != "worktree" && *workspace != "checkout" {
+	if *workspace != "" && *workspace != "worktree" && *workspace != "checkout" {
 		return usageError("project_start_invalid_workspace: use worktree or checkout")
 	}
 	if *command == "" {
 		*command = commandID()
 	}
-	root, err := projectRepositoryRoot(ctx, *repository)
+	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
 	}
@@ -80,11 +81,23 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	neutral := profile.SchemaVersion == projectVariantProfileVersion
+	if !neutral {
+		if *host == "" || *brief == "" {
+			return usageError("project start requires --launch, --host and --brief for profile /2")
+		}
+		if *workspace == "" {
+			*workspace = "worktree"
+		}
+	}
+	if err := c.projectAuthority(root, profile); err != nil {
+		return err
+	}
 	launch, exists := profile.Launches[*launchID]
 	if !exists || launch.Kind != "workflow" {
 		return usageError("project_start_unknown_launch: " + *launchID)
 	}
-	if _, err := profile.skillsRoot(*host); err != nil {
+	if _, err := projectCompileSkillsRoot(root, profile, *host); err != nil {
 		return err
 	}
 	packageName, err := profile.packageForLaunch(root, launch)
@@ -105,7 +118,7 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if details == nil {
 		return local.ErrIntegrity
 	}
-	if err := projectStartInputs(*details, inputs, refFiles); err != nil {
+	if err := projectStartInputs(*details, inputs, refFiles, !neutral); err != nil {
 		return err
 	}
 	preflight, err := projectStartPreflight(root, profile, packageName, *packageProfile, *decisionPolicy, answers, runtimeAnswers)
@@ -129,17 +142,19 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if err := authority.Close(); err != nil {
 		return err
 	}
-	briefPath := projectRequestFile(root, *brief)
-	briefBytes, err := readFile(briefPath, prifly.MaxDefinitionBytes)
-	if err != nil {
-		return err
-	}
-	if err := flow.ValidateProtocol("RunBrief", briefBytes); err != nil {
-		return err
-	}
-	var confirmed prifly.Brief
-	if err := json.Unmarshal(briefBytes, &confirmed); err != nil || confirmed.Confirmation != "explicit" {
-		return usageError("project_start_invalid_brief: RunBrief requires explicit owner confirmation")
+	var briefBytes []byte
+	if *brief != "" {
+		briefBytes, err = readFile(projectRequestFile(root, *brief), prifly.MaxDefinitionBytes)
+		if err != nil {
+			return err
+		}
+		if err := flow.ValidateProtocol("RunBrief", briefBytes); err != nil {
+			return err
+		}
+		var confirmed prifly.Brief
+		if err := json.Unmarshal(briefBytes, &confirmed); err != nil || confirmed.Confirmation != "explicit" {
+			return usageError("project_start_invalid_brief: RunBrief requires explicit owner confirmation")
+		}
 	}
 	refs := map[string]prifly.ArtifactRef{}
 	for port, path := range refFiles {
@@ -149,14 +164,17 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 		}
 		refs[port] = ref
 	}
-	// Read input files before any authority mutation. Their schema is checked by
-	// Start against the exact sealed workflow after it is registered.
-	inputPaths := bindings{}
+	// Freeze caller bytes before any authority mutation; preflight and Start
+	// see the same bytes even when an original file changes during compilation.
+	inputValues := map[string]json.RawMessage{}
+	inputPaths := map[string]string{}
 	for port, path := range inputs {
 		resolved := projectRequestFile(root, path)
-		if _, err := readFile(resolved, prifly.MaxArtifactBytes); err != nil {
+		data, err := readFile(resolved, prifly.MaxArtifactBytes)
+		if err != nil {
 			return err
 		}
+		inputValues[port] = data
 		inputPaths[port] = resolved
 	}
 
@@ -177,25 +195,46 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if err := projectVerifySealedDecisionCatalog(packageDirectory, preflight); err != nil {
 		return err
 	}
+	var execution *prifly.ExecutionBindings
+	needsWorkspace := !neutral
+	if neutral {
+		preflightEngine, err := prifly.Open(c.project, true)
+		if err != nil {
+			return err
+		}
+		execution, needsWorkspace, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, workflowPath, *host, *workspace, *allowExecution, inputValues, refs)
+		closeErr := preflightEngine.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
 
 	engine, err := prifly.Open(c.project, false)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = engine.Close() }()
-	before, err := engine.Claims(ctx)
-	if err != nil {
-		return err
+	var claim *prifly.WorktreeClaim
+	createdClaim := false
+	if needsWorkspace {
+		before, err := engine.Claims(ctx)
+		if err != nil {
+			return err
+		}
+		selected, err := engine.ClaimWorktree(ctx, prifly.ClaimRequest{CommandID: *command + ":workspace", Repository: root, OwnerID: "project-launch:" + *command, WorkspaceMode: *workspace})
+		if err != nil {
+			return err
+		}
+		claim, createdClaim = &selected, true
+		for _, previous := range before.Claims {
+			if previous.ID == selected.ID {
+				createdClaim = false
+			}
+		}
 	}
-	knownClaims := map[string]bool{}
-	for _, claim := range before.Claims {
-		knownClaims[claim.ID] = true
-	}
-	claim, err := engine.ClaimWorktree(ctx, prifly.ClaimRequest{CommandID: *command + ":workspace", Repository: root, OwnerID: "project-launch:" + *command, WorkspaceMode: *workspace})
-	if err != nil {
-		return err
-	}
-	createdClaim := !knownClaims[claim.ID]
 	imported := false
 	if err := projectPackageAvailable(ctx, engine, compiled.Package); err != nil {
 		if !errors.Is(err, local.ErrNotFound) {
@@ -218,7 +257,11 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	startOptions := prifly.StartOptions{CommandID: *command, WorkflowFile: workflowPath, BriefFile: briefPath, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
+	startOptions := prifly.StartOptions{CommandID: *command, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
+	if neutral {
+		startOptions.SchemaVersion, startOptions.ExecutionBindings = "2", execution
+		startOptions.Inputs, startOptions.InputValues = nil, inputValues
+	}
 	if preflight.Declared {
 		startOptions.DecisionCatalog, startOptions.DecisionSheet = &preflight.Catalog, &preflight.Sheet
 	}
@@ -233,7 +276,7 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 		return err
 	}
 	if err := engine.Drive(ctx, started.Receipt.RunID); err != nil {
-		return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s, workspace %s", started.Receipt.RunID, claim.ID), Cause: err}
+		return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s", started.Receipt.RunID), Cause: err}
 	}
 	view, err := engine.View(ctx, started.Receipt.RunID)
 	if err != nil {
@@ -262,7 +305,7 @@ func projectRequestFile(repository, name string) string {
 	return filepath.Join(repository, name)
 }
 
-func projectStartInputs(launch projectLaunchDetail, inputs, refs bindings) error {
+func projectStartInputs(launch projectLaunchDetail, inputs, refs bindings, requireExplicit bool) error {
 	declared := map[string]projectLaunchInput{}
 	for _, input := range launch.Inputs {
 		declared[input.Name] = input
@@ -279,6 +322,11 @@ func projectStartInputs(launch projectLaunchDetail, inputs, refs bindings) error
 		if _, ok := declared[port]; !ok {
 			return usageError("project_start_unknown_input: " + port)
 		}
+	}
+	// Profile /3 resolves defaults and project settings against the compiled
+	// contract; the source listing alone cannot decide requiredness.
+	if !requireExplicit {
+		return nil
 	}
 	for port, input := range declared {
 		if input.Required {
@@ -524,16 +572,9 @@ func (c *cli) compileDeclaredProjectPackage(ctx context.Context, root string, pr
 	if !exists {
 		return projectCompileResult{}, usageError("project_compile_unknown_package: " + name)
 	}
-	skillsRoot, err := profile.skillsRoot(host)
+	skillsRoot, err := projectCompileSkillsRoot(root, profile, host)
 	if err != nil {
 		return projectCompileResult{}, err
-	}
-	skillsRoot, err = canonicalProjectPath(filepath.Join(root, filepath.FromSlash(skillsRoot)))
-	if err != nil {
-		return projectCompileResult{}, err
-	}
-	if relative, err := filepath.Rel(root, skillsRoot); err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return projectCompileResult{}, usageError("project_compile_invalid_host_root: selected host skills root must stay inside the repository")
 	}
 	if projectPathsOverlap(root, output) || projectPathsOverlap(c.project, output) {
 		return projectCompileResult{}, usageError("project_compile_unsafe_output: output must stay outside the repository and local authority")

@@ -1,0 +1,12 @@
+authoring: prifly-step/1
+id: example:step/parse
+version: 1.0.0
+title: Parse CSV
+kind: worker
+inputs:
+  csv: {format: blob, media_types: [text/csv]}
+outputs:
+  rows: {schema_ref: "{{schema_rows}}", required_for: [pass]}
+executor: {adapter_ref: "{{adapter}}", operation: process}
+effects: {class: none, retry_class: never}
+result_schema_ref: "{{result}}"

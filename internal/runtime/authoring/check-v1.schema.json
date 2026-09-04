@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:check:1",
+  "title": "Pri-Fly full CheckDefinition YAML",
+  "description": "Profile /3 checks/ component: full check-definition/1, without authoring defaults. Compiler resolves whole-scalar refs before validating CheckDefinition.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "version", "title", "kind", "claim", "executor"],
+  "properties": {
+    "schema_version": {"const": "check-definition/1"},
+    "id": {"$ref": "#/$defs/identifier"},
+    "version": {"$ref": "#/$defs/version"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 256},
+    "kind": {"enum": ["content", "result"]},
+    "claim": {"enum": ["content_valid", "check_passed", "semantic_review"]},
+    "executor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["adapter_ref", "operation"],
+      "properties": {
+        "adapter_ref": {
+          "oneOf": [
+            {"$ref": "#/$defs/immutable_ref"},
+            {"type": "string", "pattern": "^\\{\\{[a-z][a-z0-9_-]*\\}\\}$"}
+          ]
+        },
+        "operation": {"$ref": "#/$defs/identifier"}
+      }
+    }
+  },
+  "oneOf": [
+    {"properties": {"kind": {"const": "content"}, "claim": {"const": "content_valid"}}},
+    {"properties": {"kind": {"const": "result"}, "claim": {"enum": ["check_passed", "semantic_review"]}}}
+  ],
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._:/-]{0,127}$"},
+    "version": {"type": "string", "maxLength": 64, "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[A-Za-z0-9.-]+)?$"},
+    "immutable_ref": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "digest"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "version": {"$ref": "#/$defs/version"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

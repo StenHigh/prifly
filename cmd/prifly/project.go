@@ -19,11 +19,7 @@ import (
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
-const projectProfileSource = `schema_version: prifly-project-profile/2
-hosts:
-  codex-cli: .codex/skills
-  codex-app: .agents/skills
-  claude-code: .claude/skills
+const projectProfileSource = `schema_version: prifly-project-profile/3
 packages: {}
 launches: {}
 `
@@ -433,36 +429,36 @@ func (c *cli) projectCommand(ctx context.Context, args []string) error {
 	}
 }
 
-// projectLocal edits the machine-only file that tells the local CLI where its
-// authority and binary are. Only the binary path is editable here: the file is
-// created by project init, which is also the only place an authority is chosen.
+// projectLocal edits machine-only executable choices, never the shared graph
+// or the authority chosen by project init.
 func (c *cli) projectLocal(args []string) error {
 	if len(args) == 0 || args[0] != "set" {
-		return usageError("project local requires set --executable PATH [--repository DIR]")
+		return usageError("project local requires set --executable PATH or --allow-executable NAME=PATH [--repository DIR]")
 	}
 	f := flags("project local set")
-	repository := f.String("repository", ".", "Git repository that owns the shared Pri-Fly profile")
+	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	executable := f.String("executable", "", "absolute path to the prifly binary this machine runs")
+	var allowed stringsFlag
+	f.Var(&allowed, "allow-executable", "allow a local executable NAME=/absolute/path (repeatable)")
 	if err := parse(f, args[1:]); err != nil {
 		return err
 	}
-	if *executable == "" {
-		return usageError("project local set requires --executable PATH")
+	if *executable == "" && len(allowed) == 0 {
+		return usageError("project local set requires --executable PATH or --allow-executable NAME=PATH")
 	}
-	if !filepath.IsAbs(*executable) {
+	if *executable != "" && !filepath.IsAbs(*executable) {
 		return usageError("project_local_executable_relative: --executable needs an absolute path; received " + strconv.Quote(*executable))
 	}
-	root, err := projectRepositoryRoot(context.Background(), *repository)
+	root, err := projectRoot(context.Background(), *repository)
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(root, ".prifly", "local.yaml")
-	current, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return usageError("project_local_missing: run project init before changing .prifly/local.yaml")
-	}
+	current, _, _, err := readProjectLocalExecution(root)
 	if err != nil {
 		return err
+	}
+	if len(allowed) != 0 {
+		return c.projectLocalAllowExecutables(root, current, *executable, allowed)
 	}
 	lines := strings.Split(string(current), "\n")
 	replaced := false
@@ -479,38 +475,93 @@ func (c *cli) projectLocal(args []string) error {
 		return usageError("project_local_invalid: .prifly/local.yaml does not name prifly_executable")
 	}
 	updated := strings.Join(lines, "\n")
-	if err := os.WriteFile(path, []byte(updated), 0644); err != nil {
+	if err := replaceProjectRunner(filepath.Join(root, ".prifly", "local.yaml"), updated); err != nil {
 		return err
 	}
 	return c.emit(map[string]any{"schema_version": "prifly-project-local/1", "repository": root, "prifly_executable": *executable})
 }
 
 func (c *cli) projectRunners(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "update" {
-		return usageError("project runners requires update --repository DIR")
+	if len(args) == 0 || (args[0] != "update" && args[0] != "add") {
+		return usageError("project runners requires update or add --host NAME --repository DIR")
 	}
-	f := flags("project runners update")
-	repository := f.String("repository", ".", "Git repository that owns the shared Pri-Fly profile")
+	f := flags("project runners " + args[0])
+	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
+	var hostIDs stringsFlag
+	f.Var(&hostIDs, "host", "supported host to attach (repeatable, add only)")
 	if err := parse(f, args[1:]); err != nil {
 		return err
 	}
-	root, err := projectRepositoryRoot(ctx, *repository)
+	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
 	}
-	if _, err := readProjectProfile(root); err != nil {
+	profile, err := readProjectProfile(root)
+	if err != nil {
 		return err
 	}
-	updated, err := updateProjectRunners(root)
+	if args[0] == "add" {
+		if len(hostIDs) == 0 {
+			return usageError("project runners add requires --host NAME")
+		}
+		return c.projectAddRunners(root, profile, hostIDs)
+	}
+	if len(hostIDs) != 0 {
+		return usageError("project runners update does not accept --host; it updates declared hosts only")
+	}
+	updated, err := updateProjectRunners(root, profile.hosts()...)
 	if err != nil {
 		return err
 	}
 	return c.emit(map[string]any{"schema_version": "project-runners-update/1", "repository": root, "updated_hosts": updated})
 }
 
+func (c *cli) projectAddRunners(root string, profile projectProfile, ids []string) error {
+	hosts, err := projectSelectedHosts(ids)
+	if err != nil {
+		return err
+	}
+	missing := make([]projectHost, 0, len(hosts))
+	for _, host := range hosts {
+		if _, exists := profile.HostSkillsRoots[host.ID]; exists {
+			if err := checkExistingProjectRunners(root, host); err != nil {
+				return err
+			}
+		} else {
+			missing = append(missing, host)
+		}
+	}
+	if err := checkProjectRunners(root, missing...); err != nil {
+		return err
+	}
+	added := make([]string, 0, len(missing))
+	if len(missing) != 0 {
+		document, err := readProjectProfileNode(root)
+		if err != nil {
+			return err
+		}
+		hostsNode := projectMappingValue(document.Content[0], "hosts")
+		if hostsNode == nil {
+			hostsNode = projectMappingNode()
+			projectMappingSet(document.Content[0], "hosts", hostsNode)
+		}
+		for _, host := range missing {
+			projectMappingSet(hostsNode, host.ID, projectScalarNode(host.SkillsRoot))
+			added = append(added, host.ID)
+		}
+		if err := writeProjectRunners(root, missing...); err != nil {
+			return err
+		}
+		if err := writeProjectProfileNode(root, document); err != nil {
+			return err
+		}
+	}
+	return c.emit(map[string]any{"schema_version": "project-runners-add/1", "repository": root, "added_hosts": added})
+}
+
 func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	f := flags("project questionnaire")
-	repository := f.String("repository", ".", "Git repository that owns the shared Pri-Fly profile")
+	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	name := f.String("package", "", "named package from project.yaml")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
 	if err := parse(f, args); err != nil {
@@ -519,7 +570,7 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	if (*name == "" && *launchID == "") || (*name != "" && *launchID != "") {
 		return usageError("project questionnaire requires exactly one of --package or --launch")
 	}
-	root, err := projectRepositoryRoot(ctx, *repository)
+	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
 	}
@@ -570,12 +621,18 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 
 func (c *cli) projectInit(ctx context.Context, args []string) error {
 	f := flags("project init")
-	repository := f.String("repository", ".", "Git repository that owns the shared Pri-Fly profile")
+	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	stateRoot := f.String("state-root", "", "machine-local authority root outside the repository")
+	var hostIDs stringsFlag
+	f.Var(&hostIDs, "host", "supported host to attach to a new profile (repeatable)")
 	if err := parse(f, args); err != nil {
 		return err
 	}
-	root, err := projectRepositoryRoot(ctx, *repository)
+	hosts, err := projectSelectedHosts(hostIDs)
+	if err != nil {
+		return err
+	}
+	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
 	}
@@ -601,8 +658,12 @@ func (c *cli) projectInit(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if !existing {
-		if err := checkProjectRunners(root); err != nil {
+	if existing {
+		if len(hostIDs) != 0 {
+			return usageError("project_profile_conflict: use project runners add --host NAME to attach a host to an existing profile")
+		}
+	} else {
+		if err := checkProjectRunners(root, hosts...); err != nil {
 			return err
 		}
 	}
@@ -614,10 +675,10 @@ func (c *cli) projectInit(ctx context.Context, args []string) error {
 			return err
 		}
 	} else {
-		if err := writeProjectProfile(profile, authority, executable); err != nil {
+		if err := writeProjectProfile(profile, authority, executable, hosts...); err != nil {
 			return err
 		}
-		if err := writeProjectRunners(root); err != nil {
+		if err := writeProjectRunners(root, hosts...); err != nil {
 			return err
 		}
 	}
@@ -629,11 +690,11 @@ func (c *cli) projectWorkflows(ctx context.Context, args []string) error {
 		return c.projectWorkflowsCommand(ctx, args)
 	}
 	f := flags("project workflows")
-	repository := f.String("repository", ".", "Git repository that owns the shared Pri-Fly profile")
+	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	if err := parse(f, args); err != nil {
 		return err
 	}
-	root, err := projectRepositoryRoot(ctx, *repository)
+	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
 	}
@@ -1038,19 +1099,31 @@ func readProjectProfile(root string) (projectProfile, error) {
 	}
 	profile := projectProfile{SchemaVersion: schema, HostSkillsRoots: make(map[string]string, len(projectHosts)), Launches: make(map[string]projectLaunch, len(launches))}
 	rawHosts, exists := object["hosts"]
-	if !exists {
+	if !exists && schema == "prifly-project-profile/2" {
 		return projectProfile{}, usageError("project_profile_invalid: hosts is required by prifly-project-profile/2")
 	}
-	hosts, ok := rawHosts.(map[string]any)
-	if !ok || len(hosts) != len(projectHosts) {
+	hosts := map[string]any{}
+	if exists {
+		hosts, ok = rawHosts.(map[string]any)
+		if !ok {
+			return projectProfile{}, usageError("project_profile_invalid: hosts must be an object")
+		}
+	}
+	if schema == "prifly-project-profile/2" && len(hosts) != len(projectHosts) {
 		return projectProfile{}, usageError("project_profile_invalid: hosts must declare every supported host")
 	}
 	for _, host := range projectHosts {
+		if _, exists := hosts[host.ID]; !exists && schema == projectVariantProfileVersion {
+			continue
+		}
 		root, ok := hosts[host.ID].(string)
 		if !ok || root != host.SkillsRoot {
 			return projectProfile{}, usageError("project_profile_invalid: host " + host.ID + " must use " + host.SkillsRoot)
 		}
 		profile.HostSkillsRoots[host.ID] = root
+	}
+	if len(profile.HostSkillsRoots) != len(hosts) {
+		return projectProfile{}, usageError("project_profile_invalid: hosts contains an unsupported host")
 	}
 	rawPackages, exists := object["packages"]
 	if !exists {
@@ -1140,6 +1213,36 @@ func (profile projectProfile) skillsRoot(hostID string) (string, error) {
 		return "", usageError("project_compile_unknown_host: " + hostID)
 	}
 	return root, nil
+}
+
+func (profile projectProfile) hosts() []projectHost {
+	hosts := make([]projectHost, 0, len(profile.HostSkillsRoots))
+	for _, host := range projectHosts {
+		if _, exists := profile.HostSkillsRoots[host.ID]; exists {
+			hosts = append(hosts, host)
+		}
+	}
+	return hosts
+}
+
+func projectSelectedHosts(ids []string) ([]projectHost, error) {
+	selected := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if selected[id] {
+			return nil, usageError("project_runner_invalid_host: duplicate host " + id)
+		}
+		selected[id] = true
+	}
+	hosts := make([]projectHost, 0, len(ids))
+	for _, host := range projectHosts {
+		if selected[host.ID] {
+			hosts = append(hosts, host)
+		}
+	}
+	if len(hosts) != len(ids) {
+		return nil, usageError("project_runner_invalid_host: supported hosts are codex-cli, codex-app and claude-code")
+	}
+	return hosts, nil
 }
 
 func (profile projectProfile) launchDetails(root string) ([]projectLaunchDetail, error) {
@@ -1287,6 +1390,52 @@ func projectLaunchID(id string) bool {
 	return true
 }
 
+// Project discovery does not require Git. Only the published /2 contract
+// retains its Git-root requirement; a fresh folder will become /3 at init.
+func projectRoot(ctx context.Context, path string) (string, error) {
+	directory, err := canonicalProjectPath(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(directory)
+	if err != nil || !info.IsDir() {
+		return "", usageError("project_root_invalid: project path must be an existing directory")
+	}
+	for parent := directory; ; parent = filepath.Dir(parent) {
+		info, err := os.Lstat(filepath.Join(parent, ".prifly"))
+		if err == nil {
+			if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				return "", usageError("project_profile_invalid: .prifly must be a real directory")
+			}
+			if _, err := os.Lstat(filepath.Join(parent, ".prifly", "project.yaml")); errors.Is(err, os.ErrNotExist) {
+				return parent, nil
+			} else if err != nil {
+				return "", err
+			}
+			profile, err := readProjectProfile(parent)
+			if err != nil {
+				return "", err
+			}
+			if profile.SchemaVersion == "prifly-project-profile/2" {
+				gitRoot, err := projectRepositoryRoot(ctx, parent)
+				if err != nil {
+					return "", err
+				}
+				if gitRoot != parent {
+					return "", usageError("repository_required: profile /2 must be at the Git repository root")
+				}
+			}
+			return parent, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		if filepath.Dir(parent) == parent {
+			return directory, nil
+		}
+	}
+}
+
 func projectRepositoryRoot(ctx context.Context, path string) (string, error) {
 	directory, err := canonicalProjectPath(path)
 	if err != nil {
@@ -1432,8 +1581,29 @@ func projectKnownRunnerSkills(host projectHost) []string {
 	return []string{projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host)}
 }
 
-func checkProjectRunners(root string) error {
-	for _, host := range projectHosts {
+func checkProjectRunnerRoot(root string, host projectHost) error {
+	path := root
+	for _, part := range strings.Split(host.SkillsRoot, "/") {
+		path = filepath.Join(path, part)
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return usageError("project_runner_conflict: host skills roots must use real directories inside the project")
+		}
+	}
+	return nil
+}
+
+func checkProjectRunners(root string, hosts ...projectHost) error {
+	for _, host := range hosts {
+		if err := checkProjectRunnerRoot(root, host); err != nil {
+			return err
+		}
 		path := projectRunnerPath(root, host)
 		if _, err := os.Lstat(path); err == nil {
 			return usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
@@ -1465,10 +1635,11 @@ func existingProjectProfile(root, profile string) (bool, error) {
 	} else if err != nil {
 		return false, err
 	}
-	if _, err := readProjectProfile(root); err != nil {
+	parsed, err := readProjectProfile(root)
+	if err != nil {
 		return false, err
 	}
-	if err := checkExistingProjectRunners(root); err != nil {
+	if err := checkExistingProjectRunners(root, parsed.hosts()...); err != nil {
 		return false, err
 	}
 	if _, err := os.Lstat(filepath.Join(profile, "local.yaml")); err == nil {
@@ -1483,8 +1654,11 @@ func existingProjectProfile(root, profile string) (bool, error) {
 	return true, nil
 }
 
-func checkExistingProjectRunners(root string) error {
-	for _, host := range projectHosts {
+func checkExistingProjectRunners(root string, hosts ...projectHost) error {
+	for _, host := range hosts {
+		if err := checkProjectRunnerRoot(root, host); err != nil {
+			return err
+		}
 		path := filepath.Join(projectRunnerPath(root, host), "SKILL.md")
 		info, err := os.Lstat(path)
 		if errors.Is(err, os.ErrNotExist) {
@@ -1509,13 +1683,16 @@ func checkExistingProjectRunners(root string) error {
 
 // updateProjectRunners validates every tracked runner before replacing any
 // file. This keeps a local customization from being partly overwritten.
-func updateProjectRunners(root string) ([]string, error) {
+func updateProjectRunners(root string, hosts ...projectHost) ([]string, error) {
 	type runnerUpdate struct {
 		host projectHost
 		path string
 	}
 	updates := make([]runnerUpdate, 0, len(projectHosts))
-	for _, host := range projectHosts {
+	for _, host := range hosts {
+		if err := checkProjectRunnerRoot(root, host); err != nil {
+			return nil, err
+		}
 		path := filepath.Join(projectRunnerPath(root, host), "SKILL.md")
 		info, err := os.Lstat(path)
 		if errors.Is(err, os.ErrNotExist) {
@@ -1572,8 +1749,8 @@ func replaceProjectRunner(path, contents string) error {
 	return os.Rename(temporaryName, path)
 }
 
-func writeProjectRunners(root string) error {
-	for _, host := range projectHosts {
+func writeProjectRunners(root string, hosts ...projectHost) error {
+	for _, host := range hosts {
 		parent := filepath.Dir(projectRunnerPath(root, host))
 		if err := os.MkdirAll(parent, 0755); err != nil {
 			return err
@@ -1595,7 +1772,7 @@ func writeProjectRunners(root string) error {
 	return nil
 }
 
-func writeProjectProfile(profile, authority, executable string) error {
+func writeProjectProfile(profile, authority, executable string, hosts ...projectHost) error {
 	parent := filepath.Dir(profile)
 	temporary, err := os.MkdirTemp(parent, ".prifly-profile-")
 	if err != nil {
@@ -1607,9 +1784,16 @@ func writeProjectProfile(profile, authority, executable string) error {
 			return err
 		}
 	}
+	profileSource := projectProfileSource
+	if len(hosts) != 0 {
+		profileSource += "hosts:\n"
+		for _, host := range hosts {
+			profileSource += "  " + host.ID + ": " + host.SkillsRoot + "\n"
+		}
+	}
 	for _, file := range []struct {
 		name, content string
-	}{{"project.yaml", projectProfileSource}, {".gitignore", "local.yaml\n"}, {"local.example.yaml", projectLocalExample}, {"local.yaml", projectLocalSource(authority, executable)}} {
+	}{{"project.yaml", profileSource}, {".gitignore", "local.yaml\n"}, {"local.example.yaml", projectLocalExample}, {"local.yaml", projectLocalSource(authority, executable)}} {
 		if err := os.WriteFile(filepath.Join(temporary, file.name), []byte(file.content), 0644); err != nil {
 			return err
 		}

@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=../../schemas/authoring/project-workflow-folder-v1.schema.json
+# Reference for one package root workflow.yaml, not a ready-to-run package.
+# The named step/check and supporting files must actually exist in its folder.
+# The graph stays in YAML; this section only binds existing executors.
+authoring: prifly-project-workflow/1 # Package root marker, unlike a child prifly-workflow/1.
+package:
+  id: example:package/local-programs # Author identity, not a machine path.
+  version: 1.0.0
+  description: Annotated local executable bindings
+  requires_core_protocol: "1"
+  references:
+    local_policy: core:policy/local@3.0.0 # Exact version resolved from local inventory.
+id: example:workflow/local-programs
+version: 1.0.0
+
+# Optional; profile /3 only. Omit when this package has no local programs.
+# Machine-local executable paths and secrets never belong in this section.
+execution_bindings:
+  steps: # Optional map; every key is an owned StepDefinition ID, not a stage ID.
+    example:step/report:
+      executable: shell # Required logical name, allowed locally with --allow-executable shell=/bin/sh.
+      args: [report-worker.sh] # Optional argv, default []; no implicit shell or string interpolation.
+      files: # Optional map, default {}; key is scratch destination, value is source inside this workflow folder.
+        report-worker.sh: workers/report-worker.sh # Confined regular file; bytes are sealed, not executed at compile.
+      timeout_ms: 30000 # Required execution deadline, 1..3600000 ms.
+      grace_ms: 100 # Required termination grace, 1..5000 ms.
+      max_output_bytes: 1048576 # Required output bound, 1..16777216 bytes.
+      # Optional exact context profile; omit for the existing executor default.
+      # The zero digest is illustrative and must be replaced before compilation.
+      context_profile_ref:
+        id: example:context-profile/worker
+        version: 1.0.0
+        digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  checks: # Optional map; keys identify full CheckDefinitions in checks/, not extra stages.
+    example:check/content:
+      executable: content-checker # The owner allows this installed check-request/1 program separately.
+      args: [] # Check programs use their existing check protocol, not the Step worker protocol.
+      files: {}
+      timeout_ms: 30000
+      grace_ms: 100
+      max_output_bytes: 1048576
+
+# Minimal illustrative graph. Actual use sites reference the owned step/check;
+# unused bindings do not cause their programs to run.
+entry: done
+limits: {max_step_instances: 1, max_control_transitions: 1}
+policy_ref: "{{local_policy}}"
+stages:
+  done: {kind: finish, outcome: no_work}

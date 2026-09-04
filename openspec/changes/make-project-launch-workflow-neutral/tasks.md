@@ -8,14 +8,14 @@
 
 ## 2. Высший приоритет — полноценный запуск без Git и ИИ
 
-- [ ] 2.1 Расширить `/3` optional hosts и явным подключением runner, сделать его default fresh init, сохранив reader `/2`; проверка: init без host не создаёт Git/AI folders, clone/copy bootstrap не переписывает shared YAML и frozen runners, context-capable authority готова и без host, editor schemas принимают обе версии.
-- [ ] 2.2 Отделить обнаружение Project root от Git во всех общих init/list/questionnaire/compile/start путях; проверка: public CLI работает в обычной папке и не вызывает Git там, где он не нужен; repository download сохраняет свои проверки.
-- [ ] 2.3 Ввести versioned Start/state/read/envelope путь без RunBrief для workflows без такого input, сохранив admitted start intent/inputs/policy и прежние brief contracts; проверка: no-brief Run создаётся и читается после restart без фиктивного artifact, old reader отказывает unsupported version, прежние Runs сохраняют digest и brief semantics.
-- [ ] 2.4 Описать YAML execution bindings, local executable allow mapping и отдельный versioned exact-ref payload; проверка: shapes/editor examples покрывают steps и checks, unknown selectors, чужие refs, unsafe paths и необъявленные executable отвергаются. Установленные файлы сами не исполняются.
-- [ ] 2.5 Провести bindings через общий resolver validation/Start к существующему executor pinning, не меняя `EffectiveConfiguration` и authority config; проверка: два packages/версии step с разными programs в одной authority, restart, unchanged config bytes и конфликт повторного command ID с другим binding.
-- [ ] 2.6 Вычислять нужные host/workspace по compiled contracts и связать neutral Start с Project; проверка: command-only source не требует host/brief/claim, host-bound context без host и Git-запись без workspace choice отказывают до mutation; режимы `/2` не меняются.
-- [ ] 2.7 Собрать переносимый YAML пример CSV → validation → report на существующем managed worker contract; проверка: реальный public start без Git/ИИ создаёт output с ожидаемым содержимым, его можно прочитать после restart. Разделить учебный example и тестовые fixtures, не требовать AIF/сеть.
-- [ ] 2.8 Сохранить инструкции локальной настройки программы и запуска для нового пользователя, явно назвать существующий worker contract и отсутствие sandbox; проверка: пройти пример по README без ручного редактирования authority JSON. Записать focused gates и отдельный commit среза.
+- [x] 2.1 Расширить `/3` optional hosts и явным подключением runner, сделать его default fresh init, сохранив reader `/2`; проверка: init без host не создаёт Git/AI folders, clone/copy bootstrap не переписывает shared YAML и frozen runners, context-capable authority готова и без host, editor schemas принимают обе версии.
+- [x] 2.2 Отделить обнаружение Project root от Git во всех общих init/list/questionnaire/compile/start путях; проверка: public CLI работает в обычной папке и не вызывает Git там, где он не нужен; repository download сохраняет свои проверки.
+- [x] 2.3 Ввести versioned Start/state/read/envelope путь без RunBrief для workflows без такого input, сохранив admitted start intent/inputs/policy и прежние brief contracts; проверка: no-brief Run создаётся и читается после restart без фиктивного artifact, old reader отказывает unsupported version, прежние Runs сохраняют digest и brief semantics.
+- [x] 2.4 Описать YAML execution bindings, local executable allow mapping и отдельный versioned exact-ref payload; проверка: shapes/editor examples покрывают steps и checks, unknown selectors, чужие refs, unsafe paths и необъявленные executable отвергаются. Установленные файлы сами не исполняются.
+- [x] 2.5 Провести bindings через общий resolver validation/Start к существующему executor pinning, не меняя `EffectiveConfiguration` и authority config; проверка: два packages/версии step с разными programs в одной authority, restart, unchanged config bytes и конфликт повторного command ID с другим binding.
+- [x] 2.6 Вычислять нужные host/workspace по compiled contracts и связать neutral Start с Project; проверка: command-only source не требует host/brief/claim, host-bound context без host и Git-запись без workspace choice отказывают до mutation; режимы `/2` не меняются.
+- [x] 2.7 Собрать переносимый YAML пример CSV → validation → report на существующем managed worker contract; проверка: реальный public start без Git/ИИ создаёт output с ожидаемым содержимым, его можно прочитать после restart. Разделить учебный example и тестовые fixtures, не требовать AIF/сеть.
+- [x] 2.8 Сохранить инструкции локальной настройки программы и запуска для нового пользователя, явно назвать существующий worker contract и отсутствие sandbox; проверка: пройти пример по README без ручного редактирования authority JSON. Записать focused gates и отдельный commit среза.
 
 ## 3. Высокий приоритет — общие вопросы и смешанные шаги
 
@@ -88,3 +88,77 @@ claim. Это проверка coexistence/history, а не квалификац
 UI. `make check`/`make e2e` отложены до candidate по 4.4; release, установка
 на компьютер и обновление полигона здесь не выполняются. 5.1 остаётся
 открытой как обязательство следующих срезов.
+
+## Срез 2 — нейтральный managed запуск, 2026-09-05
+
+Fresh Project `/3` не требует Git, host или отдельного RunBrief. Явные hosts
+подключаются через init/add; copy bootstrap сохраняет shared YAML и frozen
+runners. Обычные compile/start берут local authority из `local.yaml`, если
+владелец не передал прежний raw `--project`. `/2` сохраняет Git/host/brief,
+default worktree и файловую передачу configuration overrides. Для `/3`
+обязательность inputs проверяет compiled contract после defaults/settings;
+чтение source listing не подменяет эту проверку. Unknown/duplicate inputs,
+отсутствие host, workspace choice, Git или разрешённой программы отвергаются
+до registration/claim/Run.
+
+`execution_bindings` в root YAML описывает собственные steps/checks, argv,
+supporting files и явные пределы. Supporting bytes читаются через открытые
+directory handles с проверкой identity и запретом symlinks; файлы не запускаются
+во время compilation. Exact compiled refs и supporting bytes включены в
+inert `execution-bindings.json`, manifest и b1. Старый b1 golden без новых
+bindings сохранён. Логическая программа разрешается через local allow map и
+явный `--allow-execution`; registry/global executor config не переписываются.
+Runtime использует один resolver для validation/Preview/Start и существующие
+PinnedExecutor/PackageLock. Проверены две exact версии step, две программы,
+automatic checks, разные supporting bytes, restart и конфликт retry с изменённым
+payload в одной authority.
+
+Реальный осмотр уточнил две границы первоначального плана. ExecutionEnvelope
+`/1` уже не содержит brief_ref и действительно доставлен no-brief worker;
+новый envelope ради номера не понадобился. Вместо него versioned Start `/2`
+выбирает state/read `/26`, которые не создают пустой Brief/artifact; прежние
+schema/read contracts сохранены. Для CheckDefinition понадобился новый
+PackageManifest `/2`: прежний manifest `/1` не допускал kind check. Compiler
+использует manifest `/2` только с checks, остальные packages сохраняют `/1`.
+Отдельный тест доказывает YAML compile → import → reopen exact check closure;
+исполнение checks доказано runtime lifecycle, не выдано за CSV-операцию.
+
+Учебный `examples/workflows/csv-report/` содержит YAML graph и обычный Node
+worker, не AIF и не compiler script. Единственный сквозной Run выполнил
+parse → validate → report, экспортировал bytes `Rows: 3` / `Total: 24` и был
+прочитан после повторного открытия authority. Git отсутствует в PATH и папке,
+AI directories/brief/decisions/claim отсутствуют, shared/local/global config
+не меняются. Пример использует настоящий `process.execPath`, потому что shell
+shim менеджера Node не обязан работать в очищенном worker environment.
+Перед успешным Run отдельно проверены разрешение запуска, local allow map и
+missing input после настройки allow map; каждый отказ оставил packages пустыми.
+Доставка source в локальную `.prifly/` — обычное копирование YAML и декларация
+package/launch, а не ручная правка authority JSON. Git downloader не расширялся.
+
+Итоговая focused команда (один прогон после правок, из GitHub checkout):
+
+```sh
+GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local .tools/go/bin/go test ./cmd/prifly ./internal/runtime -run '^(TestCLIProject.*|TestProject.*|TestNeutralAuthoringReferencesMatchServedSchemas|TestCheckAuthoringSchemaMatchesFullDefinition|TestAuthoringDocumentsAreServedAndMatchTheDistributedFiles|TestNeutralStart.*|TestStartInputPreflightUsesReadonlyAdmissionValidation|TestExecutionBindings.*|TestPackageCheckImportsKeepVersionAndIdentityBoundaries|TestStartExactRetrySnapshotAndSourceDrift|TestCoreInputConfiguration|TestSourceRuntimeRejectsShapeOnlyDescriptors|TestFullContextNativeExecutionUsesPinnedSources|TestCallConfigurationDoesNotReplaceExplicitAbsence|TestContextFieldsNeverExtendOlderStateContracts|TestPublicSchemasMatchActualReadViewsAndRejectExtensions|TestGlossaryBindings)$' -count=1 -json
+GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local make schemas-check GO=.tools/go/bin/go
+python3 test/e2e/test_examples.py EditorContractTest
+make fmt-check refusal-check GO=.tools/go/bin/go
+openspec validate --all --strict --no-interactive
+git diff --check
+git diff --name-only 5b5c4ca -- openspec/changes/archive
+```
+
+Результат: **62/62 top-level, 143/143 subtests, 0 skipped, 0 failed**.
+cmd/prifly 18.135 s, runtime 9.755 s; промежуточные повторы не прибавлены к
+счётчику. Schema gate: **44/44** наборов совпали без `--write`, старые
+закреплённые hashes сохранены. Editor Python gate: **1/1**. OpenSpec:
+**19/19**. Formatting/refusal/diff checks чистые, archive diff пуст.
+
+**Что в этот срез не входит:** общий host runner без отраслевых правил,
+полный summary вопросов до dispatch, mixed command → assisted → command,
+живые UI observations Codex/Claude, внешний AIF package/pilot и полный
+candidate `make check`/`make e2e`. Эти работы остаются в срезах 3–4, вместе с
+полной синхронизацией main specs по 4.5; здесь актуализированы словарь,
+published/editor contracts, README и concrete design. Shell-команды не
+превращаются автоматически в native workers, managed scratch не объявляется
+sandbox. Release, установка на компьютер и полигон не менялись. Старые
+release evidence не редактировались. 5.1 остаётся открытой для следующих срезов.

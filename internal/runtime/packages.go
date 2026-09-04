@@ -109,12 +109,16 @@ type manifestComponent struct {
 // The manifest names a component kind; the registry names how the bytes are
 // interpreted. A ToolDescriptor is sealed and checked here but remains inert:
 // action admission and delivery belong to their own slice.
-func registryKind(kind string) (string, error) {
+func registryKind(kind, manifestVersion string) (string, error) {
 	switch kind {
 	case "step", "workflow", "schema", "tool":
 		return kind, nil
 	case "context":
 		return "resource", nil
+	case "check":
+		if manifestVersion == "2" {
+			return "check", nil
+		}
 	}
 	return "", faultf("unsupported_component", "package component kind %q is not admitted by this installation", kind)
 }
@@ -357,7 +361,7 @@ func readPackageManifest(source string) ([]byte, packageManifest, error) {
 	if err != nil {
 		return nil, packageManifest{}, fmt.Errorf("read %s: %w", PackageManifestFile, err)
 	}
-	if err := flow.ValidateProtocol("PackageManifest", raw); err != nil {
+	if err := flow.ValidatePackageManifest(raw); err != nil {
 		return nil, packageManifest{}, err
 	}
 	var manifest packageManifest
@@ -458,7 +462,7 @@ func packageComponents(manifest packageManifest, payload map[string][]byte, root
 	}
 	seen := map[string]bool{}
 	for _, component := range manifest.Components {
-		kind, err := registryKind(component.Kind)
+		kind, err := registryKind(component.Kind, manifest.SchemaVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -522,6 +526,15 @@ func packageComponents(manifest packageManifest, payload map[string][]byte, root
 			}
 			if descriptor.ID != component.Ref.ID || descriptor.Version != component.Ref.Version {
 				return nil, fault("ref_identity_mismatch", "ToolDescriptor differs from exact reference")
+			}
+		}
+		if kind == "check" {
+			check, err := flow.ParseCheckDefinition(data)
+			if err != nil {
+				return nil, err
+			}
+			if check.ID != component.Ref.ID || check.Version != component.Ref.Version {
+				return nil, fault("ref_identity_mismatch", "CheckDefinition differs from exact reference")
 			}
 		}
 		components = append(components, definition)

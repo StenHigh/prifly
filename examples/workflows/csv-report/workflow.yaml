@@ -1,0 +1,77 @@
+authoring: prifly-project-workflow/1
+package:
+  id: example:package/csv-report
+  version: 1.0.0
+  description: Parse, validate and summarize a CSV file without AI or Git.
+  requires_core_protocol: "1"
+  references:
+    adapter: core:adapter/local-process@2.0.0
+    policy: core:policy/local@3.0.0
+    result: core:schema/step-result@1.0.0
+id: example:workflow/csv-report
+version: 1.0.0
+title: CSV report
+inputs:
+  csv:
+    format: blob
+    media_types: [text/csv]
+    description: UTF-8 name,amount CSV; see sample.csv and README.md.
+outputs:
+  report:
+    format: blob
+    media_types: [text/plain]
+    required_for: [succeeded]
+entry: parse
+policy_ref: "{{policy}}"
+limits: {max_step_instances: 3, max_control_transitions: 8}
+stages:
+  parse:
+    kind: step
+    step_ref: "{{step_parse}}"
+    input_bindings: {csv: $inputs.csv}
+    on: {pass: validate, fail: rejected, needs_revision: rejected, no_work: rejected}
+    on_error: rejected
+  validate:
+    kind: step
+    step_ref: "{{step_validate}}"
+    input_bindings: {rows: $stages.parse.rows}
+    on: {pass: report, fail: rejected, needs_revision: rejected, no_work: rejected}
+    on_error: rejected
+  report:
+    kind: step
+    step_ref: "{{step_report}}"
+    input_bindings: {rows: $stages.validate.rows}
+    on: {pass: done, fail: rejected, needs_revision: rejected, no_work: rejected}
+    on_error: rejected
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {report: $stages.report.report}
+  rejected:
+    kind: finish
+    outcome: rejected
+
+# Portable names, resolved only through each developer's local allow list.
+execution_bindings:
+  steps:
+    example:step/parse:
+      executable: node
+      args: [worker.mjs, parse]
+      files: {worker.mjs: files/worker.mjs}
+      timeout_ms: 10000
+      grace_ms: 100
+      max_output_bytes: 1048576
+    example:step/validate:
+      executable: node
+      args: [worker.mjs, validate]
+      files: {worker.mjs: files/worker.mjs}
+      timeout_ms: 10000
+      grace_ms: 100
+      max_output_bytes: 1048576
+    example:step/report:
+      executable: node
+      args: [worker.mjs, report]
+      files: {worker.mjs: files/worker.mjs}
+      timeout_ms: 10000
+      grace_ms: 100
+      max_output_bytes: 1048576

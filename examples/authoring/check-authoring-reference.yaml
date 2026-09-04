@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=../../schemas/authoring/check-v1.schema.json
+# Full check-definition/1 reference for .prifly/workflows/NAME/checks/FILE.yaml.
+# Every field below is required: unlike step authoring, this full contract has
+# no shorthand/defaults. A check is not a graph stage or an invented Step.
+# This zero-digest example is not executable; resolve an exact adapter first.
+schema_version: check-definition/1 # Required closed contract version.
+id: example:check/content # Stable author identity, selected by execution_bindings.checks.
+version: 1.0.0 # Author version; profile /3 assigns the exact compiled version.
+title: Validate input bytes # Human-readable description of the method, 1..256 characters.
+kind: content # content checks bytes; result checks a producer result.
+claim: content_valid # content requires content_valid; result permits check_passed or semantic_review.
+executor:
+  # Exact adapter reference. A package may instead use "{{check_adapter}}"
+  # where package.references.check_adapter declares its exact logical source.
+  adapter_ref:
+    id: core:adapter/local-process
+    version: 2.0.0
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  operation: check # Adapter operation; does not itself allow a local executable.

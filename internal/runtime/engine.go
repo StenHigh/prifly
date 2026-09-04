@@ -629,7 +629,9 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		if isPublicationFailureState(r.SchemaVersion) {
 			next.SchemaVersion = CorePublicationFailureNextVersion
 		}
-		if isDecisionState(r.SchemaVersion) {
+		if isNeutralState(r.SchemaVersion) {
+			next.SchemaVersion = CoreNeutralNextVersion
+		} else if isDecisionState(r.SchemaVersion) {
 			next.SchemaVersion = CoreDecisionNextVersion
 		} else if isWorkspaceTreeState(r.SchemaVersion) {
 			next.SchemaVersion = CoreWorkspaceTreeNextVersion

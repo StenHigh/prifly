@@ -1,14 +1,16 @@
-# yaml-language-server: $schema=../../schemas/authoring/project-profile-v2.schema.json
-# Complete reference for .prifly/project.yaml. The three host roots are fixed:
+# yaml-language-server: $schema=../../schemas/authoring/project-profile-v3.schema.json
+# Complete reference for .prifly/project.yaml. Git is optional in profile /3.
+# hosts is optional: omit it entirely for command-only workflows. Any selected
+# host uses its fixed root; install it with project runners add --host HOST.
 # Pri-Fly does not guess the host by checking which folders happen to exist.
-# At launch, the selected host asks the developer to choose worktree or checkout;
-# this is a per-Run choice, not a tracked project.yaml setting.
-# /2 keeps the released author-version compilation contract. To compile several
-# variants in one authority, explicitly choose prifly-project-profile/3 and the
-# project-profile-v3 editor schema. IDs/versions in authored workflow files stay
-# unchanged; compile/start report author_package alongside the exact build.
-# This first /3 slice still requires Git, these host roots and a RunBrief.
-schema_version: prifly-project-profile/2
+# Git-writing assisted work requires an explicit worktree or checkout choice
+# per Run; ordinary commands use private scratch and do not claim a repository.
+# /2 remains a supported legacy profile with Git, all three hosts and RunBrief.
+# Existing /2 profiles migrate only by explicit reviewed edit, never at start.
+# /3 keeps authored IDs/versions; compile/start report author_package alongside
+# the exact compiled build. Program machine paths belong in ignored local.yaml,
+# never here. execution_bindings belongs in a package's root workflow.yaml.
+schema_version: prifly-project-profile/3
 hosts:
   codex-cli: .codex/skills # The `prifly-run` skill installed for Codex CLI.
   codex-app: .agents/skills # The `prifly-run` skill installed for Codex Desktop.
@@ -20,7 +22,7 @@ packages:
       repository: https://github.com/StenHigh/prifly.git # Full Git URL without credentials.
       path: examples/example # Workflow folder inside that repository.
       ref: v0.4.0 # Tag, branch or commit that was requested.
-      commit: 0000000000000000000000000000000000000000 # Exact commit that was fetched.
+      commit: "0000000000000000000000000000000000000000" # Exact commit that was fetched; a string, not a YAML number.
       digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # Tree digest without the root extend.yaml; update refuses local drift.
       extend_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # Upstream extend.yaml at install time, when it shipped one.
       catalog: https://github.com/StenHigh/prifly-workflows.git # Catalog that named the entry, when one did.

@@ -9,6 +9,7 @@
     {"document": "run-decision-v1", "id": "urn:prifly:yaml-authoring:run-decision:1", "path": "run-decision-v1.schema.json", "patterns": [".prifly/workflows/*/decisions/**/*.yaml"]},
     {"document": "workflow-v1", "id": "urn:prifly:yaml-authoring:workflow:1", "path": "workflow-v1.schema.json", "patterns": [".prifly/workflows/*/workflows/**/*.yaml"]},
     {"document": "step-v1", "id": "urn:prifly:yaml-authoring:step:1", "path": "step-v1.schema.json", "patterns": [".prifly/workflows/*/steps/**/*.yaml"]},
+    {"document": "check-v1", "id": "urn:prifly:yaml-authoring:check:1", "path": "check-v1.schema.json", "patterns": [".prifly/workflows/*/checks/**/*.yaml"]},
     {"document": "context-v1", "id": "urn:prifly:yaml-authoring:context:1", "path": "context-v1.schema.json", "patterns": [".prifly/workflows/*/contexts/**/*.yaml"]},
     {"document": "workflow-catalog-v1", "id": "urn:prifly:yaml-authoring:workflow-catalog:1", "path": "workflow-catalog-v1.schema.json", "patterns": ["catalog.yaml"]}
   ]

@@ -37,7 +37,7 @@ type ProfileCapabilities struct {
 func Capabilities() CapabilityManifest {
 	base := []string{"step", "finish", "local_process", "state_hook", "event_hook", "telemetry.catalog", "telemetry.records", "telemetry.aggregate"}
 	core := append(append([]string{}, base...), "on_error", "json_projection", "input_configuration", "choice", "call", "repeat", "partial", "local_workflow_aliases", "context_resources", "full_context", "source_import", "context_request", "automatic_checks", "assisted_session", "quality_waivers", "parallel", "map", "wait", "schedule", "live_guards", "reported_cost", "artifact_publication", "artifact_publication_checks", "artifact_close", "publication_subscription_once", "publication_subscription_each", "publication_subscription_new_only", "publication_subscription_terminal_failure", "publication_subscription_blob", "action_intent_proposal", "action_admission", "action_grant_admission", "action_delivery_prepared", "run_fork", "workspace_modes", "workspace_tree_artifacts", "decision_catalog")
-	return CapabilityManifest{
+	manifest := CapabilityManifest{
 		SchemaVersion: "capabilities/2", CoreBuild: Version, ProtocolVersions: []string{"1"}, StorageVersion: local.StorageVersion, EventVersion: local.EventVersion,
 		Profiles: []ProfileCapabilities{
 			{Profile: flow.Profile, WorkflowVersions: []string{"1"}, StepVersions: []string{"1", "2"}, StateVersion: StateVersion, ReadVersion: ReadVersion, Capabilities: base, StateVersions: []string{StateVersion}, ReadVersions: []string{ReadVersion}},
@@ -48,6 +48,12 @@ func Capabilities() CapabilityManifest {
 		// would be the manifest lying about its own build.
 		Unsupported: []string{"artifact_checks", "subscriptions", "unattended", "external_write", "destructive", "managed_isolation", "automatic_retry", "telemetry.compare", "provider_usage", "profiling"},
 	}
+	profile := &manifest.Profiles[1]
+	profile.StateVersion, profile.ReadVersion = CoreNeutralStateVersion, CoreNeutralReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreNeutralStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreNeutralReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "neutral_start", "execution_bindings")
+	return manifest
 }
 
 func supportedRun(r Run) bool {
@@ -440,6 +446,10 @@ type ProjectionManifest struct {
 }
 
 func (e *Engine) effectiveConfiguration(p *flow.Plan, files map[string]string, refs map[string]ArtifactRef, requireInputs bool) (*EffectiveConfiguration, error) {
+	return e.effectiveConfigurationWithValues(p, files, refs, nil, requireInputs)
+}
+
+func (e *Engine) effectiveConfigurationWithValues(p *flow.Plan, files map[string]string, refs map[string]ArtifactRef, values map[string]json.RawMessage, requireInputs bool) (*EffectiveConfiguration, error) {
 	if p.Profile == flow.Profile {
 		if len(e.Config.Configuration.InputValues) != 0 {
 			return nil, fault("unsupported_configuration", "input values require core-workflow/1")
@@ -468,16 +478,25 @@ func (e *Engine) effectiveConfiguration(p *flow.Plan, files map[string]string, r
 		}
 		file, hasFile := files[name]
 		ref, hasRef := refs[name]
-		if hasFile || hasRef {
+		inline, hasValue := values[name]
+		if hasFile || hasRef || hasValue {
 			if declaration.Scope != "run" {
 				return nil, faultf("configuration_scope", "run override is forbidden for %s", name)
 			}
 			if hasFile && hasRef {
 				return nil, errors.New("input file and reference cannot both bind the same port")
 			}
+			if hasValue && (hasFile || hasRef) {
+				return nil, errors.New("input value, file and reference cannot bind the same port")
+			}
 			var err error
 			value.Source = "run"
-			if hasFile {
+			if hasValue {
+				value.Value = inline
+				if len(inline) == 0 {
+					return nil, fault("invalid_json", "configuration input requires a JSON value")
+				}
+			} else if hasFile {
 				value.Value, err = e.inputBytes(file)
 			} else {
 				var artifact Artifact

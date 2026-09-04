@@ -47,6 +47,7 @@ type cli struct {
 	project, format string
 	out             io.Writer
 	help, version   bool
+	projectExplicit bool
 }
 
 var updateBinary = func(ctx context.Context, version string) (release.Result, error) {
@@ -104,8 +105,10 @@ func (c *cli) globals(args []string) ([]string, error) {
 			}
 			i++
 			c.project = args[i]
+			c.projectExplicit = true
 		case strings.HasPrefix(a, "--project="):
 			c.project = strings.TrimPrefix(a, "--project=")
+			c.projectExplicit = true
 		case a == "--format":
 			if i+1 == len(args) {
 				return nil, usageError("--format needs text, json or csv")

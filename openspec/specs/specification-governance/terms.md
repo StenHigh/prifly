@@ -94,6 +94,12 @@ WorkflowRevision и не меняет уже начатый Run.
 
 Предмет работы, ожидаемый результат, границы, критерии завершения и исходные материалы, сформулированные владельцем. Это собственное понятие Pri-Fly; не prompt модели, не workflow и не разрешение на любые действия. Go-имя сейчас `runtime.Brief`; подтверждение локального владельца в F1 не объявляется независимым многосторонним Approval.
 
+Start `/2` и state/read `/26` допускают отсутствие отдельного RunBrief:
+обычный файловый workflow получает только объявленные typed inputs. Если
+RunBrief нужен workflow как input, действует его schema и requiredness, а не
+особое имя порта. Прежний Start `/1` и старые сохранённые state/read contracts
+сохраняют обязательный brief. Новый путь не создаёт пустой паспорт или artifact.
+
 <a id="task-intake"></a>
 ### Task intake — Приём задачи
 
@@ -128,15 +134,16 @@ framework и не текущая реализованная capability.
 <a id="project-execution-profile"></a>
 ### Project execution profile — Версионируемый профиль исполнения проекта
 
-Tracked часть `<repository>/.prifly/`: явные Project launches, YAML workflow
-folders и пример локальной настройки. Шаги, schemas и contexts лежат
+Tracked часть `<project>/.prifly/`: явные Project launches, YAML workflow
+folders и пример локальной настройки. Шаги, checks, schemas и contexts лежат
 только внутри folder того сценария, которому принадлежат.
 `prifly project init` создаёт нейтральный пустой layout, отдельную authority,
-способную закреплять context resources, и три host-specific entry point
-`prifly-run`; он не добавляет какой-либо product recipe. Ignored `local.yaml`
+способную закреплять context resources; host-specific entry points
+`prifly-run` добавляются только явно выбранным hosts. Init не добавляет
+какой-либо product recipe. Ignored `local.yaml`
 закрепляет для конкретной машины пути к authority и исполняемому Pri-Fly, чтобы
 host не угадывал системный `PATH`. Профиль описывает общий для команды
-процесс и передаётся через Git. После clone та же команда проверяет shared
+процесс и может передаваться через Git либо обычным копированием. После clone та же команда проверяет shared
 profile и exact runners, создавая только отсутствующий ignored `local.yaml`;
 она не переписывает общий YAML или reviewed runner. Профиль не является authority state, workspace,
 artifact store или местом для credentials. Profile v2 фиксирует стандартные
@@ -147,10 +154,11 @@ Launcher механически передаёт свой host compiler; он н
 
 Profile `/3` вводит отдельную identity compiled package; переход с `/2` —
 явная правка `schema_version` shared `project.yaml`, не результат init/start
-или обновления сценария. Первый срез `/3` сохраняет layout `/2`: Git,
-обязательные три host roots, explicit host при compile/start и RunBrief при
-start. Optional hosts и запуск без Git/brief — следующий срез, не свойство
-одного нового marker. `/2` сохраняет прежнюю compilation и exact refs.
+или обновления сценария. Fresh init использует `/3` без Git и host roots.
+Host требуется только для выбранных host-bound sources/assisted tasks;
+Git и явный выбор worktree/checkout — для assisted repository write. Managed
+worker использует Attempt scratch, не claimed repository. `/2` сохраняет
+прежние Git/host/brief требования, compilation и exact refs.
 
 <a id="project-workflow-folder"></a>
 ### Project workflow folder — Папка сценария проекта
@@ -159,7 +167,8 @@ start. Optional hosts и запуск без Git/brief — следующий с
 `.prifly/workflows/NAME/` с обязательным `workflow.yaml` marker
 `prifly-project-workflow/1` и необязательным `extend.yaml`. Root хранит package
 identity, exact external refs и graph; compiler рекурсивно читает YAML only из
-`steps/`, `schemas/`, `contexts/` и child `workflows/` на произвольной глубине.
+`steps/`, `schemas/`, `contexts/`, child `workflows/`, а для profile `/3` также
+полные CheckDefinition в `checks/` на произвольной глубине.
 Каждый такой файл содержит ровно один YAML document; `---` не разрешён.
 Пути организуют чтение человеком и не выводят refs или control flow. Context
 может назвать raw text только из `.prifly/` либо selected versioned host skills
@@ -428,6 +437,19 @@ file-child или одну прямую directory-child с прямыми regula
 
 <a id="data"></a>
 ## Данные и контракты
+
+<a id="execution-bindings"></a>
+### Execution bindings — Привязки исполнения запуска
+
+Отдельный от обычных inputs локально разрешённый набор `execution-bindings/1`:
+exact StepDefinition/CheckDefinition ref, конфигурация Executor и bytes
+вспомогательных файлов. Один resolver использует его при validation, context
+selection и pinning. Он не изменяет authority configuration и не даёт новых
+effects. Shared YAML называет логическую программу; ignored `local.yaml`
+сопоставляет её с разрешённым абсолютным путём. `--allow-execution` разрешает
+этот запуск, но не является multi-party Approval или sandbox guarantee.
+Package несёт inert `prifly-package-execution/1` с compiled refs и supporting
+bytes; старые Runs используют прежний exact snapshot executors.
 
 <a id="ports"></a>
 ### InputPort / OutputPort — Входной / выходной порт
@@ -1380,6 +1402,8 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [CapabilityManifest](#capability-manifest) | `internal/runtime/compatibility.go` | `runtime.ProfileCapabilities.StateVersions` | `state_versions` |
 | [CapabilityManifest](#capability-manifest) | `internal/runtime/compatibility.go` | `runtime.ProfileCapabilities.ReadVersions` | `read_versions` |
 | [RunBrief](#run-brief) | `internal/runtime/model.go` | `runtime.Brief` | — |
+| [Execution bindings](#execution-bindings) | `internal/runtime/execution_bindings.go` | `runtime.ExecutionBindings` | — |
+| [Execution bindings](#execution-bindings) | `internal/runtime/execution_bindings.go` | `runtime.ExecutionBinding.DefinitionRef` | `definition_ref` |
 | [Run](#run) | `internal/runtime/model.go` | `runtime.Run` | — |
 | [DecisionCatalog](#decision-catalog) | `internal/runtime/decisions.go` | `runtime.DecisionCatalog` | — |
 | [DecisionCatalog](#decision-catalog) | `internal/runtime/decisions.go` | `runtime.DecisionDefinition` | — |

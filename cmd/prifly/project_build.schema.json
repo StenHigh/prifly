@@ -20,10 +20,10 @@
         "type": "object", "additionalProperties": false,
         "required": ["kind", "author_ref", "compiled_ref", "path"],
         "properties": {
-          "kind": {"enum": ["workflow", "step", "schema", "context"]},
+          "kind": {"enum": ["workflow", "step", "check", "schema", "context"]},
           "author_ref": {"$ref": "#/$defs/ref"},
           "compiled_ref": {"$ref": "#/$defs/ref"},
-          "path": {"type": "string", "pattern": "^(workflows|steps|schemas|contexts)/[0-9]+\\.(json|txt)$"}
+          "path": {"type": "string", "pattern": "^(workflows|steps|checks|schemas|contexts)/[0-9]+\\.(json|txt)$"}
         }
       }
     }

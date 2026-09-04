@@ -141,6 +141,10 @@ func contextProfileFor(config ExecutorConfig, definitions []PinnedDefinition, re
 }
 
 func (e *Engine) selectContextProfiles(plan *flow.Plan, definitions []PinnedDefinition, registry flow.Registry) error {
+	return e.selectContextProfilesWithBindings(plan, definitions, registry, nil)
+}
+
+func (e *Engine) selectContextProfilesWithBindings(plan *flow.Plan, definitions []PinnedDefinition, registry flow.Registry, bindings map[flow.Ref]ExecutionBinding) error {
 	if !requiresContextState(plan) {
 		return nil
 	}
@@ -163,6 +167,10 @@ func (e *Engine) selectContextProfiles(plan *flow.Plan, definitions []PinnedDefi
 			continue
 		}
 		config, exists := e.Config.Configuration.Executors[ref.ID]
+		if bindings != nil {
+			binding, found := bindings[ref]
+			config, exists = binding.Config, found
+		}
 		if !exists {
 			return faultf("missing_executor", "%s", ref.ID)
 		}
@@ -309,7 +317,7 @@ func (e *Engine) prepareContext(r Run, instructionsRef *flow.Ref, contextRefs []
 			return manifest, nil, Artifact{}, err
 		}
 	}
-	if profile.IncludeBrief {
+	if profile.IncludeBrief && (!isNeutralState(r.SchemaVersion) || r.Brief != (ArtifactRef{})) {
 		artifact, data, err := e.Artifact(r.Brief)
 		if err != nil {
 			return manifest, nil, Artifact{}, err

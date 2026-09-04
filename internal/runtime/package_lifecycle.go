@@ -124,7 +124,7 @@ func (e *Engine) InspectPackage(ctx context.Context, ref flow.Ref) (PackageInspe
 		if err != nil {
 			return PackageInspection{}, err
 		}
-		if rawDigest(manifestBytes) != pkg.ManifestDigest || flow.ValidateProtocol("PackageManifest", manifestBytes) != nil {
+		if rawDigest(manifestBytes) != pkg.ManifestDigest || flow.ValidatePackageManifest(manifestBytes) != nil {
 			return PackageInspection{}, local.ErrIntegrity
 		}
 		var manifest packageManifest

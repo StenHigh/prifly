@@ -131,19 +131,25 @@ class EditorContractTest(unittest.TestCase):
         manifest = json.loads((AUTHORING_SCHEMAS / "manifest.json").read_text())
         self.assertEqual(manifest["schema_version"], "prifly-yaml-editor-contract/1")
         expected = {
+            "project-profile",
             "project-profile-v2",
+            "project-profile-v3",
             "project-workflow-folder-v1",
             "extension-v1",
             "run-decision-v1",
             "workflow-v1",
             "step-v1",
+            "check-v1",
             "context-v1",
             "workflow-catalog-v1",
         }
         self.assertEqual({item["document"] for item in manifest["schemas"]}, expected)
         for item in manifest["schemas"]:
             self.assertEqual(Path(item["path"]).name, item["path"])
-            self.assertTrue(item["patterns"])
+            if item["document"] in {"project-profile-v2", "project-profile-v3"}:
+                self.assertEqual(item["patterns"], [])
+            else:
+                self.assertTrue(item["patterns"])
             schema = json.loads((AUTHORING_SCHEMAS / item["path"]).read_text())
             self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
             self.assertEqual(schema["$id"], item["id"])
@@ -158,7 +164,15 @@ class EditorContractTest(unittest.TestCase):
         )
         self.assertEqual(
             (EXAMPLES / "authoring" / "project-profile-authoring-reference.yaml").read_text().splitlines()[0],
-            "# yaml-language-server: $schema=../../schemas/authoring/project-profile-v2.schema.json",
+            "# yaml-language-server: $schema=../../schemas/authoring/project-profile-v3.schema.json",
+        )
+        self.assertEqual(
+            (EXAMPLES / "authoring" / "check-authoring-reference.yaml").read_text().splitlines()[0],
+            "# yaml-language-server: $schema=../../schemas/authoring/check-v1.schema.json",
+        )
+        self.assertEqual(
+            (EXAMPLES / "authoring" / "execution-bindings-authoring-reference.yaml").read_text().splitlines()[0],
+            "# yaml-language-server: $schema=../../schemas/authoring/project-workflow-folder-v1.schema.json",
         )
         self.assertEqual(
             (EXAMPLES / "authoring" / "context-authoring-reference.yaml").read_text().splitlines()[0],

@@ -18,19 +18,23 @@ import (
 )
 
 type StartOptions struct {
-	CommandID    string
-	WorkflowFile string
-	BriefFile    string
-	Inputs       map[string]string
-	InputRefs    map[string]ArtifactRef
+	// Empty and "1" retain the mandatory RunBrief contract. Version 2 admits
+	// declared workflow inputs without manufacturing a separate task document.
+	SchemaVersion string
+	CommandID     string
+	WorkflowFile  string
+	BriefFile     string
+	Inputs        map[string]string
+	InputRefs     map[string]ArtifactRef
 	// Brief and InputValues carry bytes a caller already holds instead of a
 	// path to read them from. A schedule is the reason they exist: its brief
 	// and inputs were pinned by digest when it was created, so re-reading a
 	// file at fire time would run something other than what was approved.
-	Brief           json.RawMessage
-	InputValues     map[string]json.RawMessage
-	DecisionCatalog *DecisionCatalog
-	DecisionSheet   *DecisionSheet
+	Brief             json.RawMessage
+	InputValues       map[string]json.RawMessage
+	ExecutionBindings *ExecutionBindings
+	DecisionCatalog   *DecisionCatalog
+	DecisionSheet     *DecisionSheet
 	// Guards are the live start/stop rules this Run is registered with. They
 	// are declared here rather than installed later because a registration has
 	// to exist before the first admission it protects; one installed afterwards
@@ -41,9 +45,11 @@ type StartOptions struct {
 	WorkspaceMode string
 }
 type PreviewOptions struct {
-	WorkflowFile string
-	BriefFile    string
-	InputRefs    map[string]ArtifactRef
+	SchemaVersion     string
+	WorkflowFile      string
+	BriefFile         string
+	InputRefs         map[string]ArtifactRef
+	ExecutionBindings *ExecutionBindings
 }
 type Preview struct {
 	SchemaVersion          string                          `json:"schema_version"`
@@ -87,20 +93,25 @@ type ValidationSummary struct {
 }
 
 func (e *Engine) compileFile(path string) (*flow.Plan, []PinnedDefinition, []PinnedResource, []byte, error) {
+	plan, defs, resources, raw, _, err := e.compileFileWithBindings(path, nil)
+	return plan, defs, resources, raw, err
+}
+
+func (e *Engine) compileFileWithBindings(path string, payload *ExecutionBindings) (*flow.Plan, []PinnedDefinition, []PinnedResource, []byte, map[flow.Ref]ExecutionBinding, error) {
 	defs, reg, resources, err := e.inventoryResources()
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	if filepath.IsAbs(path) {
 		relative, err := filepath.Rel(e.Root, path)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 		path = relative
 	}
 	raw, err := readLocal(e.Root, path, MaxDefinitionBytes)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	format := "json"
 	if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
@@ -108,12 +119,12 @@ func (e *Engine) compileFile(path string) (*flow.Plan, []PinnedDefinition, []Pin
 	}
 	aliases, err := e.workflowAliases()
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	if len(aliases) != 0 {
 		resolved, registry, err := flow.ResolveWorkflowAliases(raw, format, reg, aliases)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 		for ref, data := range registry {
 			if _, present := reg[ref]; !present {
@@ -127,27 +138,25 @@ func (e *Engine) compileFile(path string) (*flow.Plan, []PinnedDefinition, []Pin
 	if e.Config.Configuration.SchemaVersion == CoreContextConfigVersion {
 		contextResources, resourceErr := resourcesFromPins(resources)
 		if resourceErr != nil {
-			return nil, nil, nil, nil, resourceErr
+			return nil, nil, nil, nil, nil, resourceErr
 		}
 		plan, err = flow.CompileCore(raw, format, reg, contextResources)
 	} else {
 		plan, err = flow.CompileProfile(raw, format, reg, e.Config.Configuration.SemanticsProfile)
 	}
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
-	if err := e.selectContextProfiles(plan, defs, reg); err != nil {
-		return nil, nil, nil, nil, err
-	}
-	if err := e.checkCapabilities(plan); err != nil {
-		return nil, nil, nil, nil, err
+	bindings, err := e.executionConfiguration(plan, defs, reg, payload)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
 	}
 	// The root is not its own dependency. Check its registered identity before
 	// Start prunes the inventory to the actual dependency closure.
 	rootRef := flow.Ref{ID: plan.Workflow.ID, Version: plan.Workflow.Version, Digest: plan.Digest}
 	for _, d := range defs {
 		if d.Ref.ID == rootRef.ID && d.Ref.Version == rootRef.Version && (d.Ref != rootRef || d.RawDigest != rawDigest(raw)) {
-			return nil, nil, nil, nil, fault("workflow_registry_conflict", "selected root bytes differ from the registered version")
+			return nil, nil, nil, nil, nil, fault("workflow_registry_conflict", "selected root bytes differ from the registered version")
 		}
 	}
 	selectedResources := resources[:0]
@@ -156,12 +165,16 @@ func (e *Engine) compileFile(path string) (*flow.Plan, []PinnedDefinition, []Pin
 			selectedResources = append(selectedResources, resource)
 		}
 	}
-	return plan, defs, selectedResources, raw, nil
+	return plan, defs, selectedResources, raw, bindings, nil
 }
 
 func (e *Engine) checkCapabilities(plan *flow.Plan) error {
+	return e.checkCapabilitiesWithBindings(plan, nil)
+}
+
+func (e *Engine) checkCapabilitiesWithBindings(plan *flow.Plan, bindings map[flow.Ref]ExecutionBinding) error {
 	for _, p := range workflowPlans(plan) {
-		if err := e.checkWorkflowCapabilities(p); err != nil {
+		if err := e.checkWorkflowCapabilitiesWithBindings(p, bindings); err != nil {
 			return fmt.Errorf("%w (workflow %s)", err, p.Workflow.ID)
 		}
 	}
@@ -169,6 +182,10 @@ func (e *Engine) checkCapabilities(plan *flow.Plan) error {
 }
 
 func (e *Engine) checkWorkflowCapabilities(plan *flow.Plan) error {
+	return e.checkWorkflowCapabilitiesWithBindings(plan, nil)
+}
+
+func (e *Engine) checkWorkflowCapabilitiesWithBindings(plan *flow.Plan, bindings map[flow.Ref]ExecutionBinding) error {
 	defs, registry, err := Builtins()
 	if err != nil {
 		return err
@@ -194,7 +211,7 @@ func (e *Engine) checkWorkflowCapabilities(plan *flow.Plan) error {
 			return fault("resource_limit", "the qualified local profile supports at most 100 repeat iterations")
 		}
 	}
-	for _, step := range plan.Steps {
+	for id, step := range plan.Steps {
 		if len(step.WorkspaceTrees) != 0 {
 			manifest := builtinRef(defs, flow.WorkspaceTreeManifestSchemaID)
 			if !isAssistedExecutor(defs, flow.Executor{AdapterRef: step.Executor.AdapterRef, Operation: step.Executor.Operation}) {
@@ -238,6 +255,10 @@ func (e *Engine) checkWorkflowCapabilities(plan *flow.Plan) error {
 			return fault("unsupported_context", "use explicit sealed inputs and selected executor files in F1")
 		}
 		config, ok := e.Config.Configuration.Executors[step.ID]
+		if bindings != nil {
+			binding, exists := bindings[plan.Workflow.Definition.Stages[id].StepRef]
+			config, ok = binding.Config, exists
+		}
 		if !ok {
 			return faultf("missing_executor", "%s", step.ID)
 		}
@@ -248,11 +269,15 @@ func (e *Engine) checkWorkflowCapabilities(plan *flow.Plan) error {
 			return err
 		}
 	}
-	for _, check := range plan.Checks {
+	for ref, check := range plan.Checks {
 		if !requiresContextState(plan) || check.Executor.AdapterRef != builtinVersionRef(defs, "core:adapter/local-process", "2.0.0") || check.Executor.Operation != "check" {
 			return fault("unsupported_check_executor", "automatic checks require the exact local check operation")
 		}
 		config, exists := e.Config.Configuration.Executors[check.ID]
+		if bindings != nil {
+			binding, found := bindings[ref]
+			config, exists = binding.Config, found
+		}
 		if !exists {
 			return faultf("missing_executor", "%s", check.ID)
 		}
@@ -287,9 +312,18 @@ func validateExecutorConfig(config ExecutorConfig, fullContext bool) error {
 }
 
 func (e *Engine) Preview(options PreviewOptions) (Preview, error) {
-	p, _, _, _, err := e.compileFile(options.WorkflowFile)
+	if err := executorBindingVersion(options.SchemaVersion, options.ExecutionBindings); err != nil {
+		return Preview{}, err
+	}
+	if options.SchemaVersion != "" && options.SchemaVersion != "1" && options.SchemaVersion != "2" {
+		return Preview{}, fault("unsupported_start_version", "unsupported Start contract version")
+	}
+	p, _, _, _, bindings, err := e.compileFileWithBindings(options.WorkflowFile, options.ExecutionBindings)
 	if err != nil {
 		return Preview{}, err
+	}
+	if options.SchemaVersion == "2" && p.Profile != flow.CoreProfile {
+		return Preview{}, fault("unsupported_start_version", "Start version 2 requires core-workflow/1")
 	}
 	effective, err := e.effectiveConfiguration(p, nil, options.InputRefs, false)
 	if err != nil {
@@ -299,7 +333,7 @@ func (e *Engine) Preview(options PreviewOptions) (Preview, error) {
 	executors := map[string]ExecutorPreview{}
 	for id, step := range p.Steps {
 		hooks[id] = step.Hooks
-		cfg := e.Config.Configuration.Executors[step.ID]
+		cfg := bindings[p.Workflow.Definition.Stages[id].StepRef].Config
 		data, err := canonical(cfg)
 		if err != nil {
 			return Preview{}, err
@@ -358,6 +392,9 @@ func (e *Engine) Preview(options PreviewOptions) (Preview, error) {
 	}
 	version := "foundation-preview/1"
 	warnings := []string{"trusted local executable; no sandbox or per-tool effect enforcement", "preview grants no admission; pass the same input references at start to keep reviewed bytes", "arguments and environment are omitted; review prifly.json against configuration_digest"}
+	if options.ExecutionBindings != nil {
+		warnings[2] = "arguments and environment are omitted; review the explicit execution bindings against configuration_digest"
+	}
 	if p.Profile == flow.CoreProfile {
 		version = "core-preview/1"
 		warnings = append(warnings, "sequence is a topological inventory, not a prediction of the executed path", "configuration values are ordinary inputs; do not use them for credentials")
@@ -365,8 +402,8 @@ func (e *Engine) Preview(options PreviewOptions) (Preview, error) {
 	var checkExecutors map[string]ExecutorPreview
 	if len(p.Checks) != 0 {
 		checkExecutors = map[string]ExecutorPreview{}
-		for ref, check := range p.Checks {
-			config := e.Config.Configuration.Executors[check.ID]
+		for ref := range p.Checks {
+			config := bindings[ref].Config
 			data, err := canonical(config)
 			if err != nil {
 				return Preview{}, err
@@ -381,7 +418,7 @@ func (e *Engine) Preview(options PreviewOptions) (Preview, error) {
 		warnings = append(warnings, "required content/result checks have not run; preview cannot satisfy acceptance", "check executables are trusted local code with cooperative workspace effects, not sandboxed independent reviewers")
 	}
 	var workflows map[string]WorkflowPreview
-	if requiresInvocationState(p) {
+	if requiresInvocationState(p) || options.SchemaVersion == "2" {
 		version = CoreInvocationPreviewVersion
 		if requiresRepeatState(p) {
 			version = CoreRepeatPreviewVersion
@@ -424,7 +461,7 @@ func (e *Engine) Preview(options PreviewOptions) (Preview, error) {
 			item := WorkflowPreview{WorkflowRef: planRef(child), Sequence: child.Sequence, Hooks: map[string]map[string]flow.Hook{}, Executors: map[string]ExecutorPreview{}}
 			for id, step := range child.Steps {
 				item.Hooks[id] = step.Hooks
-				cfg := e.Config.Configuration.Executors[step.ID]
+				cfg := bindings[child.Workflow.Definition.Stages[id].StepRef].Config
 				data, err := canonical(cfg)
 				if err != nil {
 					return Preview{}, err
@@ -438,6 +475,9 @@ func (e *Engine) Preview(options PreviewOptions) (Preview, error) {
 			}
 			workflows[child.Digest] = item
 		}
+	}
+	if options.SchemaVersion == "2" {
+		version = CoreNeutralPreviewVersion
 	}
 	return Preview{SchemaVersion: version, WorkflowRef: planRef(p), Profile: p.Profile, TrustProfile: "core-local/cooperative", Sequence: p.Sequence, Hooks: hooks, Limits: p.Workflow.Limits, Admission: false, Warnings: warnings, Brief: brief, Inputs: inputs, Executors: executors, CheckExecutors: checkExecutors, Validation: ValidationSummary{true, true, true, true, inputStatus, "not_admitted", "not_checked"}, EffectiveConfiguration: effective, Workflows: workflows}, nil
 }
@@ -490,7 +530,14 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
-	if options.CommandID == "" || options.BriefFile == "" && len(options.Brief) == 0 {
+	if err := executorBindingVersion(options.SchemaVersion, options.ExecutionBindings); err != nil {
+		return local.ApplyResult{}, err
+	}
+	if options.SchemaVersion != "" && options.SchemaVersion != "1" && options.SchemaVersion != "2" {
+		return local.ApplyResult{}, fault("unsupported_start_version", "unsupported Start contract version")
+	}
+	neutral := options.SchemaVersion == "2"
+	if options.CommandID == "" || !neutral && options.BriefFile == "" && len(options.Brief) == 0 {
 		return local.ApplyResult{}, errors.New("explicit command_id and RunBrief are required")
 	}
 	if options.WorkspaceMode != "" && options.WorkspaceMode != "worktree" && options.WorkspaceMode != "checkout" {
@@ -501,11 +548,18 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 			return local.ApplyResult{}, errors.New("decision catalog and sheet must be a matching valid pair")
 		}
 	}
-	plan, defs, resources, workflowRaw, err := e.compileFile(options.WorkflowFile)
+	plan, defs, resources, workflowRaw, bindings, err := e.compileFileWithBindings(options.WorkflowFile, options.ExecutionBindings)
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
-	effective, err := e.effectiveConfiguration(plan, options.Inputs, options.InputRefs, true)
+	if neutral && plan.Profile != flow.CoreProfile {
+		return local.ApplyResult{}, fault("unsupported_start_version", "Start version 2 requires core-workflow/1")
+	}
+	var configurationValues map[string]json.RawMessage
+	if neutral {
+		configurationValues = options.InputValues
+	}
+	effective, err := e.effectiveConfigurationWithValues(plan, options.Inputs, options.InputRefs, configurationValues, true)
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
@@ -517,7 +571,7 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 	// holds scoped invocations even when its graph alone would not need them.
 	// A single-plan closure has no children, so this is the same map that
 	// function would have built, not a second way of building it.
-	if (len(options.Guards) != 0 || requiresArtifactPublicationState(plan) || requiresContextState(plan)) && configurations == nil && plan.Profile == flow.CoreProfile {
+	if (neutral || len(options.Guards) != 0 || requiresArtifactPublicationState(plan) || requiresContextState(plan)) && configurations == nil && plan.Profile == flow.CoreProfile {
 		configurations = map[string]*EffectiveConfiguration{plan.Digest: effective}
 	}
 	// Pin only the actual compiler closure and core transport contracts. An
@@ -560,21 +614,23 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 	}
 	defs = selected
 	briefBytes := []byte(options.Brief)
-	if len(briefBytes) == 0 {
+	if len(briefBytes) == 0 && options.BriefFile != "" {
 		briefBytes, err = e.inputBytes(options.BriefFile)
 		if err != nil {
 			return local.ApplyResult{}, err
 		}
 	}
-	if err := flow.ValidateProtocol("RunBrief", briefBytes); err != nil {
-		return local.ApplyResult{}, err
-	}
-	var brief Brief
-	if err := decode(briefBytes, &brief); err != nil {
-		return local.ApplyResult{}, err
-	}
-	if brief.Confirmation != "explicit" {
-		return local.ApplyResult{}, errors.New("brief requires explicit owner confirmation")
+	if !neutral || options.BriefFile != "" || len(options.Brief) != 0 {
+		if err := flow.ValidateProtocol("RunBrief", briefBytes); err != nil {
+			return local.ApplyResult{}, err
+		}
+		var brief Brief
+		if err := decode(briefBytes, &brief); err != nil {
+			return local.ApplyResult{}, err
+		}
+		if brief.Confirmation != "explicit" {
+			return local.ApplyResult{}, errors.New("brief requires explicit owner confirmation")
+		}
 	}
 	workflowRef := flow.Ref{ID: plan.Workflow.ID, Version: plan.Workflow.Version, Digest: plan.Digest}
 	foundWorkflow := false
@@ -589,83 +645,20 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if !foundWorkflow {
 		defs = append(defs, PinnedDefinition{workflowRef, "workflow", rawDigest(workflowRaw), plan.Canonical})
 	}
-	for port := range options.Inputs {
-		if _, ok := plan.Workflow.Inputs[port]; !ok {
-			return local.ApplyResult{}, fmt.Errorf("unknown input: %s", port)
-		}
-		if _, ok := options.InputRefs[port]; ok {
-			return local.ApplyResult{}, errors.New("input file and reference cannot both bind the same port")
-		}
-	}
-	for port := range options.InputRefs {
-		if _, ok := plan.Workflow.Inputs[port]; !ok {
-			return local.ApplyResult{}, fmt.Errorf("unknown input ref: %s", port)
-		}
-	}
-	for port := range options.InputValues {
-		if _, ok := plan.Workflow.Inputs[port]; !ok {
-			return local.ApplyResult{}, fmt.Errorf("unknown input value: %s", port)
-		}
-		_, byFile := options.Inputs[port]
-		_, byRef := options.InputRefs[port]
-		if byFile || byRef {
-			return local.ApplyResult{}, errors.New("input value, file and reference cannot bind the same port")
-		}
+	resolvedInputs, err := e.resolveStartInputs(plan, effective, options)
+	if err != nil {
+		return local.ApplyResult{}, err
 	}
 	inputs := map[string]ArtifactRef{}
-	for name, port := range plan.Workflow.Inputs {
-		path, hasFile := options.Inputs[name]
-		ref, hasRef := options.InputRefs[name]
-		value, hasValue := options.InputValues[name]
-		var configured json.RawMessage
-		if effective != nil {
-			configured = effective.Inputs[name].Value
-		}
-		if hasValue && len(configured) > 0 {
-			// Both would silently pick a winner. Which bytes ran has to be the
-			// caller's stated choice, not this function's precedence rule.
-			return local.ApplyResult{}, fmt.Errorf("input value and pinned configuration cannot both bind the same port: %s", name)
-		}
-		if !hasFile && !hasRef && !hasValue && len(configured) == 0 {
-			if port.Required {
-				return local.ApplyResult{}, fmt.Errorf("missing required input: %s", name)
-			}
-			continue
-		}
-		var data []byte
-		if hasValue {
-			data = value
-		} else if len(configured) > 0 {
-			// The selected file/default/override bytes were already read and
-			// validated once. Do not reread a mutable input after pinning config.
-			data = configured
-		} else if hasFile {
-			data, err = e.inputBytes(path)
-		} else {
-			var artifact Artifact
-			artifact, data, err = e.Artifact(ref)
-			if err == nil {
-				err = e.validatePortArtifact(plan, port.Port, artifact, data)
-			}
-		}
-		if err != nil {
-			return local.ApplyResult{}, err
-		}
-		if port.Format == "json" {
-			if port.SchemaRef == nil {
-				return local.ApplyResult{}, errors.New("JSON input schema required")
-			}
-			if err := plan.ValidateJSON(*port.SchemaRef, data); err != nil {
-				return local.ApplyResult{}, err
-			}
-		}
-		if hasFile || hasValue || !hasRef && len(configured) > 0 {
+	for name, input := range resolvedInputs {
+		port, ref := plan.Workflow.Inputs[name], input.Ref
+		if ref == (ArtifactRef{}) {
 			identity := fmt.Sprintf("artifact:%x", sha256.Sum256([]byte(options.CommandID+"/input/"+name)))
-			a, err := e.putArtifact(data, port.Format, port.SchemaRef, identity, map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": name}, nil, plan.Registry, portMedia(port.Port))
+			a, err := e.putArtifact(input.Data, port.Format, port.SchemaRef, identity, map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": name}, nil, plan.Registry, portMedia(port.Port))
 			if err != nil {
 				return local.ApplyResult{}, err
 			}
-			if err := e.validatePortArtifact(plan, port.Port, a, data); err != nil {
+			if err := e.validatePortArtifact(plan, port.Port, a, input.Data); err != nil {
 				return local.ApplyResult{}, err
 			}
 			ref = a.Ref()
@@ -675,7 +668,7 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 	executors := map[string]PinnedExecutor{}
 	for ref, executor := range executorDefinitions(plan) {
 		key := ref.ID
-		if requiresInvocationState(plan) {
+		if requiresInvocationState(plan) || neutral {
 			key = ref.String()
 		}
 		if _, ok := executors[key]; ok {
@@ -686,7 +679,7 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 		if isAssistedExecutor(defs, executor) {
 			continue
 		}
-		cfg := e.Config.Configuration.Executors[ref.ID]
+		cfg := bindings[ref].Config
 		resolved, err := filepath.EvalSymlinks(cfg.Executable)
 		if err != nil {
 			return local.ApplyResult{}, err
@@ -709,9 +702,12 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 			pinned.Config.ContextProfileRef, pinned.ContextProfile = &ref, &profile
 		}
 		for target, source := range cfg.Files {
-			data, err := readLocal(e.Root, source, MaxArtifactBytes)
-			if err != nil {
-				return local.ApplyResult{}, err
+			data := bindings[ref].Files[source]
+			if options.ExecutionBindings == nil {
+				data, err = readLocal(e.Root, source, MaxArtifactBytes)
+				if err != nil {
+					return local.ApplyResult{}, err
+				}
 			}
 			ref, err := e.Blobs.Put(bytes.NewReader(data), MaxArtifactBytes)
 			if err != nil {
@@ -797,13 +793,24 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 	lockDigest, _ := flow.Digest(lockBytes)
 	lockRef := flow.Ref{ID: lock["id"].(string), Version: "1.0.0", Digest: lockDigest}
 	defs = append(defs, PinnedDefinition{lockRef, "resource", rawDigest(lockBytes), lockBytes})
-	briefArtifact, err := e.putArtifact(briefBytes, "blob", nil, derivedID("artifact", e.owner, options.CommandID, "brief"), map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": "brief"}, nil, plan.Registry)
-	if err != nil {
-		return local.ApplyResult{}, err
+	var briefRef ArtifactRef
+	if len(briefBytes) != 0 {
+		briefArtifact, err := e.putArtifact(briefBytes, "blob", nil, derivedID("artifact", e.owner, options.CommandID, "brief"), map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": "brief"}, nil, plan.Registry)
+		if err != nil {
+			return local.ApplyResult{}, err
+		}
+		briefRef = briefArtifact.Ref()
 	}
-	startCommand := map[string]any{"schema_version": "1", "command_id": options.CommandID, "project_id": e.Config.ID, "workflow_ref": workflowRef, "package_lock_ref": lockRef, "brief_ref": briefArtifact.Ref(), "inputs": inputs, "interaction_mode": "with_human", "execution_mode": "managed", "capacity_profile": "foundation:one-slot", "grant_refs": []any{}}
+	startCommand := map[string]any{"schema_version": "1", "command_id": options.CommandID, "project_id": e.Config.ID, "workflow_ref": workflowRef, "package_lock_ref": lockRef, "inputs": inputs, "interaction_mode": "with_human", "execution_mode": "managed", "capacity_profile": "foundation:one-slot", "grant_refs": []any{}}
+	contract := "RunStart"
+	if neutral {
+		startCommand["schema_version"], contract = "2", "RunStartV2"
+	}
+	if briefRef != (ArtifactRef{}) {
+		startCommand["brief_ref"] = briefRef
+	}
 	cb, _ := canonical(startCommand)
-	if err := flow.ValidateProtocol("RunStart", cb); err != nil {
+	if err := flow.ValidateProtocol(contract, cb); err != nil {
 		return local.ApplyResult{}, err
 	}
 	// A declared guard is checked against the pinned plan before the Run
@@ -916,8 +923,11 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 			}
 			stateVersion = CoreDecisionStateVersion
 		}
+		if neutral {
+			stateVersion = CoreNeutralStateVersion
+		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
-		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefArtifact.Ref(), LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}}
+		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}}
 		if configurations != nil {
 			r.Ready = nil
 			r.WorkflowConfigurations = configurations

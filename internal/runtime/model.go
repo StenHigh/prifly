@@ -176,11 +176,17 @@ const (
 	CoreDecisionNextVersion     = "core-next/25"
 	CoreDecisionPreviewVersion  = "core-preview/25"
 	CoreDecisionStepReadVersion = "core-step-read/25"
-	CoreConfigVersion           = "core-configuration/1"
-	CoreContextConfigVersion    = "core-configuration/2"
-	MaxDefinitionBytes          = 2 << 20
-	MaxArtifactBytes            = 16 << 20
-	MaxRunPublications          = 1024
+	// Neutral Start records its declared inputs without requiring task intake.
+	CoreNeutralReadVersion     = "core-read/26"
+	CoreNeutralStateVersion    = "core-state/26"
+	CoreNeutralNextVersion     = "core-next/26"
+	CoreNeutralPreviewVersion  = "core-preview/26"
+	CoreNeutralStepReadVersion = "core-step-read/26"
+	CoreConfigVersion          = "core-configuration/1"
+	CoreContextConfigVersion   = "core-configuration/2"
+	MaxDefinitionBytes         = 2 << 20
+	MaxArtifactBytes           = 16 << 20
+	MaxRunPublications         = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time

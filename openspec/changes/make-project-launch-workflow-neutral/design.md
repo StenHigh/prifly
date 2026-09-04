@@ -118,6 +118,20 @@ typed inputs, policy/resources и owner intent; отдельная новая с
 
 ### 3. Bindings локальных программ — отдельный узкий вход
 
+Разведка реализации выявила ещё одну необходимую границу: CheckDefinition уже
+исполняется runtime, но опубликованный PackageManifest `/1` не допускает
+component kind `check`, а Project compiler не читает `checks/`. Для объявленных
+в этом срезе check bindings вводится PackageManifest `/2`: закрытый contract,
+выведенный из неизменяемого `/1` с новым marker и единственным добавленным kind
+`check`. Compiler `/3` читает полные CheckDefinition YAML из `checks/`, проверяет
+их существующим `ParseCheckDefinition` и выдаёт manifest `/2` только для пакета
+с такими компонентами. Остальные пакеты сохраняют manifest `/1`; profile `/2`
+явно отказывает новому `checks/`, не игнорирует файлы. Import и inspection
+выбирают schema по marker, old `/1` по-прежнему отвергает `check`. Новый component
+проходит обычные exact digest/identity/trust проверки; проверки не запускаются
+при чтении YAML, compile или import. Новый executor либо check authoring sugar
+для этого не вводится.
+
 YAML объявляет bindings по локальному component selector, логическое имя
 executable, argv и confined supporting files. Local configuration разрешает
 использование установленного executable и связывает имя с machine path.
@@ -137,6 +151,30 @@ digest и `snapshot:executors` переиспользуются.
 старый Start без payload сохраняет старое resolution. Новый путь допускает
 сосуществование двух versions/пакетов с разными executors и проверяет command
 dedup по полному закрепляемому payload.
+
+Конкретный authoring среза 2: необязательный `execution_bindings` в
+`workflow.yaml` содержит карты `steps` и `checks`. Ключ — полный авторский
+component ID внутри этого package, не stage ID; неоднозначная версия
+отвергается. Значение объявляет логическое `executable`, `args`, `files`
+(target → relative source внутри workflow folder), явные `timeout_ms`,
+`grace_ms`, `max_output_bytes` и необязательный `context_profile_ref`.
+Environment и абсолютные machine paths не входят в shared YAML.
+`checks/` принимает полный CheckDefinition YAML; отдельный сокращённый
+язык проверок не вводится. Новые bindings/check sources требуют profile `/3`.
+
+Compiler включает inert `execution-bindings.json` в manifest: закрытый
+`prifly-package-execution/1` содержит compiled exact refs, логическое имя
+программы, config и supporting bytes. Эти данные участвуют в b1; без поля
+bindings старый b1 input и его ключ не меняются. Компиляция ничего не запускает.
+Machine-local `project local set --allow-executable NAME=/absolute/path`
+записывает разрешённую программу в `local.yaml`, не в shared profile.
+`project start --allow-execution` — явное разрешение выбранных программ,
+аргументов и supporting files этого запуска; одного скачивания workflow
+недостаточно. Перед import/claim CLI разрешает только bindings выбранного
+compiled closure и проверяет inputs, capabilities и workspace requirements.
+Для `/3` CLI по умолчанию берёт authority из local.yaml; явный `--project`
+имеет прежний смысл и приоритет. Полный пользовательский summary до dispatch
+остаётся следующим срезом 3, это разрешение его не подменяет.
 
 ### 4. Общий runner и вопросы, а не оркестратор AIF
 

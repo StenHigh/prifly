@@ -17,6 +17,7 @@
     "outputs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/port"}},
     "features": {"$ref": "#/$defs/features"},
     "decision_catalog": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "execution_bindings": {"$ref": "#/$defs/execution_bindings"},
     "allowed_outcomes": {"type": "array", "items": {"type": "string"}},
     "entry": {"type": "string", "minLength": 1},
     "stages": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/stage"}},
@@ -24,6 +25,27 @@
     "policy_ref": {"$ref": "#/$defs/reference"}
   },
   "$defs": {
+    "execution_bindings": {
+      "description": "Profile /3 only. Logical local programs; compilation never executes them.",
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "steps": {"type": "object", "additionalProperties": {"$ref": "#/$defs/execution_binding"}},
+        "checks": {"type": "object", "additionalProperties": {"$ref": "#/$defs/execution_binding"}}
+      }
+    },
+    "execution_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["executable", "timeout_ms", "grace_ms", "max_output_bytes"],
+      "properties": {
+        "executable": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+        "args": {"type": "array", "maxItems": 256, "items": {"type": "string"}},
+        "files": {"type": "object", "maxProperties": 256, "additionalProperties": {"type": "string", "minLength": 1}},
+        "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 3600000},
+        "grace_ms": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "max_output_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "context_profile_ref": {"$ref": "#/$defs/reference"}
+      }
+    },
     "package": {
       "type": "object",
       "required": ["id", "version", "description", "requires_core_protocol"],

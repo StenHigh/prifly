@@ -129,7 +129,7 @@ func TestCLIProjectInitCreatesTrackedProfileAndSeparateAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, errout bytes.Buffer
-	args := []string{"project", "init", "--repository", repository, "--state-root", stateRoot, "--json"}
+	args := []string{"project", "init", "--repository", repository, "--state-root", stateRoot, "--host", "codex-cli", "--host", "codex-app", "--host", "claude-code", "--json"}
 	if code := execute(context.Background(), args, &out, &errout); code != 0 {
 		t.Fatalf("project init %d: %s", code, errout.String())
 	}
@@ -149,7 +149,7 @@ func TestCLIProjectInitCreatesTrackedProfileAndSeparateAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(profile), "schema_version: prifly-project-profile/2") || !strings.Contains(string(profile), projectHostsYAML) || !strings.Contains(string(profile), "packages: {}") || !strings.Contains(string(profile), "launches: {}") {
+	if !strings.Contains(string(profile), "schema_version: prifly-project-profile/3") || !strings.Contains(string(profile), projectHostsYAML) || !strings.Contains(string(profile), "packages: {}") || !strings.Contains(string(profile), "launches: {}") {
 		t.Fatalf("project profile omitted shared workflow settings: %s", profile)
 	}
 	for _, legacyRoot := range []string{"workflows_root:", "steps_root:", "schemas_root:", "locks_root:"} {
@@ -275,7 +275,7 @@ func TestCLIProjectRunnersUpdateOnlyKnownTemplates(t *testing.T) {
 		t.Fatalf("git init: %v: %s", err, output)
 	}
 	var out, errout bytes.Buffer
-	if code := execute(context.Background(), []string{"project", "init", "--repository", repository, "--state-root", filepath.Join(t.TempDir(), "authority"), "--json"}, &out, &errout); code != 0 {
+	if code := execute(context.Background(), []string{"project", "init", "--repository", repository, "--state-root", filepath.Join(t.TempDir(), "authority"), "--host", "codex-cli", "--host", "codex-app", "--host", "claude-code", "--json"}, &out, &errout); code != 0 {
 		t.Fatalf("project init %d: %s", code, errout.String())
 	}
 	for index, host := range projectHosts {
@@ -868,7 +868,7 @@ stages:
   done: {kind: finish, outcome: succeeded, output_bindings: {}}
 `)
 		write(".prifly/.gitignore", "local.yaml\n")
-		if err := writeProjectRunners(repository); err != nil {
+		if err := writeProjectRunners(repository, projectHosts...); err != nil {
 			t.Fatal(err)
 		}
 		git("-c", "commit.gpgsign=false", "add", ".")
@@ -1226,7 +1226,7 @@ func TestCLIProjectInitDoesNotOverwriteProjectRunner(t *testing.T) {
 		t.Fatalf("git init: %v: %s", err, output)
 	}
 	var out, errout bytes.Buffer
-	args := []string{"project", "init", "--repository", repository, "--state-root", filepath.Join(t.TempDir(), "authority"), "--json"}
+	args := []string{"project", "init", "--repository", repository, "--state-root", filepath.Join(t.TempDir(), "authority"), "--host", "codex-cli", "--json"}
 	if code := execute(context.Background(), args, &out, &errout); code == 0 || !strings.Contains(errout.String(), "project_runner_conflict") {
 		t.Fatalf("project init overwrote the existing runner: %d %s", code, errout.String())
 	}

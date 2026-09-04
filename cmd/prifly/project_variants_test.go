@@ -165,7 +165,7 @@ stages:
 	}
 	start := func(profile string, compiled projectCompileResult) projectStartResult {
 		t.Helper()
-		code, out, errout := runCLI(t, "--project", authority, "project", "start", "--repository", repository, "--launch", "sample", "--package-profile", profile, "--host", "codex-cli", "--brief", brief, "--workspace", "worktree")
+		code, out, errout := runCLI(t, "--project", authority, "project", "start", "--repository", repository, "--launch", "sample", "--package-profile", profile, "--host", "codex-cli", "--brief", brief)
 		if code != 0 {
 			t.Fatalf("start profile %s: %d %s", profile, code, errout)
 		}
@@ -189,11 +189,8 @@ stages:
 		if code != 0 || json.Unmarshal([]byte(out), &task) != nil || task.ClaimID != "" {
 			t.Fatalf("effects:none fixture must have a real handoff without a repository claim: %d %s %s", code, out, errout)
 		}
-		// Until neutral launch lands, Project creates a claim even for effects:none.
-		// Release only this unused claim so another variant can start in the same
-		// repository while the original Run remains actively awaiting its host.
-		if code, _, errout := runCLI(t, "--project", authority, "claim", "release", "--id", started.Workspace.ID, "--generation", fmt.Sprint(started.Workspace.Generation)); code != 0 {
-			t.Fatalf("release unused launch claim: %d %s", code, errout)
+		if started.Workspace != nil {
+			t.Fatal("effects:none launch must not create a workspace claim")
 		}
 		return started
 	}

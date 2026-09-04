@@ -97,12 +97,15 @@ var decisionStatePublicContracts []byte
 //go:embed run-decisions.schema.json
 var runDecisionPublicContracts []byte
 
+//go:embed neutral-start.schema.json
+var neutralStartPublicContracts []byte
+
 // PublicSchema selects a named contract from its versioned public bundle.
 // Baseline contracts (including RunSnapshot v1) remain in flow.ProtocolSchema.
 // publicBundles is the ordered set PublicSchema searches. Listing and lookup
 // read the same set, so a listed name always resolves.
 func publicBundles() [][]byte {
-	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts}
+	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts, neutralStartPublicContracts, executionBindingPublicContracts}
 }
 
 // PublicSchemaNames lists every contract PublicSchema answers for.

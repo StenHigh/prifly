@@ -98,6 +98,17 @@ func (e *Engine) localRegistry() (RegistryFile, error) {
 	return file, nil
 }
 
+// CompilationInventory exposes the same validated definition and resource set
+// used by Start, so pre-import compilation does not lose external contexts.
+func (e *Engine) CompilationInventory() ([]PinnedDefinition, flow.Registry, flow.ContextResources, error) {
+	defs, registry, pins, err := e.inventoryResources()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	resources, err := resourcesFromPins(pins)
+	return defs, registry, resources, err
+}
+
 // inventoryResources keeps JSON definitions and explicitly typed context data
 // separate. The same entry and byte budgets cover both local collections.
 func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []PinnedResource, error) {

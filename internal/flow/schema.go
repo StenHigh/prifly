@@ -122,6 +122,8 @@ func ProtocolSchemaNames() ([]string, error) {
 		return nil, problem("unsupported_contract", "", "baseline protocol schema has no definitions")
 	}
 	names := []string{
+		"RunStartV2",
+		"PackageManifestV2",
 		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
@@ -190,6 +192,20 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		return nil, err
 	}
 	defs := baseline.(map[string]any)["$defs"].(map[string]any)
+	if name == "PackageManifestV2" {
+		manifest := defs["PackageManifest"].(map[string]any)
+		properties := manifest["properties"].(map[string]any)
+		properties["schema_version"] = map[string]any{"const": "2"}
+		kind := properties["components"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)["kind"].(map[string]any)
+		kind["enum"] = append(kind["enum"].([]any), "check")
+		defs[name] = manifest
+	}
+	if name == "RunStartV2" {
+		start := defs["RunStart"].(map[string]any)
+		start["properties"].(map[string]any)["schema_version"] = map[string]any{"const": "2"}
+		start["required"] = slices.DeleteFunc(start["required"].([]any), func(value any) bool { return value == "brief_ref" })
+		defs[name] = start
+	}
 	selected := make(map[string]any)
 	root := map[string]any{"$schema": "https://json-schema.org/draft/2020-12/schema", "$ref": "#/$defs/" + name, "$defs": selected}
 	var extension []byte
@@ -471,6 +487,20 @@ func ValidateProtocol(name string, data []byte) error {
 	value, err := Parse(data, "json")
 	if err != nil {
 		return err
+	}
+	return validateProtocolValue(name, value, "")
+}
+
+// ValidatePackageManifest selects the explicit wire version; admitting checks
+// in /2 must not widen the published /1 component-kind contract.
+func ValidatePackageManifest(data []byte) error {
+	value, err := Parse(data, "json")
+	if err != nil {
+		return err
+	}
+	name := "PackageManifest"
+	if object, ok := value.(map[string]any); ok && object["schema_version"] == "2" {
+		name = "PackageManifestV2"
 	}
 	return validateProtocolValue(name, value, "")
 }

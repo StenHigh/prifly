@@ -43,6 +43,8 @@ type projectPackageSource struct {
 	RootValue             any
 	ResolvedDependencies  []flow.Ref
 	Build                 *projectBuildProvenance
+	ExecutionBindings     *projectPackageExecution
+	Folder                string
 }
 
 type projectPackageDocument struct {
@@ -79,18 +81,19 @@ type projectWorkflowFeature struct {
 }
 
 type projectCompileResult struct {
-	SchemaVersion string                    `json:"schema_version"`
-	Repository    string                    `json:"repository"`
-	Package       flow.Ref                  `json:"package"`
-	Output        string                    `json:"output"`
-	Components    []projectCompileComponent `json:"components"`
-	AuthorPackage *projectBuildIdentity     `json:"author_package,omitempty"`
-	BuildKey      string                    `json:"build_key,omitempty"`
+	SchemaVersion     string                    `json:"schema_version"`
+	Repository        string                    `json:"repository"`
+	Package           flow.Ref                  `json:"package"`
+	Output            string                    `json:"output"`
+	Components        []projectCompileComponent `json:"components"`
+	AuthorPackage     *projectBuildIdentity     `json:"author_package,omitempty"`
+	BuildKey          string                    `json:"build_key,omitempty"`
+	ExecutionBindings *projectPackageExecution  `json:"-"`
 }
 
 func (c *cli) projectCompile(ctx context.Context, args []string) error {
 	f := flags("project compile")
-	repository := f.String("repository", ".", "Git repository that owns the shared Pri-Fly profile")
+	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	name := f.String("package", "", "named package from project.yaml")
 	output := f.String("output", "", "new directory outside the repository and local authority")
 	host := f.String("host", "", "host entry point that selects project skills")
@@ -100,10 +103,10 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 	if err := parse(f, args); err != nil {
 		return err
 	}
-	if *name == "" || *output == "" || *host == "" {
-		return usageError("project compile requires --package, --host and --output")
+	if *name == "" || *output == "" {
+		return usageError("project compile requires --package and --output")
 	}
-	root, err := projectRepositoryRoot(ctx, *repository)
+	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
 	}
@@ -111,20 +114,16 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := c.projectAuthority(root, profile); err != nil {
+		return err
+	}
 	pkg, exists := profile.Packages[*name]
 	if !exists {
 		return usageError("project_compile_unknown_package: " + *name)
 	}
-	skillsRoot, err := profile.skillsRoot(*host)
+	skillsRoot, err := projectCompileSkillsRoot(root, profile, *host)
 	if err != nil {
 		return err
-	}
-	skillsRoot, err = canonicalProjectPath(filepath.Join(root, filepath.FromSlash(skillsRoot)))
-	if err != nil {
-		return err
-	}
-	if relative, err := filepath.Rel(root, skillsRoot); err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return usageError("project_compile_invalid_host_root: selected host skills root must stay inside the repository")
 	}
 	outputRoot, err := canonicalProjectPath(*output)
 	if err != nil {
@@ -356,7 +355,7 @@ func parseProjectPackageSource(value any) (projectPackageSource, error) {
 				*target = value
 			}
 		}
-		if document.Kind != "schema" && document.Kind != "step" && document.Kind != "workflow" && document.Kind != "context" {
+		if document.Kind != "schema" && document.Kind != "step" && document.Kind != "check" && document.Kind != "workflow" && document.Kind != "context" {
 			return projectPackageSource{}, usageError(fmt.Sprintf("project_package_invalid: documents/%d has unsupported kind", index))
 		}
 		if document.Source == "" || document.AliasPrefix == "" || !projectValueName.MatchString(document.AliasPrefix) {
@@ -459,6 +458,9 @@ func projectContextSourcePath(root, skillsRoot, source string) (string, error) {
 	}
 	allowed := false
 	for _, directory := range []string{filepath.Join(root, ".prifly"), skillsRoot} {
+		if directory == "" {
+			continue
+		}
 		base, err := canonicalProjectPath(directory)
 		if err != nil {
 			return "", err
@@ -483,6 +485,9 @@ func projectContextSourcePath(root, skillsRoot, source string) (string, error) {
 }
 
 func projectHostContextSourcePath(skillsRoot, source string) (string, error) {
+	if skillsRoot == "" {
+		return "", usageError("project_compile_host_required: this context reads host_skills; select a declared --host")
+	}
 	if source == "" || filepath.IsAbs(source) {
 		return "", usageError("project_package_invalid: host context source must be a relative skills path")
 	}
@@ -504,6 +509,27 @@ func projectHostContextSourcePath(skillsRoot, source string) (string, error) {
 	return path, nil
 }
 
+func projectCompileSkillsRoot(root string, profile projectProfile, host string) (string, error) {
+	if host == "" && profile.SchemaVersion == projectVariantProfileVersion {
+		return "", nil
+	}
+	if host == "" {
+		return "", usageError("project compile requires --package, --host and --output for profile /2")
+	}
+	source, err := profile.skillsRoot(host)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := canonicalProjectPath(filepath.Join(root, filepath.FromSlash(source)))
+	if err != nil {
+		return "", err
+	}
+	if relative, err := filepath.Rel(root, resolved); err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", usageError("project_compile_invalid_host_root: selected host skills root must stay inside the project")
+	}
+	return resolved, nil
+}
+
 func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error) {
 	workflowPath := filepath.Join(folder, "workflow.yaml")
 	workflowValue, err := projectYAMLDocument(workflowPath)
@@ -523,6 +549,7 @@ func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error
 	}{
 		{"schemas", "schema", "schema"},
 		{"contexts", "context", "context"},
+		{"checks", "check", "check"},
 		{"steps", "step", "step"},
 		{"workflows", "workflow", "workflow"},
 	} {
@@ -559,6 +586,7 @@ func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error
 		return projectPackageSource{}, err
 	}
 	source.RootValue = workflowValue
+	source.Folder = folder
 	return source, nil
 }
 
@@ -823,7 +851,7 @@ func projectFolderWorkflowDefinition(value any) (map[string]any, error) {
 	}
 	result := make(map[string]any, len(workflow)-1)
 	for key, field := range workflow {
-		if key != "package" && key != "decision_catalog" {
+		if key != "package" && key != "decision_catalog" && key != "execution_bindings" {
 			result[key] = field
 		}
 	}
@@ -1115,6 +1143,11 @@ func compileProjectComponent(root, skillsRoot string, document projectPackageDoc
 			protocol = "StepDefinitionV5"
 		}
 		if err := flow.ValidateProtocol(protocol, canonical); err != nil {
+			return projectCompileComponent{}, err
+		}
+	}
+	if document.Kind == "check" {
+		if _, err := flow.ParseCheckDefinition(canonical); err != nil {
 			return projectCompileComponent{}, err
 		}
 	}
@@ -1477,8 +1510,25 @@ func writeProjectPackageManifest(output string, source projectPackageSource, com
 		return flow.Ref{}, err
 	}
 	files := make([]map[string]any, 0, len(components))
+	if source.ExecutionBindings != nil {
+		data, err := projectCanonicalJSON(source.ExecutionBindings)
+		if err != nil {
+			return flow.Ref{}, err
+		}
+		if _, err := projectDecodeExecution(data); err != nil {
+			return flow.Ref{}, err
+		}
+		if err := os.WriteFile(filepath.Join(output, projectExecutionFile), data, 0644); err != nil {
+			return flow.Ref{}, err
+		}
+		files = append(files, map[string]any{"path": projectExecutionFile, "digest": fmt.Sprintf("sha256:%x", sha256.Sum256(data)), "size_bytes": len(data), "media_type": "application/json", "role": "data"})
+	}
 	manifestComponents := make([]map[string]any, 0, len(components))
+	manifestVersion := "1"
 	for _, component := range components {
+		if component.Kind == "check" {
+			manifestVersion = "2"
+		}
 		media := "application/json"
 		if component.Kind == "context" {
 			media = component.Resource.MediaType
@@ -1515,7 +1565,7 @@ func writeProjectPackageManifest(output string, source projectPackageSource, com
 		files = append(files, map[string]any{"path": projectBuildFile, "digest": fmt.Sprintf("sha256:%x", sha256.Sum256(data)), "size_bytes": len(data), "media_type": "application/json", "role": "data"})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i]["path"].(string) < files[j]["path"].(string) })
-	manifest := map[string]any{"schema_version": "1", "id": source.ID, "version": source.Version, "description": source.Description, "requires_core_protocol": source.RequiresCoreProtocol, "dependencies": dependencies, "components": manifestComponents, "files": files, "requested_capabilities": source.RequestedCapabilities, "license": source.License}
+	manifest := map[string]any{"schema_version": manifestVersion, "id": source.ID, "version": source.Version, "description": source.Description, "requires_core_protocol": source.RequiresCoreProtocol, "dependencies": dependencies, "components": manifestComponents, "files": files, "requested_capabilities": source.RequestedCapabilities, "license": source.License}
 	encoded, err := json.Marshal(manifest)
 	if err != nil {
 		return flow.Ref{}, err
@@ -1524,7 +1574,7 @@ func writeProjectPackageManifest(output string, source projectPackageSource, com
 	if err != nil {
 		return flow.Ref{}, err
 	}
-	if err := flow.ValidateProtocol("PackageManifest", data); err != nil {
+	if err := flow.ValidatePackageManifest(data); err != nil {
 		return flow.Ref{}, err
 	}
 	if err := os.WriteFile(filepath.Join(output, prifly.PackageManifestFile), append(data, '\n'), 0644); err != nil {

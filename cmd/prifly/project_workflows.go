@@ -861,7 +861,7 @@ func (c *cli) projectWorkflowsAdd(ctx context.Context, args []string) error {
 	if *name != "" && !projectLaunchID(*name) {
 		return usageError("project_workflow_source_invalid: --name must contain lowercase letters, digits, - or _")
 	}
-	root, err := projectRepositoryRoot(ctx, *repository)
+	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
 	}
@@ -1308,7 +1308,7 @@ func (c *cli) projectWorkflowsUpdate(ctx context.Context, args []string) error {
 			return usageError("project_workflow_source_invalid: " + err.Error())
 		}
 	}
-	root, err := projectRepositoryRoot(ctx, *repository)
+	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
 	}
@@ -1502,7 +1502,7 @@ func (c *cli) projectWorkflowsRemove(ctx context.Context, args []string) error {
 	if !projectLaunchID(name) {
 		return usageError("project_workflow_not_installed: " + name + " is not a declared package name")
 	}
-	root, err := projectRepositoryRoot(ctx, *repository)
+	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
 	}

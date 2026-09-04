@@ -98,9 +98,11 @@ func newProjectFixture(t *testing.T) (repository, authority string) {
 	gitFixture(t, repository, "init", "-q", "-b", "main")
 	authority = filepath.Join(t.TempDir(), "authority")
 	var out, errout bytes.Buffer
-	if code := execute(context.Background(), []string{"project", "init", "--repository", repository, "--state-root", authority, "--json"}, &out, &errout); code != 0 {
+	if code := execute(context.Background(), []string{"project", "init", "--repository", repository, "--state-root", authority, "--host", "codex-cli", "--host", "codex-app", "--host", "claude-code", "--json"}, &out, &errout); code != 0 {
 		t.Fatalf("project init %d: %s", code, errout.String())
 	}
+	// These fixtures retain the published /2 compilation and Git contract.
+	writeFixtureFile(t, repository, ".prifly/project.yaml", "schema_version: prifly-project-profile/2\n"+projectHostsYAML+"packages: {}\nlaunches: {}\n")
 	return repository, authority
 }
 

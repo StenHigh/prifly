@@ -12,14 +12,21 @@ fixtures, F1 demo и проверки runtime находятся в [`test/`](..
 - [`authoring/extension-authoring-reference.yaml`](authoring/extension-authoring-reference.yaml) —
   tracked `settings`, `exclude` и простая вставка шага через `extend.yaml`.
 - [`authoring/project-profile-authoring-reference.yaml`](authoring/project-profile-authoring-reference.yaml) —
-  полный `.prifly/project.yaml` с тремя фиксированными host roots.
+  полный `.prifly/project.yaml` `/3`; hosts необязательны и выбираются явно.
+- [`authoring/execution-bindings-authoring-reference.yaml`](authoring/execution-bindings-authoring-reference.yaml) —
+  все поля локальных execution bindings для steps/checks с comments.
+- [`authoring/check-authoring-reference.yaml`](authoring/check-authoring-reference.yaml) —
+  полная CheckDefinition для `checks/`, без shorthand и скрытых defaults.
 - [`authoring/context-authoring-reference.yaml`](authoring/context-authoring-reference.yaml) —
   обычный текст и явный context source из выбранного host skills root.
 - [`authoring/workflow-catalog-authoring-reference.yaml`](authoring/workflow-catalog-authoring-reference.yaml) —
   `catalog.yaml` каталога сценариев: категории и указатели `repository + path + ref [+ commit]`
   для `prifly project workflows search` и `add NAME`.
 
-Готовых product workflows здесь нет: Pri-Fly — движок. Сценарии AI Factory
+Для первого запуска без Git и ИИ есть учебный
+[CSV → проверка → отчёт](workflows/csv-report/README.md): YAML и обычный Node.js
+worker. Это пример общего worker protocol, не отраслевой product workflow.
+Сценарии AI Factory
 (`aif-classic`, `aif-fanout`) живут в
 [`StenHigh/prifly-aif-workflows`](https://github.com/StenHigh/prifly-aif-workflows)
 и ставятся из официального каталога `github.com/StenHigh/prifly-workflows`:
@@ -34,12 +41,46 @@ prifly project workflows add aif-classic
 частью YAML или sealed package: сложную проверку по-прежнему выполняет
 `prifly project compile`.
 
-Оба файла — **справочники, а не готовые packages**: в них стоят нулевые digest.
+Файлы `authoring/` — **справочники, а не готовые packages**: в них могут стоять
+нулевые digest и ссылки на несуществующие иллюстративные components.
 Копируй из них только нужную форму и замени refs на exact значения из
 `prifly inventory`. Обычный новый проект не обязан перечислять все поля —
 безопасные defaults описаны в [workflow and context](../openspec/specs/workflow-and-context/spec.md).
 
-## Проект с Pri-Fly: init, host runner и запуск
+## Проект с Pri-Fly: обычные программы и optional ИИ
+
+Fresh `prifly project init --repository .` создаёт profile `/3` в обычной папке,
+без Git и AI directories. `.prifly/local.yaml` связывает этот checkout с
+отдельной local authority и exact Pri-Fly executable; её путь не нужно каждый
+раз передавать в compile/start. Shared `.prifly/` содержит только общий YAML
+и supporting files. После clone/copy тот же init создаёт только отсутствующую
+local configuration, не переписывает общий YAML или frozen runners.
+
+Для command-only package host не нужен:
+
+```sh
+prifly project compile --repository . --package NAME --output ../NAME.package
+prifly project local set --repository . --allow-executable worker=/absolute/path/to/worker
+prifly project start --repository . --launch NAME --input source=./input.csv --allow-execution
+```
+
+Замените NAME, executable и input на объявления своего package. Compile не
+создаёт Run и не исполняет программы. Start требует локальное разрешение и
+`--allow-execution`, закрепляет выбранные programs/argv/files отдельно от inputs.
+RunBrief не создаётся автоматически: если такой документ объявлен required
+typed input, передайте его как соответствующий input. История и results
+сохраняются вне проекта; scratch — не sandbox для недоверенных программ.
+
+Пошаговая инструкция с реальным результатом — в
+[csv-report/README.md](workflows/csv-report/README.md). Путь `/3` описывает текущие
+исходники; до выпуска соответствующего Release используйте сборку из checkout.
+
+Если workflow использует ИИ, подключите только нужные host runners:
+
+```sh
+prifly project runners add --repository . --host codex-app
+# --host codex-cli и --host claude-code можно добавлять отдельно или вместе.
+```
 
 Package с context из host skills компилируется одной командой; `prifly-run`
 передаёт один из `--host codex-cli`, `--host codex-app` или `--host
@@ -51,19 +92,18 @@ skills root. Компилятор не импортирует package и не з
 prifly project compile --repository . --package NAME --host codex-cli --output ../NAME.package
 ```
 
-Для нового repository используйте `prifly project init --repository .`,
-добавьте собственные `.prifly/` YAML packages и launches, затем закоммитьте
-shared `.prifly/` и три generated host skills. После clone каждый разработчик
-выполняет ту же команду: она проверяет общие files и создаёт только свой ignored
-`.prifly/local.yaml`, не переписывая workflow или skills. Затем посмотрите
-явные точки запуска и вызовите `prifly-run` из skills directory своего host:
+При использовании Git закоммитьте shared `.prifly/` и только явно добавленные
+generated host skills. Посмотрите явные точки запуска:
 
 ```sh
-bin/prifly project workflows --repository . --json
+prifly project workflows --repository . --json
 ```
 
 Product workflow не копируется при `project init`: владелец добавляет папку
-сознательно, например `prifly project workflows add`. Host навык читает local
+сознательно, например `prifly project workflows add`. У текущего host runner
+ещё сохраняется прежний обязательный диалог Git/brief; его нейтральная
+переработка относится к следующему срезу. Поэтому описанный выше no-Git путь
+запускается напрямую через CLI. Для AI/Git workflows host навык читает local
 authority path и exact local Pri-Fly executable из ignored `local.yaml`,
 предлагает выбрать ID сценария, затем одним диалогом спрашивает `worktree` или
 `checkout`, package profile, применимые declared decisions и policy attended
@@ -81,7 +121,7 @@ checkout repository. Sealed context и outputs в обоих случаях ос
 authority scratch, не в repository.
 
 `project init` намеренно не заменяет tracked `prifly-run/SKILL.md`. После
-обновления Pri-Fly владелец проекта обновляет три generated runner files
+обновления Pri-Fly владелец проекта обновляет только объявленные generated runner files
 отдельным reviewed commit; существующий runner остаётся безопасным и позволяет
 clone создать только свой ignored `.prifly/local.yaml`.
 
@@ -92,6 +132,11 @@ prifly project runners update --repository .
 Команда заменяет только точные предыдущие generated runners. Если разработчик
 изменил хотя бы один из них вручную, она отказывает и не перезаписывает другие
 файлы: изменение сначала нужно перенести в reviewed project workflow.
+
+Существующий `/2` не мигрируется автоматически: он сохраняет Git, все три
+host roots, explicit `--host`, обязательный `--brief` и default worktree.
+В `/3` Git-запись assisted шага требует explicit workspace choice, а обычным
+commands и assisted `effects:none` Git claim не нужен.
 
 Assisted handoff не требует local worker socket. Для
 отдельного сценария с managed local worker заранее посмотрите
