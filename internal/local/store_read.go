@@ -37,7 +37,7 @@ func (s *Store) ReadAt(ctx context.Context, runID string, cut, after int64, limi
 	if err != nil {
 		return view, err
 	}
-	rows, err := conn.QueryContext(ctx, `SELECT seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after FROM events WHERE run_id=? AND seq>? AND seq<=? ORDER BY seq LIMIT ?`, runID, after, view.Snapshot.EventSeq, limit+1)
+	rows, err := conn.QueryContext(ctx, `SELECT seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after,state_digest,state_packed FROM events WHERE run_id=? AND seq>? AND seq<=? ORDER BY seq LIMIT ?`, runID, after, view.Snapshot.EventSeq, limit+1)
 	if err != nil {
 		return view, err
 	}
@@ -46,7 +46,12 @@ func (s *Store) ReadAt(ctx context.Context, runID string, cut, after int64, limi
 	for rows.Next() {
 		var e Event
 		e.RunID = runID
-		if err := rows.Scan(&e.Seq, &e.RunVersion, &e.Cut, &e.Type, &e.Version, &e.Actor, &e.CommandID, scanJSON{&e.Data}, &e.Digest, scanJSON{&e.StateAfter}); err != nil {
+		var stateDigest sql.NullString
+		var statePacked bool
+		if err := rows.Scan(&e.Seq, &e.RunVersion, &e.Cut, &e.Type, &e.Version, &e.Actor, &e.CommandID, scanJSON{&e.Data}, &e.Digest, scanJSON{&e.StateAfter}, &stateDigest, &statePacked); err != nil {
+			return view, err
+		}
+		if e.StateAfter, err = restore(ctx, conn, e.StateAfter, statePacked, stateDigest.String); err != nil {
 			return view, err
 		}
 		if e.Version != EventVersion || !s.eventTypes[e.Type] {
@@ -85,7 +90,7 @@ func (s *Store) ReadAllAt(ctx context.Context, cut int64, limit int) ([]Snapshot
 	if err != nil {
 		return nil, 0, err
 	}
-	rows, err := conn.QueryContext(ctx, `SELECT e.run_id,e.run_version,e.seq,e.state_after,e.state_digest
+	rows, err := conn.QueryContext(ctx, `SELECT e.run_id,e.run_version,e.seq,e.state_after,e.state_digest,e.state_packed
 FROM events e WHERE e.state_after IS NOT NULL AND e.cut<=? AND NOT EXISTS
 (SELECT 1 FROM events n WHERE n.run_id=e.run_id AND n.state_after IS NOT NULL AND n.seq>e.seq AND n.cut<=?)
 ORDER BY e.run_id LIMIT ?`, cut, cut, limit+1)
@@ -98,7 +103,11 @@ ORDER BY e.run_id LIMIT ?`, cut, cut, limit+1)
 	for rows.Next() {
 		var st Snapshot
 		var digest string
-		if err := rows.Scan(&st.RunID, &st.Version, &st.EventSeq, scanJSON{&st.Data}, &digest); err != nil {
+		var packed bool
+		if err := rows.Scan(&st.RunID, &st.Version, &st.EventSeq, scanJSON{&st.Data}, &digest, &packed); err != nil {
+			return nil, 0, err
+		}
+		if st.Data, err = restore(ctx, conn, st.Data, packed, digest); err != nil {
 			return nil, 0, err
 		}
 		if digestBytes(st.Data) != digest {
@@ -270,11 +279,15 @@ func readCut(ctx context.Context, conn *sql.Conn, requested int64) (int64, error
 func snapshotAt(ctx context.Context, conn *sql.Conn, runID string, cut int64) (Snapshot, error) {
 	state := Snapshot{RunID: runID}
 	var digest string
-	err := conn.QueryRowContext(ctx, "SELECT run_version,seq,state_after,state_digest FROM events WHERE run_id=? AND cut<=? AND state_after IS NOT NULL ORDER BY seq DESC LIMIT 1", runID, cut).Scan(&state.Version, &state.EventSeq, scanJSON{&state.Data}, &digest)
+	var packed bool
+	err := conn.QueryRowContext(ctx, "SELECT run_version,seq,state_after,state_digest,state_packed FROM events WHERE run_id=? AND cut<=? AND state_after IS NOT NULL ORDER BY seq DESC LIMIT 1", runID, cut).Scan(&state.Version, &state.EventSeq, scanJSON{&state.Data}, &digest, &packed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, ErrNotFound
 	}
 	if err != nil {
+		return state, err
+	}
+	if state.Data, err = restore(ctx, conn, state.Data, packed, digest); err != nil {
 		return state, err
 	}
 	if digestBytes(state.Data) != digest {
@@ -359,11 +372,15 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 		var version int64
 		var state json.RawMessage
 		var digest sql.NullString
-		err = conn.QueryRowContext(ctx, "SELECT seq,run_version,state_after,state_digest FROM events WHERE run_id=? AND cut<=? AND state_after IS NOT NULL ORDER BY seq DESC LIMIT 1", runID, from).Scan(&seq, &version, scanJSON{&state}, &digest)
+		var packed bool
+		err = conn.QueryRowContext(ctx, "SELECT seq,run_version,state_after,state_digest,state_packed FROM events WHERE run_id=? AND cut<=? AND state_after IS NOT NULL ORDER BY seq DESC LIMIT 1", runID, from).Scan(&seq, &version, scanJSON{&state}, &digest, &packed)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
+			return err
+		}
+		if state, err = restore(ctx, conn, state, packed, digest.String); err != nil {
 			return err
 		}
 		if !digest.Valid || digestBytes(state) != digest.String {
@@ -372,10 +389,10 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 		last[runID] = Snapshot{RunID: runID, Version: version, EventSeq: seq, Data: state}
 		return nil
 	}
-	query := "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest FROM events ORDER BY run_id,seq"
+	query := "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest,state_packed FROM events ORDER BY run_id,seq"
 	arguments := []any{}
 	if from > 0 {
-		query = "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest FROM events WHERE cut>? ORDER BY run_id,seq"
+		query = "SELECT run_id,seq,run_version,cut,type,schema_version,data,digest,state_after,state_digest,state_packed FROM events WHERE cut>? ORDER BY run_id,seq"
 		arguments = append(arguments, from)
 	}
 	rows, err := conn.QueryContext(ctx, query, arguments...)
@@ -385,7 +402,12 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 	for rows.Next() {
 		var e Event
 		var stateDigest sql.NullString
-		if err := rows.Scan(&e.RunID, &e.Seq, &e.RunVersion, &e.Cut, &e.Type, &e.Version, scanJSON{&e.Data}, &e.Digest, scanJSON{&e.StateAfter}, &stateDigest); err != nil {
+		var statePacked bool
+		if err := rows.Scan(&e.RunID, &e.Seq, &e.RunVersion, &e.Cut, &e.Type, &e.Version, scanJSON{&e.Data}, &e.Digest, scanJSON{&e.StateAfter}, &stateDigest, &statePacked); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if e.StateAfter, err = restore(ctx, conn, e.StateAfter, statePacked, stateDigest.String); err != nil {
 			_ = rows.Close()
 			return err
 		}
@@ -429,7 +451,7 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 			return ErrIntegrity
 		}
 	}
-	query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest FROM runs", nil
+	query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest,snapshot_packed FROM runs", nil
 	if from > 0 {
 		// Only the Runs this cut touched: reading every snapshot again is the
 		// cost an incremental verification exists to avoid.
@@ -440,7 +462,7 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 		if len(touched) == 0 {
 			return s.verifyCommands(ctx, conn, from)
 		}
-		query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest FROM runs WHERE run_id IN ("+placeholders(len(touched))+")", touched
+		query, arguments = "SELECT run_id,version,event_seq,snapshot,snapshot_digest,snapshot_packed FROM runs WHERE run_id IN ("+placeholders(len(touched))+")", touched
 	}
 	rows, err = conn.QueryContext(ctx, query, arguments...)
 	if err != nil {
@@ -449,7 +471,12 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 	for rows.Next() {
 		var st Snapshot
 		var digest string
-		if err := rows.Scan(&st.RunID, &st.Version, &st.EventSeq, scanJSON{&st.Data}, &digest); err != nil {
+		var packed bool
+		if err := rows.Scan(&st.RunID, &st.Version, &st.EventSeq, scanJSON{&st.Data}, &digest, &packed); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if st.Data, err = restore(ctx, conn, st.Data, packed, digest); err != nil {
 			_ = rows.Close()
 			return err
 		}

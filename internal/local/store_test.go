@@ -1,6 +1,7 @@
 package local
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -226,7 +227,7 @@ func TestStoreMigratesV1ForAuthorityControls(t *testing.T) {
 	// Rewinding the marker is not enough: a genuine v1 database also lacks the
 	// structures later versions added, and leaving them makes the fixture test
 	// a migration that never happens in the field.
-	if _, err := s.db.Exec("DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; PRAGMA user_version=1"); err != nil {
+	if _, err := s.db.Exec("DROP TABLE pinned_bytes; DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -1494,7 +1495,7 @@ func TestStoreVerifiesIncrementallyFromItsRecordedCut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+	if _, err := db.Exec("DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -1559,5 +1560,68 @@ func TestStoreOpenRefusesCorruptionAfterTheVerifiedCut(t *testing.T) {
 	}
 	if _, err := OpenStore(dir, storeTestOptions); !errors.Is(err, ErrIntegrity) {
 		t.Fatalf("a tampered new event was accepted at open: %v", err)
+	}
+}
+
+// A Run repeats its pinned bytes in every version and in every event that
+// records a state. Those strings are stored once and referenced, and what is
+// read back is the exact document that was written.
+func TestStoreSharesPinnedBytesAcrossSnapshots(t *testing.T) {
+	s, dir := testStore(t)
+	ctx := context.Background()
+	pinned := strings.Repeat("A", 32<<10)
+	state := func(version int) json.RawMessage {
+		return json.RawMessage(fmt.Sprintf(`{"version":%d,"definitions":[{"bytes":"%s"}],"note":"short"}`, version, pinned))
+	}
+	for i := range 8 {
+		applyChange(t, s, storeCommand(fmt.Sprintf("write-%d", i), "run-a", int64(i)), Change{Data: state(i + 1), Events: []EventInput{{Type: "test.updated", Version: EventVersion, Data: json.RawMessage(`{"n":1}`)}}})
+	}
+	var snapshots, events, shared int64
+	if err := s.db.QueryRow("SELECT sum(length(snapshot)) FROM runs").Scan(&snapshots); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRow("SELECT coalesce(sum(length(state_after)),0) FROM events").Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRow("SELECT count(*) FROM pinned_bytes").Scan(&shared); err != nil {
+		t.Fatal(err)
+	}
+	if shared != 1 {
+		t.Fatalf("the repeated bytes were not shared: %d rows", shared)
+	}
+	if snapshots > 4<<10 || events > 8<<10 {
+		t.Fatalf("snapshots still carry their pinned bytes: runs=%d events=%d", snapshots, events)
+	}
+	view, err := s.Read(ctx, "run-a", 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(view.Snapshot.Data) != string(state(8)) {
+		t.Fatalf("the restored snapshot differs from what was written: %s", view.Snapshot.Data)
+	}
+	for _, event := range view.Events {
+		if event.StateAfter != nil && !bytes.Contains(event.StateAfter, []byte(pinned)) {
+			t.Fatal("a recorded state was returned without its pinned bytes")
+		}
+	}
+	if err := s.Verify(ctx); err != nil {
+		t.Fatalf("verification failed over shared bytes: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Losing the shared bytes is an integrity failure, not a silent hole.
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(dir, "state.sqlite3")+"?mode=rw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("DELETE FROM pinned_bytes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenStore(dir, storeTestOptions); !errors.Is(err, ErrIntegrity) {
+		t.Fatalf("a snapshot with missing pinned bytes was accepted: %v", err)
 	}
 }

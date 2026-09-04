@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	StorageVersion = 5
+	StorageVersion = 6
 	// MaxSlotWaiters bounds the admission queue. A queue without a bound is a
 	// second unbounded resource hiding behind a bounded one.
 	MaxSlotWaiters = 64
@@ -431,11 +431,19 @@ func (s *Store) open(dir string, readOnly bool) error {
 	if appID != applicationID || version < 1 || version > StorageVersion {
 		return ErrIncompatible
 	}
-	if version < StorageVersion && !readOnly {
+	// Each migration advances one version, so an older database is brought
+	// forward step by step rather than being declared current after one of them.
+	for version < StorageVersion && !readOnly {
 		if err := s.migrate(ctx, conn, version); err != nil {
 			return err
 		}
-		version = StorageVersion
+		previous := version
+		if err := conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+			return err
+		}
+		if version <= previous {
+			return ErrIncompatible
+		}
 	}
 	var savedDir string
 	if err := conn.QueryRowContext(ctx, "SELECT id,epoch,state_directory FROM authority WHERE singleton=1").Scan(&s.info.AuthorityID, &s.info.Epoch, &savedDir); err != nil {
@@ -510,16 +518,17 @@ func (s *Store) initialize(ctx context.Context, conn *sql.Conn, dir string) erro
 CREATE TABLE authority(singleton INTEGER PRIMARY KEY CHECK(singleton=1),id TEXT NOT NULL UNIQUE,epoch INTEGER NOT NULL CHECK(epoch>0),state_directory TEXT NOT NULL,cut INTEGER NOT NULL CHECK(cut>=0),slot_id TEXT NOT NULL DEFAULT '',slot_run TEXT NOT NULL DEFAULT '',slot_capacity INTEGER NOT NULL DEFAULT 1 CHECK(slot_capacity>=1),admission_seq INTEGER NOT NULL DEFAULT 0,verified_cut INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE slots(slot_id TEXT PRIMARY KEY,run_id TEXT NOT NULL);
 CREATE TABLE slot_waiters(run_id TEXT PRIMARY KEY,since_seq INTEGER NOT NULL,seen_seq INTEGER NOT NULL);
-CREATE TABLE runs(run_id TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),event_seq INTEGER NOT NULL CHECK(event_seq>0),snapshot BLOB NOT NULL,snapshot_digest TEXT NOT NULL);
+CREATE TABLE runs(run_id TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),event_seq INTEGER NOT NULL CHECK(event_seq>0),snapshot BLOB NOT NULL,snapshot_digest TEXT NOT NULL,snapshot_packed INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE pinned_bytes(digest TEXT PRIMARY KEY,bytes BLOB NOT NULL);
 CREATE TABLE commands(actor TEXT NOT NULL,command_id TEXT NOT NULL,run_id TEXT NOT NULL,digest TEXT NOT NULL,cut INTEGER NOT NULL UNIQUE,receipt BLOB NOT NULL,receipt_digest TEXT NOT NULL,PRIMARY KEY(actor,command_id));
-CREATE TABLE events(run_id TEXT NOT NULL REFERENCES runs(run_id),seq INTEGER NOT NULL CHECK(seq>0),run_version INTEGER NOT NULL CHECK(run_version>0),cut INTEGER NOT NULL REFERENCES commands(cut) DEFERRABLE INITIALLY DEFERRED,type TEXT NOT NULL,schema_version INTEGER NOT NULL,actor TEXT NOT NULL,command_id TEXT NOT NULL,data BLOB NOT NULL,digest TEXT NOT NULL,state_after BLOB,state_digest TEXT,PRIMARY KEY(run_id,seq));
+CREATE TABLE events(run_id TEXT NOT NULL REFERENCES runs(run_id),seq INTEGER NOT NULL CHECK(seq>0),run_version INTEGER NOT NULL CHECK(run_version>0),cut INTEGER NOT NULL REFERENCES commands(cut) DEFERRABLE INITIALLY DEFERRED,type TEXT NOT NULL,schema_version INTEGER NOT NULL,actor TEXT NOT NULL,command_id TEXT NOT NULL,data BLOB NOT NULL,digest TEXT NOT NULL,state_after BLOB,state_digest TEXT,state_packed INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(run_id,seq));
 CREATE INDEX events_cut ON events(cut);
 CREATE TABLE samples(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,run_id TEXT NOT NULL,cut INTEGER NOT NULL,data BLOB NOT NULL,digest TEXT NOT NULL);
 CREATE INDEX samples_cut ON samples(cut,seq);
 CREATE TABLE authority_states(state_key TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),cut INTEGER NOT NULL UNIQUE,data BLOB NOT NULL,digest TEXT NOT NULL);
 CREATE TABLE authority_commands(actor TEXT NOT NULL,command_id TEXT NOT NULL,state_key TEXT NOT NULL,digest TEXT NOT NULL,cut INTEGER NOT NULL UNIQUE,receipt BLOB NOT NULL,receipt_digest TEXT NOT NULL,PRIMARY KEY(actor,command_id));
 PRAGMA application_id=1347569228;
-PRAGMA user_version=5;`
+PRAGMA user_version=6;`
 	if _, err := conn.ExecContext(ctx, schema); err != nil {
 		return err
 	}
@@ -531,6 +540,9 @@ PRAGMA user_version=5;`
 }
 
 func (s *Store) migrate(ctx context.Context, conn *sql.Conn, version int) error {
+	if version == 5 {
+		return s.migratePinnedBytes(ctx, conn)
+	}
 	if version == 4 {
 		return s.migrateVerifiedCut(ctx, conn)
 	}
@@ -656,6 +668,37 @@ func (s *Store) migrateVerifiedCut(ctx context.Context, conn *sql.Conn) error {
 		return err
 	}
 	if _, err := conn.ExecContext(ctx, "PRAGMA user_version=5"); err != nil {
+		return err
+	}
+	_, err := conn.ExecContext(ctx, "COMMIT")
+	return err
+}
+
+// migratePinnedBytes adds the shared byte store. Existing snapshots are left
+// exactly as they are: they read back unpacked, and only what is written after
+// the migration references shared bytes.
+func (s *Store) migratePinnedBytes(ctx context.Context, conn *sql.Conn) error {
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.Background(), "ROLLBACK")
+	var current int
+	if err := conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
+		return err
+	}
+	if current == StorageVersion {
+		return nil
+	}
+	if current != 5 {
+		return ErrIncompatible
+	}
+	if _, err := conn.ExecContext(ctx, `
+CREATE TABLE pinned_bytes(digest TEXT PRIMARY KEY,bytes BLOB NOT NULL);
+ALTER TABLE runs ADD COLUMN snapshot_packed INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE events ADD COLUMN state_packed INTEGER NOT NULL DEFAULT 0;`); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, "PRAGMA user_version=6"); err != nil {
 		return err
 	}
 	_, err := conn.ExecContext(ctx, "COMMIT")
@@ -910,14 +953,21 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 			out.Receipt.Version++
 		}
 		out.Receipt.EventSeq += int64(len(change.Events))
-		if _, err := conn.ExecContext(ctx, `INSERT INTO runs(run_id,version,event_seq,snapshot,snapshot_digest) VALUES(?,?,?,?,?)
-ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.event_seq,snapshot=excluded.snapshot,snapshot_digest=excluded.snapshot_digest`, cmd.RunID, out.Receipt.Version, out.Receipt.EventSeq, []byte(change.Data), digestBytes(change.Data)); err != nil {
+		// The pinned bytes a state carries never change, so they are stored
+		// once and referenced. The recorded digest still describes the whole
+		// state, which is what every reader checks after restoring it.
+		snapshot, snapshotPacked, err := packPinnedBytes(ctx, conn, change.Data)
+		if err != nil {
+			return out, err
+		}
+		if _, err := conn.ExecContext(ctx, `INSERT INTO runs(run_id,version,event_seq,snapshot,snapshot_digest,snapshot_packed) VALUES(?,?,?,?,?,?)
+ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.event_seq,snapshot=excluded.snapshot,snapshot_digest=excluded.snapshot_digest,snapshot_packed=excluded.snapshot_packed`, cmd.RunID, out.Receipt.Version, out.Receipt.EventSeq, []byte(snapshot), digestBytes(change.Data), snapshotPacked); err != nil {
 			return out, err
 		}
 		if len(change.Events) > 0 {
 			// One command commonly writes several events; preparing the insert
 			// once keeps the parse out of the loop under the writer lock.
-			insert, err := conn.PrepareContext(ctx, "INSERT INTO events(run_id,seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after,state_digest) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
+			insert, err := conn.PrepareContext(ctx, "INSERT INTO events(run_id,seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after,state_digest,state_packed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
 			if err != nil {
 				return out, err
 			}
@@ -928,11 +978,11 @@ ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.ev
 				}
 				var after any
 				var afterDigest any
+				packed := false
 				if i == len(change.Events)-1 {
-					after = []byte(change.Data)
-					afterDigest = digestBytes(change.Data)
+					after, afterDigest, packed = []byte(snapshot), digestBytes(change.Data), snapshotPacked
 				}
-				if _, err := insert.ExecContext(ctx, cmd.RunID, state.EventSeq+int64(i)+1, out.Receipt.Version, cut, event.Type, event.Version, cmd.Actor, cmd.ID, []byte(event.Data), digestBytes(event.Data), after, afterDigest); err != nil {
+				if _, err := insert.ExecContext(ctx, cmd.RunID, state.EventSeq+int64(i)+1, out.Receipt.Version, cut, event.Type, event.Version, cmd.Actor, cmd.ID, []byte(event.Data), digestBytes(event.Data), after, afterDigest, packed); err != nil {
 					return out, err
 				}
 			}
@@ -1132,16 +1182,20 @@ func (s *Store) CreateLinkedRun(ctx context.Context, cmd LinkedRunCommand, trans
 	}
 	if rejection == nil {
 		version, sequence := int64(1), int64(len(change.Events))
-		if _, err := conn.ExecContext(ctx, "INSERT INTO runs(run_id,version,event_seq,snapshot,snapshot_digest) VALUES(?,?,?,?,?)", cmd.NewRunID, version, sequence, []byte(change.Data), digestBytes(change.Data)); err != nil {
+		linked, linkedPacked, err := packPinnedBytes(ctx, conn, change.Data)
+		if err != nil {
+			return out, err
+		}
+		if _, err := conn.ExecContext(ctx, "INSERT INTO runs(run_id,version,event_seq,snapshot,snapshot_digest,snapshot_packed) VALUES(?,?,?,?,?,?)", cmd.NewRunID, version, sequence, []byte(linked), digestBytes(change.Data), linkedPacked); err != nil {
 			return out, err
 		}
 		for i, event := range change.Events {
 			if event.Version == 0 {
 				event.Version = EventVersion
 			}
-			var after any = []byte(change.Data)
+			var after any = []byte(linked)
 			var afterDigest any = digestBytes(change.Data)
-			if _, err := conn.ExecContext(ctx, "INSERT INTO events(run_id,seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after,state_digest) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", cmd.NewRunID, int64(i)+1, version, cut, event.Type, event.Version, cmd.Actor, cmd.ID, []byte(event.Data), digestBytes(event.Data), after, afterDigest); err != nil {
+			if _, err := conn.ExecContext(ctx, "INSERT INTO events(run_id,seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after,state_digest,state_packed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", cmd.NewRunID, int64(i)+1, version, cut, event.Type, event.Version, cmd.Actor, cmd.ID, []byte(event.Data), digestBytes(event.Data), after, afterDigest, linkedPacked); err != nil {
 				return out, err
 			}
 		}
@@ -1477,11 +1531,15 @@ func rollbackClose(conn *sql.Conn) error {
 func loadSnapshot(ctx context.Context, conn *sql.Conn, runID string) (Snapshot, error) {
 	state := Snapshot{RunID: runID}
 	var digest string
-	err := conn.QueryRowContext(ctx, "SELECT version,event_seq,snapshot,snapshot_digest FROM runs WHERE run_id=?", runID).Scan(&state.Version, &state.EventSeq, scanJSON{&state.Data}, &digest)
+	var packed bool
+	err := conn.QueryRowContext(ctx, "SELECT version,event_seq,snapshot,snapshot_digest,snapshot_packed FROM runs WHERE run_id=?", runID).Scan(&state.Version, &state.EventSeq, scanJSON{&state.Data}, &digest, &packed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, ErrNotFound
 	}
 	if err != nil {
+		return state, err
+	}
+	if state.Data, err = restore(ctx, conn, state.Data, packed, digest); err != nil {
 		return state, err
 	}
 	if digestBytes(state.Data) != digest {
