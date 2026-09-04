@@ -7,6 +7,7 @@ AI Factory или сеть.
 
 | Путь | Назначение |
 |---|---|
+| `e2e/verify-install.sh` | bootstrap installer против локального стенда release: архив с совпавшим SHA-256 ставится, подменённый отклоняется и binary не появляется |
 | `e2e/test_examples.py` | контракт foundation wrappers и локальных editor schemas |
 | `e2e/verify-authoring.py` | независимый black-box corpus Project YAML authoring, public workspace launch и установка workflow folder из локального Git-репозитория и каталога |
 | `e2e/verify-cli.py` | F1 workflow через настоящий binary |

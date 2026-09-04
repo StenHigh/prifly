@@ -171,7 +171,8 @@ python3 -B test/e2e/verify-core.py --binary bin/prifly
 
 `workflows/repeat-worker.json` показывает цикл с явным изменением input следующей итерации. `repeat-limit.json`, `repeat-noncontinuing.json` и `repeat-unknown-at-limit.json` показывают остальные пути без workers. Тело задаётся exact ref или локальным alias до lock; `stage.repeat_decided` содержит RepeatDecision с exact body ID и фактически прочитанными refs. Старые body остаются в истории; их отсутствующие outputs не подставляются вместо результата текущего body.
 
-`make e2e` запускает проверки обёртки, F1, Core и полного контекста с checks. Точный статус capability и границы квалификации — в [delivery roadmap](../openspec/specs/delivery-roadmap/spec.md).
+`make e2e` запускает проверку установщика, проверки обёртки, F1, Core и
+полного контекста с checks. Точный статус capability и границы квалификации — в [delivery roadmap](../openspec/specs/delivery-roadmap/spec.md).
 
 Новые Core projects выбирают exact `core:policy/local@2.0.0`, разрешающую глубину до 8 при одном worker, 256 StepInstances и 1024 control transitions. Прежняя policy `1.0.0` остаётся неизменной и не разрешает child depth. Генераторы берут `default_policy_ref` из ProjectConfig; inventory может содержать несколько версий одного ID. Workflows со scoped calls без repeat используют state/read v2; repeat в любом месте закреплённого closure требует v3. Прежние Runs сохраняют свои версии.
 
