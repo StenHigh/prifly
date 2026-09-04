@@ -5,7 +5,8 @@ from pathlib import Path
 import sys
 
 
-WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+ROOT = Path(__file__).resolve().parents[2]
+WORKFLOWS = ROOT / ".github" / "workflows"
 
 
 def job_section(text: str, name: str) -> str:
@@ -79,6 +80,19 @@ def main() -> int:
             return 1
     if 'tags-ignore: ["**"]' not in verify or "make ci-check" not in verify or "make e2e" not in verify:
         print("verify workflow must run the product gates for branches and skip release tags", file=sys.stderr)
+        return 1
+    installer = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+    # A first install trusts HTTPS to GitHub and nothing else, so the one thing
+    # it can still check is that the archive it received is the archive this
+    # release published.
+    installer_required = (
+        "release-manifest.json",
+        "does not match the digest this release published",
+        "sha256",
+    )
+    missing = [item for item in installer_required if item not in installer]
+    if missing:
+        print("installer does not verify the release archive:", *missing, sep="\n- ", file=sys.stderr)
         return 1
     print("release CI contract is present")
     return 0

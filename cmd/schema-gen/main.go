@@ -221,152 +221,100 @@ func (g *generator) describe(def, field, text string) {
 	}
 }
 func enum(values ...string) map[string]any { return map[string]any{"enum": values} }
+
+// profileContracts are the generated contract sets, in the order they were
+// introduced. Selecting one generates it and everything before it, which is what
+// the chains of ORs used to spell out one profile at a time.
+var profileContracts = []struct {
+	flag, description string
+	enable            func(*generator)
+}{
+	{"core", "generate core-workflow/1 public contracts", func(g *generator) { g.core = true }},
+	{"invocations", "generate core invocation state/read version 2 contracts", func(g *generator) { g.invocations = true }},
+	{"repeats", "generate core repeat state/read version 3 contracts", func(g *generator) { g.repeats = true }},
+	{"contexts", "generate core context state/read version 4 contracts", func(g *generator) { g.contexts = true }},
+	{"sessions", "generate assisted session state/read version 5 contracts", func(g *generator) { g.sessions = true }},
+	{"waivers", "generate quality waiver state/read version 6 contracts", func(g *generator) { g.waivers = true }},
+	{"parallel", "generate branch fan-out state/read version 7 contracts", func(g *generator) { g.parallel = true }},
+	{"map", "generate sealed collection state/read version 8 contracts", func(g *generator) { g.maps = true }},
+	{"wait", "generate wait registration state/read version 9 contracts", func(g *generator) { g.waits = true }},
+	{"guard", "generate live guard state/read version 10 contracts", func(g *generator) { g.guards = true }},
+	{"reported-cost", "generate named reported cost state/read version 11 contracts", func(g *generator) { g.reportedCosts = true }},
+	{"artifact-publication", "generate early artifact publication state/read version 12 contracts", func(g *generator) { g.artifacts = true }},
+	{"artifact-closure", "generate artifact closure state/read version 13 contracts", func(g *generator) { g.closures = true }},
+	{"publication-subscription", "generate publication subscription state/read version 14 contracts", func(g *generator) { g.subscriptions = true }},
+	{"publication-checks", "generate checked artifact publication state/read version 15 contracts", func(g *generator) { g.publicationChecks = true }},
+	{"publication-new-only", "generate new-only publication source state/read version 16 contracts", func(g *generator) { g.publicationNewOnly = true }},
+	{"publication-failure", "generate terminal producer-failure interruption state/read version 17 contracts", func(g *generator) { g.publicationFailure = true }},
+	{"action-intent", "generate durable ActionIntent proposal state/read version 18 contracts", func(g *generator) { g.actionIntents = true }},
+	{"action-admission", "generate durable ActionAdmission state/read version 19 contracts", func(g *generator) { g.actionAdmissions = true }},
+	{"action-grant-admission", "generate ActionAdmission exact Grant state/read version 20 contracts", func(g *generator) { g.actionGrantAdmissions = true }},
+	{"action-delivery", "generate prepared ActionDelivery state/read version 21 contracts", func(g *generator) { g.actionDeliveries = true }},
+	{"fork", "generate linked Run fork state/read version 22 contracts", func(g *generator) { g.forks = true }},
+	{"workspace", "generate declared repository workspace state/read version 23 contracts", func(g *generator) { g.workspaces = true }},
+	{"workspace-tree", "generate workspace-tree state/read version 24 contracts", func(g *generator) { g.workspaceTrees = true }},
+	{"decision-state", "generate decision catalog state/read version 25 contracts", func(g *generator) { g.decisionState = true }},
+}
+
+// documentContracts are the author-facing documents, each produced whole by the
+// contract package rather than reflected from a Go type.
+var documentContracts = []struct {
+	flag, description string
+	build             func() ([]byte, error)
+}{
+	{"step-definition-v3", "generate StepDefinition v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV3") }},
+	{"step-definition-v4", "generate StepDefinition v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV4") }},
+	{"step-definition-v5", "generate StepDefinition v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV5") }},
+	{"workflow-revision-v3", "generate WorkflowRevision v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV3") }},
+	{"publication-source", "generate once artifact publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchema() }},
+	{"publication-source-v2", "generate each-publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV2() }},
+	{"publication-source-v3", "generate once new-only source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV3() }},
+	{"publication-source-v4", "generate each-publication new-only source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV4() }},
+	{"publication-source-v5", "generate once source with terminal-failure interruption", func() ([]byte, error) { return flow.PublicationSourceSchemaV5() }},
+	{"publication-source-v6", "generate each-publication source with terminal-failure interruption", func() ([]byte, error) { return flow.PublicationSourceSchemaV6() }},
+	{"publication-source-v7", "generate once JSON/blob publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV7() }},
+	{"publication-source-v8", "generate each-publication JSON/blob source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV8() }},
+}
+
 func main() {
-	core := flag.Bool("core", false, "generate core-workflow/1 public contracts")
 	choice := flag.Bool("choice", false, "generate choice-decision/1 public contract")
-	invocations := flag.Bool("invocations", false, "generate core invocation state/read version 2 contracts")
-	repeats := flag.Bool("repeats", false, "generate core repeat state/read version 3 contracts")
-	contexts := flag.Bool("contexts", false, "generate core context state/read version 4 contracts")
-	sessions := flag.Bool("sessions", false, "generate assisted session state/read version 5 contracts")
-	waivers := flag.Bool("waivers", false, "generate quality waiver state/read version 6 contracts")
-	parallel := flag.Bool("parallel", false, "generate branch fan-out state/read version 7 contracts")
-	maps := flag.Bool("map", false, "generate sealed collection state/read version 8 contracts")
-	waits := flag.Bool("wait", false, "generate wait registration state/read version 9 contracts")
-	guards := flag.Bool("guard", false, "generate live guard state/read version 10 contracts")
-	reportedCosts := flag.Bool("reported-cost", false, "generate named reported cost state/read version 11 contracts")
-	artifacts := flag.Bool("artifact-publication", false, "generate early artifact publication state/read version 12 contracts")
-	closures := flag.Bool("artifact-closure", false, "generate artifact closure state/read version 13 contracts")
-	subscriptions := flag.Bool("publication-subscription", false, "generate publication subscription state/read version 14 contracts")
-	publicationChecks := flag.Bool("publication-checks", false, "generate checked artifact publication state/read version 15 contracts")
-	publicationNewOnly := flag.Bool("publication-new-only", false, "generate new-only publication source state/read version 16 contracts")
-	publicationFailure := flag.Bool("publication-failure", false, "generate terminal producer-failure interruption state/read version 17 contracts")
-	actionIntents := flag.Bool("action-intent", false, "generate durable ActionIntent proposal state/read version 18 contracts")
-	actionAdmissions := flag.Bool("action-admission", false, "generate durable ActionAdmission state/read version 19 contracts")
-	actionGrantAdmissions := flag.Bool("action-grant-admission", false, "generate ActionAdmission exact Grant state/read version 20 contracts")
-	actionDeliveries := flag.Bool("action-delivery", false, "generate prepared ActionDelivery state/read version 21 contracts")
-	forks := flag.Bool("fork", false, "generate linked Run fork state/read version 22 contracts")
-	workspaces := flag.Bool("workspace", false, "generate declared repository workspace state/read version 23 contracts")
-	workspaceTrees := flag.Bool("workspace-tree", false, "generate workspace-tree state/read version 24 contracts")
-	decisionState := flag.Bool("decision-state", false, "generate decision catalog state/read version 25 contracts")
 	decisions := flag.Bool("run-decisions", false, "generate Run decision bridge contracts")
-	stepDefinitionV3 := flag.Bool("step-definition-v3", false, "generate StepDefinition v3 author contract")
-	stepDefinitionV4 := flag.Bool("step-definition-v4", false, "generate StepDefinition v4 author contract")
-	stepDefinitionV5 := flag.Bool("step-definition-v5", false, "generate StepDefinition v5 author contract")
-	workflowRevisionV3 := flag.Bool("workflow-revision-v3", false, "generate WorkflowRevision v3 author contract")
-	publicationSource := flag.Bool("publication-source", false, "generate once artifact publication source author contract")
-	publicationSourceV2 := flag.Bool("publication-source-v2", false, "generate each-publication source author contract")
-	publicationSourceV3 := flag.Bool("publication-source-v3", false, "generate once new-only source author contract")
-	publicationSourceV4 := flag.Bool("publication-source-v4", false, "generate each-publication new-only source author contract")
-	publicationSourceV5 := flag.Bool("publication-source-v5", false, "generate once source with terminal-failure interruption")
-	publicationSourceV6 := flag.Bool("publication-source-v6", false, "generate each-publication source with terminal-failure interruption")
-	publicationSourceV7 := flag.Bool("publication-source-v7", false, "generate once JSON/blob publication source author contract")
-	publicationSourceV8 := flag.Bool("publication-source-v8", false, "generate each-publication JSON/blob source author contract")
+	profile := make([]*bool, len(profileContracts))
+	for i, contract := range profileContracts {
+		profile[i] = flag.Bool(contract.flag, false, contract.description)
+	}
+	document := make([]*bool, len(documentContracts))
+	for i, contract := range documentContracts {
+		document[i] = flag.Bool(contract.flag, false, contract.description)
+	}
 	flag.Parse()
-	exclusive := 0
-	for _, selected := range []bool{*core, *choice, *invocations, *repeats, *contexts, *sessions, *waivers, *parallel, *maps, *waits, *guards, *reportedCosts, *artifacts, *closures, *subscriptions, *publicationChecks, *publicationNewOnly, *publicationFailure, *actionIntents, *actionAdmissions, *actionGrantAdmissions, *actionDeliveries, *forks, *workspaces, *workspaceTrees, *decisionState, *decisions, *stepDefinitionV3, *stepDefinitionV4, *stepDefinitionV5, *workflowRevisionV3, *publicationSource, *publicationSourceV2, *publicationSourceV3, *publicationSourceV4, *publicationSourceV5, *publicationSourceV6, *publicationSourceV7, *publicationSourceV8} {
-		if selected {
+	selected, exclusive := -1, 0
+	for _, chosen := range []*bool{choice, decisions} {
+		if *chosen {
 			exclusive++
+		}
+	}
+	for i, chosen := range profile {
+		if *chosen {
+			selected, exclusive = i, exclusive+1
+		}
+	}
+	for i, chosen := range document {
+		if *chosen {
+			exclusive++
+			if exclusive == 1 && flag.NArg() == 0 {
+				data, err := documentContracts[i].build()
+				if err != nil {
+					panic(err)
+				}
+				_, _ = os.Stdout.Write(append(data, '\n'))
+				return
+			}
 		}
 	}
 	if flag.NArg() != 0 || exclusive > 1 {
 		fmt.Fprintln(os.Stderr, "schema-gen accepts one contract-selection flag")
 		os.Exit(2)
-	}
-	if *stepDefinitionV3 {
-		data, err := flow.ProtocolSchema("StepDefinitionV3")
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *stepDefinitionV4 {
-		data, err := flow.ProtocolSchema("StepDefinitionV4")
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *stepDefinitionV5 {
-		data, err := flow.ProtocolSchema("StepDefinitionV5")
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *workflowRevisionV3 {
-		data, err := flow.ProtocolSchema("WorkflowRevisionV3")
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *publicationSource {
-		data, err := flow.PublicationSourceSchema()
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *publicationSourceV2 {
-		data, err := flow.PublicationSourceSchemaV2()
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *publicationSourceV3 {
-		data, err := flow.PublicationSourceSchemaV3()
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *publicationSourceV4 {
-		data, err := flow.PublicationSourceSchemaV4()
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *publicationSourceV5 {
-		data, err := flow.PublicationSourceSchemaV5()
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *publicationSourceV6 {
-		data, err := flow.PublicationSourceSchemaV6()
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *publicationSourceV7 {
-		data, err := flow.PublicationSourceSchemaV7()
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
-	}
-	if *publicationSourceV8 {
-		data, err := flow.PublicationSourceSchemaV8()
-		if err != nil {
-			panic(err)
-		}
-		_, _ = os.Stdout.Write(append(data, '\n'))
-		return
 	}
 	if *choice {
 		emit(choiceSchema())
@@ -376,13 +324,9 @@ func main() {
 		emit(decisionSchema())
 		return
 	}
-	g := generator{defs: map[string]any{}, core: *core || *invocations || *repeats || *contexts || *sessions || *waivers || *parallel || *maps || *waits || *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, invocations: *invocations || *repeats || *contexts || *sessions || *waivers || *parallel || *maps || *waits || *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, repeats: *repeats || *contexts || *sessions || *waivers || *parallel || *maps || *waits || *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, contexts: *contexts || *sessions || *waivers || *parallel || *maps || *waits || *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, sessions: *sessions || *waivers || *parallel || *maps || *waits || *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, waivers: *waivers || *parallel || *maps || *waits || *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, parallel: *parallel || *maps || *waits || *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, maps: *maps || *waits || *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, waits: *waits || *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, guards: *guards || *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, reportedCosts: *reportedCosts || *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, artifacts: *artifacts || *closures || *subscriptions || *publicationChecks || *publicationNewOnly, closures: *closures || *subscriptions || *publicationChecks || *publicationNewOnly, subscriptions: *subscriptions || *publicationChecks || *publicationNewOnly, publicationChecks: *publicationChecks || *publicationNewOnly, publicationNewOnly: *publicationNewOnly}
-	if *publicationFailure || *actionIntents || *actionAdmissions || *actionGrantAdmissions || *actionDeliveries || *forks || *workspaces || *workspaceTrees || *decisionState {
-		g.core, g.invocations, g.repeats, g.contexts, g.sessions, g.waivers, g.parallel, g.maps, g.waits, g.guards, g.reportedCosts, g.artifacts, g.closures, g.subscriptions, g.publicationChecks, g.publicationNewOnly, g.publicationFailure = true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true
-	}
-	g.actionIntents, g.actionAdmissions, g.actionGrantAdmissions, g.actionDeliveries, g.forks, g.workspaces, g.workspaceTrees = *actionIntents || *actionAdmissions || *actionGrantAdmissions || *actionDeliveries || *forks || *workspaces || *workspaceTrees, *actionAdmissions || *actionGrantAdmissions || *actionDeliveries || *forks || *workspaces || *workspaceTrees, *actionGrantAdmissions || *actionDeliveries || *forks || *workspaces || *workspaceTrees, *actionDeliveries || *forks || *workspaces || *workspaceTrees, *forks || *workspaces || *workspaceTrees, *workspaces || *workspaceTrees, *workspaceTrees
-	if *decisionState {
-		g.actionIntents, g.actionAdmissions, g.actionGrantAdmissions, g.actionDeliveries, g.forks, g.workspaces, g.workspaceTrees, g.decisionState = true, true, true, true, true, true, true, true
+	g := generator{defs: map[string]any{}}
+	for i := 0; i <= selected; i++ {
+		profileContracts[i].enable(&g)
 	}
 	contracts := map[string]reflect.Type{
 		"FoundationRunView":             reflect.TypeFor[prifly.RunView](),

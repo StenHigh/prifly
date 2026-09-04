@@ -42,6 +42,7 @@ schemas-check:
 release-ci-check:
 	python3 -B test/e2e/verify-release-ci.py
 e2e: build
+	sh test/e2e/verify-install.sh
 	python3 -B test/e2e/test_examples.py
 	python3 -B test/e2e/verify-authoring.py --binary bin/prifly
 	python3 -B test/e2e/verify-cli.py --binary bin/prifly
