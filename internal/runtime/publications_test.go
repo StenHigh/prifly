@@ -159,7 +159,7 @@ func TestPublicationStateCASReplacementAndDurableRetry(t *testing.T) {
 		t.Fatalf("neither writer committed: %v", errorsSeen)
 	}
 	r, read := publicationRun(t, e, c)
-	if len(r.Publications) != 2 || r.Publications[1].Version != 2 || strings.Contains(string(r.Publications[1].Value), "note") || read.Snapshot.Version != 1 || read.Snapshot.EventSeq != 3 {
+	if len(r.Publications) != 2 || r.Publications[1].Version != 2 || strings.Contains(string(r.Publications[1].Value), "note") || read.Snapshot.Version != 1 || read.Snapshot.EventSeq != 4 {
 		t.Fatalf("CAS, replacement or RunVersion contract changed: %+v", r.Publications)
 	}
 	before, _ := canonicalState(r)

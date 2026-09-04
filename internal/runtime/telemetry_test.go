@@ -1098,8 +1098,13 @@ func TestTelemetryReadOnlyFixedCutWhileControlWriterCommits(t *testing.T) {
 		}
 	}
 	r, view, err := e.load(ctx, runID)
-	if err != nil || view.Snapshot.Version != start.Snapshot.Version+4 || view.Snapshot.EventSeq != start.Snapshot.EventSeq+4 || len(r.Stops) != 4 || len(r.Attempts) != 0 {
+	if err != nil || view.Snapshot.Version != start.Snapshot.Version+4 || len(r.Stops) != 4 || len(r.Attempts) != 0 {
 		t.Fatal("reader created or lost a control transition", err)
+	}
+	// Each of those commands also records the state changes it made, so the
+	// journal grows by more than one entry per command.
+	if view.Snapshot.EventSeq <= start.Snapshot.EventSeq+4 {
+		t.Fatalf("control commands recorded no state changes: %d to %d", start.Snapshot.EventSeq, view.Snapshot.EventSeq)
 	}
 	receipts, cut, err := e.Store.ReadReceiptsAt(ctx, -1, 100)
 	if err != nil || len(receipts) != 5 {

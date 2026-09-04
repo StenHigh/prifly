@@ -70,6 +70,43 @@ func (s *Store) ReadAt(ctx context.Context, runID string, cut, after int64, limi
 	return view, rows.Err()
 }
 
+// ReadEventsOfType returns one Run's events of a single type, oldest first. It
+// is bounded like every other read: a Run with more of them than the limit
+// reports that the rest was not read, so a caller can say its answer is partial
+// instead of quietly dropping history.
+func (s *Store) ReadEventsOfType(ctx context.Context, runID, eventType string, after int64, limit int) ([]Event, bool, error) {
+	limit, err := readLimit(limit)
+	if err != nil {
+		return nil, false, err
+	}
+	conn, err := s.begin(ctx, false)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rollbackClose(conn)
+	rows, err := conn.QueryContext(ctx, "SELECT seq,run_version,cut,type,schema_version,actor,command_id,data,digest FROM events WHERE run_id=? AND type=? AND seq>? ORDER BY seq LIMIT ?", runID, eventType, after, limit+1)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	events := []Event{}
+	for rows.Next() {
+		var e Event
+		e.RunID = runID
+		if err := rows.Scan(&e.Seq, &e.RunVersion, &e.Cut, &e.Type, &e.Version, &e.Actor, &e.CommandID, scanJSON{&e.Data}, &e.Digest); err != nil {
+			return nil, false, err
+		}
+		if digestBytes(e.Data) != e.Digest {
+			return nil, false, ErrIntegrity
+		}
+		if len(events) == limit {
+			return events, true, rows.Err()
+		}
+		events = append(events, e)
+	}
+	return events, false, rows.Err()
+}
+
 func (s *Store) ReadAll(ctx context.Context, limit int) ([]Snapshot, int64, error) {
 	return s.ReadAllAt(ctx, -1, limit)
 }
@@ -86,14 +123,24 @@ func (s *Store) ReadAllAt(ctx context.Context, cut int64, limit int) ([]Snapshot
 		return nil, 0, err
 	}
 	defer rollbackClose(conn)
+	current, err := currentCut(ctx, conn)
+	if err != nil {
+		return nil, 0, err
+	}
 	cut, err = readCut(ctx, conn, cut)
 	if err != nil {
 		return nil, 0, err
 	}
-	rows, err := conn.QueryContext(ctx, `SELECT e.run_id,e.run_version,e.seq,e.state_after,e.state_digest,e.state_packed
+	// At the current cut every Run's latest state is already the runs row; only
+	// a historical cut has to find the last state each Run had recorded by then.
+	query, arguments := `SELECT run_id,version,event_seq,snapshot,snapshot_digest,snapshot_packed FROM runs ORDER BY run_id LIMIT ?`, []any{limit + 1}
+	if cut != current {
+		query, arguments = `SELECT e.run_id,e.run_version,e.seq,e.state_after,e.state_digest,e.state_packed
 FROM events e WHERE e.state_after IS NOT NULL AND e.cut<=? AND NOT EXISTS
 (SELECT 1 FROM events n WHERE n.run_id=e.run_id AND n.state_after IS NOT NULL AND n.seq>e.seq AND n.cut<=?)
-ORDER BY e.run_id LIMIT ?`, cut, cut, limit+1)
+ORDER BY e.run_id LIMIT ?`, []any{cut, cut, limit + 1}
+	}
+	rows, err := conn.QueryContext(ctx, query, arguments...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -262,9 +309,15 @@ func readLimit(limit int) (int, error) {
 	return limit, nil
 }
 
-func readCut(ctx context.Context, conn *sql.Conn, requested int64) (int64, error) {
+func currentCut(ctx context.Context, conn *sql.Conn) (int64, error) {
 	var current int64
-	if err := conn.QueryRowContext(ctx, "SELECT cut FROM authority WHERE singleton=1").Scan(&current); err != nil {
+	err := conn.QueryRowContext(ctx, "SELECT cut FROM authority WHERE singleton=1").Scan(&current)
+	return current, err
+}
+
+func readCut(ctx context.Context, conn *sql.Conn, requested int64) (int64, error) {
+	current, err := currentCut(ctx, conn)
+	if err != nil {
 		return 0, err
 	}
 	if requested < -1 || requested > current {

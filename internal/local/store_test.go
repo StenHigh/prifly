@@ -1625,3 +1625,49 @@ func TestStoreSharesPinnedBytesAcrossSnapshots(t *testing.T) {
 		t.Fatalf("a snapshot with missing pinned bytes was accepted: %v", err)
 	}
 }
+
+// Reading the current population is a read of the runs table, and a historical
+// cut uses the partial index instead of scanning every event.
+func TestReadAllPlansAvoidFullEventScans(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
+	applyChange(t, s, storeCommand("update", "run-a", 1), storeChange(`{"value":2}`))
+	plan := func(query string, arguments ...any) string {
+		rows, err := s.db.QueryContext(ctx, "EXPLAIN QUERY PLAN "+query, arguments...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		text := ""
+		for rows.Next() {
+			var id, parent, notUsed int
+			var detail string
+			if err := rows.Scan(&id, &parent, &notUsed, &detail); err != nil {
+				t.Fatal(err)
+			}
+			text += detail + "\n"
+		}
+		return text
+	}
+	current := plan("SELECT run_id,version,event_seq,snapshot,snapshot_digest,snapshot_packed FROM runs ORDER BY run_id LIMIT ?", 10)
+	if strings.Contains(current, "SCAN events") {
+		t.Fatalf("the current population still reads the journal: %s", current)
+	}
+	historical := plan(`SELECT e.run_id,e.run_version,e.seq,e.state_after,e.state_digest,e.state_packed
+FROM events e WHERE e.state_after IS NOT NULL AND e.cut<=? AND NOT EXISTS
+(SELECT 1 FROM events n WHERE n.run_id=e.run_id AND n.state_after IS NOT NULL AND n.seq>e.seq AND n.cut<=?)
+ORDER BY e.run_id LIMIT ?`, 1, 1, 10)
+	if !strings.Contains(historical, "events_state") {
+		t.Fatalf("a historical cut does not use the recorded-state index: %s", historical)
+	}
+	// Both answers still agree with what the store returns.
+	runs, _, err := s.ReadAll(ctx, 10)
+	if err != nil || len(runs) != 1 || string(runs[0].Data) != `{"value":2}` {
+		t.Fatalf("current population read: %v %+v", err, runs)
+	}
+	historicalRuns, _, err := s.ReadAllAt(ctx, 1, 10)
+	if err != nil || len(historicalRuns) != 1 || string(historicalRuns[0].Data) != `{"value":1}` {
+		t.Fatalf("historical population read: %v %+v", err, historicalRuns)
+	}
+}

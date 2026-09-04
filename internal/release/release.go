@@ -355,7 +355,18 @@ func replace(target string, binary []byte) (err error) {
 	if err = temporary.Close(); err != nil {
 		return err
 	}
-	return os.Rename(temporaryName, target)
+	if err = os.Rename(temporaryName, target); err != nil {
+		return err
+	}
+	// The bytes were synced before the rename; the rename itself lives in the
+	// directory, and without syncing that too a power loss can leave the old
+	// name pointing at nothing after an update that reported success.
+	parent, err := os.Open(filepath.Dir(target))
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	return parent.Sync()
 }
 
 type BuildOptions struct {

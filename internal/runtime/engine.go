@@ -192,10 +192,15 @@ func (e *Engine) applyControlledWithControlMutation(ctx context.Context, control
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
+		// A Run's state changes are journal facts, not state that a Run carries
+		// forward: keeping them in the snapshot meant every version, and every
+		// event that records one, repeated the whole history so far. They are
+		// recorded once here and read back from the journal.
+		transitions := []StateChange{}
 		for _, key := range keys {
 			if before[key] != after[key] {
 				parts := strings.SplitN(key, "|", 2)
-				r.Transitions = append(r.Transitions, StateChange{parts[0], parts[1], before[key], after[key], observed})
+				transitions = append(transitions, StateChange{parts[0], parts[1], before[key], after[key], observed})
 			}
 		}
 		r.LastObserved = observed
@@ -212,6 +217,13 @@ func (e *Engine) applyControlledWithControlMutation(ctx context.Context, control
 		if len(change.Events) == 0 {
 			data, _ := canonical(map[string]any{"observation": observed, "status": r.Status})
 			change.Events = []local.EventInput{{Type: eventType, Version: 1, Data: data}}
+		}
+		if len(transitions) != 0 {
+			data, err := canonical(map[string]any{"transitions": transitions, "observation": observed})
+			if err != nil {
+				return local.Change{}, err
+			}
+			change.Events = append(change.Events, local.EventInput{Type: "state.changed", Version: local.EventVersion, Data: data})
 		}
 		if r.PendingAcceptance != nil && r.PendingAcceptance.ID != previousAcceptance {
 			event, err := acceptancePreparedEvent(r.PendingAcceptance)
@@ -283,9 +295,45 @@ func (e *Engine) applyControlledWithControlMutation(ctx context.Context, control
 	return result, nil
 }
 
+// maxRecordedTransitions bounds how much recorded history one read restores.
+// A Run with more changes than this is read up to the bound; timing already
+// reports what it could not measure rather than inventing the rest.
+const maxRecordedTransitions = 1 << 16
+
+// hydrateTransitions restores a Run's recorded state changes from the journal.
+// A Run written before this build keeps them in its snapshot, a Run written now
+// keeps them as events, and one that spans both is the two in order.
+func (e *Engine) hydrateTransitions(ctx context.Context, r *Run) error {
+	after := int64(0)
+	for len(r.Transitions) < maxRecordedTransitions {
+		events, more, err := e.Store.ReadEventsOfType(ctx, r.ID, "state.changed", after, 500)
+		if err != nil {
+			return err
+		}
+		for _, event := range events {
+			var recorded struct {
+				Transitions []StateChange `json:"transitions"`
+				Observation Observation   `json:"observation"`
+			}
+			if err := decode(event.Data, &recorded); err != nil {
+				return err
+			}
+			r.Transitions = append(r.Transitions, recorded.Transitions...)
+			after = event.Seq
+		}
+		if !more {
+			return nil
+		}
+	}
+	return nil
+}
+
 func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 	r, read, err := e.load(ctx, id)
 	if err != nil {
+		return RunView{}, err
+	}
+	if err := e.hydrateTransitions(ctx, &r); err != nil {
 		return RunView{}, err
 	}
 	asOf, live := e.clock.now(), e.driverLiveFor(id)

@@ -525,6 +525,7 @@ CREATE TABLE events(run_id TEXT NOT NULL REFERENCES runs(run_id),seq INTEGER NOT
 CREATE INDEX events_cut ON events(cut);
 CREATE TABLE samples(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,run_id TEXT NOT NULL,cut INTEGER NOT NULL,data BLOB NOT NULL,digest TEXT NOT NULL);
 CREATE INDEX samples_cut ON samples(cut,seq);
+CREATE INDEX events_state ON events(run_id,seq) WHERE state_after IS NOT NULL;
 CREATE TABLE authority_states(state_key TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),cut INTEGER NOT NULL UNIQUE,data BLOB NOT NULL,digest TEXT NOT NULL);
 CREATE TABLE authority_commands(actor TEXT NOT NULL,command_id TEXT NOT NULL,state_key TEXT NOT NULL,digest TEXT NOT NULL,cut INTEGER NOT NULL UNIQUE,receipt BLOB NOT NULL,receipt_digest TEXT NOT NULL,PRIMARY KEY(actor,command_id));
 PRAGMA application_id=1347569228;
@@ -694,6 +695,7 @@ func (s *Store) migratePinnedBytes(ctx context.Context, conn *sql.Conn) error {
 	}
 	if _, err := conn.ExecContext(ctx, `
 CREATE TABLE pinned_bytes(digest TEXT PRIMARY KEY,bytes BLOB NOT NULL);
+CREATE INDEX IF NOT EXISTS events_state ON events(run_id,seq) WHERE state_after IS NOT NULL;
 ALTER TABLE runs ADD COLUMN snapshot_packed INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE events ADD COLUMN state_packed INTEGER NOT NULL DEFAULT 0;`); err != nil {
 		return err

@@ -3,6 +3,7 @@
 package local
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -38,11 +39,17 @@ func readProcess(pid int) (processRecord, error) {
 	}
 	// comm may itself contain spaces and ')' characters; subsequent fields
 	// follow the final ')' (proc_pid_stat(5)). starttime is field 22 in clock ticks.
-	close := strings.LastIndexByte(string(data), ')')
+	// The stat line is read for every process of a group on every probe, so it
+	// is scanned in place rather than copied into two new strings first.
+	close := bytes.LastIndexByte(data, ')')
 	if close < 0 {
 		return processRecord{}, errors.New("invalid Linux process stat")
 	}
-	fields := strings.Fields(string(data[close+1:]))
+	raw := bytes.Fields(data[close+1:])
+	fields := make([]string, len(raw))
+	for i, field := range raw {
+		fields[i] = string(field)
+	}
 	if len(fields) < 20 {
 		return processRecord{}, errors.New("incomplete Linux process stat")
 	}
