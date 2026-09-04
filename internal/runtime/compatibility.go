@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"slices"
 	"sort"
 
@@ -373,7 +372,7 @@ func (e *Engine) workflowConfigurations(p *flow.Plan, root *EffectiveConfigurati
 				for name, port := range child.Workflow.Inputs {
 					_, bound := inputs[name]
 					if port.Required && port.Configuration != nil && !bound && len(values[child.Digest].Inputs[name].Value) == 0 {
-						return nil, fmt.Errorf("missing_required_configuration: %s %s %s input %s", parent.Workflow.ID, stage.Kind, id, name)
+						return nil, faultf("missing_required_configuration", "%s %s %s input %s", parent.Workflow.ID, stage.Kind, id, name)
 					}
 				}
 			}
@@ -395,17 +394,17 @@ func repeatLimit(p *flow.Plan, configuration *EffectiveConfiguration, stageID st
 	}
 	value, exists := configuration.Inputs[stage.LimitConfiguration]
 	if !exists || len(value.Value) == 0 {
-		return 0, fmt.Errorf("missing_repeat_limit_configuration: %s", stage.LimitConfiguration)
+		return 0, faultf("missing_repeat_limit_configuration", "%s", stage.LimitConfiguration)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(value.Value))
 	decoder.UseNumber()
 	var number json.Number
 	if err := decoder.Decode(&number); err != nil || decoder.More() {
-		return 0, fmt.Errorf("invalid_repeat_limit_configuration: %s must be an integer", stage.LimitConfiguration)
+		return 0, faultf("invalid_repeat_limit_configuration", "%s must be an integer", stage.LimitConfiguration)
 	}
 	limit, err := number.Int64()
 	if err != nil || limit < 1 || limit > stage.MaxIterations {
-		return 0, fmt.Errorf("invalid_repeat_limit_configuration: %s must be between 1 and %d", stage.LimitConfiguration, stage.MaxIterations)
+		return 0, faultf("invalid_repeat_limit_configuration", "%s must be between 1 and %d", stage.LimitConfiguration, stage.MaxIterations)
 	}
 	return limit, nil
 }
@@ -443,7 +442,7 @@ type ProjectionManifest struct {
 func (e *Engine) effectiveConfiguration(p *flow.Plan, files map[string]string, refs map[string]ArtifactRef, requireInputs bool) (*EffectiveConfiguration, error) {
 	if p.Profile == flow.Profile {
 		if len(e.Config.Configuration.InputValues) != 0 {
-			return nil, errors.New("unsupported_configuration: input values require core-workflow/1")
+			return nil, fault("unsupported_configuration", "input values require core-workflow/1")
 		}
 		return nil, nil
 	}
@@ -452,7 +451,7 @@ func (e *Engine) effectiveConfiguration(p *flow.Plan, files map[string]string, r
 	for name := range project {
 		port, ok := p.Workflow.Inputs[name]
 		if !ok || port.Configuration == nil {
-			return nil, fmt.Errorf("unknown_configuration_input: %s", name)
+			return nil, faultf("unknown_configuration_input", "%s", name)
 		}
 	}
 	for name, port := range p.Workflow.Inputs {
@@ -471,7 +470,7 @@ func (e *Engine) effectiveConfiguration(p *flow.Plan, files map[string]string, r
 		ref, hasRef := refs[name]
 		if hasFile || hasRef {
 			if declaration.Scope != "run" {
-				return nil, fmt.Errorf("configuration_scope: run override is forbidden for %s", name)
+				return nil, faultf("configuration_scope", "run override is forbidden for %s", name)
 			}
 			if hasFile && hasRef {
 				return nil, errors.New("input file and reference cannot both bind the same port")
@@ -493,7 +492,7 @@ func (e *Engine) effectiveConfiguration(p *flow.Plan, files map[string]string, r
 		}
 		if len(value.Value) == 0 {
 			if requireInputs && port.Required {
-				return nil, fmt.Errorf("missing_required_configuration: %s", name)
+				return nil, faultf("missing_required_configuration", "%s", name)
 			}
 		} else {
 			if port.Format != "json" || port.SchemaRef == nil {

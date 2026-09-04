@@ -436,7 +436,7 @@ func (e *Engine) invocationRun(ctx context.Context, id string) (string, error) {
 	for _, snapshot := range snapshots {
 		bytes += len(snapshot.Data)
 		if bytes > TelemetryMaxBytes {
-			return "", errors.New("scope_lookup_limit: local snapshot budget exceeded")
+			return "", fault("scope_lookup_limit", "local snapshot budget exceeded")
 		}
 		var r Run
 		if err := decodeState(snapshot.Data, &r); err != nil {

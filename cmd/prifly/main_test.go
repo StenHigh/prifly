@@ -2489,3 +2489,50 @@ func TestSchemaSelectorReturnsOneDefinitionWithItsClosure(t *testing.T) {
 		t.Fatalf("an unknown definition was accepted: %d %s", code, errout.String())
 	}
 }
+
+// Which commands may write is a list of facts, and a command that opens the
+// authority in the wrong mode either cannot do its work or holds a writer for
+// a read. This pins both directions for the whole surface.
+func TestEveryMutatingCommandOpensForWriting(t *testing.T) {
+	for _, c := range []struct {
+		args   []string
+		writes bool
+	}{
+		{[]string{"run", "start"}, true},
+		{[]string{"run", "drive"}, true},
+		{[]string{"run", "waive"}, true},
+		{[]string{"run", "resolve"}, true},
+		{[]string{"run", "status"}, false},
+		{[]string{"run", "explain"}, false},
+		{[]string{"run", "decision", "run:1", "request"}, true},
+		{[]string{"run", "decision", "run:1", "answer"}, true},
+		{[]string{"run", "decision", "run:1", "show"}, false},
+		{[]string{"control", "stop"}, true},
+		{[]string{"control", "show"}, false},
+		{[]string{"package", "import"}, true},
+		{[]string{"package", "list"}, false},
+		{[]string{"claim", "create"}, true},
+		{[]string{"claim", "list"}, false},
+		{[]string{"session", "submit"}, true},
+		{[]string{"session", "task"}, false},
+		{[]string{"action", "propose"}, true},
+		{[]string{"action", "list"}, false},
+		{[]string{"approval", "request"}, true},
+		{[]string{"approval", "list"}, false},
+		{[]string{"grant", "issue"}, true},
+		{[]string{"grant", "list"}, false},
+		{[]string{"capacity", "set"}, true},
+		{[]string{"capacity", "show"}, false},
+		{[]string{"artifact", "import"}, true},
+		{[]string{"artifact", "show"}, false},
+		{[]string{"source", "import"}, true},
+		{[]string{"task", "prepare"}, true},
+		{[]string{"task", "list"}, false},
+		{[]string{"doctor"}, false},
+		{[]string{"telemetry"}, false},
+	} {
+		if got := mutates(c.args); got != c.writes {
+			t.Fatalf("%v opens for writing: %t, want %t", c.args, got, c.writes)
+		}
+	}
+}

@@ -220,6 +220,45 @@ func (c *cli) versionView() map[string]any {
 	return map[string]any{"schema_version": "foundation-version/1", "version": prifly.Version, "semantics_profile": flow.Profile, "go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH}
 }
 
+// mutatingCommands names every command that may write to an authority, as the
+// subcommands it is reached by. It is a table because it is a list of facts: as
+// a chain of string comparisons it was read as logic, and a command added to
+// one place but not the other opened the authority in the wrong mode.
+var mutatingCommands = map[string][]string{
+	"run":      {"start", "fork", "drive", "pause", "cancel", "stop", "release", "resume", "waive", "resolve"},
+	"control":  {"stop", "release"},
+	"package":  {"import", "remove", "quarantine", "revoke", "restore", "trust-root"},
+	"claim":    {"create", "release", "heartbeat"},
+	"session":  {"publish", "action", "submit", "disconnect"},
+	"action":   {"propose", "admit"},
+	"capacity": {"set"},
+	"artifact": {"import", "export"},
+	"source":   {"import"},
+	"task":     {"prepare"},
+}
+
+// readingCommands are groups where everything writes except the named reads.
+var readingCommands = map[string][]string{
+	"approval": {"list"},
+	"grant":    {"list"},
+}
+
+// mutates reports whether a command needs an authority opened for writing.
+func mutates(args []string) bool {
+	if len(args) < 2 {
+		return false
+	}
+	if slices.Contains(mutatingCommands[args[0]], args[1]) {
+		return true
+	}
+	if reads, ok := readingCommands[args[0]]; ok {
+		return !slices.Contains(reads, args[1])
+	}
+	// A decision is answered under the run it belongs to: `run decision <id>
+	// request|answer` writes, and every other decision subcommand reads.
+	return args[0] == "run" && args[1] == "decision" && len(args) > 3 && (args[3] == "request" || args[3] == "answer")
+}
+
 // showHelp answers a help request without opening an authority: reading the
 // form of a command is not an operation on a project.
 func (c *cli) showHelp(topic []string) error {
@@ -447,49 +486,7 @@ func (c *cli) run(ctx context.Context, args []string) error {
 	case "project":
 		return c.projectCommand(ctx, args[1:])
 	}
-	readOnly := true
-	if args[0] == "run" && len(args) > 1 {
-		switch args[1] {
-		case "start", "fork", "drive", "pause", "cancel", "stop", "release", "resume", "waive":
-			readOnly = false
-		}
-		if args[1] == "decision" && len(args) > 3 && (args[3] == "request" || args[3] == "answer") {
-			readOnly = false
-		}
-	}
-	if args[0] == "control" && len(args) > 1 && (args[1] == "stop" || args[1] == "release") {
-		readOnly = false
-	}
-	if args[0] == "package" && len(args) > 1 && (args[1] == "import" || args[1] == "remove" || args[1] == "quarantine" || args[1] == "revoke" || args[1] == "restore" || args[1] == "trust-root") {
-		readOnly = false
-	}
-	if args[0] == "claim" && len(args) > 1 && (args[1] == "create" || args[1] == "release" || args[1] == "heartbeat") {
-		readOnly = false
-	}
-	if args[0] == "session" && len(args) > 1 && (args[1] == "publish" || args[1] == "action" || args[1] == "submit" || args[1] == "disconnect") {
-		readOnly = false
-	}
-	if args[0] == "action" && len(args) > 1 && (args[1] == "propose" || args[1] == "admit") {
-		readOnly = false
-	}
-	if args[0] == "approval" && len(args) > 1 && args[1] != "list" {
-		readOnly = false
-	}
-	if args[0] == "grant" && len(args) > 1 && args[1] != "list" {
-		readOnly = false
-	}
-	if args[0] == "capacity" && len(args) > 1 && args[1] == "set" {
-		readOnly = false
-	}
-	if args[0] == "artifact" && len(args) > 1 && (args[1] == "import" || args[1] == "export") {
-		readOnly = false
-	}
-	if args[0] == "source" && len(args) > 1 && args[1] == "import" {
-		readOnly = false
-	}
-	if args[0] == "task" && len(args) > 1 && args[1] == "prepare" {
-		readOnly = false
-	}
+	readOnly := !mutates(args)
 	e, err := prifly.Open(c.project, readOnly)
 	if err != nil {
 		return err
@@ -1899,7 +1896,7 @@ func (c *cli) step(ctx context.Context, args []string) error {
 	req.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(req)
 	if err != nil {
-		return errors.New("step_transport_unavailable: no receipt received; do not invent an acknowledgement")
+		return &prifly.Fault{Code: "step_transport_unavailable", Message: "no receipt received; do not invent an acknowledgement"}
 	}
 	defer response.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
@@ -1907,10 +1904,10 @@ func (c *cli) step(ctx context.Context, args []string) error {
 		return err
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return errors.New("step_publication_rejected: inspect the publication contract and current attempt")
+		return &prifly.Fault{Code: "step_publication_rejected", Message: "inspect the publication contract and current attempt"}
 	}
 	if !json.Valid(data) {
-		return errors.New("invalid_transport_response: expected JSON receipt")
+		return &prifly.Fault{Code: "invalid_transport_response", Message: "expected JSON receipt"}
 	}
 	return c.emit(json.RawMessage(data))
 }

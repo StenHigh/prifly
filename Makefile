@@ -16,8 +16,12 @@ race:
 	$(GO) test -race -timeout $(RACE_TIMEOUT) ./...
 vet:
 	$(GO) vet ./...
-check: test race vet fmt-check schemas-check release-ci-check
-ci-check: test vet fmt-check schemas-check release-ci-check
+# The authority needs cgo to run, but nothing else in this build should need it
+# to be readable: a package that cannot be type-checked without the driver is a
+# package that has the driver's types in its own contracts.
+	CGO_ENABLED=0 $(GO) vet ./...
+check: test race vet fmt-check refusal-check schemas-check release-ci-check
+ci-check: test vet fmt-check refusal-check schemas-check release-ci-check
 fmt:
 	$(GO) fmt ./...
 # Formatting drifted unnoticed because nothing checked it. A gate that does not
@@ -25,6 +29,12 @@ fmt:
 fmt-check:
 	@unformatted=$$($(GOFMT) -l ./cmd ./internal); \
 	if [ -n "$$unformatted" ]; then echo "not gofmt-clean:"; echo "$$unformatted"; exit 1; fi
+# A refusal carries its code in a typed Fault, not inside the text of an error
+# that every reader has to split apart again. Tests still build text-shaped
+# errors on purpose, to prove such an error is still read correctly.
+refusal-check:
+	@sites=$$(rg -n 'errors\.New\("[a-z_]+:|fmt\.Errorf\("[a-z_]+:' internal cmd --glob '!*_test.go' || true); \
+	if [ -n "$$sites" ]; then echo "refusal code inside error text:"; echo "$$sites"; exit 1; fi
 schemas:
 	python3 scripts/check-schema.py --go "$(GO)" --write
 schemas-check:

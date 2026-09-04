@@ -116,7 +116,7 @@ func registryKind(kind string) (string, error) {
 	case "context":
 		return "resource", nil
 	}
-	return "", fmt.Errorf("unsupported_component: package component kind %q is not admitted by this installation", kind)
+	return "", faultf("unsupported_component", "package component kind %q is not admitted by this installation", kind)
 }
 
 // A context resource declares its representation through the declared media
@@ -129,7 +129,7 @@ func resourceEncoding(mediaType string) (string, error) {
 	if strings.HasPrefix(base, "text/") {
 		return "utf8_text", nil
 	}
-	return "", fmt.Errorf("unsupported_component: context resource media type %q is neither JSON nor text", mediaType)
+	return "", faultf("unsupported_component", "context resource media type %q is neither JSON nor text", mediaType)
 }
 
 func packageDirectory(id, version string) string {
@@ -181,7 +181,7 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 		return local.AuthorityApplyResult{}, errors.New("explicit command, source directory and trust reason required")
 	}
 	if e.Config.Configuration.SemanticsProfile != flow.CoreProfile {
-		return local.AuthorityApplyResult{}, errors.New("unsupported: package import requires core-workflow/1")
+		return local.AuthorityApplyResult{}, fault("unsupported", "package import requires core-workflow/1")
 	}
 	source, err := filepath.Abs(request.Directory)
 	if err != nil {
@@ -192,7 +192,7 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 		return local.AuthorityApplyResult{}, err
 	}
 	if overlaps(filepath.ToSlash(source), filepath.ToSlash(e.Root)) {
-		return local.AuthorityApplyResult{}, errors.New("unsafe_source: a package source cannot overlap the authority project root")
+		return local.AuthorityApplyResult{}, fault("unsafe_source", "a package source cannot overlap the authority project root")
 	}
 	manifestBytes, manifest, err := readPackageManifest(source)
 	if err != nil {
@@ -412,13 +412,13 @@ func sealPackagePayload(source string, manifest packageManifest) (map[string][]b
 			return nil
 		}
 		if !entry.Type().IsRegular() {
-			return fmt.Errorf("unsafe_package: %s is not a regular file", relative)
+			return faultf("unsafe_package", "%s is not a regular file", relative)
 		}
 		if relative == PackageManifestFile {
 			return nil
 		}
 		if _, ok := declared[strings.ToLower(relative)]; !ok {
-			return fmt.Errorf("undeclared_file: %s is not listed in the package manifest", relative)
+			return faultf("undeclared_file", "%s is not listed in the package manifest", relative)
 		}
 		present[strings.ToLower(relative)] = true
 		return nil
@@ -429,18 +429,18 @@ func sealPackagePayload(source string, manifest packageManifest) (map[string][]b
 	payload := make(map[string][]byte, len(declared))
 	for key, file := range declared {
 		if !present[key] {
-			return nil, fmt.Errorf("missing_file: %s is declared but absent", file.Path)
+			return nil, faultf("missing_file", "%s is declared but absent", file.Path)
 		}
 		data, err := readLocal(source, file.Path, MaxPackageFileBytes)
 		if err != nil {
 			return nil, err
 		}
 		if int64(len(data)) != file.SizeBytes || rawDigest(data) != file.Digest {
-			return nil, fmt.Errorf("digest_mismatch: %s does not match its declared bytes", file.Path)
+			return nil, faultf("digest_mismatch", "%s does not match its declared bytes", file.Path)
 		}
 		total += file.SizeBytes
 		if total > maxInventoryBytes {
-			return nil, errors.New("dependency_limit: package payload exceeds the 64 MiB budget")
+			return nil, fault("dependency_limit", "package payload exceeds the 64 MiB budget")
 		}
 		payload[file.Path] = data
 	}
@@ -472,7 +472,7 @@ func packageComponents(manifest packageManifest, payload map[string][]byte, root
 		seen[key] = true
 		raw, present := payload[component.Path]
 		if !present {
-			return nil, fmt.Errorf("missing_component: %s has no declared payload file", component.Path)
+			return nil, faultf("missing_component", "%s has no declared payload file", component.Path)
 		}
 		definition := Definition{Ref: component.Ref, Kind: kind, Path: root + "/" + component.Path}
 		if kind == "resource" {
@@ -510,10 +510,10 @@ func packageComponents(manifest packageManifest, payload map[string][]byte, root
 			return nil, err
 		}
 		if len(data) > MaxDefinitionBytes {
-			return nil, errors.New("document_too_large: canonical package component exceeds 2 MiB")
+			return nil, fault("document_too_large", "canonical package component exceeds 2 MiB")
 		}
 		if rawDigest(data) != component.Ref.Digest {
-			return nil, fmt.Errorf("digest_mismatch: %s does not match its exact reference", component.Ref.ID)
+			return nil, faultf("digest_mismatch", "%s does not match its exact reference", component.Ref.ID)
 		}
 		if kind == "tool" {
 			descriptor, err := flow.ParseToolDescriptor(data)
@@ -521,7 +521,7 @@ func packageComponents(manifest packageManifest, payload map[string][]byte, root
 				return nil, err
 			}
 			if descriptor.ID != component.Ref.ID || descriptor.Version != component.Ref.Version {
-				return nil, errors.New("ref_identity_mismatch: ToolDescriptor differs from exact reference")
+				return nil, fault("ref_identity_mismatch", "ToolDescriptor differs from exact reference")
 			}
 		}
 		components = append(components, definition)
@@ -536,7 +536,7 @@ func (e *Engine) materializePackage(root string, manifest packageManifest, paylo
 	final := filepath.Join(e.Root, filepath.FromSlash(root))
 	if existing, err := readLocal(e.Root, root+"/"+PackageManifestFile, MaxDefinitionBytes); err == nil {
 		if rawDigest(existing) != rawDigest(manifestBytes) {
-			return errors.New("package_identity_conflict: this package directory holds different sealed bytes")
+			return fault("package_identity_conflict", "this package directory holds different sealed bytes")
 		}
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {

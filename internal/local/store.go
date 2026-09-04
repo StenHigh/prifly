@@ -1589,6 +1589,11 @@ func (s scanJSON) Scan(value any) error {
 	return nil
 }
 
+// qualifiedSQLiteBuilds are the SQLite releases this build accepts, newest line
+// first. Each entry is the first release on its line that carries the WAL fix
+// this authority depends on.
+var qualifiedSQLiteBuilds = [][3]int{{3, 51, 3}, {3, 50, 7}, {3, 44, 6}}
+
 func patchedSQLite(version string) bool {
 	parts := strings.Split(version, ".")
 	if len(parts) != 3 {
@@ -1602,5 +1607,12 @@ func patchedSQLite(version string) bool {
 		}
 		v[i] = n
 	}
-	return slices.Compare(v[:], []int{3, 51, 3}) >= 0 || (v[0] == 3 && v[1] == 50 && v[2] >= 7) || (v[0] == 3 && v[1] == 44 && v[2] >= 6)
+	// The qualified builds: the first release carrying the WAL fix on each
+	// maintained line, and anything newer than the newest of them.
+	for _, qualified := range qualifiedSQLiteBuilds {
+		if v[0] == qualified[0] && v[1] == qualified[1] && v[2] >= qualified[2] {
+			return true
+		}
+	}
+	return slices.Compare(v[:], qualifiedSQLiteBuilds[0][:]) >= 0
 }

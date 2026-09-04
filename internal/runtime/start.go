@@ -147,7 +147,7 @@ func (e *Engine) compileFile(path string) (*flow.Plan, []PinnedDefinition, []Pin
 	rootRef := flow.Ref{ID: plan.Workflow.ID, Version: plan.Workflow.Version, Digest: plan.Digest}
 	for _, d := range defs {
 		if d.Ref.ID == rootRef.ID && d.Ref.Version == rootRef.Version && (d.Ref != rootRef || d.RawDigest != rawDigest(raw)) {
-			return nil, nil, nil, nil, errors.New("workflow_registry_conflict: selected root bytes differ from the registered version")
+			return nil, nil, nil, nil, fault("workflow_registry_conflict", "selected root bytes differ from the registered version")
 		}
 	}
 	selectedResources := resources[:0]
@@ -177,7 +177,7 @@ func (e *Engine) checkWorkflowCapabilities(plan *flow.Plan) error {
 		plan.Profile == flow.CoreProfile && (plan.Workflow.PolicyRef == builtinVersionRef(defs, "core:policy/local", "2.0.0") ||
 			plan.Workflow.PolicyRef == builtinVersionRef(defs, "core:policy/local", "3.0.0"))
 	if !supportedPolicy {
-		return errors.New("unsupported_policy: expected an exact local policy supported by the selected profile")
+		return fault("unsupported_policy", "expected an exact local policy supported by the selected profile")
 	}
 	var policy struct {
 		Limits flow.Limits `json:"limits"`
@@ -187,28 +187,28 @@ func (e *Engine) checkWorkflowCapabilities(plan *flow.Plan) error {
 	}
 	limits := plan.Workflow.Limits
 	if limits.MaxStepInstances > policy.Limits.MaxStepInstances || limits.MaxControlTransitions > policy.Limits.MaxControlTransitions || limits.MaxParallelism > policy.Limits.MaxParallelism || limits.MaxChildDepth > policy.Limits.MaxChildDepth {
-		return fmt.Errorf("resource_limit: workflow limits exceed pinned policy %s", plan.Workflow.PolicyRef.String())
+		return faultf("resource_limit", "workflow limits exceed pinned policy %s", plan.Workflow.PolicyRef.String())
 	}
 	for _, stage := range plan.Workflow.Definition.Stages {
 		if stage.Kind == "repeat" && stage.MaxIterations > 100 {
-			return errors.New("resource_limit: the qualified local profile supports at most 100 repeat iterations")
+			return fault("resource_limit", "the qualified local profile supports at most 100 repeat iterations")
 		}
 	}
 	for _, step := range plan.Steps {
 		if len(step.WorkspaceTrees) != 0 {
 			manifest := builtinRef(defs, flow.WorkspaceTreeManifestSchemaID)
 			if !isAssistedExecutor(defs, flow.Executor{AdapterRef: step.Executor.AdapterRef, Operation: step.Executor.Operation}) {
-				return errors.New("unsupported_workspace_tree_executor: workspace trees require an assisted session")
+				return fault("unsupported_workspace_tree_executor", "workspace trees require an assisted session")
 			}
 			for _, binding := range step.WorkspaceTrees {
 				output := step.Outputs[binding.OutputPort]
 				if output.SchemaRef == nil || *output.SchemaRef != manifest {
-					return errors.New("workspace_tree_manifest_contract_mismatch")
+					return fault("workspace_tree_manifest_contract_mismatch", "")
 				}
 				if binding.InputPort != "" {
 					input := step.Inputs[binding.InputPort]
 					if input.SchemaRef == nil || *input.SchemaRef != manifest {
-						return errors.New("workspace_tree_manifest_contract_mismatch")
+						return fault("workspace_tree_manifest_contract_mismatch", "")
 					}
 				}
 			}
@@ -221,28 +221,28 @@ func (e *Engine) checkWorkflowCapabilities(plan *flow.Plan) error {
 		}
 		fullContext := requiresContextState(plan) && step.Executor.AdapterRef == builtinVersionRef(defs, "core:adapter/local-process", "2.0.0")
 		if !fullContext && step.Executor.AdapterRef != builtinRef(defs, "core:adapter/local-process") || step.Executor.Operation != "process" {
-			return errors.New("unsupported_executor: expected pinned core local process adapter")
+			return fault("unsupported_executor", "expected pinned core local process adapter")
 		}
 		if step.Effects.Class != "none" && step.Effects.Class != "workspace_write" {
-			return errors.New("unsupported_effect: F1 does not qualify external_write or destructive; an assisted session step is narrowed further to workspace_write or none")
+			return fault("unsupported_effect", "F1 does not qualify external_write or destructive; an assisted session step is narrowed further to workspace_write or none")
 		}
 		for _, output := range step.Outputs {
 			if output.Format == "blob" && len(output.MediaTypes) > 1 {
-				return errors.New("unsupported_output_media: a fixed local output slot requires one declared media type")
+				return fault("unsupported_output_media", "a fixed local output slot requires one declared media type")
 			}
 		}
 		if len(step.RequiredCapabilities) > 0 {
-			return errors.New("unsupported_capability: F1 supplies the fixed local process contract only")
+			return fault("unsupported_capability", "F1 supplies the fixed local process contract only")
 		}
 		if !fullContext && (step.InstructionsRef != nil || len(step.ContextRefs) > 0) {
-			return errors.New("unsupported_context: use explicit sealed inputs and selected executor files in F1")
+			return fault("unsupported_context", "use explicit sealed inputs and selected executor files in F1")
 		}
 		config, ok := e.Config.Configuration.Executors[step.ID]
 		if !ok {
-			return fmt.Errorf("missing_executor: %s", step.ID)
+			return faultf("missing_executor", "%s", step.ID)
 		}
 		if !fullContext && config.ContextProfileRef != nil {
-			return errors.New("unsupported_context_adapter: context profiles require local-process@2.0.0")
+			return fault("unsupported_context_adapter", "context profiles require local-process@2.0.0")
 		}
 		if err := validateExecutorConfig(config, fullContext); err != nil {
 			return err
@@ -250,11 +250,11 @@ func (e *Engine) checkWorkflowCapabilities(plan *flow.Plan) error {
 	}
 	for _, check := range plan.Checks {
 		if !requiresContextState(plan) || check.Executor.AdapterRef != builtinVersionRef(defs, "core:adapter/local-process", "2.0.0") || check.Executor.Operation != "check" {
-			return errors.New("unsupported_check_executor: automatic checks require the exact local check operation")
+			return fault("unsupported_check_executor", "automatic checks require the exact local check operation")
 		}
 		config, exists := e.Config.Configuration.Executors[check.ID]
 		if !exists {
-			return fmt.Errorf("missing_executor: %s", check.ID)
+			return faultf("missing_executor", "%s", check.ID)
 		}
 		if err := validateExecutorConfig(config, true); err != nil {
 			return err
@@ -466,7 +466,7 @@ func (e *Engine) pinDefinitions(defs []PinnedDefinition) error {
 		previous, err := readLocal(e.Root, filepath.Join(".prifly/inventory", name), MaxDefinitionBytes)
 		if err == nil {
 			if !bytes.Equal(previous, record) {
-				return fmt.Errorf("definition_drift: %s@%s bytes changed; assign a new version", d.Ref.ID, d.Ref.Version)
+				return faultf("definition_drift", "%s@%s bytes changed; assign a new version", d.Ref.ID, d.Ref.Version)
 			}
 			continue
 		}
@@ -980,7 +980,7 @@ func portMedia(p flow.Port) string {
 }
 func (e *Engine) validatePortArtifact(p *flow.Plan, port flow.Port, a Artifact, data []byte) error {
 	if a.Format != port.Format || port.Format == "json" && !sameRef(a.SchemaRef, port.SchemaRef) {
-		return errors.New("binding_type_mismatch: artifact format/schema differs from port")
+		return fault("binding_type_mismatch", "artifact format/schema differs from port")
 	}
 	if port.SchemaRef != nil && port.SchemaRef.ID == sourceSnapshotSchemaID {
 		// Schema shape alone cannot assert that a source adapter acquired the
@@ -1002,7 +1002,7 @@ func (e *Engine) validatePortArtifact(p *flow.Plan, port flow.Port, a Artifact, 
 			accepted = accepted || media == a.MediaType
 		}
 		if !accepted {
-			return errors.New("binding_media_mismatch: import an artifact with an accepted media type and bind its exact reference")
+			return fault("binding_media_mismatch", "import an artifact with an accepted media type and bind its exact reference")
 		}
 	}
 	if port.SchemaRef != nil {

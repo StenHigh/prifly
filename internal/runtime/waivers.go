@@ -109,10 +109,14 @@ func (e *Engine) Waive(ctx context.Context, c WaiveRequest) (local.ApplyResult, 
 		if err != nil {
 			return local.Change{}, local.ErrIntegrity
 		}
+		policy, err := rPolicy(*r)
+		if err != nil {
+			return local.Change{}, err
+		}
 		waiver := Waiver{
 			ID: derivedID("waiver", r.ID, c.CommandID), StepID: c.StepID, CheckRef: c.CheckRef, Subjects: subjects,
 			Reason: c.Reason, ExpiresAt: now.Add(maxWaiverLifetime).Format(time.RFC3339Nano), ApproverID: e.owner,
-			PolicyRef: rPolicy(*r), Status: "active", Created: obs, AppliedTo: []string{},
+			PolicyRef: policy, Status: "active", Created: obs, AppliedTo: []string{},
 		}
 		for _, existing := range r.Waivers {
 			if existing.Status == "active" && existing.StepID == waiver.StepID && existing.CheckRef == waiver.CheckRef {

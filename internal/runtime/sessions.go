@@ -153,7 +153,7 @@ const assistedAttemptTimeoutMS = 60 * 60 * 1000
 // pinned context, not text the step invents at run time.
 func validateAssistedStep(plan *flow.Plan, step flow.StepDefinition) error {
 	if !requiresContextState(plan) {
-		return errors.New("unsupported_executor: an assisted session step requires the full context contract")
+		return fault("unsupported_executor", "an assisted session step requires the full context contract")
 	}
 	// A step that only produces a proposal has no business holding write
 	// permission on a shared worktree: two such steps would be kept apart by
@@ -163,17 +163,17 @@ func validateAssistedStep(plan *flow.Plan, step flow.StepDefinition) error {
 		// Two boundaries refuse this, and neither is visible in the step's own
 		// declaration: the profile does not qualify the class at all, and the
 		// assisted contract narrows it further.
-		return errors.New("unsupported_effect: an assisted session step declares workspace_write or none; this profile qualifies neither external_write nor destructive, and the assisted contract narrows the rest to workspace_write or none")
+		return fault("unsupported_effect", "an assisted session step declares workspace_write or none; this profile qualifies neither external_write nor destructive, and the assisted contract narrows the rest to workspace_write or none")
 	}
 	if len(step.RequiredCapabilities) > 0 {
-		return errors.New("unsupported_capability: the assisted contract supplies no extra capabilities")
+		return fault("unsupported_capability", "the assisted contract supplies no extra capabilities")
 	}
 	if step.InstructionsRef == nil && len(step.ContextRefs) == 0 {
-		return errors.New("unsupported_context: an assisted session step names the pinned skill it hands over")
+		return fault("unsupported_context", "an assisted session step names the pinned skill it hands over")
 	}
 	for _, output := range step.Outputs {
 		if output.Format == "blob" && len(output.MediaTypes) > 1 {
-			return errors.New("unsupported_output_media: a fixed output slot requires one declared media type")
+			return fault("unsupported_output_media", "a fixed output slot requires one declared media type")
 		}
 	}
 	return nil
@@ -222,7 +222,7 @@ func (e *Engine) materializeSkills(r Run, workspace string, refs []flow.Ref) ([]
 			}
 		}
 		if pinned == nil {
-			return nil, fmt.Errorf("missing_context: %s is not pinned by this run", ref.ID)
+			return nil, faultf("missing_context", "%s is not pinned by this run", ref.ID)
 		}
 		if rawDigest(pinned.Bytes) != ref.Digest {
 			return nil, local.ErrIntegrity

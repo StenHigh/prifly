@@ -124,7 +124,7 @@ func ValidateDecisionDefinition(definition DecisionDefinition) error {
 	// accepts a report that never carried one, so the word would promise a gate
 	// that does not exist.
 	if definition.Phase == "runtime" && definition.Required {
-		return errors.New("decision_required_unenforceable: only a preflight decision can be required; a runtime decision is answered when its executor raises a request")
+		return fault("decision_required_unenforceable", "only a preflight decision can be required; a runtime decision is answered when its executor raises a request")
 	}
 	if definition.Sensitivity != "ordinary" && definition.Sensitivity != "scope-changing" && definition.Sensitivity != "approval-like" {
 		return errors.New("decision definition sensitivity is invalid")

@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -41,21 +40,21 @@ type SealedItem struct {
 func itemKey(item any, pointer string) (string, error) {
 	value, found := flow.JSONPointer(item, pointer)
 	if !found {
-		return "", fmt.Errorf("item_key_missing: no value at %s", pointer)
+		return "", faultf("item_key_missing", "no value at %s", pointer)
 	}
 	switch typed := value.(type) {
 	case string:
 		if typed == "" {
-			return "", errors.New("item_key_invalid: an empty string is not an identity")
+			return "", fault("item_key_invalid", "an empty string is not an identity")
 		}
 		return "string:" + typed, nil
 	case float64:
 		if typed != math.Trunc(typed) || math.Abs(typed) > 1<<53-1 {
-			return "", errors.New("item_key_invalid: a numeric key must be a safe integer")
+			return "", fault("item_key_invalid", "a numeric key must be a safe integer")
 		}
 		return "integer:" + strconv.FormatInt(int64(typed), 10), nil
 	}
-	return "", errors.New("item_key_invalid: an item key is a string or a safe integer")
+	return "", fault("item_key_invalid", "an item key is a string or a safe integer")
 }
 
 // sealCollection reads the whole collection, checks every item, and derives one

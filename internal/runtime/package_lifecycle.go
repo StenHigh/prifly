@@ -289,7 +289,7 @@ func (e *Engine) packageHolders(ctx context.Context, id, version string) ([]stri
 		return nil, err
 	}
 	if len(snapshots) >= maxPinScanRuns {
-		return nil, errors.New("scan_limit: this installation holds more runs than one bounded scan can prove")
+		return nil, fault("scan_limit", "this installation holds more runs than one bounded scan can prove")
 	}
 	holders := []string{}
 	for _, snapshot := range snapshots {

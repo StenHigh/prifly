@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
 	"github.com/stenhigh/prifly/internal/local"
 )
 
@@ -131,8 +129,7 @@ func TestBusyAuthorityRetriesAndNeverRoutesOnError(t *testing.T) {
 				}
 				return
 			}
-			var reported sqlite3.Error
-			if !errors.As(err, &reported) {
+			if !local.IsBusy(err) {
 				t.Fatalf("a held write lock was not reported by the store: %v", err)
 			}
 			exit := 0

@@ -3,7 +3,6 @@ package runtime
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"slices"
 	"sync"
 
@@ -48,41 +47,41 @@ type Invocation struct {
 func (r Run) MarshalJSON() ([]byte, error) {
 	type wireRun Run
 	if !isForkState(r.SchemaVersion) && r.Fork != nil {
-		return nil, fmt.Errorf("invalid_fork: older state contains fork provenance")
+		return nil, faultf("invalid_fork", "older state contains fork provenance")
 	}
 	if !isContextState(r.SchemaVersion) && hasContextStateFields(r) {
-		return nil, fmt.Errorf("invalid_context: older state contains context contract fields")
+		return nil, faultf("invalid_context", "older state contains context contract fields")
 	}
 	if !isGuardState(r.SchemaVersion) && len(r.Guards) != 0 {
-		return nil, fmt.Errorf("invalid_guard: older state contains live guard registrations")
+		return nil, faultf("invalid_guard", "older state contains live guard registrations")
 	}
 	if !isReportedCostState(r.SchemaVersion) && hasReportedCostStateFields(r) {
-		return nil, fmt.Errorf("invalid_reported_cost: older state contains reported costs")
+		return nil, faultf("invalid_reported_cost", "older state contains reported costs")
 	}
 	if !isArtifactPublicationState(r.SchemaVersion) && len(r.ArtifactPublications) != 0 {
-		return nil, fmt.Errorf("invalid_artifact_publication: older state contains artifact publications")
+		return nil, faultf("invalid_artifact_publication", "older state contains artifact publications")
 	}
 	if !isArtifactClosureState(r.SchemaVersion) && len(r.ArtifactClosures) != 0 {
-		return nil, fmt.Errorf("invalid_artifact_closure: older state contains artifact closures")
+		return nil, faultf("invalid_artifact_closure", "older state contains artifact closures")
 	}
 	if !isActionIntentState(r.SchemaVersion) && (len(r.ActionIntents) != 0 || len(r.ActionAdmissions) != 0) {
-		return nil, fmt.Errorf("invalid_action_intent: older state contains action proposals")
+		return nil, faultf("invalid_action_intent", "older state contains action proposals")
 	}
 	if !isActionAdmissionState(r.SchemaVersion) && len(r.ActionAdmissions) != 0 {
-		return nil, fmt.Errorf("invalid_action_admission: older state contains admissions")
+		return nil, faultf("invalid_action_admission", "older state contains admissions")
 	}
 	if !isActionDeliveryState(r.SchemaVersion) && len(r.ActionDeliveries) != 0 {
-		return nil, fmt.Errorf("invalid_action_delivery: older state contains deliveries")
+		return nil, faultf("invalid_action_delivery", "older state contains deliveries")
 	}
 	if !isRepeatState(r.SchemaVersion) {
 		for _, a := range r.Activations {
 			if a != nil && a.Repeat != nil {
-				return nil, fmt.Errorf("invalid_repeat: older state contains repeat progress")
+				return nil, faultf("invalid_repeat", "older state contains repeat progress")
 			}
 		}
 		for _, inv := range r.Invocations {
 			if inv != nil && inv.Iteration != nil {
-				return nil, fmt.Errorf("invalid_repeat: older state contains an iteration")
+				return nil, faultf("invalid_repeat", "older state contains an iteration")
 			}
 		}
 	}
@@ -90,7 +89,7 @@ func (r Run) MarshalJSON() ([]byte, error) {
 		return json.Marshal(wireRun(r))
 	}
 	if len(r.Ready) != 0 {
-		return nil, fmt.Errorf("invalid_invocation: invocation state has a legacy Run frontier")
+		return nil, faultf("invalid_invocation", "invocation state has a legacy Run frontier")
 	}
 	return json.Marshal(struct {
 		*wireRun
@@ -103,27 +102,27 @@ func (r Run) MarshalJSON() ([]byte, error) {
 // inputs, plan or budget. Complete persisted-state validation belongs to load.
 func (r Run) invocationLineage(id string) ([]*Invocation, error) {
 	if !isInvocationState(r.SchemaVersion) {
-		return nil, fmt.Errorf("invalid_invocation: scoped state is unavailable")
+		return nil, faultf("invalid_invocation", "scoped state is unavailable")
 	}
 	lineage := make([]*Invocation, 0, 4)
 	for len(lineage) < len(r.Invocations) {
 		inv := r.Invocations[id]
 		if inv == nil || inv.ID != id || inv.RunID != r.ID {
-			return nil, fmt.Errorf("invalid_invocation: unknown invocation identity %q", id)
+			return nil, faultf("invalid_invocation", "unknown invocation identity %q", id)
 		}
 		lineage = append(lineage, inv)
 		if inv.ParentInvocationID == "" {
 			if inv.ID != r.RootInvocationID || inv.CallerActivationID != "" {
-				return nil, fmt.Errorf("invalid_invocation: disconnected invocation root")
+				return nil, faultf("invalid_invocation", "disconnected invocation root")
 			}
 			return lineage, nil
 		}
 		if inv.ID == r.RootInvocationID || inv.CallerActivationID == "" {
-			return nil, fmt.Errorf("invalid_invocation: invalid parent/caller identity")
+			return nil, faultf("invalid_invocation", "invalid parent/caller identity")
 		}
 		id = inv.ParentInvocationID
 	}
-	return nil, fmt.Errorf("invalid_invocation: invocation ancestry is cyclic or empty")
+	return nil, faultf("invalid_invocation", "invocation ancestry is cyclic or empty")
 }
 
 // invocationPlans compiles the pinned closure once and follows only exact
@@ -146,7 +145,7 @@ func (r Run) invocationPlansFromRoot(id string, root *flow.Plan) ([]*Invocation,
 	}
 	last := len(lineage) - 1
 	if root == nil || lineage[last].WorkflowRef != r.WorkflowRef || planRef(root) != r.WorkflowRef {
-		return nil, nil, fmt.Errorf("invalid_invocation: root workflow reference changed")
+		return nil, nil, faultf("invalid_invocation", "root workflow reference changed")
 	}
 	plans := make([]*flow.Plan, len(lineage))
 	plans[last] = root
@@ -154,14 +153,14 @@ func (r Run) invocationPlansFromRoot(id string, root *flow.Plan) ([]*Invocation,
 		inv, parent := lineage[i], lineage[i+1]
 		caller := r.Activations[inv.CallerActivationID]
 		if caller == nil || caller.ID != inv.CallerActivationID || caller.InvocationID != parent.ID || !r.childMatchesCaller(inv, caller) {
-			return nil, nil, fmt.Errorf("invalid_invocation: caller does not belong to parent")
+			return nil, nil, faultf("invalid_invocation", "caller does not belong to parent")
 		}
 		child := plans[i+1].BodyPlan(caller.StageID)
 		if fanOut(caller.Kind) {
 			child = plans[i+1].BranchPlan(caller.StageID, inv.BranchID)
 		}
 		if child == nil || inv.WorkflowRef != (flow.Ref{ID: child.Workflow.ID, Version: child.Workflow.Version, Digest: child.Digest}) {
-			return nil, nil, fmt.Errorf("invalid_invocation: child workflow is not the pinned body target")
+			return nil, nil, faultf("invalid_invocation", "child workflow is not the pinned body target")
 		}
 		plans[i] = child
 	}
@@ -179,7 +178,7 @@ func (r Run) planForCompiled(root *flow.Plan, invID string) (*flow.Plan, error) 
 func (r Run) planFor(invID string) (*flow.Plan, error) {
 	if !isInvocationState(r.SchemaVersion) {
 		if invID != r.RootInvocationID {
-			return nil, fmt.Errorf("invalid_invocation: legacy Run has only its root invocation")
+			return nil, faultf("invalid_invocation", "legacy Run has only its root invocation")
 		}
 		return r.plan()
 	}
@@ -233,13 +232,13 @@ func (r *Run) setReadyFor(invID string, ready []string) error {
 	if isInvocationState(r.SchemaVersion) {
 		inv := r.Invocations[invID]
 		if inv == nil || inv.ID != invID || inv.RunID != r.ID {
-			return fmt.Errorf("invalid_invocation: unknown frontier owner")
+			return faultf("invalid_invocation", "unknown frontier owner")
 		}
 		inv.Ready = append([]string{}, ready...)
 		return nil
 	}
 	if invID != r.RootInvocationID {
-		return fmt.Errorf("invalid_invocation: legacy Run has only its root frontier")
+		return faultf("invalid_invocation", "legacy Run has only its root frontier")
 	}
 	r.Ready = slices.Clone(ready)
 	return nil
@@ -378,11 +377,11 @@ func (r Run) admissionsBlockedFor(invID string) bool {
 // re-establishing them on every call bought nothing.
 func (r *Run) chargeInvocation(invID string, controls, steps int64) error {
 	if controls < 0 || steps < 0 {
-		return fmt.Errorf("invalid_invocation: negative budget charge")
+		return faultf("invalid_invocation", "negative budget charge")
 	}
 	if !isInvocationState(r.SchemaVersion) {
 		if invID != r.RootInvocationID {
-			return fmt.Errorf("invalid_invocation: legacy Run has only its root budget")
+			return faultf("invalid_invocation", "legacy Run has only its root budget")
 		}
 		workflow, err := pinnedBudgetWorkflow(r.Workflow, r.WorkflowRef)
 		if err != nil {
@@ -399,7 +398,7 @@ func (r *Run) chargeInvocation(invID string, controls, steps int64) error {
 		return err
 	}
 	if r.ControlTransitions != lineage[len(lineage)-1].ControlTransitions {
-		return fmt.Errorf("invalid_invocation: root and Run control counters disagree")
+		return faultf("invalid_invocation", "root and Run control counters disagree")
 	}
 	for i, inv := range lineage {
 		if !invocationBudgetFits(inv.ControlTransitions, controls, limits[i].MaxControlTransitions) || !invocationBudgetFits(inv.StepInstances, steps, limits[i].MaxStepInstances) {
@@ -459,15 +458,15 @@ func parsePinnedBudgetWorkflow(data []byte, ref flow.Ref) (flow.WorkflowRevision
 		return workflow, err
 	}
 	if rawDigest(canonical) != ref.Digest {
-		return workflow, fmt.Errorf("invalid_invocation: pinned budget definition digest changed")
+		return workflow, faultf("invalid_invocation", "pinned budget definition digest changed")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(canonical))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&workflow); err != nil {
-		return workflow, fmt.Errorf("invalid_invocation: invalid pinned budget definition: %w", err)
+		return workflow, wrapFault("invalid_invocation", "invalid pinned budget definition", err)
 	}
 	if workflow.ID != ref.ID || workflow.Version != ref.Version || workflow.SchemaVersion != "1" && workflow.SchemaVersion != "2" && workflow.SchemaVersion != "3" {
-		return workflow, fmt.Errorf("invalid_invocation: pinned budget definition identity changed")
+		return workflow, faultf("invalid_invocation", "pinned budget definition identity changed")
 	}
 	return workflow, nil
 }
@@ -483,7 +482,7 @@ func (r Run) invocationLimits(invID string) ([]*Invocation, []flow.Limits, error
 	}
 	last := len(lineage) - 1
 	if lineage[last].WorkflowRef != r.WorkflowRef {
-		return nil, nil, fmt.Errorf("invalid_invocation: root budget workflow changed")
+		return nil, nil, faultf("invalid_invocation", "root budget workflow changed")
 	}
 	limits := make([]flow.Limits, len(lineage))
 	limits[last] = workflow.Limits
@@ -492,40 +491,40 @@ func (r Run) invocationLimits(invID string) ([]*Invocation, []flow.Limits, error
 		inv, parent := lineage[i], lineage[i+1]
 		caller := r.Activations[inv.CallerActivationID]
 		if caller == nil || caller.ID != inv.CallerActivationID || caller.InvocationID != parent.ID || !r.childMatchesCaller(inv, caller) {
-			return nil, nil, fmt.Errorf("invalid_invocation: budget caller does not belong to parent")
+			return nil, nil, faultf("invalid_invocation", "budget caller does not belong to parent")
 		}
 		stage, exists := workflow.Definition.Stages[caller.StageID]
 		if !exists || stage.Kind != caller.Kind {
-			return nil, nil, fmt.Errorf("invalid_invocation: budget caller is not the pinned stage")
+			return nil, nil, faultf("invalid_invocation", "budget caller is not the pinned stage")
 		}
 		ref := stage.WorkflowRef
 		if stage.Kind == "map" {
 			// Every item runs one pinned body, so membership is the sealed
 			// identity rather than a position among declared branches.
 			if caller.Parallel == nil || !slices.Contains(caller.Parallel.BranchIDs, inv.BranchID) {
-				return nil, nil, fmt.Errorf("invalid_invocation: item is not a member of its sealed collection")
+				return nil, nil, faultf("invalid_invocation", "item is not a member of its sealed collection")
 			}
 			ref = stage.BodyWorkflowRef
 		}
 		if stage.Kind == "parallel" {
 			index := slices.IndexFunc(stage.ParallelBranches, func(branch flow.ParallelBranch) bool { return branch.ID == inv.BranchID })
 			if index < 0 || caller.Parallel == nil || int64(len(caller.Parallel.BranchIDs)) != int64(len(stage.ParallelBranches)) {
-				return nil, nil, fmt.Errorf("invalid_invocation: branch is not a member of its pinned stage")
+				return nil, nil, faultf("invalid_invocation", "branch is not a member of its pinned stage")
 			}
 			ref = stage.ParallelBranches[index].WorkflowRef
 		}
 		if stage.Kind == "repeat" {
 			ref = stage.BodyWorkflowRef
 			if inv.Iteration == nil || *inv.Iteration > stage.MaxIterations || caller.Repeat.IterationCount > stage.MaxIterations {
-				return nil, nil, fmt.Errorf("invalid_invocation: iteration exceeds its pinned repeat limit")
+				return nil, nil, faultf("invalid_invocation", "iteration exceeds its pinned repeat limit")
 			}
 		}
 		if ref != inv.WorkflowRef {
-			return nil, nil, fmt.Errorf("invalid_invocation: budget workflow is not the pinned body target")
+			return nil, nil, faultf("invalid_invocation", "budget workflow is not the pinned body target")
 		}
 		data, exists := registry[inv.WorkflowRef]
 		if !exists {
-			return nil, nil, fmt.Errorf("invalid_invocation: child budget definition is missing")
+			return nil, nil, faultf("invalid_invocation", "child budget definition is missing")
 		}
 		workflow, err = pinnedBudgetWorkflow(data, inv.WorkflowRef)
 		if err != nil {

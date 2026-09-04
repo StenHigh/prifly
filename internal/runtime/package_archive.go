@@ -2,12 +2,12 @@ package runtime
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -167,7 +167,7 @@ func extractPackageArchive(path, into string) (string, error) {
 	if err := os.MkdirAll(into, 0700); err != nil {
 		return "", err
 	}
-	reader := tar.NewReader(strings.NewReader(string(data)))
+	reader := tar.NewReader(bytes.NewReader(data))
 	seen := map[string]bool{}
 	entries, total := 0, int64(0)
 	for {
@@ -176,11 +176,11 @@ func extractPackageArchive(path, into string) (string, error) {
 			break
 		}
 		if err != nil {
-			return "", fmt.Errorf("unsafe_archive: %w", err)
+			return "", wrapFault("unsafe_archive", "", err)
 		}
 		entries++
 		if entries > MaxPackageArchiveEntries {
-			return "", errors.New("unsafe_archive: the archive declares more entries than this installation reads")
+			return "", fault("unsafe_archive", "the archive declares more entries than this installation reads")
 		}
 		name := filepath.ToSlash(filepath.Clean(header.Name))
 		switch header.Typeflag {
@@ -196,13 +196,13 @@ func extractPackageArchive(path, into string) (string, error) {
 		default:
 			// Links, devices and anything else are refused: an archive says
 			// what bytes it carries, never where the filesystem should point.
-			return "", fmt.Errorf("unsafe_archive: %s is not a regular file or directory", header.Name)
+			return "", faultf("unsafe_archive", "%s is not a regular file or directory", header.Name)
 		}
 		if !safeRelative(name) || name != filepath.ToSlash(header.Name) && filepath.ToSlash(header.Name) != "./"+name {
 			return "", local.ErrUnsafePath
 		}
 		if seen[strings.ToLower(name)] {
-			return "", fmt.Errorf("unsafe_archive: %s collides with another entry after normalisation", header.Name)
+			return "", faultf("unsafe_archive", "%s collides with another entry after normalisation", header.Name)
 		}
 		seen[strings.ToLower(name)] = true
 		total += header.Size
@@ -214,7 +214,7 @@ func extractPackageArchive(path, into string) (string, error) {
 			return "", err
 		}
 		if int64(len(body)) != header.Size {
-			return "", errors.New("unsafe_archive: an entry does not carry its declared size")
+			return "", fault("unsafe_archive", "an entry does not carry its declared size")
 		}
 		target := filepath.Join(into, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {

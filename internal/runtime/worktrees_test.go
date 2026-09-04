@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -349,7 +350,7 @@ func TestConcurrentClaimsProduceOneOwner(t *testing.T) {
 	for i := 0; i < racers; i++ {
 		go func(i int) {
 			_, err := e.ClaimWorktree(context.Background(), ClaimRequest{
-				CommandID: "command:race-" + itoa(int64(i)), Repository: repository, OwnerID: "session:racer",
+				CommandID: "command:race-" + strconv.Itoa(i), Repository: repository, OwnerID: "session:racer",
 			})
 			results <- err
 		}(i)

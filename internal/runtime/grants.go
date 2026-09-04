@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strconv"
 	"time"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -127,10 +129,10 @@ func (e *Engine) IssueControlGrant(ctx context.Context, c ControlGrantRequest) (
 	}
 	for _, capability := range c.Capabilities {
 		if capability != "stop.release" && capability != "package.trust" && capability != "action.admit" {
-			return local.AuthorityApplyResult{}, errors.New("unsupported_operation: this installation delegates stop.release, package.trust and action.admit")
+			return local.AuthorityApplyResult{}, fault("unsupported_operation", "this installation delegates stop.release, package.trust and action.admit")
 		}
 	}
-	if contains(c.Capabilities, "action.admit") {
+	if slices.Contains(c.Capabilities, "action.admit") {
 		if len(c.Capabilities) != 1 || len(c.ResourceScopes) == 0 {
 			return local.AuthorityApplyResult{}, errors.New("an action.admit grant names one capability and its exact resource scopes")
 		}
@@ -178,7 +180,7 @@ func (e *Engine) IssueControlGrant(ctx context.Context, c ControlGrantRequest) (
 		SchemaVersion: "1", ID: derivedID("constraints", e.owner, c.CommandID), Version: "1.0.0",
 		ProjectIDs: []string{e.Config.ID}, AllowedDataClasses: []string{"restricted"},
 		AllowedDestinations: append([]ResourceIdentity{}, c.ResourceScopes...), MaxParallelOperations: 1,
-		BudgetLimits: []grantBudget{{Unit: "requests", Amount: itoa(c.MaxOperations), Enforcement: "hard"}},
+		BudgetLimits: []grantBudget{{Unit: "requests", Amount: strconv.FormatInt(c.MaxOperations, 10), Enforcement: "hard"}},
 	}
 	constraintBytes, err := canonical(constraints)
 	if err != nil {
@@ -196,11 +198,10 @@ func (e *Engine) IssueControlGrant(ctx context.Context, c ControlGrantRequest) (
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
 	}
-	intent, intentBytes, expiry, err := e.controlIntentFor("grant.issue", "project", e.Config.ID, e.Config.DefaultPolicyRef, reg, c.CommandID, payload)
+	intent, _, expiry, err := e.controlIntentFor("grant.issue", "project", e.Config.ID, e.Config.DefaultPolicyRef, reg, c.CommandID, payload)
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
 	}
-	_ = intentBytes
 	command, err := canonical(map[string]any{"operation": "grant.issue", "command_id": c.CommandID, "subject_id": c.SubjectID, "capabilities": c.Capabilities, "control_intent_ref": intent.Ref(), "approval_refs": approvalRefs(c.Approvals), "reason": c.Reason})
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
@@ -244,18 +245,6 @@ func (e *Engine) IssueControlGrant(ctx context.Context, c ControlGrantRequest) (
 		}
 		return encoded, nil
 	})
-}
-
-func itoa(value int64) string {
-	if value == 0 {
-		return "0"
-	}
-	digits := []byte{}
-	for value > 0 {
-		digits = append([]byte{byte('0' + value%10)}, digits...)
-		value /= 10
-	}
-	return string(digits)
 }
 
 // grantStatus is what the grant means now. Expiry and exhaustion are derived,
@@ -330,15 +319,6 @@ func consumeGrant(control *AuthorityControl, subject, operation, intentDigest, a
 		recorded.Grant.Status = "exhausted"
 	}
 	return nil
-}
-
-func contains(values []string, wanted string) bool {
-	for _, value := range values {
-		if value == wanted {
-			return true
-		}
-	}
-	return false
 }
 
 func containsResource(values []ResourceIdentity, wanted ResourceIdentity) bool {

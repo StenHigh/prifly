@@ -121,7 +121,7 @@ func (e *Engine) controlScope(scope string) (string, error) {
 	case "project":
 		return e.Config.ID, nil
 	}
-	return "", errors.New("unsupported_scope: authority control targets installation or project")
+	return "", fault("unsupported_scope", "authority control targets installation or project")
 }
 
 func approvalRefs(ids []string) []any {

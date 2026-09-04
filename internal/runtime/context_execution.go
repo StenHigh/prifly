@@ -110,10 +110,10 @@ func contextProfileFor(config ExecutorConfig, definitions []PinnedDefinition, re
 	}
 	data, exists := registry[ref]
 	if !exists {
-		return ContextProfile{}, flow.Ref{}, fmt.Errorf("missing_context_profile: %s", ref.String())
+		return ContextProfile{}, flow.Ref{}, faultf("missing_context_profile", "%s", ref.String())
 	}
 	if rawDigest(data) != ref.Digest {
-		return ContextProfile{}, flow.Ref{}, errors.New("context_profile_drift: profile bytes differ from their exact reference")
+		return ContextProfile{}, flow.Ref{}, fault("context_profile_drift", "profile bytes differ from their exact reference")
 	}
 	if err := flow.ValidateSchema(registry, builtinRef(definitions, "core:schema/context-profile"), data); err != nil {
 		return ContextProfile{}, flow.Ref{}, err
@@ -123,19 +123,19 @@ func contextProfileFor(config ExecutorConfig, definitions []PinnedDefinition, re
 		return ContextProfile{}, flow.Ref{}, err
 	}
 	if profile.ID != ref.ID || profile.Version != ref.Version {
-		return ContextProfile{}, flow.Ref{}, errors.New("context_profile_drift: definition identity differs from its reference")
+		return ContextProfile{}, flow.Ref{}, fault("context_profile_drift", "definition identity differs from its reference")
 	}
 	if err := ValidateContextProfile(profile, false); err != nil {
 		return ContextProfile{}, flow.Ref{}, err
 	}
 	if profile.AssemblyRef != builtinRef(definitions, "core:assembly/local-json") {
-		return ContextProfile{}, flow.Ref{}, errors.New("unsupported_context_assembly: only the exact local JSON assembly is supported")
+		return ContextProfile{}, flow.Ref{}, fault("unsupported_context_assembly", "only the exact local JSON assembly is supported")
 	}
 	if profile.IsolationRequired == "fresh" {
-		return ContextProfile{}, flow.Ref{}, errors.New("unsupported_context_isolation: local process isolation is not qualified as fresh")
+		return ContextProfile{}, flow.Ref{}, fault("unsupported_context_isolation", "local process isolation is not qualified as fresh")
 	}
 	if profile.MaxTokens != nil {
-		return ContextProfile{}, flow.Ref{}, errors.New("unsupported_tokenization: local JSON assembly does not qualify token budgets or AI dispatch")
+		return ContextProfile{}, flow.Ref{}, fault("unsupported_tokenization", "local JSON assembly does not qualify token budgets or AI dispatch")
 	}
 	return profile, ref, nil
 }
@@ -153,7 +153,7 @@ func (e *Engine) selectContextProfiles(plan *flow.Plan, definitions []PinnedDefi
 			}
 		}
 		if kind != "check" {
-			return errors.New("check_definition_kind: automatic check requires a typed check registry entry")
+			return fault("check_definition_kind", "automatic check requires a typed check registry entry")
 		}
 	}
 	for ref, executor := range executorDefinitions(plan) {
@@ -164,11 +164,11 @@ func (e *Engine) selectContextProfiles(plan *flow.Plan, definitions []PinnedDefi
 		}
 		config, exists := e.Config.Configuration.Executors[ref.ID]
 		if !exists {
-			return fmt.Errorf("missing_executor: %s", ref.ID)
+			return faultf("missing_executor", "%s", ref.ID)
 		}
 		if executor.AdapterRef != adapter {
 			if config.ContextProfileRef != nil {
-				return errors.New("unsupported_context_adapter: context profiles require local-process@2.0.0")
+				return fault("unsupported_context_adapter", "context profiles require local-process@2.0.0")
 			}
 			continue
 		}
@@ -184,7 +184,7 @@ func (e *Engine) selectContextProfiles(plan *flow.Plan, definitions []PinnedDefi
 			}
 		}
 		if kind != "resource" {
-			return errors.New("context_profile_type_mismatch: context profile must be a JSON resource definition")
+			return fault("context_profile_type_mismatch", "context profile must be a JSON resource definition")
 		}
 		// Configuration references are selected explicitly at Start, not
 		// discovered by walking arbitrary fields of resource JSON data.

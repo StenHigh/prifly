@@ -75,18 +75,18 @@ func validateWorkspaceTreeManifest(manifest WorkspaceTreeManifest) error {
 
 func validateWorkspaceTreeShape(manifest WorkspaceTreeManifest, requireRefs bool) error {
 	if manifest.SchemaVersion != WorkspaceTreeManifestVersion || !safeRelative(manifest.Root) || !directChildName(manifest.Entrypoint) || len(manifest.Files) == 0 || len(manifest.Files) > MaxWorkspaceTreeFiles {
-		return errors.New("invalid_workspace_tree_manifest")
+		return fault("invalid_workspace_tree_manifest", "")
 	}
 	seen, entrypoint := map[string]bool{}, false
 	for _, file := range manifest.Files {
 		if !directChildName(file.Path) || seen[file.Path] || requireRefs && (file.Ref.ArtifactID == "" || file.Ref.Revision != 1 || !strings.HasPrefix(file.Ref.Digest, "sha256:")) {
-			return errors.New("invalid_workspace_tree_manifest")
+			return fault("invalid_workspace_tree_manifest", "")
 		}
 		seen[file.Path] = true
 		entrypoint = entrypoint || file.Path == manifest.Entrypoint
 	}
 	if !entrypoint || !sort.SliceIsSorted(manifest.Files, func(i, j int) bool { return manifest.Files[i].Path < manifest.Files[j].Path }) {
-		return errors.New("invalid_workspace_tree_manifest")
+		return fault("invalid_workspace_tree_manifest", "")
 	}
 	return nil
 }
@@ -98,21 +98,21 @@ func workspaceTreePolicyLocation(policy flow.WorkspaceTreeCapturePolicy, manifes
 	switch policy.Kind {
 	case "exact_file":
 		if filepath.ToSlash(filepath.Dir(policy.Path)) != manifest.Root || filepath.Base(policy.Path) != manifest.Entrypoint || len(manifest.Files) != 1 {
-			return "", errors.New("workspace_tree_policy_mismatch")
+			return "", fault("workspace_tree_policy_mismatch", "")
 		}
 		return policy.Path, nil
 	case "direct_child_file":
 		if manifest.Root != policy.Path || len(manifest.Files) != 1 {
-			return "", errors.New("workspace_tree_policy_mismatch")
+			return "", fault("workspace_tree_policy_mismatch", "")
 		}
 		return filepath.ToSlash(filepath.Join(manifest.Root, manifest.Entrypoint)), nil
 	case "direct_child_tree":
 		if filepath.ToSlash(filepath.Dir(manifest.Root)) != policy.Path || policy.Entrypoint != manifest.Entrypoint || !directChildName(filepath.Base(manifest.Root)) {
-			return "", errors.New("workspace_tree_policy_mismatch")
+			return "", fault("workspace_tree_policy_mismatch", "")
 		}
 		return manifest.Root, nil
 	default:
-		return "", errors.New("workspace_tree_policy_mismatch")
+		return "", fault("workspace_tree_policy_mismatch", "")
 	}
 }
 
@@ -123,7 +123,7 @@ func (e *Engine) readWorkspaceTreeManifest(r Run, ref ArtifactRef) (WorkspaceTre
 	}
 	schema := builtinRef(r.Definitions, flow.WorkspaceTreeManifestSchemaID)
 	if schema.ID == "" || artifact.Format != "json" || !sameRef(artifact.SchemaRef, &schema) || flow.ValidateSchema(r.registry(), schema, data) != nil {
-		return WorkspaceTreeManifest{}, errors.New("workspace_tree_manifest_contract_mismatch")
+		return WorkspaceTreeManifest{}, fault("workspace_tree_manifest_contract_mismatch", "")
 	}
 	var manifest WorkspaceTreeManifest
 	if err := decode(data, &manifest); err != nil {
@@ -252,7 +252,7 @@ func (e *Engine) materializeWorkspaceTree(root *os.Root, manifest WorkspaceTreeM
 		artifact, data, err := e.Artifact(entry.Ref)
 		if err != nil || artifact.Ref() != entry.Ref {
 			cleanup()
-			return nil, errors.New("workspace_tree_entry_unavailable")
+			return nil, fault("workspace_tree_entry_unavailable", "")
 		}
 		target := filepath.ToSlash(filepath.Join(manifest.Root, entry.Path))
 		if existing, err := root.Lstat(target); err == nil {
@@ -263,7 +263,7 @@ func (e *Engine) materializeWorkspaceTree(root *os.Root, manifest WorkspaceTreeM
 			current, err := readLocal(root.Name(), target, MaxArtifactBytes)
 			if err != nil || rawDigest(current) != entry.Ref.Digest {
 				cleanup()
-				return nil, errors.New("workspace_tree_input_drift")
+				return nil, fault("workspace_tree_input_drift", "")
 			}
 			continue
 		} else if !errors.Is(err, os.ErrNotExist) {
@@ -309,7 +309,7 @@ func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs m
 			ref, ok := inputs[binding.InputPort]
 			if !ok {
 				cleanup()
-				return nil, nil, errors.New("workspace_tree_input_missing")
+				return nil, nil, fault("workspace_tree_input_missing", "")
 			}
 			manifest, err := e.readWorkspaceTreeManifest(r, ref)
 			if err != nil {
@@ -344,7 +344,7 @@ func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs m
 			if binding.Capture.Kind == "exact_file" {
 				if _, err := root.Lstat(binding.Capture.Path); !errors.Is(err, os.ErrNotExist) {
 					cleanup()
-					return nil, nil, errors.New("workspace_tree_output_exists")
+					return nil, nil, fault("workspace_tree_output_exists", "")
 				}
 			}
 		}
@@ -437,7 +437,7 @@ func captureWorkspaceTree(root string, handoff WorkspaceTreeHandoff, location st
 			if err != nil {
 				return WorkspaceTreeManifest{}, nil, err
 			}
-			return WorkspaceTreeManifest{}, nil, errors.New("workspace_tree_entry_limit")
+			return WorkspaceTreeManifest{}, nil, fault("workspace_tree_entry_limit", "")
 		}
 		manifest.Root, manifest.Entrypoint = location, policy.Entrypoint
 		for _, entry := range entries {
@@ -451,7 +451,7 @@ func captureWorkspaceTree(root string, handoff WorkspaceTreeHandoff, location st
 			files[entry.Name()] = data
 		}
 	default:
-		return WorkspaceTreeManifest{}, nil, errors.New("workspace_tree_policy_escape")
+		return WorkspaceTreeManifest{}, nil, fault("workspace_tree_policy_escape", "")
 	}
 	names := make([]string, 0, len(files))
 	for name := range files {
@@ -479,7 +479,7 @@ func writeCapturedTreeFile(workspace, path string, data []byte) error {
 		if bytes.Equal(existing, data) {
 			return nil
 		}
-		return errors.New("workspace_tree_capture_conflict")
+		return fault("workspace_tree_capture_conflict", "")
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -529,7 +529,7 @@ func (e *Engine) captureTreeOutput(a *Attempt, handoff WorkspaceTreeHandoff, loc
 func (e *Engine) captureWorkspaceTreeOutputs(a *Attempt, step flow.StepDefinition, result Result, locations []WorkspaceTreeLocation) (Result, error) {
 	if len(step.WorkspaceTrees) == 0 {
 		if len(locations) != 0 {
-			return Result{}, errors.New("workspace_tree_location_unexpected")
+			return Result{}, fault("workspace_tree_location_unexpected", "")
 		}
 		return result, nil
 	}
@@ -576,7 +576,7 @@ func (e *Engine) sealWorkspaceTreeOutput(r Run, a *Attempt, step flow.StepDefini
 	}
 	var manifest WorkspaceTreeManifest
 	if err := decode(data, &manifest); err != nil || validateWorkspaceTreeManifest(manifest) != nil {
-		return Artifact{}, errors.New("workspace_tree_manifest_invalid")
+		return Artifact{}, fault("workspace_tree_manifest_invalid", "")
 	}
 	inputProvenance := []ArtifactRef{}
 	for _, handoff := range a.Session.WorkspaceTrees {
@@ -593,7 +593,7 @@ func (e *Engine) sealWorkspaceTreeOutput(r Run, a *Attempt, step flow.StepDefini
 	for _, entry := range manifest.Files {
 		captured, err := readLocal(a.Workspace, treeCapturePath(port, entry.Path), MaxArtifactBytes)
 		if err != nil || rawDigest(captured) != entry.Ref.Digest {
-			return Artifact{}, errors.New("workspace_tree_capture_drift")
+			return Artifact{}, fault("workspace_tree_capture_drift", "")
 		}
 		artifact, err := e.putArtifact(captured, "blob", nil, entry.Ref.ArtifactID, producer, inputProvenance, r.registry())
 		if err != nil || artifact.Ref() != entry.Ref {

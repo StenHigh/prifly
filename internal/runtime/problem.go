@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mattn/go-sqlite3"
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
 )
@@ -37,11 +36,25 @@ type DiagnosticError struct {
 func (e *DiagnosticError) Error() string { return e.Err.Error() }
 func (e *DiagnosticError) Unwrap() error { return e.Err }
 
-func persistenceFailure(err error) bool {
-	var sqlite sqlite3.Error
-	var path *os.PathError
-	return err != nil && (errors.As(err, &sqlite) || errors.As(err, &path) || errors.Is(err, local.ErrIntegrity) || errors.Is(err, local.ErrIncompatible))
+// persistenceFailure asks the storage package whether this is its own failure:
+// which error types mean that is storage's business, not the runtime's.
+func persistenceFailure(err error) bool { return local.IsPersistenceFailure(err) }
+
+// exitForCode maps a refusal to the exit status its class uses: an unsupported
+// capability, a conflicting state, or an authority that was moved or restored
+// and only allows inspection.
+func exitForCode(code string) int {
+	switch {
+	case strings.HasPrefix(code, "unsupported"):
+		return 5
+	case strings.Contains(code, "conflict") || strings.Contains(code, "drift"):
+		return 3
+	case strings.Contains(code, "recovery"):
+		return 6
+	}
+	return 2
 }
+
 func validProblemCode(s string) bool {
 	if len(s) < 1 || len(s) > 64 || s[0] < 'a' || s[0] > 'z' {
 		return false
@@ -134,13 +147,7 @@ func ProblemFor(err error) (Problem, int) {
 			if detail := refusalDetail(base); detail != "" {
 				p.Violations = []Violation{{"", detail}}
 			}
-			if strings.HasPrefix(code, "unsupported") {
-				exit = 5
-			} else if strings.Contains(code, "conflict") || strings.Contains(code, "drift") {
-				exit = 3
-			} else if strings.Contains(code, "recovery") {
-				exit = 6
-			}
+			exit = exitForCode(code)
 		}
 	}
 	if !validProblemCode(p.Code) {

@@ -755,7 +755,7 @@ func (r Run) planKey() string {
 
 func (r Run) plan() (*flow.Plan, error) {
 	if !supportedRun(r) {
-		return nil, fmt.Errorf("incompatible_run: unsupported state/semantics profile")
+		return nil, faultf("incompatible_run", "unsupported state/semantics profile")
 	}
 	if isContextState(r.SchemaVersion) {
 		if err := contextPinnedInvariant(r); err != nil {
@@ -776,13 +776,13 @@ func (r Run) plan() (*flow.Plan, error) {
 		return nil, err
 	}
 	if requiresRepeatState(p) && !isRepeatState(r.SchemaVersion) {
-		return nil, fmt.Errorf("incompatible_run: repeat closure requires core-state/3")
+		return nil, faultf("incompatible_run", "repeat closure requires core-state/3")
 	}
 	if requiresPublicationNewOnlyState(p) && !isPublicationNewOnlyState(r.SchemaVersion) {
-		return nil, fmt.Errorf("incompatible_run: new-only publication source requires core-state/16")
+		return nil, faultf("incompatible_run", "new-only publication source requires core-state/16")
 	}
 	if requiresPublicationFailureState(p) && !isPublicationFailureState(r.SchemaVersion) {
-		return nil, fmt.Errorf("incompatible_run: terminal-failure publication source requires core-state/17")
+		return nil, faultf("incompatible_run", "terminal-failure publication source requires core-state/17")
 	}
 	return p, nil
 }

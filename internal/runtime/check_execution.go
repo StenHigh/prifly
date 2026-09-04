@@ -761,5 +761,5 @@ func (e *Engine) recoverCheckUncertain(ctx context.Context, loaded Run, checkID,
 	if err != nil {
 		return err
 	}
-	return errors.New("recovery_required: uncertain check retained; no process was launched")
+	return fault("recovery_required", "uncertain check retained; no process was launched")
 }

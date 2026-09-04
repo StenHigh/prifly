@@ -106,7 +106,7 @@ func daySlots(s Schedule, calendar ScheduleCalendar, loc *time.Location, day tim
 func dueSlots(s Schedule, calendar ScheduleCalendar, after, now time.Time) ([]slot, error) {
 	loc, err := time.LoadLocation(s.Timezone)
 	if err != nil {
-		return nil, fmt.Errorf("unknown_timezone: %s is not a zone this build can resolve", s.Timezone)
+		return nil, faultf("unknown_timezone", "%s is not a zone this build can resolve", s.Timezone)
 	}
 	if now.Before(after) {
 		// A watermark ahead of the clock is a rollback, not a backlog. Deciding

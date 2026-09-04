@@ -468,7 +468,7 @@ func InitProfile(root, profile string) error { return initProfile(root, profile,
 
 func initProfile(root, profile string, projectContext bool) error {
 	if profile != flow.Profile && profile != flow.CoreProfile {
-		return errors.New("unsupported_profile: unknown semantics profile")
+		return fault("unsupported_profile", "unknown semantics profile")
 	}
 	absolute, err := filepath.Abs(root)
 	if err != nil {
@@ -483,7 +483,7 @@ func initProfile(root, profile string, projectContext bool) error {
 	}
 	for _, path := range []string{"prifly.json", "definitions.json", ".prifly/installation.json", ".prifly/state/state.sqlite3"} {
 		if _, err := os.Lstat(filepath.Join(root, path)); err == nil {
-			return errors.New("initialization_conflict: existing configuration or partial installation was not overwritten")
+			return fault("initialization_conflict", "existing configuration or partial installation was not overwritten")
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -587,7 +587,7 @@ func Open(root string, readOnly bool) (*Engine, error) {
 		adapter = builtinVersionRef(defs, "core:adapter/local-process", "2.0.0")
 	}
 	if !supportedPolicy || len(config.AdapterBindings) != 1 || config.AdapterBindings["local_process"] != adapter {
-		return nil, errors.New("unsupported_configuration: expected an exact local policy supported by the selected profile and the local_process adapter binding")
+		return nil, fault("unsupported_configuration", "expected an exact local policy supported by the selected profile and the local_process adapter binding")
 	}
 	var rawConfig struct {
 		Configuration json.RawMessage `json:"configuration"`
@@ -599,7 +599,7 @@ func Open(root string, readOnly bool) (*Engine, error) {
 		return nil, err
 	}
 	if config.Configuration.SemanticsProfile == flow.Profile && len(config.Configuration.InputValues) != 0 {
-		return nil, errors.New("unsupported_configuration: input values require core-workflow/1")
+		return nil, fault("unsupported_configuration", "input values require core-workflow/1")
 	}
 	if len(config.InstalledPackages) != 0 || len(config.SecretRefs) != 0 {
 		return nil, errors.New("packages and secret providers are unsupported in foundation-sequence/1")
@@ -684,7 +684,7 @@ func (e *Engine) workflowAliases() (map[string][]byte, error) {
 		return nil, err
 	}
 	if len(file.Aliases) > 0 && e.Config.Configuration.SemanticsProfile != flow.CoreProfile {
-		return nil, errors.New("unsupported_alias: local workflow aliases require core-workflow/1")
+		return nil, fault("unsupported_alias", "local workflow aliases require core-workflow/1")
 	}
 	aliases := map[string][]byte{}
 	var total int

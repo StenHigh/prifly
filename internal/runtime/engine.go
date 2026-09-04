@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -405,7 +404,7 @@ func (e *Engine) driverLock(runID string) (*os.File, error) {
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
-		return nil, fmt.Errorf("driver_already_active: %w", err)
+		return nil, wrapFault("driver_already_active", "", err)
 	}
 	if err := f.Truncate(0); err != nil {
 		f.Close()
@@ -685,7 +684,7 @@ func (e *Engine) Restrict(ctx context.Context, c RestrictCommand) (local.ApplyRe
 		return local.ApplyResult{}, err
 	}
 	if c.Scope != "run" && c.Scope != "invocation" {
-		return local.ApplyResult{}, errors.New("unsupported_scope: F1 control targets one explicitly selected run")
+		return local.ApplyResult{}, fault("unsupported_scope", "F1 control targets one explicitly selected run")
 	}
 	runID := c.ScopeID
 	if c.Scope == "invocation" {
@@ -765,7 +764,11 @@ func (e *Engine) Release(ctx context.Context, c ReleaseRequest) (local.ApplyResu
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
-	artifact, ib, expiry, err := e.controlIntentFor("stop.release", "run", c.RunID, rPolicy(r), r.registry(), c.CommandID, intentPayload)
+	policy, err := rPolicy(r)
+	if err != nil {
+		return local.ApplyResult{}, err
+	}
+	artifact, ib, expiry, err := e.controlIntentFor("stop.release", "run", c.RunID, policy, r.registry(), c.CommandID, intentPayload)
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
@@ -896,10 +899,15 @@ func controlIntentCurrent(intent Artifact, expiry time.Time, obs Observation) er
 	return nil
 }
 
-func rPolicy(r Run) flow.Ref {
+// rPolicy reads the policy a Run's pinned workflow declares. A workflow that
+// cannot be read has no policy to report, and saying so is the difference
+// between "this Run has no policy" and "nobody looked".
+func rPolicy(r Run) (flow.Ref, error) {
 	var w flow.WorkflowRevision
-	_ = json.Unmarshal(r.Workflow, &w)
-	return w.PolicyRef
+	if err := json.Unmarshal(r.Workflow, &w); err != nil {
+		return flow.Ref{}, wrapFault("pinned_workflow_unreadable", "the Run's pinned workflow could not be read", err)
+	}
+	return w.PolicyRef, nil
 }
 
 func (e *Engine) Resume(ctx context.Context, runID, commandID, reason string, expected int64) (local.ApplyResult, error) {

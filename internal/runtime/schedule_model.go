@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -197,7 +196,7 @@ func validateSchedule(s Schedule) error {
 		return errors.New("unsupported schedule contract version")
 	}
 	if _, err := time.LoadLocation(s.Timezone); err != nil {
-		return fmt.Errorf("unknown_timezone: %s is not a zone this build can resolve", s.Timezone)
+		return faultf("unknown_timezone", "%s is not a zone this build can resolve", s.Timezone)
 	}
 	return nil
 }
@@ -207,7 +206,7 @@ func validateCalendar(c ScheduleCalendar) error {
 		return errors.New("unsupported schedule calendar contract version")
 	}
 	if len(c.DailyLocalTimes) == 0 || len(c.DailyLocalTimes) > MaxCalendarTimes {
-		return fmt.Errorf("invalid_calendar: a calendar states between 1 and %d daily local times", MaxCalendarTimes)
+		return faultf("invalid_calendar", "a calendar states between 1 and %d daily local times", MaxCalendarTimes)
 	}
 	seen := map[string]bool{}
 	for _, value := range c.DailyLocalTimes {
@@ -215,7 +214,7 @@ func validateCalendar(c ScheduleCalendar) error {
 			return err
 		}
 		if seen[value] {
-			return errors.New("invalid_calendar: the same daily local time is stated twice")
+			return fault("invalid_calendar", "the same daily local time is stated twice")
 		}
 		seen[value] = true
 	}
@@ -228,12 +227,12 @@ func validateCalendar(c ScheduleCalendar) error {
 func parseLocalTime(value string) (hour, minute int, err error) {
 	fields := strings.Split(value, ":")
 	if len(fields) != 2 || len(fields[0]) != 2 || len(fields[1]) != 2 {
-		return 0, 0, fmt.Errorf("invalid_calendar: %q is not an exact HH:MM local time", value)
+		return 0, 0, faultf("invalid_calendar", "%q is not an exact HH:MM local time", value)
 	}
 	hour, herr := strconv.Atoi(fields[0])
 	minute, merr := strconv.Atoi(fields[1])
 	if herr != nil || merr != nil || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
-		return 0, 0, fmt.Errorf("invalid_calendar: %q is not an exact HH:MM local time", value)
+		return 0, 0, faultf("invalid_calendar", "%q is not an exact HH:MM local time", value)
 	}
 	return hour, minute, nil
 }

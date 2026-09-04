@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -129,18 +128,18 @@ func existingTaskPreparation(e *prifly.Engine, path string, inputBytes []byte, i
 		return taskPrepared{}, false, err
 	}
 	if err := flow.ValidateProtocol("RunBrief", data); err != nil {
-		return taskPrepared{}, false, fmt.Errorf("task_brief_conflict: existing intake brief is not valid: %w", err)
+		return taskPrepared{}, false, &prifly.Fault{Code: "task_brief_conflict", Message: "existing intake brief is not valid", Cause: err}
 	}
 	var brief prifly.Brief
 	if err := json.Unmarshal(data, &brief); err != nil {
 		return taskPrepared{}, false, err
 	}
 	if len(brief.SourceRefs) != len(input.SourceRefs)+1 {
-		return taskPrepared{}, false, errors.New("task_brief_conflict: existing intake brief has different source references")
+		return taskPrepared{}, false, &prifly.Fault{Code: "task_brief_conflict", Message: "existing intake brief has different source references"}
 	}
 	for i, ref := range input.SourceRefs {
 		if brief.SourceRefs[i] != ref {
-			return taskPrepared{}, false, errors.New("task_brief_conflict: existing intake brief has different source references")
+			return taskPrepared{}, false, &prifly.Fault{Code: "task_brief_conflict", Message: "existing intake brief has different source references"}
 		}
 	}
 	snapshotRef := brief.SourceRefs[len(brief.SourceRefs)-1]
@@ -158,7 +157,7 @@ func existingTaskPreparation(e *prifly.Engine, path string, inputBytes []byte, i
 		return taskPrepared{}, false, err
 	}
 	if !bytes.Equal(source, inputBytes) || !bytes.Equal(data, wantBytes) {
-		return taskPrepared{}, false, errors.New("task_brief_conflict: existing intake brief does not match the selected task")
+		return taskPrepared{}, false, &prifly.Fault{Code: "task_brief_conflict", Message: "existing intake brief does not match the selected task"}
 	}
 	return taskPrepared{SchemaVersion: "task-prepared/1", TaskID: input.ID, BriefPath: path, Brief: brief, SourceSnapshot: snapshotRef}, true, nil
 }

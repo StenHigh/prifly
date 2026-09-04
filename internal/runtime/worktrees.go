@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -164,7 +165,7 @@ func (e *Engine) ClaimWorktrees(ctx context.Context, commandID string, requests 
 		if err != nil {
 			return nil, err
 		}
-		claimID := derivedID("claim", e.Installation.ID, commandID, itoa(int64(index)))
+		claimID := derivedID("claim", e.Installation.ID, commandID, strconv.Itoa(index))
 		if !claimIDPattern.MatchString(claimID) {
 			return nil, local.ErrIntegrity
 		}
@@ -548,7 +549,7 @@ func (e *Engine) repositoryIdentity(ctx context.Context, path string) (Repositor
 		return RepositoryIdentity{}, err
 	}
 	if overlaps(filepath.ToSlash(toplevel), filepath.ToSlash(e.Root)) {
-		return RepositoryIdentity{}, errors.New("unsafe_repository: a claimed repository cannot overlap the authority project root")
+		return RepositoryIdentity{}, fault("unsafe_repository", "a claimed repository cannot overlap the authority project root")
 	}
 	return RepositoryIdentity{CommonDir: common, Toplevel: toplevel}, nil
 }
@@ -636,7 +637,7 @@ func (e *Engine) removeWorktree(ctx context.Context, claim WorktreeClaim) error 
 		return local.ErrUnsafePath
 	}
 	if claim.Status == "active" && (uint64(stat.Dev) != claim.Device || stat.Ino != claim.Inode) {
-		return errors.New("claim_identity_conflict: the claimed directory is not the one this claim created")
+		return fault("claim_identity_conflict", "the claimed directory is not the one this claim created")
 	}
 	if _, err := e.git(ctx, claim.Repository.Toplevel, "worktree", "remove", "--force", "--end-of-options", target); err != nil {
 		return err

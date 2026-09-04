@@ -37,6 +37,11 @@ type BlobStore struct {
 	readOnly bool
 }
 
+// A digest is written as its algorithm and 64 hex characters, so its text has
+// one length: "sha256:" plus the hash.
+const digestPrefix = "sha256:"
+const digestTextLength = len(digestPrefix) + sha256.Size*2
+
 func OpenBlobStore(dir string) (*BlobStore, error) {
 	r, err := privateRoot(dir)
 	if err != nil {
@@ -238,7 +243,7 @@ func (b *BlobStore) open(ref BlobRef) (*os.File, error) {
 }
 
 func blobName(ref BlobRef) (string, error) {
-	if ref.Size < 0 || ref.Size > MaxBlobBytes || len(ref.Digest) != 71 || !strings.HasPrefix(ref.Digest, "sha256:") {
+	if ref.Size < 0 || ref.Size > MaxBlobBytes || len(ref.Digest) != digestTextLength || !strings.HasPrefix(ref.Digest, digestPrefix) {
 		return "", fmt.Errorf("invalid blob reference: %w", ErrIntegrity)
 	}
 	name := ref.Digest[7:]

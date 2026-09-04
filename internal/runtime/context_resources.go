@@ -61,10 +61,10 @@ func (e *Engine) localRegistry() (RegistryFile, error) {
 				return RegistryFile{}, errors.New("older registry cannot contain context resource representation fields")
 			}
 			if !encodingPresent || !mediaPresent || entry.ByteEncoding == "" || entry.MediaType == "" || entry.Kind != "resource" {
-				return RegistryFile{}, errors.New("invalid_context_resource: resource requires both byte_encoding and media_type")
+				return RegistryFile{}, fault("invalid_context_resource", "resource requires both byte_encoding and media_type")
 			}
 			if e.Config.Configuration.SemanticsProfile != flow.CoreProfile {
-				return RegistryFile{}, errors.New("unsupported: typed context resources require core-workflow/1")
+				return RegistryFile{}, fault("unsupported", "typed context resources require core-workflow/1")
 			}
 		}
 		refBytes, err := canonical(entry.Ref)
@@ -81,7 +81,7 @@ func (e *Engine) localRegistry() (RegistryFile, error) {
 		case "step", "schema", "workflow", "policy", "adapter", "resource":
 		case "check", "tool":
 			if file.SchemaVersion != "3" || e.Config.Configuration.SemanticsProfile != flow.CoreProfile {
-				return RegistryFile{}, errors.New("unsupported: checks and tools require Registry3 and core-workflow/1")
+				return RegistryFile{}, fault("unsupported", "checks and tools require Registry3 and core-workflow/1")
 			}
 		default:
 			return RegistryFile{}, errors.New("unsupported registry kind")
@@ -113,7 +113,7 @@ func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []Pinn
 	var sourceBytes, pinnedBytes int
 	entries := append(append([]Definition{}, file.Entries...), e.packageEntries()...)
 	if len(entries) > maxLocalRegistryEntries {
-		return nil, nil, nil, errors.New("dependency_limit: local and package definitions exceed 512 entries")
+		return nil, nil, nil, fault("dependency_limit", "local and package definitions exceed 512 entries")
 	}
 	identities := make(map[string]bool, len(entries))
 	for _, entry := range entries {
@@ -130,7 +130,7 @@ func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []Pinn
 		}
 		sourceBytes += len(raw)
 		if sourceBytes > maxInventoryBytes {
-			return nil, nil, nil, errors.New("dependency_limit: local registry exceeds 64 MiB source budget")
+			return nil, nil, nil, fault("dependency_limit", "local registry exceeds 64 MiB source budget")
 		}
 		format := "json"
 		if strings.HasSuffix(entry.Path, ".yaml") || strings.HasSuffix(entry.Path, ".yml") {
@@ -150,7 +150,7 @@ func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []Pinn
 			}
 			pinnedBytes += len(resource.Bytes)
 			if pinnedBytes > maxInventoryBytes {
-				return nil, nil, nil, errors.New("dependency_limit: local registry exceeds 64 MiB pinned budget")
+				return nil, nil, nil, fault("dependency_limit", "local registry exceeds 64 MiB pinned budget")
 			}
 			resources = append(resources, PinnedResource{Ref: entry.Ref, RawDigest: rawDigest(raw), ByteEncoding: resource.ByteEncoding, MediaType: resource.MediaType, Bytes: resource.Bytes})
 			continue
@@ -174,10 +174,10 @@ func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []Pinn
 			return nil, nil, nil, err
 		}
 		if len(data) > MaxDefinitionBytes {
-			return nil, nil, nil, errors.New("document_too_large: canonical definition exceeds 2 MiB")
+			return nil, nil, nil, fault("document_too_large", "canonical definition exceeds 2 MiB")
 		}
 		if rawDigest(data) != entry.Ref.Digest {
-			return nil, nil, nil, fmt.Errorf("digest_mismatch: %s", entry.Ref.ID)
+			return nil, nil, nil, faultf("digest_mismatch", "%s", entry.Ref.ID)
 		}
 		if entry.Kind == "check" {
 			check, err := flow.ParseCheckDefinition(data)
@@ -185,7 +185,7 @@ func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []Pinn
 				return nil, nil, nil, err
 			}
 			if check.ID != entry.Ref.ID || check.Version != entry.Ref.Version {
-				return nil, nil, nil, errors.New("ref_identity_mismatch: CheckDefinition differs from exact reference")
+				return nil, nil, nil, fault("ref_identity_mismatch", "CheckDefinition differs from exact reference")
 			}
 		}
 		if entry.Kind == "tool" {
@@ -194,12 +194,12 @@ func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []Pinn
 				return nil, nil, nil, err
 			}
 			if descriptor.ID != entry.Ref.ID || descriptor.Version != entry.Ref.Version {
-				return nil, nil, nil, errors.New("ref_identity_mismatch: ToolDescriptor differs from exact reference")
+				return nil, nil, nil, fault("ref_identity_mismatch", "ToolDescriptor differs from exact reference")
 			}
 		}
 		pinnedBytes += len(data)
 		if pinnedBytes > maxInventoryBytes {
-			return nil, nil, nil, errors.New("dependency_limit: local registry exceeds 64 MiB pinned budget")
+			return nil, nil, nil, fault("dependency_limit", "local registry exceeds 64 MiB pinned budget")
 		}
 		defs = append(defs, PinnedDefinition{Ref: entry.Ref, Kind: entry.Kind, RawDigest: rawDigest(raw), Bytes: data})
 		registry[entry.Ref] = data
@@ -213,7 +213,7 @@ func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []Pinn
 // returned compiler inputs own their bytes and cannot mutate the stored pins.
 func resourcesFromPins(pins []PinnedResource) (flow.ContextResources, error) {
 	if len(pins) > maxLocalRegistryEntries {
-		return nil, errors.New("dependency_limit: context resource snapshot exceeds 512 entries")
+		return nil, fault("dependency_limit", "context resource snapshot exceeds 512 entries")
 	}
 	resources := make(flow.ContextResources, len(pins))
 	seen := make(map[string]bool, len(pins))
@@ -237,7 +237,7 @@ func resourcesFromPins(pins []PinnedResource) (flow.ContextResources, error) {
 		}
 		total += len(pin.Bytes)
 		if total > maxInventoryBytes {
-			return nil, errors.New("dependency_limit: context resource snapshot exceeds 64 MiB")
+			return nil, fault("dependency_limit", "context resource snapshot exceeds 64 MiB")
 		}
 		resource, err := flow.CanonicalContextResource(pin.Ref, flow.ContextResource{ByteEncoding: pin.ByteEncoding, MediaType: pin.MediaType, Bytes: pin.Bytes})
 		if err != nil {
@@ -273,7 +273,7 @@ func (e *Engine) pinResources(pins []PinnedResource) error {
 		previous, err := readLocal(e.Root, relative, MaxDefinitionBytes)
 		if err == nil {
 			if !bytes.Equal(previous, record) {
-				return fmt.Errorf("definition_drift: %s@%s resource representation changed; assign a new version", pin.Ref.ID, pin.Ref.Version)
+				return faultf("definition_drift", "%s@%s resource representation changed; assign a new version", pin.Ref.ID, pin.Ref.Version)
 			}
 			continue
 		}

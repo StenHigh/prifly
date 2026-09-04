@@ -132,7 +132,7 @@ func (e *Engine) SetControlApprovalPolicy(ctx context.Context, c ControlApproval
 		// Gating grant.issue is what keeps CTRL-007: a grant bounds when a
 		// decision is made, it never becomes the way to skip one.
 		if operation != "stop.release" && operation != "package.trust" && operation != "grant.issue" && operation != "action.admit" {
-			return local.AuthorityApplyResult{}, errors.New("unsupported_operation: this installation gates stop.release, package.trust, grant.issue and action.admit")
+			return local.AuthorityApplyResult{}, fault("unsupported_operation", "this installation gates stop.release, package.trust, grant.issue and action.admit")
 		}
 	}
 	policy := ControlApprovalPolicy{SchemaVersion: ControlApprovalPolicyVersion, Operations: append([]string{}, c.Operations...), Quorum: c.Quorum, Independence: c.Independence}

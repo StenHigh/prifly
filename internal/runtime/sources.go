@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"encoding/json"
-	"errors"
 	"mime"
 	"path/filepath"
 	"strings"
@@ -284,7 +283,7 @@ func (e *Engine) ImportSource(options SourceImportOptions) (Artifact, error) {
 		return Artifact{}, err
 	}
 	if options.Format == "json" && options.SchemaRef == nil {
-		return Artifact{}, errors.New("source_content_invalid: JSON source import requires an exact schema reference")
+		return Artifact{}, fault("source_content_invalid", "JSON source import requires an exact schema reference")
 	}
 	_, registry, err := e.Inventory()
 	if err != nil {
@@ -296,10 +295,10 @@ func (e *Engine) ImportSource(options SourceImportOptions) (Artifact, error) {
 	}
 	adapterRef, schemaRef := builtinRef(definitions, localSourceAdapterID), builtinRef(definitions, sourceSnapshotSchemaID)
 	if _, present := registry[schemaRef]; !present {
-		return Artifact{}, errors.New("unsupported_source_contract: source snapshot schema is not installed")
+		return Artifact{}, fault("unsupported_source_contract", "source snapshot schema is not installed")
 	}
 	if _, present := registry[adapterRef]; !present {
-		return Artifact{}, errors.New("unsupported_source_contract: local source adapter is not installed")
+		return Artifact{}, fault("unsupported_source_contract", "local source adapter is not installed")
 	}
 	root, relative, err := e.artifactOwnerPath(options.Path)
 	if err != nil {

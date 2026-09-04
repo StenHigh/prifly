@@ -225,7 +225,7 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 		return err
 	}
 	if err := engine.Drive(ctx, started.Receipt.RunID); err != nil {
-		return fmt.Errorf("project_start_incomplete: run %s, workspace %s: %w", started.Receipt.RunID, claim.ID, err)
+		return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s, workspace %s", started.Receipt.RunID, claim.ID), Cause: err}
 	}
 	view, err := engine.View(ctx, started.Receipt.RunID)
 	if err != nil {

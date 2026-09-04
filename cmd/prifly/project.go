@@ -1268,7 +1268,7 @@ func projectPathsOverlap(first, second string) bool {
 func defaultProjectAuthorityRoot(repository string) (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("local_state_root_unavailable: %w", err)
+		return "", &prifly.Fault{Code: "local_state_root_unavailable", Cause: err}
 	}
 	digest := sha256.Sum256([]byte(repository))
 	return filepath.Join(base, "Pri-Fly", "projects", hex.EncodeToString(digest[:])), nil
@@ -1277,7 +1277,7 @@ func defaultProjectAuthorityRoot(repository string) (string, error) {
 func projectExecutable() (string, error) {
 	path, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("prifly_executable_unavailable: %w", err)
+		return "", &prifly.Fault{Code: "prifly_executable_unavailable", Cause: err}
 	}
 	return canonicalProjectPath(path)
 }

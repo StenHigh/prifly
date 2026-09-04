@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
 )
@@ -338,7 +337,7 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 	stage := p.Workflow.Definition.Stages[a.StageID]
 	step := p.Steps[a.StageID]
 	if !isInvocationState(r.SchemaVersion) && len(r.Attempts) >= int(p.Workflow.Limits.MaxStepInstances) {
-		return errors.New("budget_exhausted: max step instances")
+		return fault("budget_exhausted", "max step instances")
 	}
 	commandID, attemptID, admissionID, reservationID := newID("command"), newID("attempt"), newID("admission"), newID("reservation")
 	checked := pendingPassed(r, "step_input", a.ID)
@@ -537,9 +536,9 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		}
 		deadline, dispatchDeadline := created, created
 		deadline.MonotonicMS += cfg.TimeoutMS
-		dispatchDeadline.MonotonicMS += 30000
+		dispatchDeadline.MonotonicMS += dispatchWindow.Milliseconds()
 		deadline.UTC = now.Add(time.Duration(cfg.TimeoutMS) * time.Millisecond).Format(time.RFC3339Nano)
-		dispatchDeadline.UTC = now.Add(30 * time.Second).Format(time.RFC3339Nano)
+		dispatchDeadline.UTC = now.Add(dispatchWindow).Format(time.RFC3339Nano)
 		if handoff != nil {
 			handoff.Handed, handoff.DeadlineTrust = obs, obs.UTCTrust
 		}
@@ -1009,6 +1008,11 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	return errors.Join(watchErr, e.settle(settleCtx, r.ID, a.ID, outcome, runErr))
 }
 
+// dispatchWindow bounds how long an admitted attempt may sit between its
+// dispatch record and its actual launch. It is not the step's own timeout: it
+// only says how long a launch may take to begin.
+const dispatchWindow = 30 * time.Second
+
 // observationDeadline bounds recording one process observation. It is longer
 // than the store's busy timeout on purpose: a concurrent writer must be waited
 // out and retried, because a dropped observation costs the worker its evidence.
@@ -1022,8 +1026,7 @@ func retryOnBusy(ctx context.Context, write func() error) error {
 	const busyRetryInterval = 50 * time.Millisecond
 	for {
 		err := write()
-		var sqlite sqlite3.Error
-		if !errors.As(err, &sqlite) || sqlite.Code != sqlite3.ErrBusy && sqlite.Code != sqlite3.ErrLocked {
+		if !local.IsBusy(err) {
 			return err
 		}
 		select {
@@ -1235,7 +1238,7 @@ func outputProblem(code, port, message string) error {
 // handoff is still awaiting instead of burning the attempt.
 func (e *Engine) readResultOutputs(r Run, a *Attempt, step flow.StepDefinition, p *flow.Plan, result Result) (map[string][]byte, error) {
 	if len(result.EvidenceRefs) > 0 || len(result.EffectReceiptRefs) > 0 {
-		return nil, errors.New("unsupported_evidence: local output checks do not trust worker-supplied external receipts")
+		return nil, fault("unsupported_evidence", "local output checks do not trust worker-supplied external receipts")
 	}
 	for port, definition := range step.Outputs {
 		if slices.Contains(definition.RequiredFor, result.Verdict) {
@@ -1298,7 +1301,7 @@ func (e *Engine) resultOutputs(r Run, a *Attempt, step flow.StepDefinition, p *f
 		data := contents[port]
 		if workspaceTreeBinding(step, port) != nil {
 			if deferred {
-				return nil, errors.New("workspace_tree_deferred_acceptance_unsupported")
+				return nil, fault("workspace_tree_deferred_acceptance_unsupported", "")
 			}
 			artifact, err := e.sealWorkspaceTreeOutput(r, a, step, definition, port, ref, data)
 			if err != nil {
@@ -1792,11 +1795,11 @@ func (e *Engine) recoverUncertain(ctx context.Context, r Run, reason string) err
 	if err != nil {
 		return err
 	}
-	return &DiagnosticError{ID: derivedID("diagnostic", r.ID, commandID, "recovery", "executor_ownership_lost"), Err: errors.New("recovery_required: uncertain attempt retained; no process was launched")}
+	return &DiagnosticError{ID: derivedID("diagnostic", r.ID, commandID, "recovery", "executor_ownership_lost"), Err: fault("recovery_required", "uncertain attempt retained; no process was launched")}
 }
 
 func recoveryError(r Run) error {
-	err := errors.New("recovery_required: an unresolved execution retains the slot; no blind retry")
+	err := fault("recovery_required", "an unresolved execution retains the slot; no blind retry")
 	for i := len(r.Diagnostics) - 1; i >= 0; i-- {
 		if r.Diagnostics[i].Origin == "core" {
 			return &DiagnosticError{ID: r.Diagnostics[i].ID, Err: err}
