@@ -277,7 +277,10 @@ func OpenStore(dir string, opts StoreOptions) (*Store, error) {
 		return nil, errors.New("SQLite soft budget must be within 64 KiB..64 GiB")
 	}
 	if opts.BusyTimeout == 0 {
-		opts.BusyTimeout = 500 * time.Millisecond
+		// A concurrent writer holds the write lock for as long as its own
+		// transaction runs. Waiting is cheaper than failing an observation that
+		// has nowhere else to be recorded.
+		opts.BusyTimeout = 3 * time.Second
 	}
 	if opts.BusyTimeout < time.Millisecond || opts.BusyTimeout > 5*time.Second || len(opts.EventTypes) == 0 {
 		return nil, errors.New("event types and a busy timeout within 1ms..5s are required")

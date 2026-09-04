@@ -82,8 +82,10 @@ func (e *Engine) Waive(ctx context.Context, c WaiveRequest) (local.ApplyResult, 
 	}
 	command := map[string]any{
 		"schema_version": "1", "command_id": c.CommandID, "run_id": c.RunID, "expected_run_version": view.Snapshot.Version,
-		"payload": map[string]any{"step_instance_id": c.StepID, "check_ref": c.CheckRef, "subject_refs": subjects, "reason": c.Reason,
-			"expires_at": e.clock.now().UTC},
+		// No clock reading belongs in a command's identity: a retry with the
+		// same command id must be the same command. The waiver's own window is
+		// computed in the transform from the recorded observation.
+		"payload": map[string]any{"step_instance_id": c.StepID, "check_ref": c.CheckRef, "subject_refs": subjects, "reason": c.Reason},
 	}
 	encoded, err := canonical(command)
 	if err != nil {

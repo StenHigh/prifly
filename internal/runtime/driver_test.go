@@ -79,7 +79,7 @@ func driverProject(t *testing.T, mode string, timeoutMS int64) (*Engine, string)
 			e.Config.ConfigurationSchemaRef = builtinVersionRef(defs, "core:schema/core-configuration", "2.0.0")
 		}
 	}
-	withReport := slices.Contains([]string{"commit-pass", "commit-consumer", "bad-digest", "bad-json", "mixed-pass", "mixed-check-fail"}, mode)
+	withReport := slices.Contains([]string{"commit-pass", "commit-wait", "commit-consumer", "bad-digest", "bad-json", "mixed-pass", "mixed-check-fail"}, mode)
 	if mode == "bad-json" {
 		schema := []byte(`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["value"],"properties":{"value":{"type":"integer"}},"additionalProperties":false}`)
 		digest, err := flow.Digest(schema)
@@ -519,6 +519,42 @@ func driverDispatchFixture(t *testing.T, e *Engine, runID, attemptID string) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A driver that died after the process group was already observed empty left
+// saved proof that nothing of that attempt is still running. Recovery closes it
+// as a lost settlement and releases the slot, instead of holding the authority
+// for an owner statement about an outcome the journal already answers.
+func TestDriverCrashAfterGroupEmptySettlesWithoutUncertainty(t *testing.T) {
+	e, runID := driverProject(t, "pass", 10000)
+	a := driverAdmit(t, e, runID)
+	driverDispatchFixture(t, e, runID, a.ID)
+	ctx := context.Background()
+	// Injected runner observations exercise core handling only: no process is
+	// spawned, probed or signalled by this fixture.
+	identity := local.ProcessIdentity{PID: os.Getpid(), OwnerPID: os.Getpid()}
+	for _, kind := range []string{"start_returned", "group_empty"} {
+		if err := e.observe(ctx, runID, a.ID, local.ProcessObservation{Kind: kind, Identity: identity}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatalf("saved executor end was not recovered: %v", err)
+	}
+	r := driverRun(t, e, runID)
+	settled := r.Attempts[a.ID]
+	if settled.Settled == nil || settled.Status != "failed" || r.Status == "uncertain" || r.HasUnresolvedEffects || len(r.Active) != 0 {
+		t.Fatalf("proven executor end was kept uncertain: %+v", r)
+	}
+	if settled.ProcessOutcome != nil || settled.Accepted != nil {
+		t.Fatalf("recovery invented process facts or accepted an unjudged candidate: %+v", settled)
+	}
+	if !slices.ContainsFunc(r.Diagnostics, func(d Diagnostic) bool { return d.Code == "executor_settlement_lost" }) {
+		t.Fatalf("lost settlement was not named: %+v", r.Diagnostics)
+	}
+	if slot, owner, err := e.Store.Slot(ctx); err != nil || slot != "" || owner != "" {
+		t.Fatalf("closed attempt kept the authority slot: %q %q %v", slot, owner, err)
 	}
 }
 
@@ -1689,7 +1725,7 @@ func TestDriverWorkerHelper(t *testing.T) {
 	if json.Unmarshal(envelopeBytes, &envelope) != nil {
 		os.Exit(91)
 	}
-	withReport := slices.Contains([]string{"commit-pass", "commit-consumer", "bad-digest", "bad-json", "mixed-pass", "mixed-check-fail"}, mode)
+	withReport := slices.Contains([]string{"commit-pass", "commit-wait", "commit-consumer", "bad-digest", "bad-json", "mixed-pass", "mixed-check-fail"}, mode)
 	if mode == "crash-short" || withReport {
 		starts, err := os.OpenFile("worker-starts", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
@@ -1873,7 +1909,7 @@ func TestDriverWorkerHelper(t *testing.T) {
 			os.Exit(95)
 		}
 	}
-	if mode == "early" || mode == "wait" {
+	if mode == "early" || mode == "wait" || mode == "commit-wait" {
 		deadline := time.Now().Add(15 * time.Second)
 		for time.Now().Before(deadline) {
 			if _, err := os.Stat("finish"); err == nil {

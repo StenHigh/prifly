@@ -4004,9 +4004,6 @@
         "proof_ref": {
           "$ref": "#/$defs/EvidenceRef"
         },
-        "observed_at": {
-          "$ref": "#/$defs/Timestamp"
-        },
         "reason": {
           "type": "string",
           "minLength": 1,
@@ -4021,7 +4018,6 @@
         "actor_id",
         "decision",
         "proof_ref",
-        "observed_at",
         "reason"
       ],
       "additionalProperties": false
@@ -6061,17 +6057,13 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 4096
-            },
-            "expires_at": {
-              "$ref": "#/$defs/Timestamp"
             }
           },
           "required": [
             "step_instance_id",
             "check_ref",
             "subject_refs",
-            "reason",
-            "expires_at"
+            "reason"
           ],
           "additionalProperties": false
         }

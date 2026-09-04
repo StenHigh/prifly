@@ -344,6 +344,11 @@ func (e *Engine) executePendingCheck(ctx context.Context, loaded Run, _ local.Re
 		return recoveryError(r)
 	}
 	if check.Dispatch != nil {
+		// A journalled empty process group leaves nothing to wait on, so the
+		// check is closed as a lost settlement rather than held uncertain.
+		if check.ExecutorEnd != nil {
+			return e.settleCheckLost(ctx, r.ID, check.ID)
+		}
 		return e.recoverCheckUncertain(ctx, r, check.ID, "saved dispatch has no live foreground owner")
 	}
 	tokenHash := ""
@@ -505,7 +510,7 @@ func (e *Engine) executePendingCheck(ctx context.Context, loaded Run, _ local.Re
 			return nil
 		},
 	}, func(observation local.ProcessObservation) error {
-		observeCtx, observeCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		observeCtx, observeCancel := context.WithTimeout(context.Background(), observationDeadline)
 		defer observeCancel()
 		return e.observeCheck(observeCtx, r.ID, check.ID, tokenHash, observation)
 	})
@@ -538,6 +543,10 @@ func activeCheck(r *Run, checkID, tokenHash string) (*CheckExecution, error) {
 }
 
 func (e *Engine) observeCheck(ctx context.Context, runID, checkID, tokenHash string, observed local.ProcessObservation) error {
+	return retryOnBusy(ctx, func() error { return e.observeCheckOnce(ctx, runID, checkID, tokenHash, observed) })
+}
+
+func (e *Engine) observeCheckOnce(ctx context.Context, runID, checkID, tokenHash string, observed local.ProcessObservation) error {
 	if observed.Kind == "result_candidate" {
 		return local.Reject("check_protocol_violation", "check result must use stdout, not the StepResult channel")
 	}
@@ -672,6 +681,30 @@ func (e *Engine) settleCheck(ctx context.Context, runID, checkID, tokenHash stri
 		data, err := canonical(map[string]any{"check_execution_id": checkID, "status": check.Status, "failure": check.Failure, "report_bytes": reportBytes, "process_outcome": outcome, "observation": obs})
 		change.Events = []local.EventInput{{Type: event, Version: local.EventVersion, Data: data}}
 		return change, err
+	})
+	return err
+}
+
+// settleCheckLost closes a check whose process group was already observed empty
+// and journalled before this driver lost the run: its slot is released instead
+// of being held for a resolution. No report is read - the executor output that
+// carries it was never seen by this driver, so the check settles failed.
+func (e *Engine) settleCheckLost(ctx context.Context, runID, checkID string) error {
+	_, err := e.apply(ctx, e.owner, derivedID("command", checkID, "settlement-lost"), runID, "check.settled", map[string]any{"check_execution_id": checkID, "failure": "check_settlement_lost"}, nil, local.CommandGuarded, func(r *Run, _ local.Snapshot, obs Observation) (local.Change, error) {
+		check, err := activeCheck(r, checkID, "")
+		if err != nil {
+			return local.Change{}, err
+		}
+		if check.Dispatch == nil || check.ExecutorEnd == nil {
+			return local.Change{}, local.Reject("check_recovery_conflict", "no dispatched check with a saved executor end")
+		}
+		check.Status, check.Failure, check.Settled, check.Report = "failed", "check_settlement_lost", &obs, nil
+		if r.cancelRequestedFor(check.Request.InvocationID) {
+			check.Status, check.Failure = "cancelled", "cancelled"
+		}
+		r.ActiveCheckID = ""
+		data, err := canonical(map[string]any{"check_execution_id": checkID, "status": check.Status, "failure": check.Failure, "observation": obs})
+		return local.Change{ReleaseSlot: checkID, Events: []local.EventInput{{Type: "check.settled", Version: local.EventVersion, Data: data}}}, err
 	})
 	return err
 }

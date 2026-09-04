@@ -74,7 +74,6 @@ type approvalVote struct {
 	ActorID       string      `json:"actor_id"`
 	Decision      string      `json:"decision"`
 	ProofRef      EvidenceRef `json:"proof_ref"`
-	ObservedAt    string      `json:"observed_at"`
 	Reason        string      `json:"reason"`
 }
 
@@ -312,8 +311,13 @@ func (e *Engine) DecideControlApproval(ctx context.Context, c ApprovalDecision) 
 	vote := approvalVote{
 		SchemaVersion: "1", ID: voteID, ApprovalID: c.ApprovalID, IntentDigest: existing.IntentDigest,
 		ActorID: e.owner, Decision: c.Decision, ProofRef: EvidenceRef{ID: voteID, Digest: rawDigest([]byte(voteID))},
-		ObservedAt: e.clock.now().UTC, Reason: c.Reason,
+		Reason: c.Reason,
 	}
+	// The vote is sealed under an identity derived from the command, so its
+	// bytes must be derived from the command too. When the vote was stamped
+	// with the clock, retrying one command produced different bytes under the
+	// same artifact identity. The commit time is recorded by the control
+	// journal entry this vote is attached to.
 	encoded, err := canonical(vote)
 	if err != nil {
 		return local.AuthorityApplyResult{}, err

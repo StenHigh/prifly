@@ -944,6 +944,32 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			return err
 		}
 		return c.emit(commandResponse(result))
+	case "resolve":
+		attempt := f.String("attempt", "", "uncertain attempt to resolve")
+		check := f.String("check", "", "uncertain check to resolve")
+		outcome := f.String("outcome", "", "not_applied or applied")
+		version := f.Int64("expected-version", -1, "")
+		if err := parse(f, args[2:]); err != nil {
+			return err
+		}
+		if *reason == "" || *outcome == "" {
+			return usageError("run resolve requires (--attempt ID|--check ID) --outcome not_applied|applied --reason TEXT")
+		}
+		if *command == "" {
+			*command = commandID()
+		}
+		if *version < 0 {
+			view, err := e.View(ctx, id)
+			if err != nil {
+				return err
+			}
+			*version = view.RunVersion
+		}
+		result, err := e.ResolveObligation(ctx, id, *command, *attempt, *check, *outcome, *reason, *version)
+		if err != nil {
+			return err
+		}
+		return c.emit(commandResponse(result))
 	case "resume":
 		version := f.Int64("expected-version", -1, "")
 		if err := parse(f, args[2:]); err != nil {
@@ -1915,6 +1941,16 @@ func renderRun(w io.Writer, v prifly.RunView) error {
 	if _, err := fmt.Fprintf(w, "diagnostics=%d run_outputs=%d step_outputs=%d unresolved=%t\n", len(v.Run.Diagnostics), len(v.Run.Outputs), sealed, v.Run.HasUnresolvedEffects); err != nil {
 		return err
 	}
+	// A counter is not a cause. When a run carries recorded failures, the
+	// reader gets the code, the phase and the authority's own account of it.
+	for _, d := range v.Run.Diagnostics {
+		if d.Severity != "error" {
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "diagnostic %s phase=%s %s\n", strconv.Quote(d.Code), d.Phase, d.Message); err != nil {
+			return err
+		}
+	}
 	if v.Run.DecisionSheet != nil {
 		if _, err := fmt.Fprintf(w, "decisions=%d pending_decision=%t\n", len(v.Run.DecisionLedger), v.Run.PendingDecision != nil); err != nil {
 			return err
@@ -2061,6 +2097,8 @@ Global: --project DIR  --json  --format text|json|csv
   run pause|cancel RUN_ID --reason TEXT [--command-id ID]
   run release RUN_ID --expected-epoch N --stop ID:GENERATION --reason TEXT
   run resume RUN_ID --expected-version N --reason TEXT
+  run resolve RUN_ID (--attempt ID | --check ID) --outcome not_applied|applied --reason TEXT [--expected-version N]
+                                   Close one obligation whose outcome the authority never observed, by owner attestation; it frees the slot and never re-runs anything
   run waive RUN_ID --step STEP --check-id ID --check-version X.Y.Z --check-digest DIGEST --reason TEXT
   run waivers RUN_ID                A waiver is not a pass: the outcome stays completed_with_waivers
   control status                    Enrolled session principal, object access and control stops

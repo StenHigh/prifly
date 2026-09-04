@@ -1024,6 +1024,11 @@ ChoiceDecision не является предметным DecisionArtifact worke
 
 В `core-workflow/1` известный технический отказ может потребляться объявленным `on_error`. Событие `stage.error_handled` сохраняет activation, Attempt при её наличии, код отказа и выбранную следующую стадию. Неудачный StepInstance остаётся failed; preparation failure до допуска не создаёт фиктивную Attempt. Cancellation и uncertain не являются обычными ошибками обработчика. Принятый verdict без `on.<verdict>` остаётся принятым результатом, но завершает Run с ошибкой маршрутизации; `on_error` не подменяет отсутствующий verdict handler.
 
+<a id="resolution"></a>
+### Resolution — Разрешение неопределённого обязательства
+
+Явное решение владельца о судьбе обязательства, исход которого authority не смогла установить. Recovery сохраняет неопределённость и удерживает занятый slot; Resolution — единственный способ её снять, и снимает её не догадкой, а заявлением владельца о том, что внешний эффект был применён или не был. Она закрывает attempt или check как failed с записанным исходом и причиной, освобождает slot и пересчитывает признак незакрытых эффектов. Resolution не маршрутизируется объявленным `on_error`: обработчик описывает известный технический отказ, а не решение человека о неизвестном. Она отказывает, пока живой driver удерживает работу: пока владелец процесса на месте, судьба обязательства ещё может выясниться сама.
+
 <a id="run-version"></a>
 ### RunVersion — Версия управляющего состояния запуска
 
@@ -1182,6 +1187,8 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | Термин | Исходник от корня | Go | JSON |
 |---|---|---|---|
 | [WorkflowRevision](#workflow-revision) | `internal/flow/types.go` | `flow.WorkflowRevision` | — |
+| [Resolution](#resolution) | `internal/runtime/model.go` | `runtime.ObligationResolution` | — |
+| [Resolution](#resolution) | `internal/runtime/model.go` | `runtime.ObligationResolution.Outcome` | `outcome` |
 | [ReleaseManifest](#release-manifest) | `internal/release/release.go` | `release.Manifest` | — |
 | [ReleaseManifest](#release-manifest) | `internal/release/release.go` | `release.Manifest.SchemaVersion` | `schema_version` |
 | [Managed binary installation](#managed-binary-installation) | `internal/release/release.go` | `release.Receipt` | — |

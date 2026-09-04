@@ -87,15 +87,19 @@ change.
 
 `_busy_timeout` по умолчанию поднимается с 500 мс до 3 с (потолок `OpenStore`
 5 с сохраняется). `observe`/`observeCheck` при `SQLITE_BUSY` повторяют попытку
-внутри своего 2-секундного контекста. Если персистентность всё же не удалась,
+внутри своего контекста; окно наблюдения при этом поднимается с 2 с до 15 с,
+иначе повтор недостижим: контекст истекал бы раньше, чем SQLite сообщит busy. Если персистентность всё же не удалась,
 процесс останавливается (правило «нет ненаблюдаемых effects» сохраняется), но
 settlement получает код `authority_persistence_failed`, который
 `routeKnownError` не считает известным technical failure: workflow не идёт по
 `on_error`, а Run остаётся с видимым инцидентом authority. `settleWith`
 сохраняет исходную ошибку `resultOutputs`/`decode`/`ValidateJSON` в
-диагностике (bounded `Detail`) и отличает infrastructure-класс
+диагностике (bounded, 512 байт) и отличает infrastructure-класс
 (`local.ErrIntegrity`, `os.PathError`, `ErrBlobLimit`, storage budget) от
-worker-класса.
+worker-класса. Причина дописывается к message самой диагностики, а не в
+отдельное поле `Detail`: опубликованный контракт диагностики v1 закреплён
+digest'ом (`schemas/foundation/public.schema.json`), и новое поле сломало бы
+его для уже запечатанных пакетов.
 
 ### 4. Идемпотентность retry по `--command-id` без часов в payload
 

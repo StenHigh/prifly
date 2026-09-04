@@ -964,6 +964,22 @@ func (e *Engine) Resume(ctx context.Context, runID, commandID, reason string, ex
 }
 
 func diagnostic(r *Run, occurrence, attemptID, code, phase, message string, obs Observation) error {
+	return diagnosticDetail(r, occurrence, attemptID, code, phase, message, "", obs)
+}
+
+// maxDiagnosticDetailBytes bounds the recorded cause. A stored error text is
+// evidence, not a log: it must not grow the Run state without limit.
+const maxDiagnosticDetailBytes = 512
+
+func diagnosticDetail(r *Run, occurrence, attemptID, code, phase, message, detail string, obs Observation) error {
+	if len(detail) > maxDiagnosticDetailBytes {
+		detail = strings.ToValidUTF8(detail[:maxDiagnosticDetailBytes], "")
+	}
+	// The cause joins the engine-authored sentence instead of taking a field of
+	// its own: the published v1 diagnostic contract is pinned by digest.
+	if detail != "" {
+		message += ": " + detail
+	}
 	id := derivedID("diagnostic", r.ID, occurrence, phase, code)
 	return recordDiagnostic(r, Diagnostic{ID: id, RunID: r.ID, AttemptID: attemptID, Origin: "core", Severity: "error", Code: code, Category: "executor", Phase: phase, Message: message, Observed: obs, CauseRefs: []string{}})
 }

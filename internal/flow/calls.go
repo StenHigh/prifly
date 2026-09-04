@@ -117,13 +117,32 @@ func (p *Plan) StageOutputs(stageID string) map[string]OutputPort {
 // definitions. A build without it cannot describe what a parallel stage
 // produces, so the reference is looked up rather than assumed.
 func (p *Plan) aggregateSchemaRef() *Ref {
+	var found *Ref
 	for ref := range p.Registry {
-		if ref.ID == AggregateSchemaID {
-			found := ref
-			return &found
+		if ref.ID != AggregateSchemaID {
+			continue
+		}
+		candidate := ref
+		if found == nil || betterAggregateRef(candidate, *found) {
+			found = &candidate
 		}
 	}
-	return nil
+	return found
+}
+
+// betterAggregateRef orders two pinned summary forms. Map order is not an
+// order: with two versions in one registry, the same plan could describe its
+// parallel output with a different schema on every read. The version this build
+// actually produces wins; anything else is ordered by version and then digest,
+// so the answer stays fixed for a registry this build did not ship.
+func betterAggregateRef(candidate, current Ref) bool {
+	if (candidate.Version == AggregateSchemaVersion) != (current.Version == AggregateSchemaVersion) {
+		return candidate.Version == AggregateSchemaVersion
+	}
+	if candidate.Version != current.Version {
+		return candidate.Version > current.Version
+	}
+	return candidate.Digest > current.Digest
 }
 
 // BodyPlan returns the exact nested definition for a local control stage. A

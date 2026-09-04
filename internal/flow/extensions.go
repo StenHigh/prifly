@@ -18,6 +18,11 @@ type graphEdge struct{ target, verdict, repeatRoute, publicationStage string }
 // it into a project's own shape is the supported way to use a different form.
 const AggregateSchemaID = "core:schema/aggregate-manifest"
 
+// AggregateSchemaVersion is the version of that form this build produces. A
+// pinned registry may still carry another one, so the reference is selected
+// rather than assumed.
+const AggregateSchemaVersion = "1.0.0"
+
 // WorkspaceTreeManifestSchemaID names the standard, sealed index of native
 // workspace files. Its entries refer to ordinary raw ArtifactRevisions; it is
 // not a virtual filesystem and does not name a provider-specific layout.

@@ -393,6 +393,18 @@ type OutputSlot struct {
 	Revision   int64  `json:"revision"`
 	Path       string `json:"path"`
 }
+
+// ObligationResolution is the owner's statement about an obligation whose
+// outcome the authority could not establish. Recovery preserves that
+// uncertainty and keeps the slot it holds; nothing but this statement removes
+// it, and it removes it by being told what happened, never by guessing.
+type ObligationResolution struct {
+	Outcome  string      `json:"outcome"`
+	Reason   string      `json:"reason"`
+	Actor    string      `json:"actor"`
+	Observed Observation `json:"observed"`
+}
+
 type Attempt struct {
 	ID                string                 `json:"id"`
 	StepID            string                 `json:"step_instance_id"`

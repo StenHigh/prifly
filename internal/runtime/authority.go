@@ -21,6 +21,7 @@ const (
 	ControlOperationStop    = "control.stop"
 	ControlOperationRelease = "control.release"
 	ControlOperationAdmit   = "run.admit"
+	ControlOperationResolve = "run.resolve"
 	ControlOperationTrust   = "package.trust"
 	ControlOperationRead    = "object.read"
 
@@ -110,7 +111,7 @@ func (c AuthorityControl) blockingStop(installationID, projectID string) *Author
 // control plane enrolled by an older build is reconciled for the same
 // authenticated owner instead of leaving the installation unable to proceed.
 func ownerOperations() []string {
-	return []string{ControlOperationAdmit, ControlOperationApprove, ControlOperationGrant, ControlOperationPolicy, ControlOperationRead, ControlOperationRelease, ControlOperationStop, ControlOperationTrust}
+	return []string{ControlOperationAdmit, ControlOperationApprove, ControlOperationGrant, ControlOperationPolicy, ControlOperationRead, ControlOperationRelease, ControlOperationResolve, ControlOperationStop, ControlOperationTrust}
 }
 
 func (e *Engine) controlScope(scope string) (string, error) {

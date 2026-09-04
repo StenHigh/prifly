@@ -701,6 +701,19 @@ func (e *Engine) MarkSessionDisconnected(ctx context.Context, runID, attemptID s
 		// its claimed worktree before it went away.
 		r.HasUnresolvedEffects = true
 		r.Status = "uncertain"
+		// The obligation itself carries the uncertainty, not only the Run: the
+		// owner resolves an attempt, and a Run whose attempt still read as
+		// dispatched offered nothing to resolve.
+		current.Status = "uncertain"
+		if step := r.Steps[current.StepID]; step != nil {
+			step.Status = "uncertain"
+		}
+		if activation := r.Activations[current.ActivationID]; activation != nil {
+			activation.Status = "uncertain"
+			if err := r.setInvocationStatus(activation.InvocationID, "uncertain", nil); err != nil {
+				return local.Change{}, err
+			}
+		}
 		if err := diagnostic(r, attemptID, attemptID, "assisted_host_disconnected", "dispatch", "the assisted host did not report before its deadline", obs); err != nil {
 			return local.Change{}, err
 		}

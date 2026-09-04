@@ -170,3 +170,41 @@ func TestMapProducesOnlyItsSummary(t *testing.T) {
 		t.Fatalf("expected unknown_port, got %v", err)
 	}
 }
+
+// Two pinned versions of the shipped summary form must not make one plan
+// describe its parallel output differently from read to read.
+func TestAggregateSchemaSelectionIsDeterministic(t *testing.T) {
+	shipped := []byte(`true`)
+	other := []byte(`{"type":"object"}`)
+	shippedDigest, err := Digest(shipped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherDigest, err := Digest(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned := Ref{ID: AggregateSchemaID, Version: AggregateSchemaVersion, Digest: shippedDigest}
+	plan := &Plan{Registry: Registry{
+		pinned: shipped,
+		{ID: AggregateSchemaID, Version: "2.0.0", Digest: otherDigest}:  other,
+		{ID: "test:schema/item", Version: "1.0.0", Digest: otherDigest}: other,
+	}}
+	for range 100 {
+		selected := plan.aggregateSchemaRef()
+		if selected == nil || *selected != pinned {
+			t.Fatalf("the form this build produces was not selected: %+v", selected)
+		}
+	}
+	// With only a foreign version pinned, the answer is still one fixed ref.
+	foreign := &Plan{Registry: Registry{
+		{ID: AggregateSchemaID, Version: "2.0.0", Digest: otherDigest}:   other,
+		{ID: AggregateSchemaID, Version: "2.0.0", Digest: shippedDigest}: shipped,
+	}}
+	first := foreign.aggregateSchemaRef()
+	for range 100 {
+		if again := foreign.aggregateSchemaRef(); again == nil || *again != *first {
+			t.Fatalf("a foreign registry resolved differently: %+v %+v", first, again)
+		}
+	}
+}

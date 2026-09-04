@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
 )
@@ -111,6 +112,15 @@ func (e *Engine) Drive(ctx context.Context, runID string) (retErr error) {
 				return local.ErrIntegrity
 			}
 			if a.Dispatch != nil {
+				// The saved journal already proves the process group was empty,
+				// so nothing of this attempt can still be running: it is closed
+				// as a lost settlement instead of holding the slot uncertain.
+				if a.ExecutorEnd != nil {
+					if err := e.settleRecoveredExecutorEnd(ctx, runID, a.ID); err != nil {
+						return err
+					}
+					continue
+				}
 				return e.recoverUncertain(ctx, r, "dispatch boundary exists without this driver's live ownership")
 			}
 			if r.cancelRequestedFor(activation.InvocationID) {
@@ -966,7 +976,7 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 		_, err = remainingBudget(attempt.Admitted, attempt.Deadline, now)
 		return err
 	}}, func(observation local.ProcessObservation) error {
-		observeCtx, observeCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		observeCtx, observeCancel := context.WithTimeout(context.Background(), observationDeadline)
 		defer observeCancel()
 		return e.observe(observeCtx, r.ID, a.ID, observation)
 	})
@@ -990,7 +1000,36 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	return errors.Join(watchErr, e.settle(settleCtx, r.ID, a.ID, outcome, runErr))
 }
 
+// observationDeadline bounds recording one process observation. It is longer
+// than the store's busy timeout on purpose: a concurrent writer must be waited
+// out and retried, because a dropped observation costs the worker its evidence.
+const observationDeadline = 15 * time.Second
+
+// retryOnBusy repeats a write that SQLite refused because another writer held
+// the database. The observation it carries has nowhere else to go: dropping it
+// turns a live worker into an unexplained failure, so it is retried for as long
+// as the caller's own context allows.
+func retryOnBusy(ctx context.Context, write func() error) error {
+	const busyRetryInterval = 50 * time.Millisecond
+	for {
+		err := write()
+		var sqlite sqlite3.Error
+		if !errors.As(err, &sqlite) || sqlite.Code != sqlite3.ErrBusy && sqlite.Code != sqlite3.ErrLocked {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(busyRetryInterval):
+		}
+	}
+}
+
 func (e *Engine) observe(ctx context.Context, runID, attemptID string, o local.ProcessObservation) error {
+	return retryOnBusy(ctx, func() error { return e.observeOnce(ctx, runID, attemptID, o) })
+}
+
+func (e *Engine) observeOnce(ctx context.Context, runID, attemptID string, o local.ProcessObservation) error {
 	if o.Kind == "result_candidate" {
 		return e.observeResult(ctx, runID, attemptID, o)
 	}
@@ -1287,6 +1326,10 @@ type settlementEvidence struct {
 	Outcome   *local.ProcessOutcome
 	Actor     string
 	CommandID string
+	// Failure names a settlement whose verdict is already known without
+	// reading the attempt: recovery closes what it can prove, and does not
+	// judge a saved result candidate it never owned.
+	Failure string
 }
 
 func (e *Engine) settle(ctx context.Context, runID, attemptID string, outcome local.ProcessOutcome, runErr error) error {
@@ -1310,15 +1353,23 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 	p, planErr := r.planFor(activation.InvocationID)
 	var accepted *Result
 	var pending *PendingAcceptance
-	failure := ""
+	failure := evidence.Failure
+	detail := ""
 	outcome := evidence.Outcome
 	uncertain := outcome != nil && (outcome.Uncertain || (outcome.Started && (!outcome.WaitReturned || !outcome.GroupEmpty)))
-	if uncertain {
+	if failure != "" {
+		// The caller already read the evidence and named the failure.
+	} else if uncertain {
 		failure = "executor_settlement_unknown"
 	} else if r.cancelRequestedFor(activation.InvocationID) {
 		failure = "cancelled"
 	} else if outcome != nil && !outcome.Started {
 		failure = "executor_start_failed"
+	} else if persistenceFailure(runErr) {
+		// The authority could not record what it observed. That is this
+		// authority failing, not a verdict about the worker, so no declared
+		// error route answers it.
+		failure = "authority_persistence_failed"
 	} else if runErr != nil {
 		failure = "executor_observation_failed"
 	} else if outcome != nil && outcome.StopReason != "" {
@@ -1335,14 +1386,14 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 		step := p.Steps[activation.StageID]
 		var value Result
 		if err := decode(a.Candidate, &value); err != nil {
-			failure = "invalid_result"
+			failure, detail = "invalid_result", err.Error()
 		} else if err := p.ValidateJSON(step.ResultSchemaRef, a.Candidate); err != nil {
-			failure = "result_schema_invalid"
+			failure, detail = "result_schema_invalid", err.Error()
 		} else {
 			deferred := isContextState(r.SchemaVersion) && hasStepAcceptanceChecks(step)
 			outputs, err := e.resultOutputs(r, a, step, p, value, deferred)
 			if err != nil {
-				failure = "invalid_output"
+				failure, detail = sealingClass(err, "invalid_output"), err.Error()
 			} else if deferred {
 				digest := rawDigest(a.Candidate)
 				candidate := ArtifactRef{ArtifactID: derivedID("artifact", "result-intake", r.ID, a.ID, digest), Revision: 1, Digest: digest}
@@ -1350,13 +1401,13 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 					pending, err = newPendingAcceptance(r, p, "step_result", activation.InvocationID, activation.ID, a.ID, value.Outputs, outputs, &candidate, e.clock.now())
 				}
 				if err != nil {
-					failure = "result_evidence_invalid"
+					failure, detail = sealingClass(err, "result_evidence_invalid"), err.Error()
 				} else if pending == nil {
 					// All checked output ports were optional and absent. No check
 					// is invented, but any other prepared outputs still publish.
 					for _, output := range outputs {
 						if _, err = e.publishPreparedArtifact(output, r.registry()); err != nil {
-							failure = "invalid_output"
+							failure, detail = sealingClass(err, "invalid_output"), err.Error()
 							break
 						}
 					}
@@ -1461,7 +1512,7 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 			if err := r.failInvocation(activation.InvocationID, obs); err != nil {
 				return local.Change{}, err
 			}
-			if err := diagnostic(r, commandID, attemptID, failure, "settlement", "Executor or result validation failed; inspect recorded evidence", obs); err != nil {
+			if err := diagnosticDetail(r, commandID, attemptID, failure, "settlement", "Executor or result validation failed; inspect recorded evidence", detail, obs); err != nil {
 				return local.Change{}, err
 			}
 			if planErr == nil {
@@ -1478,6 +1529,21 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 		return change, nil
 	})
 	return err
+}
+
+// settleRecoveredExecutorEnd closes an attempt whose process group was already
+// observed empty and journalled before this driver lost the run. That end is
+// saved evidence, not a guess, so the attempt fails and its slot is released
+// instead of being held for an owner resolution. The saved result candidate is
+// not accepted here: judging it belongs to the driver that owned the dispatch.
+func (e *Engine) settleRecoveredExecutorEnd(ctx context.Context, runID, attemptID string) error {
+	evidence := settlementEvidence{
+		Kind:      "recovered_executor_end",
+		Actor:     e.owner,
+		CommandID: derivedID("command", attemptID, "settlement-lost"),
+		Failure:   "executor_settlement_lost",
+	}
+	return e.settleWith(ctx, runID, attemptID, evidence, nil)
 }
 
 // settleUnstarted is only for a launch this foreground owner knows never
@@ -1547,7 +1613,25 @@ func (e *Engine) settleUnstarted(ctx context.Context, runID, attemptID, tokenHas
 // Only a proven settled failure can consume on_error. The failed StepInstance
 // stays failed; the durable transition names its activation and next stage.
 // Unknown effects, cancellation and an invalid pinned plan never enter here.
+// authorityFailures are failures of this authority itself. A declared on_error
+// branch answers what the worker did; it must never be entered because the
+// engine could not persist or seal the evidence of what the worker did.
+var authorityFailures = map[string]bool{"authority_persistence_failed": true, "authority_output_sealing_failed": true}
+
+// sealingClass separates this authority's own storage failure from a worker's
+// invalid output. Only the second is a verdict about the work, and only the
+// second may be answered by a declared error route.
+func sealingClass(err error, workerCode string) string {
+	if persistenceFailure(err) || errors.Is(err, local.ErrBlobLimit) || errors.Is(err, local.ErrSampleLimit) || errors.Is(err, local.ErrReadOnly) {
+		return "authority_output_sealing_failed"
+	}
+	return workerCode
+}
+
 func routeKnownError(r *Run, p *flow.Plan, activationID, attemptID, code string, obs Observation) (local.EventInput, bool, error) {
+	if authorityFailures[code] {
+		return local.EventInput{}, false, nil
+	}
 	if r.Profile != flow.CoreProfile || p.Profile != r.Profile || r.HasUnresolvedEffects || len(r.Active) != 0 || r.ActiveCheckID != "" || r.PendingAcceptance != nil {
 		return local.EventInput{}, false, nil
 	}

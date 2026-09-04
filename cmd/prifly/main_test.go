@@ -2425,6 +2425,33 @@ func TestRunSummaryPrintsStepVerdicts(t *testing.T) {
 	}
 }
 
+// A run that failed printed only how many diagnostics it had. The reader had to
+// go to the JSON to learn what went wrong, so the summary now names the cause.
+func TestRunSummaryPrintsDiagnosticCauses(t *testing.T) {
+	var out bytes.Buffer
+	view := prifly.RunView{}
+	view.Run.ID = "run:example"
+	view.Run.Status = "failed"
+	view.Run.Outputs = map[string]prifly.ArtifactRef{}
+	view.Run.Diagnostics = []prifly.Diagnostic{
+		{Code: "authority_output_sealing_failed", Severity: "error", Phase: "settlement", Message: "Executor or result validation failed; inspect recorded evidence: mkdir artifacts/ab: permission denied"},
+		{Code: "context_pinned", Severity: "info", Phase: "admission", Message: "not an error"},
+	}
+	if err := renderRun(&out, view); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, `diagnostic "authority_output_sealing_failed" phase=settlement`) {
+		t.Fatalf("the summary hides the failure: %s", text)
+	}
+	if !strings.Contains(text, "mkdir artifacts/ab: permission denied") {
+		t.Fatalf("the summary hides the recorded cause: %s", text)
+	}
+	if strings.Contains(text, "not an error") {
+		t.Fatalf("the summary printed a non-error diagnostic: %s", text)
+	}
+}
+
 // Reading one form cost the whole bundle: for the assisted session contracts
 // that is hundreds of kilobytes of context spent on a single field.
 func TestSchemaSelectorReturnsOneDefinitionWithItsClosure(t *testing.T) {
