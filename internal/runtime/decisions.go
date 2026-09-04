@@ -118,6 +118,13 @@ func ValidateDecisionDefinition(definition DecisionDefinition) error {
 	if definition.Phase != "preflight" && definition.Phase != "runtime" {
 		return errors.New("decision definition phase must be preflight or runtime")
 	}
+	// A preflight answer is demanded before a Run starts. Nothing can demand a
+	// runtime answer: the authority cannot make an executor raise a request and
+	// accepts a report that never carried one, so the word would promise a gate
+	// that does not exist.
+	if definition.Phase == "runtime" && definition.Required {
+		return errors.New("decision_required_unenforceable: only a preflight decision can be required; a runtime decision is answered when its executor raises a request")
+	}
 	if definition.Sensitivity != "ordinary" && definition.Sensitivity != "scope-changing" && definition.Sensitivity != "approval-like" {
 		return errors.New("decision definition sensitivity is invalid")
 	}

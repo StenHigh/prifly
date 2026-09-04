@@ -2392,3 +2392,73 @@ func TestMissingPackageFolderIsNamed(t *testing.T) {
 		t.Fatalf("the refusal does not name the missing folder: %s", errout.String())
 	}
 }
+
+// The text summary is what a reader gets by default, and it withheld the one
+// fact a worker comes for: whether its result was accepted.
+func TestRunSummaryPrintsStepVerdicts(t *testing.T) {
+	var out bytes.Buffer
+	view := prifly.RunView{}
+	view.Run.ID = "run:example"
+	view.Run.Status = "running"
+	view.Run.Diagnostics = []prifly.Diagnostic{}
+	view.Run.Outputs = map[string]prifly.ArtifactRef{}
+	view.Run.Steps = map[string]*prifly.Step{
+		"step:two":   {ID: "step:two", Status: "completed", Verdict: "needs_revision", Outputs: map[string]prifly.ArtifactRef{}},
+		"step:one":   {ID: "step:one", Status: "completed", Verdict: "pass", Outputs: map[string]prifly.ArtifactRef{"plan": {}}},
+		"step:three": {ID: "step:three", Status: "running"},
+	}
+	if err := renderRun(&out, view); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, `step "step:one" status=completed verdict=pass outputs=1`) {
+		t.Fatalf("the summary hides an accepted verdict: %s", text)
+	}
+	if !strings.Contains(text, `verdict=needs_revision`) {
+		t.Fatalf("the summary hides a non-passing verdict: %s", text)
+	}
+	if strings.Contains(text, "step:three") {
+		t.Fatalf("the summary invented a verdict for a running step: %s", text)
+	}
+	if strings.Index(text, "step:one") > strings.Index(text, "step:two") {
+		t.Fatalf("the summary printed steps in map order: %s", text)
+	}
+}
+
+// Reading one form cost the whole bundle: for the assisted session contracts
+// that is hundreds of kilobytes of context spent on a single field.
+func TestSchemaSelectorReturnsOneDefinitionWithItsClosure(t *testing.T) {
+	var full, selected, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"--json", "schema", "SessionSubmissionV5"}, &full, &errout); code != 0 {
+		t.Fatal(errout.String())
+	}
+	if code := execute(context.Background(), []string{"--json", "schema", "SessionSubmissionV5", "--def", "runtime_SessionSubmission"}, &selected, &errout); code != 0 {
+		t.Fatalf("the selector was refused: %s", errout.String())
+	}
+	if selected.Len() >= full.Len()/4 {
+		t.Fatalf("the selector saved nothing: %d of %d bytes", selected.Len(), full.Len())
+	}
+	var answer struct {
+		Ref  string                     `json:"$ref"`
+		Defs map[string]json.RawMessage `json:"$defs"`
+	}
+	if err := json.Unmarshal(selected.Bytes(), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if answer.Ref != "#/$defs/runtime_SessionSubmission" {
+		t.Fatalf("the selector answered for %s", answer.Ref)
+	}
+	// Every reference the answer makes must resolve inside the answer.
+	for name, raw := range answer.Defs {
+		for _, match := range contractReference.FindAllStringSubmatch(string(raw), -1) {
+			if _, ok := answer.Defs[match[1]]; !ok {
+				t.Fatalf("%s references %s, which the answer does not carry", name, match[1])
+			}
+		}
+	}
+	errout.Reset()
+	selected.Reset()
+	if code := execute(context.Background(), []string{"--json", "schema", "SessionSubmissionV5", "--def", "Absent"}, &selected, &errout); code == 0 || !strings.Contains(errout.String(), "declares no definition named Absent") {
+		t.Fatalf("an unknown definition was accepted: %d %s", code, errout.String())
+	}
+}

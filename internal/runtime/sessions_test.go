@@ -712,3 +712,34 @@ func TestAcceptedSummaryReachesTheView(t *testing.T) {
 		t.Fatal("the view exposed raw definitions or executors")
 	}
 }
+
+// A worker asking whether its own result was accepted reads the ordinary
+// summary. Leaving the verdict out of it sent one to the authority storage.
+func TestAcceptedVerdictIsVisibleInTheRunState(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	ctx := context.Background()
+	task := handOver(t, e, runID)
+	if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "planned")); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	view, err := e.View(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, step := range view.Run.Steps {
+		if step == nil || step.Verdict == "" {
+			continue
+		}
+		found = true
+		if step.Verdict != "pass" || len(step.Outputs) == 0 {
+			t.Fatalf("the accepted step reports %+v", step)
+		}
+	}
+	if !found {
+		t.Fatal("no step carries the verdict its result was accepted with")
+	}
+}

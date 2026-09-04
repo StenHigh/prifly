@@ -35,6 +35,12 @@ inputs: # Optional: defaults to {}.
   plan_manifest:
     schema_ref: plan_manifest # Required compatible JSON input for workspace_trees.
     required: true
+# A declared port is filled by whoever is named here. The worker writes the
+# bytes to the slot path its context manifest gives that port, then reports the
+# port under `outputs` with the artifact_id and revision from that same manifest
+# and a digest of the bytes it wrote; the runtime seals them. A port bound below
+# under `workspace_trees` is the exception: the runtime captures and seals it,
+# and a worker that reports such a port is refused.
 outputs: # Optional: defaults to {}.
   report:
     schema_ref: output_schema # JSON also defaults format=json.

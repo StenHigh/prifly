@@ -78,6 +78,12 @@ developer only at the workflow's declared decision points.
    declared question again. A package profile is part of the sheet; follow the
    pinned package instructions for its argument form. For a workspace-write task, make repository
    changes only in ` + "`repository_workspace`" + `; never put context or outputs there.
+   Fill every output slot the task does not close itself: write the bytes to
+   the path ` + "`context.json`" + ` gives that port, then report it under
+   ` + "`outputs`" + ` with the ` + "`artifact_id`" + ` and ` + "`revision`" + ` that same file gives
+   and a ` + "`digest`" + ` of the bytes you wrote. Pri-Fly seals those bytes itself;
+   never invent an artifact identity and never report a port you did not fill.
+   A port bound to a workspace tree is filled by Pri-Fly, not by you.
    Submit the typed result, then drive the Run. When two reviewer tasks
    are present, handle both; use separate agent sessions only when the host
    platform actually provides them.
@@ -128,6 +134,12 @@ developer only at the workflow's declared decision points.
 4. For every outstanding session task, read its pinned skill and sealed
    context from ` + "`workspace`" + `. For a workspace-write task, make repository
    changes only in ` + "`repository_workspace`" + `; never put context or outputs there.
+   Fill every output slot the task does not close itself: write the bytes to
+   the path ` + "`context.json`" + ` gives that port, then report it under
+   ` + "`outputs`" + ` with the ` + "`artifact_id`" + ` and ` + "`revision`" + ` that same file gives
+   and a ` + "`digest`" + ` of the bytes you wrote. Pri-Fly seals those bytes itself;
+   never invent an artifact identity and never report a port you did not fill.
+   A port bound to a workspace tree is filled by Pri-Fly, not by you.
    Submit the typed result, then drive the Run. When two reviewer tasks
    are present, handle both; use separate agent sessions only when the host
    platform actually provides them.

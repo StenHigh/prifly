@@ -11,7 +11,7 @@
     "title": {"type": "string", "minLength": 1},
     "description": {"type": "string"},
     "phase": {"enum": ["preflight", "runtime"]},
-    "required": {"type": "boolean", "default": true},
+    "required": {"type": "boolean", "default": true, "description": "Whether an answer is demanded before the Run starts. Only a preflight decision can be required: a runtime decision is answered when its executor raises a request, and the authority cannot demand that. Defaults to true for preflight and false for runtime."},
     "choices": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/choice"}},
     "value_schema": {"type": "object"},
     "recommendation": {},

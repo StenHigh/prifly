@@ -66,6 +66,48 @@ type PackageManifestMetadata struct {
 // InspectPackage returns the recorded trust/lifecycle record and the metadata
 // from exactly the sealed manifest named by ref. It does not resolve, execute
 // or repair any package bytes.
+// PackageComponent returns the exact bytes of one component an installed
+// trusted package declares, found by the ID the package gave it. An operator
+// filling a declared output slot by hand needs the shape of that slot, and the
+// component that carries it is otherwise reachable only as a file inside the
+// authority.
+func (e *Engine) PackageComponent(ctx context.Context, id string) (Definition, []byte, error) {
+	record, _, err := e.readPackages(ctx)
+	if err != nil {
+		return Definition{}, nil, err
+	}
+	for _, pkg := range record.Packages {
+		if pkg.Status != "" && pkg.Status != PackageTrusted {
+			continue
+		}
+		manifestBytes, err := readLocal(e.Root, pkg.Root+"/"+PackageManifestFile, MaxDefinitionBytes)
+		if err != nil {
+			return Definition{}, nil, err
+		}
+		if rawDigest(manifestBytes) != pkg.ManifestDigest {
+			return Definition{}, nil, local.ErrIntegrity
+		}
+		var manifest packageManifest
+		if err := decode(manifestBytes, &manifest); err != nil {
+			return Definition{}, nil, local.ErrIntegrity
+		}
+		for _, component := range manifest.Components {
+			if component.Ref.ID != id {
+				continue
+			}
+			data, err := readLocal(e.Root, pkg.Root+"/"+component.Path, MaxDefinitionBytes)
+			if err != nil {
+				return Definition{}, nil, err
+			}
+			if rawDigest(data) != component.Ref.Digest {
+				return Definition{}, nil, local.ErrIntegrity
+			}
+			return Definition{Ref: component.Ref, Kind: component.Kind, Path: component.Path}, data, nil
+		}
+	}
+	return Definition{}, nil, &flow.Problem{Code: "package_component_not_found", Message: "no installed trusted package declares " + id + "; read package list for what is installed"}
+}
+
 func (e *Engine) InspectPackage(ctx context.Context, ref flow.Ref) (PackageInspection, error) {
 	record, _, err := e.readPackages(ctx)
 	if err != nil {

@@ -93,7 +93,7 @@ func TestDecisionConditionRequiresSealedPredecessorAnswer(t *testing.T) {
 
 func TestDecisionBridgeResumesSameAssistedAttempt(t *testing.T) {
 	preflight := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "logging", Title: "Logging", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "concise", Title: "Concise", Value: json.RawMessage(`"concise"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "logging"}}
-	runtime := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Required: true, Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}, {ID: "no", Title: "No", Value: json.RawMessage(`false`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}
+	runtime := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}, {ID: "no", Title: "No", Value: json.RawMessage(`false`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{preflight, runtime}}
 	catalogDigest, err := DecisionCatalogDigest(catalog)
 	if err != nil {
@@ -168,7 +168,7 @@ func TestDecisionBridgeResumesSameAssistedAttempt(t *testing.T) {
 }
 
 func TestDecisionBridgeAutonomousPolicyUsesDeclaredRecommendation(t *testing.T) {
-	runtime := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Required: true, Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}}, Recommendation: json.RawMessage(`true`), Automatic: true, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}
+	runtime := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}}, Recommendation: json.RawMessage(`true`), Automatic: true, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{runtime}}
 	digest, err := DecisionCatalogDigest(catalog)
 	if err != nil {
@@ -196,7 +196,7 @@ func TestDecisionBridgeAutonomousPolicyUsesDeclaredRecommendation(t *testing.T) 
 }
 
 func TestDecisionBridgeKeepsRestrictedChoiceForHumanAndRefusesUnknown(t *testing.T) {
-	restricted := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "publish_scope", Title: "Publish scope", Phase: "runtime", Required: true, Choices: []DecisionChoice{{ID: "none", Title: "No publication", Value: json.RawMessage(`false`)}}, Recommendation: json.RawMessage(`false`), Sensitivity: "scope-changing", Destination: DecisionDestination{Kind: "session_context", Name: "publish_scope"}}
+	restricted := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "publish_scope", Title: "Publish scope", Phase: "runtime", Choices: []DecisionChoice{{ID: "none", Title: "No publication", Value: json.RawMessage(`false`)}}, Recommendation: json.RawMessage(`false`), Sensitivity: "scope-changing", Destination: DecisionDestination{Kind: "session_context", Name: "publish_scope"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{restricted}}
 	digest, err := DecisionCatalogDigest(catalog)
 	if err != nil {
@@ -252,8 +252,8 @@ func TestDecisionBridgeServesTwoPackagesWithOneProtocol(t *testing.T) {
 		answer     string
 		invalid    string
 	}{
-		{"continue", DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Required: true, Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}, {ID: "no", Title: "No", Value: json.RawMessage(`false`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}, `true`, `"maybe"`},
-		{"reviewers", DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "reviewers", Title: "Reviewer count", Phase: "runtime", Required: true, Choices: []DecisionChoice{{ID: "one", Title: "One", Value: json.RawMessage(`1`)}, {ID: "two", Title: "Two", Value: json.RawMessage(`2`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "reviewers"}}, `2`, `3`},
+		{"continue", DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}, {ID: "no", Title: "No", Value: json.RawMessage(`false`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}, `true`, `"maybe"`},
+		{"reviewers", DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "reviewers", Title: "Reviewer count", Phase: "runtime", Choices: []DecisionChoice{{ID: "one", Title: "One", Value: json.RawMessage(`1`)}, {ID: "two", Title: "Two", Value: json.RawMessage(`2`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "reviewers"}}, `2`, `3`},
 	}
 	for _, pkg := range packages {
 		t.Run(pkg.name, func(t *testing.T) {
@@ -349,5 +349,29 @@ func TestDecisionBridgeServesTwoPackagesWithOneProtocol(t *testing.T) {
 				t.Fatalf("late answer changed the Run: %+v %v", after.Run.DecisionLedger, err)
 			}
 		})
+	}
+}
+
+// The catalog declares obligation only where it is enforced. A runtime decision
+// marked required reads as a gate in the questionnaire, while the authority
+// accepts a report whose executor never raised the request.
+func TestRuntimeDecisionCannotBeRequired(t *testing.T) {
+	definition := DecisionDefinition{
+		SchemaVersion: DecisionDefinitionVersion, ID: "commit_grouping", Title: "Commit grouping",
+		Phase: "runtime", Choices: []DecisionChoice{{ID: "follow", Title: "Follow", Value: json.RawMessage(`"follow"`)}},
+		Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "commit_grouping"},
+	}
+	if err := ValidateDecisionDefinition(definition); err != nil {
+		t.Fatalf("an ordinary runtime decision was refused: %v", err)
+	}
+	definition.Required = true
+	if err := ValidateDecisionDefinition(definition); refusalCode(err) != "decision_required_unenforceable" {
+		t.Fatalf("a runtime decision was allowed to promise a gate: %v", err)
+	}
+	preflight := definition
+	preflight.Phase, preflight.Required = "preflight", true
+	preflight.Recommendation = json.RawMessage(`"follow"`)
+	if err := ValidateDecisionDefinition(preflight); err != nil {
+		t.Fatalf("a required preflight decision was refused: %v", err)
 	}
 }

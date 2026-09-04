@@ -360,3 +360,28 @@ func TestFailedInstallationLeavesTheWorkingDirectoryIntact(t *testing.T) {
 		t.Fatalf("a failed installation disturbed sealed bytes: %v %+v", err, report)
 	}
 }
+
+// The shape of a declared output slot lives in the package that declared it.
+// Reachable only as a file inside the authority, it is storage, not a contract.
+func TestPackageComponentIsReadableByItsDeclaredID(t *testing.T) {
+	e, ctx, entry, _ := importedPilotPackage(t)
+	manifest, err := os.ReadFile(filepath.Join(e.Root, filepath.FromSlash(entry.Root), PackageManifestFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared packageManifest
+	if err := decode(manifest, &declared); err != nil || len(declared.Components) == 0 {
+		t.Fatalf("the installed package declares no component: %v", err)
+	}
+	component := declared.Components[0]
+	definition, body, err := e.PackageComponent(ctx, component.Ref.ID)
+	if err != nil {
+		t.Fatalf("a declared component was not readable by its ID: %v", err)
+	}
+	if definition.Ref != component.Ref || rawDigest(body) != component.Ref.Digest {
+		t.Fatalf("the component read back differs: %+v", definition)
+	}
+	if _, _, err := e.PackageComponent(ctx, "test:schema/absent"); refusalCode(err) != "package_component_not_found" {
+		t.Fatalf("an unknown component was not refused by name: %v", err)
+	}
+}

@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"sort"
@@ -255,6 +256,59 @@ func contractNames() ([]string, error) {
 	return slices.Compact(names), nil
 }
 
+// emitContractDefinition answers for one definition inside a bundle. Reading a
+// single form otherwise costs the whole bundle, which for the assisted session
+// contracts is hundreds of kilobytes of context spent on one field.
+func (c *cli) emitContractDefinition(name, definition string) error {
+	body, err := contractSchema(name)
+	if err != nil {
+		return err
+	}
+	var bundle map[string]json.RawMessage
+	if err := json.Unmarshal(body, &bundle); err != nil {
+		return err
+	}
+	var defs map[string]json.RawMessage
+	if raw, ok := bundle["$defs"]; ok {
+		if err := json.Unmarshal(raw, &defs); err != nil {
+			return err
+		}
+	}
+	if _, exists := defs[definition]; !exists {
+		return &flow.Problem{Code: "unsupported_contract", Path: "/$defs/" + definition, Message: name + " declares no definition named " + definition}
+	}
+	// A definition without the definitions it references is unreadable, so the
+	// answer carries its closure and nothing else.
+	selected := map[string]json.RawMessage{}
+	var visit func(string) error
+	visit = func(current string) error {
+		if _, seen := selected[current]; seen {
+			return nil
+		}
+		raw, exists := defs[current]
+		if !exists {
+			return &flow.Problem{Code: "unsupported_contract", Path: "/$defs/" + current, Message: name + " references a definition it does not declare: " + current}
+		}
+		selected[current] = raw
+		for _, match := range contractReference.FindAllStringSubmatch(string(raw), -1) {
+			if err := visit(match[1]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := visit(definition); err != nil {
+		return err
+	}
+	answer := map[string]any{"$schema": "https://json-schema.org/draft/2020-12/schema", "$ref": "#/$defs/" + definition, "$defs": selected}
+	if title, ok := bundle["title"]; ok {
+		answer["title"] = title
+	}
+	return c.emit(answer)
+}
+
+var contractReference = regexp.MustCompile(`"\$ref"\s*:\s*"#/\$defs/([^"]+)"`)
+
 // contractNameForReference converts the declared reference form a handed task
 // uses (`core:schema/step-result`) into the contract name (`StepResult`). A
 // caller reading its own task should not have to know the two differ.
@@ -291,6 +345,11 @@ func contractSchema(name string) ([]byte, error) {
 		if b, aliasErr := flow.ProtocolSchema(alias); aliasErr == nil {
 			return b, nil
 		}
+	}
+	// A name this binary does not carry may still be declared by a package the
+	// authority installed, and that is a different command.
+	if strings.Contains(name, ":") {
+		return nil, &flow.Problem{Code: "unsupported_contract", Message: "no built-in contract is named " + name + "; a schema declared by an installed package is read with package inspect --component " + name}
 	}
 	return nil, err
 }
@@ -362,6 +421,12 @@ func (c *cli) run(ctx context.Context, args []string) error {
 	case "ref":
 		return c.ref(args[1:])
 	case "schema":
+		if len(args) == 3 && args[1] != "" && strings.HasPrefix(args[2], "--def=") {
+			return c.emitContractDefinition(args[1], strings.TrimPrefix(args[2], "--def="))
+		}
+		if len(args) == 4 && args[2] == "--def" {
+			return c.emitContractDefinition(args[1], args[3])
+		}
 		if len(args) == 1 {
 			names, err := contractNames()
 			if err != nil {
@@ -1329,11 +1394,25 @@ func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) err
 		return c.emit(prifly.PackageView(record))
 	case "inspect":
 		refFile := f.String("ref", "", "exact package ImmutableRef JSON file")
+		component := f.String("component", "", "declared ID of one component an installed package carries")
 		if err := parse(f, args[1:]); err != nil {
 			return err
 		}
+		if *component != "" {
+			if *refFile != "" {
+				return usageError("package inspect reads either --ref FILE or --component ID, not both")
+			}
+			// The shape of a declared output slot lives in the package that
+			// declared it. Without this the operator reads it as a file inside
+			// the authority, which is storage, not a contract.
+			definition, body, err := e.PackageComponent(ctx, *component)
+			if err != nil {
+				return err
+			}
+			return c.emit(map[string]any{"schema_version": "foundation-package-component/1", "ref": definition.Ref, "kind": definition.Kind, "component": json.RawMessage(body)})
+		}
 		if *refFile == "" {
-			return usageError("package inspect requires --ref FILE with an ImmutableRef")
+			return usageError("package inspect requires --ref FILE with an ImmutableRef, or --component ID")
 		}
 		var ref flow.Ref
 		if err := readJSON(c.requestFile(*refFile), &ref); err != nil {
@@ -1841,6 +1920,22 @@ func renderRun(w io.Writer, v prifly.RunView) error {
 			return err
 		}
 	}
+	// A worker reading this summary is usually asking one question: was my own
+	// result accepted. Printing only counters sent it to the authority storage
+	// for a verdict the view already holds.
+	steps := make([]string, 0, len(v.Run.Steps))
+	for id, step := range v.Run.Steps {
+		if step != nil && step.Verdict != "" {
+			steps = append(steps, id)
+		}
+	}
+	slices.Sort(steps)
+	for _, id := range steps {
+		step := v.Run.Steps[id]
+		if _, err := fmt.Fprintf(w, "step %s status=%s verdict=%s outputs=%d\n", strconv.Quote(id), step.Status, step.Verdict, len(step.Outputs)); err != nil {
+			return err
+		}
+	}
 	return renderTiming(w, v.Timing, v.Cut)
 }
 
@@ -1946,7 +2041,9 @@ Global: --project DIR  --json  --format text|json|csv
   version | doctor | inventory     Versions, integrity, exact local definitions
   ref FILE --id ID --version X.Y.Z [--raw-text]
                                    Canonical JSON/YAML; --raw-text hashes exact UTF-8 resource bytes
-  schema [NAME]                    One exact wire contract or authoring document, or the list of names when NAME is omitted
+  schema [NAME] [--def DEFINITION]
+                                   One exact wire contract or authoring document, or the list of names when NAME is omitted
+                                   --def returns one definition with the closure it references, instead of the whole bundle
                                    Authoring YAML has worked references in examples/authoring/ of the Pri-Fly repository;
                                    extension-authoring-reference.yaml shows a complete extend.yaml, extensions included
   validate --workflow FILE          Shape, refs, graph and profile validation
@@ -1973,7 +2070,8 @@ Global: --project DIR  --json  --format text|json|csv
   package import --dir DIR --reason TEXT [--command-id ID]
                                    Seal, verify and trust a local package; nothing in it is executed
   package list                      Trusted packages, their origin and recorded trust decision
-  package inspect --ref REF.json    Read one exact sealed package; never executes or repairs it
+  package inspect --ref REF.json | --component ID
+                                   Read one exact sealed package, or the bytes of one component it declares, by the ID the package gave it
   package import --archive FILE.tar [--signature FILE.sig] --reason TEXT
   package trust-root --id ID --public-key HEX --reason TEXT | --id ID --remove --reason TEXT
                                    A key inside a package never appoints itself trusted

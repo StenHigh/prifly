@@ -642,7 +642,11 @@ func projectDecisionDefinition(value any) (prifly.DecisionDefinition, error) {
 		}
 	}
 	if _, exists := copy["required"]; !exists {
-		copy["required"] = true
+		// The default exists so a declared preflight question is answered
+		// before a Run starts. A runtime question is answered when its executor
+		// raises a request, and nothing can demand that, so defaulting it to
+		// true would mark every such decision with a promise it cannot keep.
+		copy["required"] = copy["phase"] == "preflight"
 	}
 	if _, exists := copy["automatic"]; !exists {
 		copy["automatic"] = false
