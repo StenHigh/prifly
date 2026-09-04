@@ -12,7 +12,10 @@
 семантически versioned, tagged GitHub Release репозитория `StenHigh/prifly`.
 Release MUST содержать отдельный manifest с version, platform, archive
 identity и digest, а также signature, проверяемую встроенным public key.
-`latest` разрешён только для обнаружения новейшего stable tagged Release
+Подпись MUST вычисляться по RFC 8785 canonical bytes manifest, чтобы её мог
+проверить внешний инструмент без воспроизведения сериализации Pri-Fly; на
+переходный период Release MAY дополнительно публиковать прежнюю signature
+form. `latest` разрешён только для обнаружения новейшего stable tagged Release
 через постоянную ссылку `releases/latest/download`; branch, commit, workflow
 artifact и произвольный URL MUST NOT быть источником bytes для updater.
 
@@ -25,6 +28,11 @@ artifact и произвольный URL MUST NOT быть источником 
 - **WHEN** signature manifest не проходит или digest downloaded archive не
   совпадает с подписанным значением
 - **THEN** installation отказывает без замены действующего binary
+
+#### Scenario: Внешняя проверка подписи
+- **WHEN** аудитор проверяет `release-manifest.json` и его canonical signature
+  стандартным ed25519 инструментом
+- **THEN** проверка проходит без исходного кода Pri-Fly
 
 ### Requirement: Release tag использует уже qualified source tree
 Перед созданием protected release tag тот же source tree MUST пройти required
@@ -68,11 +76,13 @@ credential MUST быть job-scoped `GITHUB_TOKEN` с permission `contents: writ
 Repository MUST публиковать одну copyable `curl` command для first install.
 Она MUST скачивать bootstrap в локальный temporary file перед исполнением,
 ставить Pri-Fly только в user-writable каталог и не требовать `sudo`. Bootstrap
-MUST не запускать project workflow, не менять project authority и не менять
-shell profile без явного отдельного выбора. Документация MUST явно назвать
-GitHub HTTPS Release asset trust boundary первой установки; до работающего
-binary она MUST NOT обещать cryptographic verification сильнее этого trust
-boundary.
+MUST скачивать release manifest того же Release и сверять SHA-256 archive с
+записанным в нём до установки; несовпадение MUST завершаться отказом без
+частичной установки. Bootstrap MUST не запускать project workflow, не менять
+project authority и не менять shell profile без явного отдельного выбора.
+Документация MUST явно назвать GitHub HTTPS Release asset trust boundary первой
+установки; до работающего binary она MUST NOT обещать cryptographic
+verification сильнее этого trust boundary.
 
 #### Scenario: Пользователь запускает documented install command
 - **WHEN** supported platform получает bootstrap из official GitHub Release
@@ -83,6 +93,10 @@ boundary.
 - **WHEN** bootstrap не может записать в выбранный user directory
 - **THEN** он сообщает точную причину и не оставляет частично установленный
   executable
+
+#### Scenario: Digest archive не совпадает с manifest
+- **WHEN** скачанный archive имеет другой SHA-256, чем manifest того же Release
+- **THEN** bootstrap отказывает и не создаёт executable
 
 ### Requirement: Обновление выполняется только по явной команде
 `prifly update` MUST быть явной user command и MAY выполнять сеть только во

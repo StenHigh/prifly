@@ -36,29 +36,34 @@
 - Полный `make race` на этой машине под нагрузкой (load ≈ 8) даёт
   `schema_timeout`/`database is locked`; доверять GitHub `race.yml`.
 
+## Надёжность и производительность authority (change `harden-authority-reliability-and-performance`, заархивирован)
+
+51/51, все ворота зелёные (`make check` с race, `make e2e`, `--strict`,
+`git diff --check`). Delta синхронизирована в `runtime-resources`,
+`architecture-decisions`, `cli-protocol`, `control-security-ux`,
+`delivery-roadmap`, `quality-and-acceptance`, `release-distribution`;
+измерения и не достигнутые цели — в `evidence.md` архива
+`openspec/changes/archive/2026-09-04-harden-authority-reliability-and-performance/`.
+Roadmap milestone и product gate этим не закрыты.
+
+- Хранилище перешло на версии 5 и 6: `authority.verified_cut`
+  (инкрементальная проверка при открытии) и таблица `pinned_bytes`
+  (закреплённые байты хранятся один раз по digest). Миграции применяются
+  по одной, `open` больше не объявляет базу текущей после первой из них.
+- Переходы состояний пишутся событием `state.changed` и восстанавливаются
+  из журнала при чтении; форма Run и его digest не изменились.
+- Схемы валидируются in-process, если оценка обхода схемы ниже бюджета;
+  подпроцесс остался для экспоненциальных схем и за
+  `PRIFLY_SCHEMA_WORKER=1`. Это уточнение дизайна: подпроцесс существовал
+  не только из-за ReDoS.
+- `synchronous=NORMAL` намеренно НЕ включён (4.4): выигрыш 15.6 → 13.7 с
+  не оправдывает потерю последних коммитов при потере питания, и
+  `runtime-resources` требует FULL.
+- Отказы теперь типизированы (`runtime.Fault`), ворота `make refusal-check`
+  и `CGO_ENABLED=0 go vet ./...` добавлены в `ci-check`.
+
 ## Открытые changes (`openspec list`)
 
-- `harden-authority-reliability-and-performance` — 51/51, все ворота зелёные
-  (`make check` с race, `make e2e`, `--strict`, `git diff --check`); готов к
-  архивации с sync. Все восемь блоков выполнены,
-  результаты и отклонения записаны в самих задачах, измерения — в
-  `openspec/changes/harden-authority-reliability-and-performance/evidence.md`.
-  Что стоит знать до архивации:
-  - Хранилище перешло на версии 5 и 6: `authority.verified_cut`
-    (инкрементальная проверка при открытии) и таблица `pinned_bytes`
-    (закреплённые байты хранятся один раз по digest). Миграции применяются
-    по одной, `open` больше не объявляет базу текущей после первой из них.
-  - Переходы состояний пишутся событием `state.changed` и восстанавливаются
-    из журнала при чтении; форма Run и его digest не изменились.
-  - Схемы валидируются in-process, если оценка обхода схемы ниже бюджета;
-    подпроцесс остался для экспоненциальных схем и за
-    `PRIFLY_SCHEMA_WORKER=1`. Это уточнение дизайна: подпроцесс существовал
-    не только из-за ReDoS.
-  - `synchronous=NORMAL` намеренно НЕ включён (4.4): выигрыш 15.6 → 13.7 с
-    не оправдывает потерю последних коммитов при потере питания, и
-    `runtime-resources` требует FULL.
-  - Отказы теперь типизированы (`runtime.Fault`), ворота `make refusal-check`
-    и `CGO_ENABLED=0 go vet ./...` добавлены в `ci-check`.
 - `add-run-decision-catalog` — 18/20; открыты 4.2 (ручное наблюдение в
   Codex и Claude Code) и 6.3 (bounded live pilot).
 - `add-native-host-question-ux` — 6/7 (task 2.3 — ручное наблюдение UI).
@@ -70,12 +75,7 @@
 
 ## Следующие шаги
 
-- Закрыть 8.5 этого change (ворота `make check`, `make e2e`, `openspec
-  validate --strict`, `git diff --check`) и заархивировать его с sync — delta
-  затрагивает `runtime-resources`, `architecture-decisions`, `cli-protocol`,
-  `control-security-ux`, `delivery-roadmap`, `quality-and-acceptance`,
-  `release-distribution`.
-- Релиз после архивации: изменения включают новую версию хранилища (миграция
+- Следующий релиз включает новую версию хранилища (миграция
   v4→v5→v6 при первом открытии) и новый asset релиза
   `release-manifest.jcs.sig`; обновление старым `prifly update` продолжает
   работать по прежней подписи.
@@ -125,9 +125,6 @@
   заархивирован, spec `cli-protocol` синхронизирована. Обе pilot-сессии
   оповещены.
 - Следующий change — `improve-cli-discoverability` по очереди ниже.
-- `harden-authority-reliability-and-performance` готов к
-  `/openspec-apply-change` (0/51; delta `release-distribution` перебазирована
-  на GitHub-текст, `openspec validate --strict` зелёный).
 - Ручные наблюдения владельца: `add-run-decision-catalog` 4.2 и 6.3,
   `add-native-host-question-ux` 2.3; после них — архив с sync.
 - Установки `v0.5.0` не обновятся сами: переустановка командой из README;

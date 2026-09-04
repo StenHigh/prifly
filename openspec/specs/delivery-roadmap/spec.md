@@ -150,6 +150,11 @@ runtime contract.
 | Active | `add-native-host-question-ux`: один конечный вопрос в Codex и Claude Code | Осталось ручное наблюдение UI | Доступ к обоим host runtimes | Закрыть task 2.3 active change без заявления product qualification |
 | High | `assisted-model-profile-protocol` | Не начато | Versioned assisted-host contract | Создать OpenSpec change до заявления о provider/model/reasoning selection |
 
+Ревью надёжности и производительности authority выполнено и закрыто archived
+change `2026-09-04-harden-authority-reliability-and-performance`: измерения,
+не достигнутые цели и отклонённые решения остаются в его evidence. Оно не
+закрывает roadmap milestone и не объявляет product gate.
+
 Работа над самими AI Factory packages — живой pilot `aif-classic` на задаче
 и совместимость с опубликованным AI Factory package — ведётся в backlog
 repository `StenHigh/prifly-aif-workflows`; в Pri-Fly остаются только
@@ -192,6 +197,8 @@ proposal только после указанного prerequisite.
 | Внешние source adapters задач (GitLab, GitHub, Jira) | P2-09 action authority и один завершённый живой pilot | Создать отдельный proposal; репозитории и каталог YAML workflow folders уже реализованы archived change `2026-09-03-add-project-workflow-catalog` (`project workflows search/add/update/remove`), `init` и default execution остаются offline |
 | Полное provider usage и cost view | P2-09 и P2-16 | Включить в соответствующие acceptance changes, не вычислять цену самим |
 | Workspace-visible delivery record | Согласованный review/retention contract | Создать отдельный proposal |
+| Замена SQLite driver на pure-Go (`modernc.org/sqlite`) | ADR с измерениями поверх evidence archived change `2026-09-04-harden-authority-reliability-and-performance` | Создать отдельный proposal с benchmark evidence и расширенной release matrix |
+| Принятие сохранённого result candidate при recovery | `run resolve` и recovery по доказательствам завершения | Создать отдельный proposal о повторной валидации без driver ownership |
 | Trusted reuse готовых шагов | P2-13 | Проработать в P2-13 change |
 | Full dry run | P2-15 | Проработать в P2-15 change |
 | Helper `continue` command | Стабильный операторский interface | Создать отдельный proposal после P2-15 |
