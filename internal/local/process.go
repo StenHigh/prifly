@@ -508,7 +508,12 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 		out.StopReason = reason
 		// Stopping is the one phase where the poll rate is a bound on behaviour:
 		// the escalation from term to kill and the observation that the group is
-		// gone both happen on this tick.
+		// gone both happen on this tick. The timer that slows the poll down has
+		// to be stopped first: a step cancelled inside its first close-watch
+		// window would otherwise be slowed back down right after this reset,
+		// and a group that did exit on TERM would be escalated to KILL because
+		// nothing looked in time.
+		slowPoll.Stop()
 		ticker.Reset(processPollInterval)
 		// The unreaped Cmd is the authority here. Serialized identities recovered
 		// after a crash never reach this signaling path.
