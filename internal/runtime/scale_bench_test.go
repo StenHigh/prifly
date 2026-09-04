@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -62,6 +64,80 @@ func BenchmarkTiming1000Nodes(b *testing.B) {
 	for b.Loop() {
 		if tree := Timing(r, r.LastObserved, false); tree.Root.ID == "" {
 			b.Fatal("timing produced no tree")
+		}
+	}
+}
+
+// BenchmarkRunStatus measures what a person waits for when they ask what a Run
+// is doing: the read, its timing tree, and the recorded history behind it.
+func BenchmarkRunStatus(b *testing.B) {
+	e, runID := driverProject(b, "pass", 10000)
+	ctx := context.Background()
+	if err := e.Drive(ctx, runID); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := e.View(ctx, runID); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkAdmit measures admitting one attempt: the command, its transaction
+// and everything the authority checks before work may start.
+func BenchmarkAdmit(b *testing.B) {
+	t := b
+	e, _ := driverProject(t, "pass", 10000)
+	ctx := context.Background()
+	b.ResetTimer()
+	for b.Loop() {
+		b.StopTimer()
+		runID := driverStart(t, e)
+		r, view, err := e.load(ctx, runID)
+		if err != nil {
+			b.Fatal(err)
+		}
+		plan, err := r.plan()
+		if err != nil {
+			b.Fatal(err)
+		}
+		activation := activationFor(&r, "work")
+		b.StartTimer()
+		if err := e.admit(ctx, r, view, plan, activation); err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		// The admitted attempt holds the authority's only slot, so it is
+		// settled before the next iteration asks for one.
+		r, _, err = e.load(ctx, runID)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if err := e.settleUnstarted(ctx, runID, r.Active[0], "", "cancelled"); err != nil {
+			b.Fatal(err)
+		}
+		b.StartTimer()
+	}
+}
+
+// BenchmarkPublish measures one worker publication: the smallest command a
+// running step issues, and the one it issues most often.
+func BenchmarkPublish(b *testing.B) {
+	e, token, command := publicationFixture(b, nil)
+	ctx := context.Background()
+	b.ResetTimer()
+	for i := 0; b.Loop(); i++ {
+		// An event hook is the publication a running step issues most often:
+		// each one is its own record rather than a replacement of the last.
+		next := command
+		next.CommandID = fmt.Sprintf("command:bench-publish-%d", i)
+		next.Hook, next.Kind = "warning_raised", "event"
+		next.EventKey = fmt.Sprintf("warning:%d", i)
+		next.ExpectedStateVersion = nil
+		next.Value = json.RawMessage(`{"phase":"working"}`)
+		if _, err := e.Publish(ctx, token, next); err != nil {
+			b.Fatal(err)
 		}
 	}
 }

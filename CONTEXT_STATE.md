@@ -4,7 +4,7 @@
 в `openspec/` (см. `openspec/SOURCE-OF-TRUTH.md`); этот файл только
 ориентирует.
 
-Обновлено: 2026-09-03. Это рабочая копия Pri-Fly (`StenHigh/prifly`),
+Обновлено: 2026-09-04. Это рабочая копия Pri-Fly (`StenHigh/prifly`),
 начатая свежей историей из GitLab-дерева `main` = `27fa58c`. GitLab-проект
 `stenhigh/prifly` архивирован (read-only, README указывает на GitHub).
 
@@ -38,8 +38,27 @@
 
 ## Открытые changes (`openspec list`)
 
-- `harden-authority-reliability-and-performance` — 0/51; delta
-  release-distribution перебазирована на GitHub-текст spec.
+- `harden-authority-reliability-and-performance` — 51/51, все ворота зелёные
+  (`make check` с race, `make e2e`, `--strict`, `git diff --check`); готов к
+  архивации с sync. Все восемь блоков выполнены,
+  результаты и отклонения записаны в самих задачах, измерения — в
+  `openspec/changes/harden-authority-reliability-and-performance/evidence.md`.
+  Что стоит знать до архивации:
+  - Хранилище перешло на версии 5 и 6: `authority.verified_cut`
+    (инкрементальная проверка при открытии) и таблица `pinned_bytes`
+    (закреплённые байты хранятся один раз по digest). Миграции применяются
+    по одной, `open` больше не объявляет базу текущей после первой из них.
+  - Переходы состояний пишутся событием `state.changed` и восстанавливаются
+    из журнала при чтении; форма Run и его digest не изменились.
+  - Схемы валидируются in-process, если оценка обхода схемы ниже бюджета;
+    подпроцесс остался для экспоненциальных схем и за
+    `PRIFLY_SCHEMA_WORKER=1`. Это уточнение дизайна: подпроцесс существовал
+    не только из-за ReDoS.
+  - `synchronous=NORMAL` намеренно НЕ включён (4.4): выигрыш 15.6 → 13.7 с
+    не оправдывает потерю последних коммитов при потере питания, и
+    `runtime-resources` требует FULL.
+  - Отказы теперь типизированы (`runtime.Fault`), ворота `make refusal-check`
+    и `CGO_ENABLED=0 go vet ./...` добавлены в `ci-check`.
 - `add-run-decision-catalog` — 18/20; открыты 4.2 (ручное наблюдение в
   Codex и Claude Code) и 6.3 (bounded live pilot).
 - `add-native-host-question-ux` — 6/7 (task 2.3 — ручное наблюдение UI).
@@ -50,6 +69,16 @@
   архивировать без sync.
 
 ## Следующие шаги
+
+- Закрыть 8.5 этого change (ворота `make check`, `make e2e`, `openspec
+  validate --strict`, `git diff --check`) и заархивировать его с sync — delta
+  затрагивает `runtime-resources`, `architecture-decisions`, `cli-protocol`,
+  `control-security-ux`, `delivery-roadmap`, `quality-and-acceptance`,
+  `release-distribution`.
+- Релиз после архивации: изменения включают новую версию хранилища (миграция
+  v4→v5→v6 при первом открытии) и новый asset релиза
+  `release-manifest.jcs.sig`; обновление старым `prifly update` продолжает
+  работать по прежней подписи.
 
 - Релиз `v0.8.0` (2026-09-04) выпущен на коммите `2f8a8a1`: читаемость
   инструмента (справка подкоманд, `--version`, `help TOPIC`, индекс из 362

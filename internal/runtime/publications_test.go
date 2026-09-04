@@ -22,7 +22,7 @@ import (
 	"github.com/stenhigh/prifly/internal/local"
 )
 
-func publicationFixture(t *testing.T, change func(*flow.StepDefinition)) (*Engine, string, PublishCommand) {
+func publicationFixture(t testing.TB, change func(*flow.StepDefinition)) (*Engine, string, PublishCommand) {
 	t.Helper()
 	e := artifactEngine(t)
 	defs, reg, err := Builtins()
@@ -88,7 +88,7 @@ func publicationFixture(t *testing.T, change func(*flow.StepDefinition)) (*Engin
 	return e, token, PublishCommand{SchemaVersion: "1", CommandID: "command:initial", RunID: r.ID, StepID: "step:one", AttemptID: "attempt:one", EnvelopeDigest: r.Attempts["attempt:one"].EnvelopeDigest, Hook: "progress_changed", Kind: "state", ExpectedStateVersion: &zero, Value: json.RawMessage(`{"phase":"working","completed":4,"note":"remove me"}`)}
 }
 
-func publicationRun(t *testing.T, e *Engine, c PublishCommand) (Run, local.ReadView) {
+func publicationRun(t testing.TB, e *Engine, c PublishCommand) (Run, local.ReadView) {
 	t.Helper()
 	r, view, err := e.load(context.Background(), c.RunID)
 	if err != nil {

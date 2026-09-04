@@ -14,7 +14,7 @@ import (
 	"github.com/stenhigh/prifly/internal/local"
 )
 
-func artifactEngine(t *testing.T) *Engine {
+func artifactEngine(t testing.TB) *Engine {
 	t.Helper()
 	root := t.TempDir()
 	if err := Init(root); err != nil {

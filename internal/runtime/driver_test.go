@@ -27,7 +27,7 @@ import (
 
 // These integration fixtures launch this actual Go test executable through
 // stdin/fd3 and the OS process-group runner. No fake executor substitutes for it.
-func driverProject(t *testing.T, mode string, timeoutMS int64) (*Engine, string) {
+func driverProject(t testing.TB, mode string, timeoutMS int64) (*Engine, string) {
 	t.Helper()
 	e := artifactEngine(t)
 	defs, _, err := Builtins()
@@ -193,7 +193,7 @@ func driverProject(t *testing.T, mode string, timeoutMS int64) (*Engine, string)
 	return e, driverStart(t, e)
 }
 
-func driverStart(t *testing.T, e *Engine) string {
+func driverStart(t testing.TB, e *Engine) string {
 	t.Helper()
 	result, err := e.Start(context.Background(), StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/driver.json", BriefFile: "brief.json", Inputs: map[string]string{"source": "source.txt"}})
 	if err != nil {
@@ -202,7 +202,7 @@ func driverStart(t *testing.T, e *Engine) string {
 	return result.Receipt.RunID
 }
 
-func driverRun(t *testing.T, e *Engine, runID string) Run {
+func driverRun(t testing.TB, e *Engine, runID string) Run {
 	t.Helper()
 	r, _, err := e.load(context.Background(), runID)
 	if err != nil {
@@ -211,7 +211,7 @@ func driverRun(t *testing.T, e *Engine, runID string) Run {
 	return r
 }
 
-func driverAdmit(t *testing.T, e *Engine, runID string) *Attempt {
+func driverAdmit(t testing.TB, e *Engine, runID string) *Attempt {
 	t.Helper()
 	r, v, err := e.load(context.Background(), runID)
 	if err != nil {
@@ -228,7 +228,7 @@ func driverAdmit(t *testing.T, e *Engine, runID string) *Attempt {
 	return r.Attempts[r.Active[0]]
 }
 
-func driverWait(t *testing.T, e *Engine, runID string, ready func(Run) bool) Run {
+func driverWait(t testing.TB, e *Engine, runID string, ready func(Run) bool) Run {
 	t.Helper()
 	// Helpers are separate race-instrumented test binaries. Loading the expanded
 	// schema set can take longer than the old five-second polling window.
@@ -503,7 +503,7 @@ func TestDriverStopWinsBeforeAdmissionAndDispatch(t *testing.T) {
 // This fixture names the deliberate test boundary without adding a production
 // fault hook. The real authority transaction commits dispatch, but this test
 // harness never invokes OS spawn until a different, explicit test path does so.
-func driverDispatchFixture(t *testing.T, e *Engine, runID, attemptID string) {
+func driverDispatchFixture(t testing.TB, e *Engine, runID, attemptID string) {
 	t.Helper()
 	r, view, err := e.load(context.Background(), runID)
 	if err != nil {

@@ -107,16 +107,18 @@ func TestBusyAuthorityRetriesAndNeverRoutesOnError(t *testing.T) {
 			release := holdAuthorityWriteLock(t, e)
 			// Longer than the store's busy timeout, so SQLite really reports
 			// busy to the engine at least once before the lock is released.
-			observeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			// Both bounds sit just above that timeout: the test is about the
+			// retry happening at all, not about waiting.
+			observeCtx, cancel := context.WithTimeout(ctx, 3500*time.Millisecond)
 			defer cancel()
 			if name == "retried" {
-				time.AfterFunc(4*time.Second, release)
+				time.AfterFunc(3200*time.Millisecond, release)
 			}
 			started := time.Now()
 			err := e.observe(observeCtx, runID, a.ID, local.ProcessObservation{Kind: "group_empty", Identity: identity})
 			elapsed := time.Since(started)
 			release()
-			if elapsed < 3*time.Second {
+			if elapsed < 2900*time.Millisecond {
 				t.Fatalf("the engine did not wait out the concurrent writer: %v %v", elapsed, err)
 			}
 			if name == "retried" {
