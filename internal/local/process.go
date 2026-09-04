@@ -482,8 +482,10 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 	// core reading /proc for a process nobody was waiting on that closely.
 	ticker := time.NewTicker(processPollInterval)
 	defer ticker.Stop()
-	slowPoll := time.AfterFunc(processPollCloseWatch, func() { ticker.Reset(processPollSettled) })
-	defer slowPoll.Stop()
+	// The rate changes only from the loop below, never from a timer goroutine:
+	// a callback that fired while the step was being stopped used to slow the
+	// poll back down right after the stop had sped it up.
+	settled := false
 	var stopAt time.Time
 	var killAt time.Time
 	signalGroup := func(sig syscall.Signal, phase, reason string, at time.Time) {
@@ -513,8 +515,10 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 		// window would otherwise be slowed back down right after this reset,
 		// and a group that did exit on TERM would be escalated to KILL because
 		// nothing looked in time.
-		slowPoll.Stop()
-		ticker.Reset(processPollInterval)
+		if settled {
+			settled = false
+			ticker.Reset(processPollInterval)
+		}
 		// The unreaped Cmd is the authority here. Serialized identities recovered
 		// after a crash never reach this signaling path.
 		signalGroup(syscall.SIGTERM, "term", reason, stopAt)
@@ -556,6 +560,10 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 		case <-streamDone:
 			streamsComplete++
 		case <-ticker.C:
+			if !settled && stopAt.IsZero() && time.Since(out.StartedAt) >= processPollCloseWatch {
+				settled = true
+				ticker.Reset(processPollSettled)
+			}
 			group, groupErr := readProcessGroup(out.Identity.PGID)
 			leaderNow, leaderErr := readProcess(out.Identity.PID)
 			if leaderErr == nil && out.Identity.StartID != "" && (leaderNow.StartID != out.Identity.StartID || leaderNow.PPID != os.Getpid() || leaderNow.PGID != out.Identity.PGID) {
