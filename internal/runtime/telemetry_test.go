@@ -1320,3 +1320,45 @@ func TestTelemetryCrashHelper(t *testing.T) {
 	_, _ = e.Store.AppendSamples(ctx, queued)
 	os.Exit(84)
 }
+
+// Measuring a command used to cost a second write transaction after it had
+// already committed. The samples now ride the command's own transaction, so a
+// command is measured exactly once, at the cut it committed.
+func TestTelemetrySamplesRecordedWithCommand(t *testing.T) {
+	e, options := emptyRuntime(t)
+	ctx := context.Background()
+	options.CommandID = newID("command")
+	result, err := e.Start(ctx, options)
+	if err != nil || result.Receipt.Version == 0 {
+		t.Fatalf("the fixture is not a committed command: %+v %v", result, err)
+	}
+	if !result.SamplesRecorded {
+		t.Fatal("the command did not record its own telemetry")
+	}
+	page, err := e.Store.ReadSamples(ctx, -1, 0, 100)
+	if err != nil || page.More {
+		t.Fatalf("bounded sample read: %v", err)
+	}
+	metrics := map[string]bool{}
+	for _, row := range page.Records {
+		if row.Cut != result.Receipt.Cut {
+			t.Fatalf("a sample landed at another cut than its command: %d vs %d", row.Cut, result.Receipt.Cut)
+		}
+		var value TelemetrySampleData
+		if err := decode(row.Data, &value); err != nil {
+			t.Fatal(err)
+		}
+		metrics[value.Metric] = true
+	}
+	for _, metric := range []string{"core.command_requests", "core.command_duration", "core.lock_wait", "core.transaction_duration", "core.storage_bytes"} {
+		if !metrics[metric] {
+			t.Fatalf("the command's own batch lost %s: %+v", metric, metrics)
+		}
+	}
+	// An exact repeat never reaches a transaction, so it is still measured by
+	// the separate collector, and it says so.
+	repeat, err := e.Start(ctx, options)
+	if err != nil || !repeat.Duplicate || repeat.SamplesRecorded {
+		t.Fatalf("a repeat was applied as a command or claimed a transaction: %+v %v", repeat, err)
+	}
+}

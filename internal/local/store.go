@@ -170,6 +170,26 @@ type Command struct {
 	// it must be pure just like the Run transform. Receipt-only retries never
 	// invoke it, so a consumed decision cannot be spent twice.
 	ControlMutation func(AuthoritySnapshot) (json.RawMessage, error)
+	// Samples supplies this command's own telemetry. The store calls it once,
+	// immediately before commit, with the timings it measured, so recording a
+	// command costs no second write transaction. Telemetry never fails a
+	// command: a batch that no longer fits the diagnostic allowance is dropped.
+	Samples CommandTelemetry
+}
+
+// CommandTelemetry builds the samples for one applied command from the timings
+// measured inside its transaction.
+type CommandTelemetry func(SampleTimings) []SampleInput
+
+// SampleTimings are the facts only the store holds when a command commits.
+// TransactionDuration is measured up to the sample write, so it excludes the
+// commit itself; that is deliberate, since the samples are part of it.
+type SampleTimings struct {
+	LockWait            time.Duration
+	TransactionDuration time.Duration
+	AllocatedBytes      int64
+	Version             int64
+	Rejected            bool
 }
 
 // LinkedRunCommand creates a new Run while checking the exact version of the
@@ -257,6 +277,10 @@ type ApplyResult struct {
 	Duplicate           bool
 	LockWait            time.Duration
 	TransactionDuration time.Duration
+	// SamplesRecorded reports that this command wrote its own telemetry in its
+	// own transaction. A caller only falls back to a separate write for the
+	// paths that never reached one, such as an exact repeat.
+	SamplesRecorded bool
 }
 
 type ReadView struct {
@@ -845,18 +869,27 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.event_seq,snapshot=excluded.snapshot,snapshot_digest=excluded.snapshot_digest`, cmd.RunID, out.Receipt.Version, out.Receipt.EventSeq, []byte(change.Data), digestBytes(change.Data)); err != nil {
 			return out, err
 		}
-		for i, event := range change.Events {
-			if event.Version == 0 {
-				event.Version = EventVersion
-			}
-			var after any
-			var afterDigest any
-			if i == len(change.Events)-1 {
-				after = []byte(change.Data)
-				afterDigest = digestBytes(change.Data)
-			}
-			if _, err := conn.ExecContext(ctx, "INSERT INTO events(run_id,seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after,state_digest) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", cmd.RunID, state.EventSeq+int64(i)+1, out.Receipt.Version, cut, event.Type, event.Version, cmd.Actor, cmd.ID, []byte(event.Data), digestBytes(event.Data), after, afterDigest); err != nil {
+		if len(change.Events) > 0 {
+			// One command commonly writes several events; preparing the insert
+			// once keeps the parse out of the loop under the writer lock.
+			insert, err := conn.PrepareContext(ctx, "INSERT INTO events(run_id,seq,run_version,cut,type,schema_version,actor,command_id,data,digest,state_after,state_digest) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
+			if err != nil {
 				return out, err
+			}
+			defer insert.Close()
+			for i, event := range change.Events {
+				if event.Version == 0 {
+					event.Version = EventVersion
+				}
+				var after any
+				var afterDigest any
+				if i == len(change.Events)-1 {
+					after = []byte(change.Data)
+					afterDigest = digestBytes(change.Data)
+				}
+				if _, err := insert.ExecContext(ctx, cmd.RunID, state.EventSeq+int64(i)+1, out.Receipt.Version, cut, event.Type, event.Version, cmd.Actor, cmd.ID, []byte(event.Data), digestBytes(event.Data), after, afterDigest); err != nil {
+					return out, err
+				}
 			}
 		}
 		if release != "" {
@@ -904,10 +937,43 @@ ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.ev
 			return out, err
 		}
 	}
+	if err := recordCommandSamples(ctx, conn, s.softLimitBytes, cut, cmd.Samples, SampleTimings{
+		LockWait: out.LockWait, TransactionDuration: time.Since(txStarted),
+		Version: out.Receipt.Version, Rejected: out.Receipt.Rejection != nil,
+	}); err != nil {
+		return out, err
+	} else if cmd.Samples != nil {
+		out.SamplesRecorded = true
+	}
 	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
 		return out, err
 	}
 	return out, nil
+}
+
+// recordCommandSamples writes a command's own telemetry at its own cut. The
+// samples ride the command's transaction, so a failure to fit the diagnostic
+// allowance drops them rather than losing the command they describe.
+func recordCommandSamples(ctx context.Context, conn *sql.Conn, softLimitBytes, cut int64, telemetry CommandTelemetry, timings SampleTimings) error {
+	if telemetry == nil {
+		return nil
+	}
+	usage, err := storageUsage(ctx, conn, softLimitBytes)
+	if err != nil {
+		return err
+	}
+	timings.AllocatedBytes = usage.AllocatedBytes
+	batch := telemetry(timings)
+	if len(batch) == 0 {
+		return nil
+	}
+	if err := validSampleBatch(batch); err != nil {
+		return err
+	}
+	if _, err := insertSamples(ctx, conn, softLimitBytes, cut, batch); err != nil && !errors.Is(err, ErrSampleLimit) && !errors.Is(err, ErrCommandConflict) {
+		return err
+	}
+	return nil
 }
 
 // CreateLinkedRun atomically checks a source Run and creates a distinct new

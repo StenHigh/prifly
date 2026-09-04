@@ -1594,21 +1594,11 @@ func TestDriverCaptureCostSamples(t *testing.T) {
 		}
 		panic("completed sample has no attempt")
 	}
-	// Measure one standard sampling call separately from mandatory facts and
-	// execution. Start is a real committed command and supplies its actual timing
-	// result, outside the timer. This deliberate extra collector call records
-	// another sample batch in a disposable authority; it is not another command.
-	// No production instrumentation switch or fake persistence implementation is
-	// involved. Successful persistence is checked after the measured call.
+	// Measure one standard command including the telemetry it records in its
+	// own transaction. There is no separate collector call to time any more:
+	// a command is the only writer of its own samples.
 	runCommandSample := func(e *Engine) (int64, int, int) {
 		ctx := context.Background()
-		commandID := newID("command")
-		commandStarted := time.Now()
-		result, err := e.Start(ctx, StartOptions{CommandID: commandID, WorkflowFile: "workflows/driver.json", BriefFile: "brief.json", Inputs: map[string]string{"source": "source.txt"}})
-		if err != nil || result.Receipt.Version == 0 || result.TransactionDuration <= 0 {
-			t.Fatalf("sampling input is not a real committed command: %+v %v", result, err)
-		}
-		runID := result.Receipt.RunID
 		before, err := e.Store.ReadSamples(ctx, -1, 0, 1000)
 		if err != nil || before.More {
 			t.Fatalf("sampling fixture exceeded its bounded read: %v", err)
@@ -1617,13 +1607,17 @@ func TestDriverCaptureCostSamples(t *testing.T) {
 		if len(before.Records) > 0 {
 			afterSeq = before.Records[len(before.Records)-1].Seq
 		}
-		beforeState, err := e.Store.Read(ctx, runID, 0, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
+		commandID := newID("command")
 		started := time.Now()
-		e.recordCommand(commandID, runID, commandStarted, result, nil)
+		result, err := e.Start(ctx, StartOptions{CommandID: commandID, WorkflowFile: "workflows/driver.json", BriefFile: "brief.json", Inputs: map[string]string{"source": "source.txt"}})
 		elapsed := time.Since(started).Nanoseconds()
+		if err != nil || result.Receipt.Version == 0 || result.TransactionDuration <= 0 {
+			t.Fatalf("sampling input is not a real committed command: %+v %v", result, err)
+		}
+		if !result.SamplesRecorded {
+			t.Fatal("the command did not record its own telemetry")
+		}
+		runID := result.Receipt.RunID
 		after, err := e.Store.ReadSamples(ctx, -1, afterSeq, 100)
 		if err != nil || after.More || len(after.Records) != 5 {
 			t.Fatalf("sample loss/incomplete batch; do not report successful capture latency: %+v %v", after, err)
@@ -1637,6 +1631,9 @@ func TestDriverCaptureCostSamples(t *testing.T) {
 			}
 			metrics[value.Metric] = true
 			payloadBytes += len(row.Data)
+			if row.Cut != result.Receipt.Cut {
+				t.Fatalf("the samples did not ride the command's own transaction: cut %d, command cut %d", row.Cut, result.Receipt.Cut)
+			}
 			if value.Metric != "core.storage_bytes" && (row.RunID != runID || value.CommandID != commandID) {
 				t.Fatal("sampling call did not retain its real command/run identity")
 			}
@@ -1645,10 +1642,6 @@ func TestDriverCaptureCostSamples(t *testing.T) {
 			if !metrics[metric] {
 				t.Fatalf("standard sample batch lost %s", metric)
 			}
-		}
-		afterState, err := e.Store.Read(ctx, runID, 0, 1)
-		if err != nil || beforeState.Snapshot.EventSeq != afterState.Snapshot.EventSeq || !bytes.Equal(beforeState.Snapshot.Data, afterState.Snapshot.Data) {
-			t.Fatalf("sampling call changed mandatory run state: %v", err)
 		}
 		return elapsed, len(after.Records), payloadBytes
 	}
@@ -1696,7 +1689,7 @@ func TestDriverCaptureCostSamples(t *testing.T) {
 		medians[field] = values[len(values)/2]
 	}
 	info := template.Store.Info()
-	report := map[string]any{"format": "process-capture-samples/2", "collected_at": time.Now().UTC().Format(time.RFC3339Nano), "go_version": goruntime.Version(), "goos": goruntime.GOOS, "goarch": goruntime.GOARCH, "logical_cpus": goruntime.NumCPU(), "gomaxprocs": goruntime.GOMAXPROCS(0), "worker_executable_digest": executor.ExecutableDigest, "worker_executable_bytes": worker.Size(), "baseline_envelope_bytes": len(admitted.Envelope), "sqlite_version": info.SQLiteVersion, "sqlite_journal": info.JournalMode, "sqlite_synchronous": info.Synchronous, "pairs": len(samples), "warmup_pairs_excluded": 1, "command_sample_method": "direct_standard_recordCommand_on_actual_committed_start_result", "command_sample_context_budget_ms": 30, "command_sample_warmups_excluded": 1, "samples": samples, "median_ns": medians}
+	report := map[string]any{"format": "process-capture-samples/2", "collected_at": time.Now().UTC().Format(time.RFC3339Nano), "go_version": goruntime.Version(), "goos": goruntime.GOOS, "goarch": goruntime.GOARCH, "logical_cpus": goruntime.NumCPU(), "gomaxprocs": goruntime.GOMAXPROCS(0), "worker_executable_digest": executor.ExecutableDigest, "worker_executable_bytes": worker.Size(), "baseline_envelope_bytes": len(admitted.Envelope), "sqlite_version": info.SQLiteVersion, "sqlite_journal": info.JournalMode, "sqlite_synchronous": info.Synchronous, "pairs": len(samples), "warmup_pairs_excluded": 1, "command_sample_method": "actual_committed_start_recording_its_own_samples_in_one_transaction", "command_sample_context_budget_ms": 30, "command_sample_warmups_excluded": 1, "samples": samples, "median_ns": medians}
 	encoded, err := json.Marshal(report)
 	if err != nil {
 		t.Fatal(err)

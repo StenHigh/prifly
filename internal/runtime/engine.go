@@ -126,7 +126,7 @@ func (e *Engine) applyControlledWithControlMutation(ctx context.Context, control
 	}
 	started := time.Now()
 	var observed Observation
-	command := local.Command{ID: id, Actor: actor, RunID: runID, Payload: commandBytes, ExpectedVersion: expected, Mode: mode, Control: control, Pins: pins}
+	command := local.Command{ID: id, Actor: actor, RunID: runID, Payload: commandBytes, ExpectedVersion: expected, Mode: mode, Control: control, Pins: pins, Samples: e.commandTelemetry(id, runID, started)}
 	if controlMutation != nil {
 		command.ControlMutation = func(snapshot local.AuthoritySnapshot) (json.RawMessage, error) {
 			return controlMutation(snapshot, observed)
