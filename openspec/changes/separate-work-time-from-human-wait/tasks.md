@@ -1,6 +1,6 @@
 ## 1. Контракты и воспроизводимый дефект
 
-- [ ] 1.1 Сверить версии StepDefinition, authoring, assisted session, state/read и затронутые readers с опубликованным inventory; сохранить точную карту в design и добавить regression нынешнего позднего ответа: ответ сохранён, результат отклонён по deadline. Проверка: адресный тест воспроизводит отказ без настоящего ожидания.
+- [x] 1.1 Сверить версии StepDefinition, authoring, assisted session, state/read и затронутые readers с опубликованным inventory; сохранить точную карту в design и добавить regression нынешнего позднего ответа: ответ сохранён, результат отклонён по deadline. Проверка: адресный тест воспроизводит отказ без настоящего ожидания.
 - [ ] 1.2 Добавить новый authoring marker и versioned `session_limits` с конечным active default и бессрочным wait default; закреплять настройки в definition, не менять legacy compilation. Проверка: compiler tests для defaults, индивидуальных значений, новой revision, неверного executor, нуля, отрицательных чисел и переполнения; прежние fixture digests неизменны.
 - [ ] 1.3 Ввести необходимые новые session/state/read editions с сохраняемыми остатком, фазой ожидания, observations и поколением доставки; связать initial envelope, answer context и effective timing проверяемыми bytes. Проверка: round-trip/reopen, отказ stale или подменённой delivery и чтение old editions без переписывания frozen schemas.
 
@@ -34,3 +34,33 @@
 Release, полигон и product qualification. Дорогие code/CI gates для этого
 docs-only planning среза не запускаются; результаты прежнего короткого
 живого теста и его ограничения сохранены в design.
+
+## Implementation checkpoint — 2026-09-06
+
+Выполнено 1/13. `TestLegacyAssistedDecisionAcceptsLateAnswerButRejectsResult`
+через обычные API, настоящий SQLite и `testing/synctest` проводит 10 минут
+работы, две недели ожидания и restart. Старый ответ сохраняется, deadline не
+меняется, поздний результат отклоняется. `TestLegacyAssistedRunsShareInstallationClaim`
+подтверждает отдельный пробел: два разных Start при capacity 2 одновременно
+получают один checkout claim. Ни один тест не объявляет эти дефекты нормой
+для нового контракта.
+
+Проверка двух diagnostic regression: 2/2 PASS, package 1.455 s. Команда:
+`GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local .tools/go/bin/go test ./internal/runtime -run '^TestLegacyAssisted(DecisionAcceptsLateAnswerButRejectsResult|RunsShareInstallationClaim)$' -count=1 -timeout=45s -v`.
+OpenSpec strict all: 20 passed, 0 failed; `git diff --check`: pass.
+
+Parking/admission остановлены по правилу OpenSpec apply: выявлен пропуск
+дизайна, запрошено согласование защиты рабочей копии (подробности в design).
+Задача 1.2 подготовлена локальным незакоммиченным черновиком в flow authoring,
+project compiler и editor sources; runtime сроки ещё не реализованы. В том
+же черновике общий `validateAssistedStep` явно отказывает
+`unsupported_session_limits`, чтобы новый YAML не исполнялся со скрытым старым
+часом. Проверка этого guard вместе с двумя regression: 3/3 PASS, 1.507 s.
+Mirror schemas, документация authoring и runtime integration ещё не завершены,
+поэтому 1.2 не отмечена выполненной и черновик не публикуется как capability.
+
+Что в этот срез не входит: исправление ожидания/отмены/claim exclusivity,
+новые session/state editions, успешный двухнедельный timed Run, Release,
+обновление установленного бинарника и полигона. Коммит этого checkpoint
+содержит только diagnostic tests и запись зависимости; незавершённый authoring
+остаётся в рабочем дереве для продолжения после решения владельца.

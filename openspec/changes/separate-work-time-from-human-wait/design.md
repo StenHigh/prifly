@@ -204,3 +204,38 @@ refs, state и frozen runners сохраняются; новые примеры 
 dialog changes без закрытия их других критериев. Release и изменение
 пользовательского полигона требуют отдельного решения. По OpenSpec propose
 этот planning turn не изменяет код; apply начинается новым запросом владельца.
+
+### Inventory перед реализацией — 2026-09-06
+
+Опубликованная граница на `e2b4db6`: StepDefinition v1…v5,
+`prifly-step/1`, Core state/read/next/preview/step-read до /26,
+assisted-session до /5, DecisionRequest и DecisionRecord /1.
+Следующие имена: StepDefinitionV6 / `prifly-step/2`, CoreTiming* /27,
+SessionHandoffV6 / SessionTaskV6 / SessionSubmissionV6 и DecisionRequestV2.
+Закрытые исходы вопроса требуют DecisionRecordV2: enum record/1 менять нельзя.
+В mixed Run /27 legacy шаг сохраняет /5 и прежний absolute deadline;
+новый /6 выбирается по закреплённым session_limits своего StepDefinition,
+не просто по версии Run. Старые preflight/legacy records остаются /1.
+
+Публичные runtime bundles производит `cmd/schema-gen/main.go`, список
+freshness — `scripts/check-schema.py`, встраивание — `runtime/contracts.go`.
+Новые nested поля нужно исключать из старых editions до reflection-рекурсии,
+иначе даже удалённое property оставит новые $defs и изменит их bytes.
+
+### Обнаруженная зависимость: исключительное использование рабочей копии
+
+При implementation audit обнаружен пропуск плана. `activeClaim` выбирает
+один active claim installation, а не claim текущего Run (`worktrees.go`).
+`admit` копирует его ID/generation, но не резервирует его за Run; slot table
+хранит только slot_id/run_id. Поэтому освобождение execution slot у Run A
+позволяет Run B получить ту же рабочую копию. ControlPin и сохранение claim
+сами по себе этого не предотвращают. Это существующий пробел при capacity >1,
+а новое парковочное поведение сделает его доступным и при capacity 1.
+
+Изменение parking/admission приостановлено до согласования защиты рабочего
+ресурса. Предложение владельцу: включить durable исключительное использование
+claim конкретным Run до безопасного завершения или явного освобождения,
+с атомарной проверкой при выдаче работы и без автоматического снятия по lease.
+Это ещё не утверждённый механизм и не новая реализованная capability.
+Нельзя молча сузить поддержку ожидания до no-claim шагов или обещать
+исключительность лишь по наличию прежнего WorktreeClaim.
