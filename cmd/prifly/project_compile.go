@@ -1144,6 +1144,8 @@ func compileProjectComponent(root, skillsRoot string, document projectPackageDoc
 			protocol = "StepDefinitionV4"
 		case "5":
 			protocol = "StepDefinitionV5"
+		case "6":
+			protocol = "StepDefinitionV6"
 		}
 		if err := flow.ValidateProtocol(protocol, canonical); err != nil {
 			return projectCompileComponent{}, err

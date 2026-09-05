@@ -106,14 +106,14 @@ func TestLegacyAssistedDecisionAcceptsLateAnswerButRejectsResult(t *testing.T) {
 	})
 }
 
-// This records a pre-existing isolation gap, not permission for new timed
-// sessions to hand another Run the checkout retained by a parked Attempt.
-func TestLegacyAssistedRunsShareInstallationClaim(t *testing.T) {
+// New admissions must enforce ownership even when the workflow uses a legacy
+// session contract. The historical sharing regression remains in Git.
+func TestLegacyAssistedRunsCannotShareInstallationClaim(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	ctx := context.Background()
 	e, firstID, claim := assistedWorkspaceFixture(t, "checkout")
-	if _, err := e.SetAdmissionCapacity(ctx, CapacityRequest{CommandID: newID("command"), Capacity: 2, Reason: "reproduce legacy claim sharing across Runs"}); err != nil {
+	if _, err := e.SetAdmissionCapacity(ctx, CapacityRequest{CommandID: newID("command"), Capacity: 2, Reason: "prove capacity does not confer workspace ownership"}); err != nil {
 		t.Fatal(err)
 	}
 	first := handOver(t, e, firstID)
@@ -121,22 +121,18 @@ func TestLegacyAssistedRunsShareInstallationClaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second := handOver(t, e, started.Receipt.RunID)
-	if first.RunID == second.RunID || first.AttemptID == second.AttemptID {
-		t.Fatal("fixture did not admit distinct Runs and Attempts")
-	}
-	if first.ClaimID != claim.ID || second.ClaimID != claim.ID || first.ClaimGeneration != claim.Generation || second.ClaimGeneration != claim.Generation || first.RepositoryWorkspace != claim.Repository.Toplevel || second.RepositoryWorkspace != first.RepositoryWorkspace {
-		t.Fatalf("legacy Runs no longer reproduce sharing one claimed checkout: first=%+v second=%+v claim=%+v", first, second, claim)
+	if err := e.Drive(ctx, started.Receipt.RunID); refusalCode(err) != "claim_run_conflict" {
+		t.Fatalf("another legacy Run acquired the held checkout: %v", err)
 	}
 	capacity, held, err := e.AdmissionCapacity(ctx)
-	if err != nil || capacity != 2 || len(held) != 2 || held[first.AttemptID] != first.RunID || held[second.AttemptID] != second.RunID {
-		t.Fatalf("both deliveries were not admitted concurrently: capacity=%d held=%v err=%v", capacity, held, err)
+	if err != nil || capacity != 2 || len(held) != 1 || held[first.AttemptID] != first.RunID {
+		t.Fatalf("refused delivery consumed a slot: capacity=%d held=%v err=%v", capacity, held, err)
 	}
-	for _, task := range []SessionTask{first, second} {
-		r := driverRun(t, e, task.RunID)
-		attempt := r.Attempts[task.AttemptID]
-		if r.SchemaVersion != "core-state/23" || task.SchemaVersion != "assisted-session/3" || attempt.Settled != nil || attempt.Accepted != nil || attempt.Session.HostState != SessionAwaiting {
-			t.Fatalf("the shared checkout was not held by an unsettled legacy delivery: %+v", attempt)
-		}
+	bound, err := e.claim(ctx, claim.ID)
+	if err != nil || bound.RunID != first.RunID || bound.Generation != first.ClaimGeneration || bound.ID != first.ClaimID || bound.Repository.Toplevel != first.RepositoryWorkspace {
+		t.Fatalf("first admission did not bind the exact checkout: %+v %v", bound, err)
+	}
+	if second := driverRun(t, e, started.Receipt.RunID); len(second.Attempts) != 0 || second.SchemaVersion != "core-state/23" {
+		t.Fatalf("refusal changed the legacy contract or admitted work: %+v", second.Attempts)
 	}
 }

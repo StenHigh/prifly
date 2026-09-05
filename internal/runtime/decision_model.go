@@ -29,8 +29,16 @@ func decisionInvariant(r Run) error {
 	pending := 0
 	for _, record := range r.DecisionLedger {
 		definition, exists := decisionDefinition(r.DecisionCatalog, record.DefinitionID)
-		if !exists || record.SchemaVersion != DecisionRecordVersion || record.DefinitionDigest == "" || record.Status == "" || record.Source == "" {
+		timedRecord := record.SchemaVersion == DecisionRecordTimingVersion
+		if !exists || (record.SchemaVersion != DecisionRecordVersion && !timedRecord) || record.DefinitionDigest == "" || record.Status == "" || record.Source == "" {
 			return errors.New("decision invariant: ledger record is invalid")
+		}
+		if timedRecord != timedSession(r.Attempts[record.AttemptID]) || timedRecord && !isTimingState(r.SchemaVersion) {
+			return errors.New("decision invariant: record edition differs from its session owner")
+		}
+		closed := record.Status == "cancelled" || record.Status == "expired"
+		if record.ClosureReason != "" && (!timedRecord || !closed) {
+			return errors.New("decision invariant: closure reason requires a closed timed record")
 		}
 		digest, err := DecisionDefinitionDigest(definition)
 		if err != nil || digest != record.DefinitionDigest {
@@ -45,6 +53,10 @@ func decisionInvariant(r Run) error {
 			if len(record.Value) == 0 {
 				return errors.New("decision invariant: recorded answer is invalid")
 			}
+		} else if record.Status == "rejected" || closed {
+			if len(record.Value) != 0 || record.Source != "unanswered" || record.Observed == nil || closed && (!timedRecord || record.ClosureReason == "") {
+				return errors.New("decision invariant: a closed question cannot invent an answer")
+			}
 		} else {
 			return errors.New("decision invariant: unsupported ledger status")
 		}
@@ -55,8 +67,13 @@ func decisionInvariant(r Run) error {
 		}
 		return nil
 	}
-	if pending != 1 || r.PendingDecision.SchemaVersion != DecisionRequestVersion {
+	request := r.PendingDecision
+	timedRequest := request.SchemaVersion == DecisionRequestTimingVersion
+	if pending != 1 || (request.SchemaVersion != DecisionRequestVersion && !timedRequest) || timedRequest != request.YieldExecution {
 		return errors.New("decision invariant: pending request does not match ledger")
+	}
+	if timedRequest != timedSession(r.Attempts[request.AttemptID]) || timedRequest && !isTimingState(r.SchemaVersion) {
+		return errors.New("decision invariant: request edition differs from its session owner")
 	}
 	return nil
 }

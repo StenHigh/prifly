@@ -105,7 +105,7 @@ func (e *Engine) admitCheck(ctx context.Context, loaded Run, view local.ReadView
 		if blocked != nil {
 			return local.Change{}, blocked
 		}
-		if r.CheckExecutions[check.ID] != nil || r.ActiveCheckID != "" || len(r.Active) != 0 && !checkMayOverlapPublisher(*r, request) || r.HasUnresolvedEffects || r.terminal() || r.admissionsBlockedFor(request.InvocationID) || r.cancelRequestedFor(request.InvocationID) {
+		if r.CheckExecutions[check.ID] != nil || r.ActiveCheckID != "" || r.executingAttempts() != 0 && !checkMayOverlapPublisher(*r, request) || r.HasUnresolvedEffects || r.terminal() || r.admissionsBlockedFor(request.InvocationID) || r.cancelRequestedFor(request.InvocationID) {
 			return local.Change{}, local.Reject("check_admission_blocked", "restriction or unsettled work prevents check admission")
 		}
 		if request.AdmittedVersion != snapshot.Version+1 || request.ControlEpoch != r.ControlEpoch {
@@ -550,7 +550,7 @@ func (e *Engine) executePendingCheck(ctx context.Context, loaded Run, _ local.Re
 
 func activeCheck(r *Run, checkID, tokenHash string) (*CheckExecution, error) {
 	check := r.CheckExecutions[checkID]
-	if check == nil || check.ID != checkID || check.Request.RunID != r.ID || check.Settled != nil || r.ActiveCheckID != checkID || len(r.Active) != 0 && !checkMayOverlapPublisher(*r, check.Request) || r.HasUnresolvedEffects || tokenHash != "" && check.TokenHash != tokenHash {
+	if check == nil || check.ID != checkID || check.Request.RunID != r.ID || check.Settled != nil || r.ActiveCheckID != checkID || r.executingAttempts() != 0 && !checkMayOverlapPublisher(*r, check.Request) || r.HasUnresolvedEffects || tokenHash != "" && check.TokenHash != tokenHash {
 		return nil, local.Reject("stale_check", "operation does not own the active check")
 	}
 	return check, nil

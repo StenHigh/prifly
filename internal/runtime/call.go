@@ -250,7 +250,7 @@ func invocationInvariant(r Run) error {
 	// Several scopes may be ready at once: readiness is pending work, not
 	// running work. What is bounded is how much runs simultaneously, and a
 	// check occupies the same capacity as an attempt.
-	running := len(r.Active)
+	running := int(r.executingAttempts())
 	if r.ActiveCheckID != "" {
 		running++
 	}

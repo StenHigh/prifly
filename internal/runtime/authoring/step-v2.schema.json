@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:step:2",
+  "title": "Pri-Fly step authoring including assisted work and wait limits",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["authoring", "id", "version", "kind"],
+  "properties": {
+    "authoring": {"enum": ["prifly-step/1", "prifly-step/2"]},
+    "schema_version": {"type": "string", "minLength": 1},
+    "id": {"type": "string", "minLength": 1},
+    "version": {"type": ["string", "number"]},
+    "title": {"type": "string", "minLength": 1},
+    "refs": {"type": "object", "additionalProperties": {}},
+    "kind": {"enum": ["worker", "check", "command"]},
+    "inputs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/port"}},
+    "outputs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/port"}},
+    "executor": {"type": "object", "additionalProperties": true},
+    "instructions_ref": {"$ref": "#/$defs/reference"},
+    "context_refs": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+    "required_capabilities": {"type": "array", "items": {"type": "string"}},
+    "effects": {"type": "object", "additionalProperties": true},
+    "result_check_refs": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+    "result_schema_ref": {"$ref": "#/$defs/reference"},
+    "hooks": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": true}},
+    "telemetry": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "workspace_trees": {"type": "array", "items": {"$ref": "#/$defs/workspace_tree"}},
+    "session_limits": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "active_timeout_ms": {
+          "type": "integer", "minimum": 1, "maximum": 9223372036854, "default": 3600000,
+          "description": "Конечное время разрешённой работы, в миллисекундах. Объявленное ожидание ответа не расходует этот остаток. По умолчанию один час."
+        },
+        "decision_wait_timeout_ms": {
+          "type": ["integer", "null"], "minimum": 1, "maximum": 9223372036854, "default": null,
+          "description": "Срок одного объявленного ожидания ответа, в миллисекундах. Отсутствие поля или null означает ожидание без ограничения времени."
+        }
+      }
+    }
+  },
+  "allOf": [{
+    "if": {"properties": {"authoring": {"const": "prifly-step/2"}}},
+    "then": {"properties": {
+      "schema_version": {"const": "6"},
+      "executor": {
+        "additionalProperties": false,
+        "required": ["adapter_ref", "operation"],
+        "properties": {
+          "adapter_ref": {"anyOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "object", "required": ["id"], "properties": {"id": {"const": "core:adapter/assisted-session"}}}
+          ]},
+          "operation": {"const": "session"}
+        }
+      }
+    }},
+    "else": {"not": {"required": ["session_limits"]}}
+  }],
+  "$defs": {
+    "reference": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "object"}]},
+    "port": {"anyOf": [{"$ref": "#/$defs/reference"}, {"type": "object", "additionalProperties": true}]},
+    "workspace_tree": {
+      "type": "object", "additionalProperties": false,
+      "required": ["output_port", "capture"],
+      "properties": {
+        "input_port": {"type": "string", "minLength": 1},
+        "output_port": {"type": "string", "minLength": 1},
+        "capture": {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "path"],
+          "properties": {
+            "kind": {"enum": ["exact_file", "direct_child_file", "direct_child_tree"]},
+            "path": {"type": "string", "minLength": 1},
+            "entrypoint": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  }
+}

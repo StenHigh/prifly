@@ -92,6 +92,7 @@ type projectLaunchSummary struct {
 	BriefDigest         string                        `json:"brief_digest,omitempty"`
 	ConfigurationDigest string                        `json:"configuration_digest"`
 	Execution           []projectExecutionReview      `json:"execution"`
+	SessionLimits       []prifly.SessionLimitPreview  `json:"session_limits,omitempty"`
 	DecisionSheet       prifly.DecisionSheet          `json:"decision_sheet"`
 	DecisionStates      []projectDecisionState        `json:"decision_states"`
 	KnownQuestionsOnly  bool                          `json:"known_questions_only"`

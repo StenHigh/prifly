@@ -127,7 +127,7 @@ launches:
 	}
 	reviewed := prepare()
 	assertNoEffects(t)
-	if reviewed.SchemaVersion != "project-launch-summary/1" || !reviewed.KnownQuestionsOnly || reviewed.ReviewDigest == "" || reviewed.BuildKey == "" || len(reviewed.Execution) != 3 || len(reviewed.InputDigests) != 1 || reviewed.BriefDigest != "" {
+	if reviewed.SchemaVersion != "project-launch-summary/2" || !reviewed.KnownQuestionsOnly || reviewed.ReviewDigest == "" || reviewed.BuildKey == "" || len(reviewed.Execution) != 3 || len(reviewed.InputDigests) != 1 || reviewed.BriefDigest != "" {
 		t.Fatalf("incomplete neutral launch review: %+v", reviewed)
 	}
 	if len(reviewed.DecisionSheet.Records) != 1 || string(reviewed.DecisionSheet.Records[0].Value) != "false" || !reviewed.DecisionStates[0].Answered {
@@ -168,7 +168,7 @@ launches:
 	t.Run("summary_write_failure", func(t *testing.T) {
 		writes := 0
 		writer := projectSummaryWriter(func(data []byte) (int, error) {
-			if bytes.Contains(data, []byte(`"schema_version":"project-launch-summary/1"`)) {
+			if bytes.Contains(data, []byte(`"schema_version":"project-launch-summary/2"`)) {
 				writes++
 				assertNoEffects(t)
 			}
@@ -184,7 +184,7 @@ launches:
 		writes := 0
 		var out, stderr bytes.Buffer
 		writer := projectSummaryWriter(func(data []byte) (int, error) {
-			if bytes.Contains(data, []byte(`"schema_version":"project-launch-summary/1"`)) {
+			if bytes.Contains(data, []byte(`"schema_version":"project-launch-summary/2"`)) {
 				writes++
 				assertNoEffects(t)
 				if err := os.Remove(link); err != nil {
@@ -215,7 +215,7 @@ launches:
 	var out, stderr bytes.Buffer
 	writes := 0
 	writer := projectSummaryWriter(func(data []byte) (int, error) {
-		if bytes.Contains(data, []byte(`"schema_version":"project-launch-summary/1"`)) {
+		if bytes.Contains(data, []byte(`"schema_version":"project-launch-summary/2"`)) {
 			writes++
 			assertNoEffects(t)
 			var actual projectLaunchSummary

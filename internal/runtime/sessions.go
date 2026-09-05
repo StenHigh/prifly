@@ -27,12 +27,14 @@ const (
 	AssistedSessionWorkspaceVersion = "assisted-session/3"
 	AssistedSessionTreeVersion      = "assisted-session/4"
 	AssistedSessionDecisionVersion  = "assisted-session/5"
+	AssistedSessionTimingVersion    = "assisted-session/6"
 	ReportedCostVersion             = "reported-cost/1"
 	MaxReportedCosts                = 8
 
-	SessionAwaiting     = "awaiting_host"
-	SessionReported     = "reported"
-	SessionDisconnected = "disconnected"
+	SessionAwaiting         = "awaiting_host"
+	SessionReported         = "reported"
+	SessionDisconnected     = "disconnected"
+	SessionWaitingAdmission = "waiting_admission"
 )
 
 // ReportedCost is the exact non-negative decimal amount one source claimed for
@@ -74,7 +76,7 @@ func validateReportedCosts(costs []ReportedCost) error {
 
 func hasReportedCostStateFields(r Run) bool {
 	for _, attempt := range r.Attempts {
-		if attempt != nil && (len(attempt.ReportedCosts) != 0 || attempt.Session != nil && (attempt.Session.SchemaVersion == AssistedSessionCostVersion || attempt.Session.SchemaVersion == AssistedSessionWorkspaceVersion || attempt.Session.SchemaVersion == AssistedSessionTreeVersion || attempt.Session.SchemaVersion == AssistedSessionDecisionVersion)) {
+		if attempt != nil && (len(attempt.ReportedCosts) != 0 || attempt.Session != nil && (attempt.Session.SchemaVersion == AssistedSessionCostVersion || attempt.Session.SchemaVersion == AssistedSessionWorkspaceVersion || attempt.Session.SchemaVersion == AssistedSessionTreeVersion || attempt.Session.SchemaVersion == AssistedSessionDecisionVersion || attempt.Session.SchemaVersion == AssistedSessionTimingVersion)) {
 			return true
 		}
 	}
@@ -95,6 +97,7 @@ type SessionHandoff struct {
 	WorkspaceTrees     []WorkspaceTreeHandoff     `json:"workspace_trees,omitempty"`
 	DecisionContext    map[string]json.RawMessage `json:"decision_context,omitempty"`
 	DeliveryGeneration int64                      `json:"delivery_generation,omitempty"`
+	Timing             *SessionTiming             `json:"timing,omitempty"`
 	HostState          string                     `json:"host_state"`
 	// DeadlineTrust names the clock the deadline is enforced on. The local
 	// profile reports an unqualified wall clock; nothing here upgrades it.
@@ -144,8 +147,8 @@ func requiresSessionState(definitions []PinnedDefinition, p *flow.Plan) bool {
 	return false
 }
 
-// ponytail: one fixed assisted deadline until a declared per-step time budget
-// exists; a workflow cannot yet state how long a human-paced session may take.
+// Legacy definitions retain their original absolute deadline. New definitions
+// pin the separate active and human-wait allowances in SessionLimits.
 const assistedAttemptTimeoutMS = 60 * 60 * 1000
 
 // validateAssistedStep keeps the assisted surface narrow: the host may change
@@ -292,6 +295,7 @@ type SessionTask struct {
 	DecisionSheet       *DecisionSheet             `json:"decision_sheet,omitempty"`
 	DecisionContext     map[string]json.RawMessage `json:"decision_context,omitempty"`
 	DecisionBridge      bool                       `json:"decision_bridge,omitempty"`
+	Delivery            *SessionDelivery           `json:"delivery,omitempty"`
 	ResultSchemaRef     flow.Ref                   `json:"result_schema_ref"`
 	Deadline            string                     `json:"deadline"`
 	PermittedEffects    []string                   `json:"permitted_effects"`
@@ -328,6 +332,14 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 		if attemptID != "" && id != attemptID {
 			continue
 		}
+		if timedSession(a) {
+			if err := sessionReportAdmissible(r, a, e.clock.now()); err != nil {
+				return SessionTask{}, err
+			}
+			if r.terminal() || r.HasUnresolvedEffects || r.cancelRequestedFor(r.Activations[a.ActivationID].InvocationID) {
+				return SessionTask{}, local.Reject("dispatch_blocked", "this delivery was cancelled; drive the Run to close it")
+			}
+		}
 		activation := r.Activations[a.ActivationID]
 		if activation == nil {
 			return SessionTask{}, local.ErrIntegrity
@@ -345,12 +357,16 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 			ResultSchemaRef: step.ResultSchemaRef, Deadline: a.Deadline.UTC,
 			PermittedEffects: []string{"write_inside_declared_output_slot"},
 		}
-		if a.Session.SchemaVersion == AssistedSessionDecisionVersion {
+		if a.Session.SchemaVersion == AssistedSessionDecisionVersion || timedSession(a) {
 			task.RunVersion = view.Snapshot.Version
 			task.DecisionBridge, task.DecisionSheet = decisionRuntimeAvailable(r.DecisionCatalog, r.DecisionSheet), r.DecisionSheet
 		}
+		if timedSession(a) {
+			delivery := sessionDelivery(a)
+			task.Delivery = &delivery
+		}
 		if step.Effects.Class == "workspace_write" {
-			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion {
+			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionTimingVersion {
 				task.PermittedEffects = []string{"write_inside_claimed_workspace", "local_git_commit_on_claimed_workspace"}
 			} else {
 				task.PermittedEffects = []string{"write_inside_claimed_worktree", "local_git_commit_on_claimed_base"}
@@ -362,7 +378,7 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 				return SessionTask{}, err
 			}
 			task.ClaimPath = claim.Path
-			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion {
+			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionTimingVersion {
 				if a.Session.WorkspaceMode != claimMode(claim) {
 					return SessionTask{}, local.ErrIntegrity
 				}
@@ -420,7 +436,7 @@ func currentSessionPublisher(r *Run, principal string, command PublishCommand, d
 		r.Steps[attempt.StepID].Ref != definitionRef || activation.InvocationID != invocationID || activation.StageID != stageID {
 		return nil, nil, local.Reject("publisher_frozen", "terminal, inactive or fenced session publishers cannot create new publications")
 	}
-	if err := assistedReportAdmissible(attempt.Admitted, attempt.Deadline, obs); err != nil {
+	if err := sessionReportAdmissible(*r, attempt, obs); err != nil {
 		return nil, nil, err
 	}
 	return attempt, activation, nil
@@ -501,12 +517,12 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
-	if (submission.SchemaVersion != AssistedSessionVersion && submission.SchemaVersion != AssistedSessionCostVersion && submission.SchemaVersion != AssistedSessionWorkspaceVersion && submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion) || submission.RunID == "" || submission.AttemptID == "" || submission.EnvelopeDigest == "" {
+	if (submission.SchemaVersion != AssistedSessionVersion && submission.SchemaVersion != AssistedSessionCostVersion && submission.SchemaVersion != AssistedSessionWorkspaceVersion && submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion) || submission.RunID == "" || submission.AttemptID == "" || submission.EnvelopeDigest == "" {
 		return local.ApplyResult{}, submissionProblem("/schema_version", "a submission names a supported schema version, run, attempt and envelope digest")
 	}
 	if submission.DecisionRequest != nil {
 		request := submission.DecisionRequest
-		if submission.SchemaVersion != AssistedSessionDecisionVersion || len(submission.Result) != 0 || len(submission.ReportedCosts) != 0 || len(submission.WorkspaceTrees) != 0 || request.RunID != submission.RunID || request.AttemptID != submission.AttemptID || request.EnvelopeDigest != submission.EnvelopeDigest {
+		if submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion || len(submission.Result) != 0 || len(submission.ReportedCosts) != 0 || len(submission.WorkspaceTrees) != 0 || request.RunID != submission.RunID || request.AttemptID != submission.AttemptID || request.EnvelopeDigest != submission.EnvelopeDigest {
 			return local.ApplyResult{}, submissionProblem("/decision_request", "a decision request is the only assisted-session/5 submission and must name its delivery")
 		}
 		return e.RequestDecision(ctx, *request)
@@ -538,6 +554,14 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if attempt.Session.SchemaVersion != submission.SchemaVersion {
 		return local.ApplyResult{}, local.Reject("session_version_conflict", "the report does not use the contract this attempt was handed")
 	}
+	if timedSession(attempt) && (attempt.Session.HostState == sessionWaitingDecision || attempt.Session.HostState == SessionWaitingAdmission || attempt.Session.HostState == SessionDisconnected) {
+		return local.ApplyResult{}, local.Reject("session_state_conflict", "a parked or closed delivery cannot publish a result")
+	}
+	if timedSession(attempt) && attempt.Session.HostState == SessionAwaiting {
+		if err := sessionReportAdmissible(r, attempt, e.clock.now()); err != nil {
+			return local.ApplyResult{}, err
+		}
+	}
 	canonicalResult, err := flow.Canonical(submission.Result)
 	if err != nil {
 		return local.ApplyResult{}, local.Reject("invalid_result", "the report is not canonicalizable JSON")
@@ -564,7 +588,7 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if !exists {
 		return local.ApplyResult{}, local.ErrIntegrity
 	}
-	if submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && len(submission.WorkspaceTrees) != 0 {
+	if submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && len(submission.WorkspaceTrees) != 0 {
 		return local.ApplyResult{}, &flow.Problem{Code: "submission_trees_unsupported", Path: "/workspace_trees", Message: "this assisted-session version cannot report workspace trees"}
 	}
 	// Capture follows the step's declared bindings, not the wording of the
@@ -625,7 +649,7 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 		if current.Session.HostState != SessionAwaiting {
 			return local.Change{}, local.Reject("session_state_conflict", "this handoff is no longer awaiting a host report")
 		}
-		if err := assistedReportAdmissible(current.Admitted, current.Deadline, obs); err != nil {
+		if err := sessionReportAdmissible(*r, current, obs); err != nil {
 			return local.Change{}, err
 		}
 		if r.admissionsBlockedFor(r.Activations[current.ActivationID].InvocationID) || r.cancelRequestedFor(r.Activations[current.ActivationID].InvocationID) {
@@ -673,9 +697,12 @@ func (e *Engine) MarkSessionDisconnected(ctx context.Context, runID, attemptID s
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
-	_, view, err := e.load(ctx, runID)
+	run, view, err := e.load(ctx, runID)
 	if err != nil {
 		return local.ApplyResult{}, err
+	}
+	if timedSession(run.Attempts[attemptID]) {
+		return local.ApplyResult{}, local.Reject("session_state_conflict", "timed deliveries use run drive to reconcile active/wait expiry; this legacy disconnect command cannot decide their outcome")
 	}
 	commandID := derivedID("command", attemptID, "session-disconnect", fmt.Sprint(view.Snapshot.Version))
 	return e.apply(ctx, e.owner, commandID, runID, "diagnostic.recorded", map[string]any{"attempt_id": attemptID, "code": "assisted_host_disconnected"}, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {

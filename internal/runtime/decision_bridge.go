@@ -182,6 +182,9 @@ func advanceDecisionDelivery(attempt *Attempt, name string, value json.RawMessag
 		attempt.Session.DecisionContext = map[string]json.RawMessage{}
 	}
 	attempt.Session.DecisionContext[name] = append(json.RawMessage(nil), value...)
+	if timedSession(attempt) {
+		return recordTimedDelivery(attempt, observed)
+	}
 	delivery, err := canonical(map[string]any{"envelope_digest": attempt.EnvelopeDigest, "decision_context": attempt.Session.DecisionContext})
 	if err != nil {
 		return err
@@ -192,14 +195,29 @@ func advanceDecisionDelivery(attempt *Attempt, name string, value json.RawMessag
 	return nil
 }
 
+func decisionYieldAdmissible(r Run, attempt *Attempt) error {
+	if r.HasUnresolvedEffects {
+		return fault("decision_yield_blocked", "unresolved effects prevent safely yielding this delivery")
+	}
+	for _, delivery := range r.ActionDeliveries {
+		if delivery.OwningAttemptID == attempt.ID && (delivery.DeliveryStatus != "prepared" || delivery.EffectStatus == nil || *delivery.EffectStatus != "not_started") {
+			return fault("decision_yield_blocked", "an in-flight or unknown action prevents safely yielding this delivery")
+		}
+	}
+	return nil
+}
+
 func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (local.ApplyResult, error) {
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
-	if request.SchemaVersion != DecisionRequestVersion || request.RunID == "" || request.AttemptID == "" || request.EnvelopeDigest == "" || !decisionID.MatchString(request.DecisionID) || request.DefinitionDigest == "" {
+	if (request.SchemaVersion != DecisionRequestVersion && request.SchemaVersion != DecisionRequestTimingVersion) || request.RunID == "" || request.AttemptID == "" || request.EnvelopeDigest == "" || !decisionID.MatchString(request.DecisionID) || request.DefinitionDigest == "" {
 		return local.ApplyResult{}, errors.New("decision request has invalid identity")
 	}
-	control, _, err := e.ensureControl(ctx)
+	if (request.SchemaVersion == DecisionRequestTimingVersion) != request.YieldExecution {
+		return local.ApplyResult{}, fault("decision_request_unsupported", "timed requests must explicitly yield execution; legacy requests cannot change that contract")
+	}
+	control, controlVersion, err := e.ensureControl(ctx)
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
@@ -218,7 +236,8 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 		return local.ApplyResult{}, err
 	}
 	commandID := derivedID("command", request.RunID, "decision-request", digest)
-	return e.apply(ctx, e.owner, commandID, request.RunID, "decision.requested", request, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, observed Observation) (local.Change, error) {
+	pin := &local.ControlPin{Key: AuthorityControlKey, Version: controlVersion}
+	return e.applyControlled(ctx, pin, e.owner, commandID, request.RunID, "decision.requested", request, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, observed Observation) (local.Change, error) {
 		if r.PendingDecision != nil {
 			return local.Change{}, local.Reject("decision_pending", "this Run already awaits one declared decision")
 		}
@@ -231,12 +250,40 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 			return local.Change{}, local.Reject("decision_conflict", "the request definition differs from the sealed catalog")
 		}
 		attempt := r.Attempts[request.AttemptID]
-		if attempt == nil || attempt.Session == nil || attempt.Session.SchemaVersion != AssistedSessionDecisionVersion || attempt.Session.PrincipalID != e.owner || attempt.Session.HostState != SessionAwaiting || attempt.EnvelopeDigest != request.EnvelopeDigest {
+		if attempt == nil || attempt.Session == nil || (attempt.Session.SchemaVersion != AssistedSessionDecisionVersion && !timedSession(attempt)) || attempt.Session.PrincipalID != e.owner || attempt.Session.HostState != SessionAwaiting || attempt.EnvelopeDigest != request.EnvelopeDigest || (request.SchemaVersion == DecisionRequestTimingVersion) != timedSession(attempt) {
 			return local.Change{}, local.Reject("decision_request_unsupported", "this attempt is not an awaiting decision-bridge session delivery")
+		}
+		activation := r.Activations[attempt.ActivationID]
+		if activation == nil {
+			return local.Change{}, local.ErrIntegrity
+		}
+		if r.terminal() || r.cancelRequestedFor(activation.InvocationID) || attempt.Settled != nil {
+			return local.Change{}, fault("decision_conflict", "cancelled or settled work cannot open another question")
+		}
+		recordVersion := DecisionRecordVersion
+		if timedSession(attempt) {
+			if err := decisionYieldAdmissible(*r, attempt); err != nil {
+				return local.Change{}, err
+			}
+			if err := consumeSessionTime(*r, attempt, observed); err != nil {
+				return local.Change{}, err
+			}
+			recordVersion = DecisionRecordTimingVersion
+		}
+		// Automatic choices renew a delivery without parking. They cannot use
+		// that shortcut to evade a stop that would forbid readmission.
+		checkAutomatic := func() error {
+			if timedSession(attempt) && (r.admissionsBlockedFor(activation.InvocationID) || control.blockingStop(e.Installation.ID, e.Config.ID) != nil) {
+				return fault("dispatch_blocked", "current controls forbid renewing this delivery automatically")
+			}
+			return nil
 		}
 		// The owner's own answer, given before the Run started, outranks any
 		// policy default: waiting for them is what the wait was for.
 		if sealed, exists := sealedDecisionAnswer(r.DecisionSheet, definition.ID); exists {
+			if err := checkAutomatic(); err != nil {
+				return local.Change{}, err
+			}
 			value, err := flow.Canonical(sealed)
 			if err != nil || ValidateDecisionValue(definition, value) != nil {
 				return local.Change{}, local.Reject("invalid_decision_default", "the sealed owner answer is not a declared value of this decision")
@@ -244,11 +291,14 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 			if err := advanceDecisionDelivery(attempt, definition.Destination.Name, value, observed); err != nil {
 				return local.Change{}, err
 			}
-			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: DecisionRecordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "answered", Source: "actor", Value: value, Observed: &observed})
+			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "answered", Source: "actor", Value: value, Observed: &observed})
 			data, err := canonical(map[string]any{"request": request, "request_digest": digest, "observation": observed, "source": "actor"})
 			return local.Change{Events: []local.EventInput{{Type: "decision.answered", Version: 1, Data: data}}}, err
 		}
 		if r.DecisionSheet.DecisionPolicy == "autonomous" && autonomousBlock(definition) == "" {
+			if err := checkAutomatic(); err != nil {
+				return local.Change{}, err
+			}
 			value, err := flow.Canonical(definition.Recommendation)
 			if err != nil || ValidateDecisionValue(definition, value) != nil {
 				return local.Change{}, local.Reject("invalid_decision_default", "the declared automatic recommendation is invalid")
@@ -256,15 +306,27 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 			if err := advanceDecisionDelivery(attempt, definition.Destination.Name, value, observed); err != nil {
 				return local.Change{}, err
 			}
-			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: DecisionRecordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "defaulted", Source: "autonomous_policy", Value: value, Observed: &observed})
+			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "defaulted", Source: "autonomous_policy", Value: value, Observed: &observed})
 			data, err := canonical(map[string]any{"request": request, "request_digest": digest, "observation": observed, "source": "autonomous_policy"})
 			return local.Change{Events: []local.EventInput{{Type: "decision.defaulted", Version: 1, Data: data}}}, err
 		}
 		r.PendingDecision = &request
 		attempt.Session.HostState = sessionWaitingDecision
-		r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: DecisionRecordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "pending", Source: "unanswered", Observed: &observed})
+		releaseSlot := ""
+		if timedSession(attempt) {
+			attempt.Session.Timing.SlotHeld = false
+			if wait := attempt.Session.Timing.Limits.DecisionWaitTimeoutMS; wait != nil {
+				deadline, err := sessionDeadline(observed, *wait)
+				if err != nil {
+					return local.Change{}, err
+				}
+				attempt.Session.Timing.WaitDeadline = &deadline
+			}
+			releaseSlot = attempt.ID
+		}
+		r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "pending", Source: "unanswered", Observed: &observed})
 		data, err := canonical(map[string]any{"request": request, "request_digest": digest, "observation": observed})
-		return local.Change{Events: []local.EventInput{{Type: "decision.requested", Version: 1, Data: data}}}, err
+		return local.Change{ReleaseSlot: releaseSlot, Events: []local.EventInput{{Type: "decision.requested", Version: 1, Data: data}}}, err
 	})
 }
 
@@ -279,7 +341,7 @@ func (e *Engine) AnswerDecision(ctx context.Context, answer DecisionAnswer) (loc
 	if err != nil {
 		return local.ApplyResult{}, local.Reject("invalid_decision_answer", "the answer is not canonicalizable JSON")
 	}
-	control, _, err := e.ensureControl(ctx)
+	control, controlVersion, err := e.ensureControl(ctx)
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
@@ -298,7 +360,8 @@ func (e *Engine) AnswerDecision(ctx context.Context, answer DecisionAnswer) (loc
 	// judged by the pending request, and a late answer for a settled request is
 	// reported as not pending instead of colliding with the earlier command.
 	commandID := derivedID("command", answer.RunID, "decision-answer", answer.RequestDigest, strconv.FormatInt(answer.ExpectedRunVersion, 10), rawDigest(canonicalValue))
-	return e.apply(ctx, e.owner, commandID, answer.RunID, "decision.answered", answer, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, observed Observation) (local.Change, error) {
+	pin := &local.ControlPin{Key: AuthorityControlKey, Version: controlVersion}
+	return e.applyControlled(ctx, pin, e.owner, commandID, answer.RunID, "decision.answered", answer, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, observed Observation) (local.Change, error) {
 		request := r.PendingDecision
 		if request == nil {
 			return local.Change{}, local.Reject("decision_not_pending", "this Run has no pending decision")
@@ -315,8 +378,20 @@ func (e *Engine) AnswerDecision(ctx context.Context, answer DecisionAnswer) (loc
 			return local.Change{}, local.Reject("invalid_decision_answer", err.Error())
 		}
 		attempt := r.Attempts[request.AttemptID]
-		if attempt == nil || attempt.Session == nil || attempt.Session.SchemaVersion != AssistedSessionDecisionVersion || attempt.Session.HostState != sessionWaitingDecision || attempt.EnvelopeDigest != request.EnvelopeDigest {
+		if attempt == nil || attempt.Session == nil || (attempt.Session.SchemaVersion != AssistedSessionDecisionVersion && !timedSession(attempt)) || attempt.Session.HostState != sessionWaitingDecision || attempt.EnvelopeDigest != request.EnvelopeDigest {
 			return local.Change{}, local.Reject("decision_conflict", "the pending request no longer owns this session delivery")
+		}
+		activation := r.Activations[attempt.ActivationID]
+		if activation == nil {
+			return local.Change{}, local.ErrIntegrity
+		}
+		if r.terminal() || r.cancelRequestedFor(activation.InvocationID) || attempt.Settled != nil {
+			return local.Change{}, fault("decision_conflict", "cancelled or settled work cannot accept a late answer")
+		}
+		if timedSession(attempt) {
+			if err := decisionWaitAdmissible(*r, attempt, observed); err != nil {
+				return local.Change{}, err
+			}
 		}
 		found := false
 		for index := range r.DecisionLedger {
@@ -330,8 +405,17 @@ func (e *Engine) AnswerDecision(ctx context.Context, answer DecisionAnswer) (loc
 		if !found {
 			return local.Change{}, local.ErrIntegrity
 		}
-		if err := advanceDecisionDelivery(attempt, definition.Destination.Name, canonicalValue, observed); err != nil {
-			return local.Change{}, err
+		if timedSession(attempt) {
+			if attempt.Session.DecisionContext == nil {
+				attempt.Session.DecisionContext = map[string]json.RawMessage{}
+			}
+			attempt.Session.DecisionContext[definition.Destination.Name] = append(json.RawMessage(nil), canonicalValue...)
+			attempt.Session.HostState = SessionWaitingAdmission
+			attempt.Session.Timing.Observed, attempt.Session.Timing.WaitDeadline = observed, nil
+		} else {
+			if err := advanceDecisionDelivery(attempt, definition.Destination.Name, canonicalValue, observed); err != nil {
+				return local.Change{}, err
+			}
 		}
 		r.PendingDecision = nil
 		data, err := canonical(map[string]any{"answer": answer, "request_digest": requestDigest, "observation": observed})

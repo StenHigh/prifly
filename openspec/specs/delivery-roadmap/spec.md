@@ -146,16 +146,17 @@ runtime contract.
 
 | Уровень | Запись | Статус | Prerequisite | Следующий шаг |
 |---|---|---|---|---|
-| Highest | [`separate-work-time-from-human-wait`](../../changes/separate-work-time-from-human-wait/tasks.md): ожидание человека без расхода рабочего времени | В работе: 1/13, legacy regression; parking приостановлен из-за выявленной зависимости | Существующие assisted session, decision bridge и admission queue; требуется согласовать исключительное использование claim между Runs | Согласовать защиту рабочей копии, затем реализовать сроки и безопасное ожидание до дальнейшей квалификации живых диалогов |
+| Highest | [`separate-work-time-from-human-wait`](../../changes/separate-work-time-from-human-wait/tasks.md): ожидание человека без расхода рабочего времени | Реализация завершена: 14/14; versioned сроки, безопасное ожидание и исключительное использование claim проверены | Существующие assisted session, decision bridge и admission queue; исключительное использование claim одним Run включено в scope | Продолжить общий candidate: полные ворота, реальные UI observations и внешний AIF gate; Release отдельно |
 | Highest | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md): универсальный Project launch | В работе: variants, no-Git managed запуск, общая анкета/review и mixed flow; 17/24 задач, текущий срез 57 тестов | Versioned Start/пакеты, существующие local-process и assisted-session | Далее: реальные UI observations и внешний AIF gate; Release отдельно |
 | Active | `add-run-decision-catalog`: per-Run Fast/Full/Ultra и universal decision bridge | В работе | Versioned Project launch, sealed package profile и durable Run-state | Завершить typed catalog, preflight, wait/recovery и host/CLI evidence, не выдавая upstream AIF compatibility или live-pilot qualification за результат Core |
 | Active | `add-native-host-question-ux`: один конечный вопрос в Codex и Claude Code | Осталось ручное наблюдение UI | Доступ к обоим host runtimes | Закрыть task 2.3 active change без заявления product qualification |
+| High | `workspace-tree-preparation-rollback`: очистка файлов при отказе до admission | Выявлен прежний дефект: cleanup input tree использует уже закрытый os.Root | Существующие workspace tree materialization и rollback | Описать отдельный change и проверить удаление только созданных подготовкой файлов без потери файлов пользователя |
 | High | `assisted-model-profile-protocol` | Не начато | Versioned assisted-host contract | Создать OpenSpec change до заявления о provider/model/reasoning selection |
 
-Приоритет на 2026-09-06 — исправить расходование рабочего срока при ожидании
-человека, затем продолжить общий путь запуска, а не расширение AIF или
-управление моделями. Долгая пауза в живом тесте выявила этот дефект; короткий
-повтор успешно создал отчёт, но исправлением сроков не является. Детальные
+На 2026-09-06 расходование рабочего срока при ожидании человека исправлено
+в новом явном контракте. Далее — общий путь запуска, а не расширение AIF или
+управление моделями. Длительное ожидание проверено отдельным runtime regression,
+короткий живой mixed Run создал отчёт; это не квалификация native UI. Детальные
 задачи и условия приёмки находятся только в linked changes. Первые два среза
 универсального запуска снимают блокеры самостоятельного использования Pri-Fly;
 после исправления ожидания общий decision UX и внешний AIF проверяются

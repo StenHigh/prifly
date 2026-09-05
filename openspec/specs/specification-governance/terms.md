@@ -50,7 +50,10 @@ limits. Точный контракт — в [workflow and context](../workflow-
 ### Step authoring source — Авторский исходник шага
 
 Изменяемый YAML `prifly-step/1`, который перед sealing однозначно превращается
-в машинный StepDefinition v2. Он опускает только безопасные пустые collections,
+в машинный StepDefinition v2 (либо явно выбранную поддержанную edition).
+Новый marker `prifly-step/2` явно выбирает v6 с [SessionLimits](#session-limits);
+старые definitions и Runs при этом не переписываются.
+Authoring опускает только безопасные пустые collections,
 title, JSON port format и обычные port defaults; effects, retry, executor,
 result schema и повышенные capabilities остаются явными. Marker не является
 полем StepDefinition, новой runtime-семантикой или способом изменить уже
@@ -303,6 +306,12 @@ question. **DecisionAnswer** — typed ответ на этот exact pending re
 передаётся другому step и не делает successor ready. Ни один из этих DTO не
 является Approval, Grant, ActionIntent либо DecisionArtifact.
 
+Для `assisted-session/6` Request `/2` содержит обязательный
+`yield_execution: true`: host прекращает работу по прежней delivery. Только
+принятое объявленное ожидание приостанавливает расход рабочего остатка.
+Ответ не выдаёт слот и не продлевает права: до повторного допуска состояние
+остаётся `waiting_admission`. Legacy Request `/1` сохраняет прежний смысл.
+
 <a id="decision-record"></a>
 ### DecisionRecord — Запись журнала решений
 
@@ -311,6 +320,10 @@ question. **DecisionAnswer** — typed ответ на этот exact pending re
 Журнал объясняет происхождение выбора в Run report; automatic recommendation
 никогда не выдаётся за ответ человека. Запись не разрешает внешний effect и не
 заменяет ActionIntent или Approval.
+
+Record `/2` дополнительно сохраняет `cancelled` или `expired` без значения
+ответа, с `closure_reason`. Эта edition относится только к runtime-решению
+timed Attempt; preflight и legacy records остаются `/1`.
 
 <a id="interaction-policy"></a>
 ### Attended / autonomous / unattended Run — Режим участия владельца
@@ -626,15 +639,20 @@ archive digest, manifest bytes и signature остаются тремя разн
 заявлен.
 
 Claim фиксируется durable до создания worktree: прерванная подготовка оставляет
-`preparing`, который можно очистить, а не неатрибутируемый каталог. Release и
-cleanup `worktree` записываются вместе, но удаляется только каталог с той
-device/inode identity, которую создал именно этот claim; подменённый каталог
+`preparing`, а не неатрибутируемый каталог. Claim record `/3` при admission
+атомарно закрепляет `run_id`; свободный слот и истёкший lease не передают
+папку другому Run. Уже выданный legacy claim без доказанного Run-владельца
+требует recovery, не автоматической атрибуции.
+Release незавершённого либо uncertain Run запрещён. Допустимый release сначала
+фиксирует `releasing`, затем выполняет cleanup вне write-транзакции. После
+прерывания fence сохраняется. Удаляется только каталог с подтверждённой
+device/inode identity этого claim; неизвестный либо подменённый каталог
 блокирует удаление. Cleanup `checkout` снимает только claim и никогда не
 меняет Git topology, branch, HEAD или файлы. `checkout` допускается лишь из
 чистого repository и сохраняет ту же physical exclusivity. Устаревшая
 generation не удаляет ресурс более позднего владельца. Один claim на
-репозиторий — граница этой поставки, а не планировщик: fairness queue,
-parallel и remote claims не введены.
+репозиторий — граница этой поставки. Очередь execution slots не передаёт
+владение claim; распределённые и remote claims этим не реализуются.
 
 <a id="assisted-session"></a>
 ### AssistedSession / SessionHandoff — Ассистируемое исполнение и передача работы хосту
@@ -651,13 +669,45 @@ Workspace tree bindings; для output-only дерева host возвращае
 разрешённую location, а не digest, manifest или ArtifactRef. Хост доказывает,
 какую работу держит, возвращая точные attempt
 identity и envelope digest, а не предъявлением токена. Отсутствие отчёта
-является собственным состоянием `disconnected` и переводит Run в `uncertain`;
+в legacy contract является состоянием `disconnected` и переводит Run в `uncertain`;
 оно никогда не становится успехом и не запускает автоматический повтор,
 потому что эффект в claimed Workspace мог остаться.
 
 Закрытие ассистируемой попытки опирается только на сам отчёт и объявленные outputs. Факты процесса — код возврата, время выхода, identity процесса — у неё отсутствуют и не подставляются: `ProcessOutcome` и `ExecutorEnd` остаются пустыми, потому что отчёт доказывает ответ хоста, а не остановку его сессии.
 
 Допустимость отчёта отличается от бюджета исполнения. Бюджет выдаёт время работы и потому требует общего квалифицированного clock domain; работа хоста этим authority не ограничена, а его отчёт всегда приходит из другого процесса. Поэтому срок handoff решает только, принимается ли отчёт, и сравнивается по записанному UTC, а `deadline_trust` называет часы, на которых этот предел держится. Смена локальных часов сдвигает его: это заявленное ограничение, а не квалифицированная гарантия.
+
+В `/6` срок управляется SessionTiming, а новый SessionTask несёт SessionDelivery.
+Истёкшая доставка больше не выдаётся как исполнимая задача. Unknown workspace
+effect сохраняет `uncertain`; effects:none без иных обязательств может быть
+закрыт как failed/ cancelled без выдуманного ProcessOutcome. Старый
+`session disconnect` для этой edition отказывает и направляет к `run drive`.
+
+<a id="session-limits"></a>
+### SessionLimits — Закреплённые сроки ассистируемого шага
+
+Часть StepDefinition v6: положительный конечный `active_timeout_ms`
+(default 3600000 ms) и nullable `decision_wait_timeout_ms` (default null —
+без срока ожидания). Предел каждого положительного значения — 9223372036854 ms.
+Настройки закрепляются в revision, доступны только assisted executor и не
+изменяют managed process timeout либо ранее созданные Runs.
+
+<a id="session-timing"></a>
+### SessionTiming / SessionDelivery — Учёт времени и текущая доставка
+
+SessionTiming в SessionHandoff `/6` хранит закреплённые limits, `remaining_ms`,
+последнюю `observed`, optional `wait_deadline` и факт `slot_held`. Это не CPU
+время: активный интервал означает доступность работы/отчёта cooperative host.
+`waiting_decision` и `waiting_admission` не расходуют остаток и не занимают
+execution slot, но сохраняют Attempt, claims, pins и обязательства.
+
+SessionDelivery связывает digest неизменяемого исходного ExecutionEnvelope,
+`generation`, `decision_context`, актуальные timing и deadline. Её canonical
+bytes определяют текущий `envelope_digest` в SessionTask и отчёте `/6`.
+Новая delivery той же Attempt появляется только после повторного допуска;
+старые bytes envelope не переписываются. Rollback за сохранённую временную
+границу даёт отказ, но UTC остаётся `local_wall_unqualified`, не доверенными
+часами и не механизмом автоматического пробуждения host.
 
 Состояние `core-state/5` существует ради этих фактов: прежние bundles остаются неизменными, а Run не утверждает dispatch, за который никто не отвечает.
 
@@ -1352,6 +1402,7 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.ClaimRecord` | — |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim` | — |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Mode` | `mode` |
+| [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.RunID` | `run_id` |
 | [Generation](#generation) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Generation` | `generation` |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.RepositoryIdentity` | — |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Repository` | `repository` |
@@ -1360,6 +1411,11 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [ClaimProcess](#resource-lease) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Process` | `process` |
 | [AssistedSession](#assisted-session) | `internal/runtime/sessions.go` | `runtime.SessionHandoff` | — |
 | [AssistedSession](#assisted-session) | `internal/runtime/sessions.go` | `runtime.SessionHandoff.HostState` | `host_state` |
+| [SessionLimits](#session-limits) | `internal/flow/types.go` | `flow.StepDefinition.SessionLimits` | `session_limits` |
+| [SessionLimits](#session-limits) | `internal/flow/types.go` | `flow.SessionLimits.ActiveTimeoutMS` | `active_timeout_ms` |
+| [SessionLimits](#session-limits) | `internal/flow/types.go` | `flow.SessionLimits.DecisionWaitTimeoutMS` | `decision_wait_timeout_ms` |
+| [SessionTiming](#session-timing) | `internal/runtime/sessions.go` | `runtime.SessionHandoff.Timing` | `timing` |
+| [SessionDelivery](#session-timing) | `internal/runtime/sessions.go` | `runtime.SessionTask.Delivery` | `delivery` |
 | [SessionHandoff](#assisted-session) | `internal/runtime/sessions.go` | `runtime.SessionHandoff.WorkspaceMode` | `workspace_mode` |
 | [SessionHandoff](#assisted-session) | `internal/runtime/model.go` | `runtime.Attempt.Session` | `session` |
 | [SessionHandoff](#assisted-session) | `internal/runtime/sessions.go` | `runtime.SessionTask` | — |

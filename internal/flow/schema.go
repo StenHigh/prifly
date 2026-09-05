@@ -127,7 +127,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
-		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5",
+		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6",
 		"WorkflowRevisionV2", "WorkflowRevisionV3",
 	}
 	for name := range defs {
@@ -218,6 +218,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = stepDefinitionV2Schema
 	case "StepDefinitionV5":
 		extension = stepDefinitionV2Schema
+	case "StepDefinitionV6":
+		extension = stepDefinitionV2Schema
 	case "WorkflowRevisionV2":
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV3":
@@ -230,14 +232,17 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		}
 		root = value.(map[string]any)
 		selected = root["$defs"].(map[string]any)
-		if name == "StepDefinitionV3" || name == "StepDefinitionV4" || name == "StepDefinitionV5" {
+		if name == "StepDefinitionV3" || name == "StepDefinitionV4" || name == "StepDefinitionV5" || name == "StepDefinitionV6" {
 			stepDefinitionV3(root)
 		}
-		if name == "StepDefinitionV4" || name == "StepDefinitionV5" {
+		if name == "StepDefinitionV4" || name == "StepDefinitionV5" || name == "StepDefinitionV6" {
 			stepDefinitionV4(root)
 		}
-		if name == "StepDefinitionV5" {
+		if name == "StepDefinitionV5" || name == "StepDefinitionV6" {
 			stepDefinitionV5(root)
+		}
+		if name == "StepDefinitionV6" {
+			stepDefinitionV6(root)
 		}
 		if name == "WorkflowRevisionV3" {
 			workflowRevisionV3(root, defs)
@@ -466,6 +471,28 @@ func stepDefinitionV5(root map[string]any) {
 			},
 		},
 	}
+}
+
+// StepDefinition v6 pins separate active and decision-wait allowances. Workspace
+// trees remain available, but a timed assisted step need not touch a repository.
+func stepDefinitionV6(root map[string]any) {
+	root["$id"] = "urn:prifly:step-definition:6"
+	root["title"] = "Pri-Fly StepDefinition v6: assisted work and decision wait limits"
+	properties := root["properties"].(map[string]any)
+	properties["schema_version"].(map[string]any)["const"] = "6"
+	properties["session_limits"] = map[string]any{
+		"type": "object", "additionalProperties": false,
+		"required": []any{"active_timeout_ms", "decision_wait_timeout_ms"},
+		"properties": map[string]any{
+			"active_timeout_ms":        map[string]any{"type": "integer", "minimum": 1, "maximum": MaxSessionTimeoutMS},
+			"decision_wait_timeout_ms": map[string]any{"type": []any{"integer", "null"}, "minimum": 1, "maximum": MaxSessionTimeoutMS},
+		},
+	}
+	required := slices.DeleteFunc(root["required"].([]any), func(value any) bool { return value == "workspace_trees" })
+	root["required"] = append(required, "session_limits")
+	executor := properties["executor"].(map[string]any)["properties"].(map[string]any)
+	executor["operation"] = map[string]any{"const": "session"}
+	executor["adapter_ref"].(map[string]any)["properties"] = map[string]any{"id": map[string]any{"const": "core:adapter/assisted-session"}}
 }
 
 // ValidateSchema checks data before a Run exists, using the same pinned schema

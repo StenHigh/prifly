@@ -308,7 +308,21 @@ type StepDefinition struct {
 	Hooks           map[string]Hook        `json:"hooks,omitempty"`
 	Telemetry       []Mapping              `json:"telemetry,omitempty"`
 	WorkspaceTrees  []WorkspaceTreeBinding `json:"workspace_trees,omitempty"`
+	SessionLimits   *SessionLimits         `json:"session_limits,omitempty"`
 }
+
+// SessionLimits separates an assisted delivery's finite work allowance from
+// one declared decision wait. A nil wait limit means no calendar deadline.
+type SessionLimits struct {
+	ActiveTimeoutMS       int64  `json:"active_timeout_ms"`
+	DecisionWaitTimeoutMS *int64 `json:"decision_wait_timeout_ms"`
+}
+
+const (
+	DefaultSessionActiveTimeoutMS int64 = 3600000
+	// Milliseconds must remain representable as a time.Duration in the runtime.
+	MaxSessionTimeoutMS int64 = 9223372036854
+)
 
 // WorkspaceTreeBinding declares the bounded part of a claimed Workspace that
 // carries one sealed WorkspaceTreeManifest between assisted steps. The runtime,

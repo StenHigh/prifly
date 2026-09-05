@@ -525,6 +525,11 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 				return step, problem("unsupported", path+"/schema_version", "workspace trees require core-workflow/1")
 			}
 			name = "StepDefinitionV5"
+		case "6":
+			if p.Profile != CoreProfile {
+				return step, problem("unsupported", path+"/schema_version", "assisted session limits require core-workflow/1")
+			}
+			name = "StepDefinitionV6"
 		}
 	}
 	if err := validateProtocolValue(name, value, path); err != nil {
@@ -579,8 +584,8 @@ func (p *Plan) checkWorkspaceTrees(step StepDefinition, path string) error {
 	if len(step.WorkspaceTrees) == 0 {
 		return nil
 	}
-	if step.SchemaVersion != "5" || step.Effects.Class != "workspace_write" {
-		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees require StepDefinition v5 and workspace_write")
+	if (step.SchemaVersion != "5" && step.SchemaVersion != "6") || step.Effects.Class != "workspace_write" {
+		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees require StepDefinition v5 or v6 and workspace_write")
 	}
 	seenPaths, seenOutputs := map[string]bool{}, map[string]bool{}
 	for index, binding := range step.WorkspaceTrees {

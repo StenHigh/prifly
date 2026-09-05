@@ -20,6 +20,18 @@ import (
 // The host here is scripted. This proves the public protocol and real native
 // workers, not a human's identity or Codex/Claude's question presentation.
 func TestCLIProjectMixedDecisionResumesWithoutGit(t *testing.T) {
+	testCLIProjectMixedDecision(t, false)
+}
+
+// Native workers need the operating system's real clock. The runtime's separate
+// synctest covers two weeks; this test covers the same timed public protocol
+// between actual commands, without rewriting timestamps or durable snapshots.
+func TestCLIProjectTimedMixedDecisionResumesWithoutGit(t *testing.T) {
+	testCLIProjectMixedDecision(t, true)
+}
+
+func testCLIProjectMixedDecision(t *testing.T, timed bool) {
+	t.Helper()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("the native CSV workers require Node")
@@ -79,7 +91,7 @@ launches:
     workflow: .prifly/workflows/mixed/workflow.yaml
 `)
 	writeFixtureFile(t, root, folder+"/workflow.yaml", mixedDecisionWorkflow)
-	writeFixtureFile(t, root, folder+"/steps/scale.yaml", `authoring: prifly-step/1
+	scaleSource := `authoring: prifly-step/1
 id: test:step/scale
 version: 1.0.0
 kind: worker
@@ -91,7 +103,11 @@ executor: {adapter_ref: "{{assisted}}", operation: session}
 instructions_ref: "{{context_scale}}"
 effects: {class: none, retry_class: never}
 result_schema_ref: "{{result}}"
-`)
+`
+	if timed {
+		scaleSource = strings.Replace(scaleSource, "prifly-step/1", "prifly-step/2", 1)
+	}
+	writeFixtureFile(t, root, folder+"/steps/scale.yaml", scaleSource)
 	writeFixtureFile(t, root, folder+"/contexts/scale.yaml", `id: test:context/scale
 version: 1.0.0
 media_type: text/markdown; charset=utf-8
@@ -162,6 +178,13 @@ destination: {kind: session_context, name: multiplier}
 		t.Fatalf("native parse did not feed the host: %q %v", rowsBefore, err)
 	}
 	run, _ := readSnapshot()
+	originalEnvelope := bytes.Clone(run.Attempts[task.AttemptID].Envelope)
+	var remainingMS int64
+	if timed {
+		if run.SchemaVersion != prifly.CoreTimingStateVersion || task.SchemaVersion != prifly.AssistedSessionTimingVersion || task.Delivery == nil || task.Delivery.Timing.RemainingMS != 3600000 {
+			t.Fatalf("mixed fixture did not enter the new timed contract: %+v", task)
+		}
+	}
 	definition := run.DecisionCatalog.Decisions[0]
 	digest, err := prifly.DecisionDefinitionDigest(definition)
 	if err != nil {
@@ -170,7 +193,21 @@ destination: {kind: session_context, name: multiplier}
 	request := prifly.DecisionRequest{SchemaVersion: prifly.DecisionRequestVersion, RunID: runID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, DecisionID: definition.ID, DefinitionDigest: digest, ExpectedRunVersion: task.RunVersion}
 	// The decision variant omits result entirely; JSON null is not a result
 	// and must not be sent alongside a decision request.
-	command("--project", authority, "session", "submit", "--file", writeJSON(map[string]any{"schema_version": task.SchemaVersion, "run_id": runID, "attempt_id": task.AttemptID, "envelope_digest": task.EnvelopeDigest, "decision_request": request}))
+	if timed {
+		args := []string{"--project", authority, "run", "decision", runID, "request", "--attempt", task.AttemptID, "--envelope-digest", task.EnvelopeDigest, "--decision", definition.ID, "--expected-run-version", strconv.FormatInt(task.RunVersion, 10)}
+		if code, _, stderr := runCLI(t, args...); code == 0 || !strings.Contains(stderr, "decision_request_unsupported") {
+			t.Fatalf("timed host yielded without explicit consent: %d %s", code, stderr)
+		}
+		command(append(args, "--yield-execution")...)
+		parked, _ := readSnapshot()
+		timing := parked.Attempts[task.AttemptID].Session.Timing
+		if timing == nil || timing.RemainingMS <= 0 || timing.RemainingMS > 3600000 || timing.WaitDeadline != nil || timing.SlotHeld {
+			t.Fatalf("question did not preserve a bounded remainder with unbounded wait and no execution slot: %+v", timing)
+		}
+		remainingMS = timing.RemainingMS
+	} else {
+		command("--project", authority, "session", "submit", "--file", writeJSON(map[string]any{"schema_version": task.SchemaVersion, "run_id": runID, "attempt_id": task.AttemptID, "envelope_digest": task.EnvelopeDigest, "decision_request": request}))
+	}
 	var next prifly.NextView
 	decode(command("--project", authority, "run", "next", runID), &next)
 	if next.Action != "waiting_decision" {
@@ -189,6 +226,9 @@ destination: {kind: session_context, name: multiplier}
 	if ledger.RunID != runID || ledger.Pending == nil || ledger.Pending.AttemptID != task.AttemptID || ledger.RequestDigest == "" {
 		t.Fatal("reopened pending decision changed identity")
 	}
+	if timed && (ledger.Pending.SchemaVersion != prifly.DecisionRequestTimingVersion || !ledger.Pending.YieldExecution) {
+		t.Fatal("CLI did not persist the typed yield-execution request")
+	}
 	answer := []string{"--project", authority, "run", "decision", runID, "answer", "--decision", definition.ID, "--request-digest", ledger.RequestDigest, "--expected-run-version", strconv.FormatInt(ledger.RunVersion, 10), "--value"}
 	_, beforeInvalid := readSnapshot()
 	if code, _, stderr := runCLI(t, append(append([]string{}, answer...), `"double"`)...); code == 0 || !strings.Contains(stderr, "invalid_decision_answer") {
@@ -205,10 +245,43 @@ destination: {kind: session_context, name: multiplier}
 	decode(command("--project", authority, "run", "decisions", runID), &ledger)
 	answer[len(answer)-2] = strconv.FormatInt(ledger.RunVersion, 10)
 	command(append(answer, "2")...)
+	if timed {
+		answered, _ := readSnapshot()
+		session := answered.Attempts[task.AttemptID].Session
+		if answered.PendingDecision != nil || session.HostState != prifly.SessionWaitingAdmission || session.Timing.RemainingMS != remainingMS || session.Timing.SlotHeld {
+			t.Fatalf("answer itself admitted new work or replenished time: %+v", session)
+		}
+		if code, _, stderr := runCLI(t, "--project", authority, "session", "task", "--run", runID); code == 0 || !strings.Contains(stderr, "no_active_handoff") {
+			t.Fatalf("saved answer was exposed as an admitted handoff: %d %s", code, stderr)
+		}
+		decode(command("--project", authority, "run", "next", runID), &next)
+		if next.Action != "session_resume" {
+			t.Fatalf("answered attempt did not await explicit readmission: %+v", next)
+		}
+		command("--project", authority, "run", "drive", runID)
+	}
 	var resumed prifly.SessionTask
 	decode(command("--project", authority, "session", "task", "--run", runID), &resumed)
 	if resumed.AttemptID != task.AttemptID || resumed.RunID != runID || resumed.EnvelopeDigest == task.EnvelopeDigest || string(resumed.DecisionContext["multiplier"]) != "2" {
 		t.Fatal("accepted answer did not redeliver the same assisted attempt")
+	}
+	if timed {
+		deadline, err := time.Parse(time.RFC3339Nano, resumed.Deadline)
+		if err != nil || !deadline.After(time.Now()) || resumed.Delivery == nil || resumed.Delivery.Timing.RemainingMS != remainingMS || !resumed.Delivery.Timing.SlotHeld || resumed.Delivery.Generation <= task.Delivery.Generation {
+			t.Fatalf("readmission did not grant only the preserved remainder: %+v %v", resumed, err)
+		}
+		observed, err := time.Parse(time.RFC3339Nano, resumed.Delivery.Timing.Observed.UTC)
+		if err != nil || deadline.Sub(observed) != time.Duration(remainingMS)*time.Millisecond {
+			t.Fatalf("new deadline did not bind the exact saved remainder: %v", err)
+		}
+		continued, _ := readSnapshot()
+		if !bytes.Equal(continued.Attempts[task.AttemptID].Envelope, originalEnvelope) {
+			t.Fatal("resume rewrote the initial instruction or input refs")
+		}
+		unchangedRows, err := os.ReadFile(filepath.Join(resumed.Workspace, resumed.Context.Inputs["rows"].Path))
+		if err != nil || !bytes.Equal(unchangedRows, rowsBefore) {
+			t.Fatalf("wait and reopen changed the original input bytes: %v", err)
+		}
 	}
 	command("--project", authority, "run", "drive", runID)
 	assertNotFinal()

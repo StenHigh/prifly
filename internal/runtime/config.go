@@ -93,6 +93,9 @@ func decodeState(data []byte, value any) error {
 		if err := contextWireFields(fields, r.SchemaVersion); err != nil {
 			return err
 		}
+		if err := timingWireFields(fields, *r); err != nil {
+			return err
+		}
 		// A guard field in an older wire contract is refused, including an
 		// explicit null: a state that names a rule its version cannot describe
 		// would be read by an older core as a Run with no rule at all.
@@ -179,6 +182,62 @@ func decodeState(data []byte, value any) error {
 					return errors.New("legacy state cannot contain scoped stops")
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// Go pointers lose the difference between an omitted field and explicit null.
+// Inspect the wire as well, so a new field cannot hide inside an older edition.
+func timingWireFields(fields map[string]json.RawMessage, r Run) error {
+	var attempts map[string]map[string]json.RawMessage
+	if err := json.Unmarshal(fields["attempts"], &attempts); len(fields["attempts"]) != 0 && err != nil {
+		return err
+	}
+	for id, attempt := range attempts {
+		var session map[string]json.RawMessage
+		if raw := attempt["session"]; len(raw) != 0 {
+			if err := json.Unmarshal(raw, &session); err != nil {
+				return err
+			}
+		}
+		if _, exists := session["timing"]; exists {
+			if !isTimingState(r.SchemaVersion) || r.Attempts[id] == nil || r.Attempts[id].Session == nil || r.Attempts[id].Session.SchemaVersion != AssistedSessionTimingVersion {
+				return errors.New("older session cannot contain timing fields")
+			}
+		}
+	}
+	if r.PendingDecision != nil {
+		var request map[string]json.RawMessage
+		if err := json.Unmarshal(fields["pending_decision"], &request); err != nil {
+			return err
+		}
+		_, yield := request["yield_execution"]
+		if (!isTimingState(r.SchemaVersion) && r.PendingDecision.SchemaVersion == DecisionRequestTimingVersion) || (yield && r.PendingDecision.SchemaVersion != DecisionRequestTimingVersion) {
+			return errors.New("older decision request cannot contain execution handover")
+		}
+	}
+	var ledger []map[string]json.RawMessage
+	if err := json.Unmarshal(fields["decision_ledger"], &ledger); len(fields["decision_ledger"]) != 0 && err != nil {
+		return err
+	}
+	for i, record := range ledger {
+		_, closure := record["closure_reason"]
+		if (!isTimingState(r.SchemaVersion) && r.DecisionLedger[i].SchemaVersion == DecisionRecordTimingVersion) || (closure && r.DecisionLedger[i].SchemaVersion != DecisionRecordTimingVersion) {
+			return errors.New("older decision record cannot contain closure reasons")
+		}
+	}
+	var sheet struct {
+		Records []map[string]json.RawMessage `json:"records"`
+	}
+	if raw := fields["decision_sheet"]; len(raw) != 0 {
+		if err := json.Unmarshal(raw, &sheet); err != nil {
+			return err
+		}
+	}
+	for _, record := range sheet.Records {
+		if _, exists := record["closure_reason"]; exists {
+			return errors.New("preflight decision record cannot contain a runtime closure reason")
 		}
 	}
 	return nil

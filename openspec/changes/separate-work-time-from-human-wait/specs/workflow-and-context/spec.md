@@ -27,3 +27,30 @@ executor. Legacy authoring MUST сохранять прежнюю compilation и
 #### Scenario: После запуска изменены настройки
 - **WHEN** YAML получает новые значения сроков
 - **THEN** только новая revision использует их, а ранее созданный Run не меняется
+
+## MODIFIED Requirements
+
+### Requirement: YAML является lossless authoring frontend
+`prifly-workflow/1`, `prifly-step/1` и `prifly-step/2` MUST детерминированно
+опускаться в canonical JSON definitions до schema, compiler, digest и Run.
+Runtime MUST не интерпретировать YAML shortcuts. Full JSON и full YAML without
+marker MUST сохранять машинный contract; every rare field MUST иметь полную
+форму. Новый step marker MUST явно выбирать StepDefinition v6; старый marker
+MUST не получать его timing semantics автоматически.
+
+#### Scenario: Автор использует полное машинное поле
+- **WHEN** compact frontend не сокращает нужную настройку
+- **THEN** compiler принимает её как unchanged canonical definition field
+
+### Requirement: YAML defaults ограничены безопасной структурой
+Authoring YAML MUST требовать identity, entry/stages, policy и execution
+ceilings. Он MAY default title, empty ports/bindings, outcome set и безопасные
+structural values, но MUST не угадывать routes, permissions, max iterations,
+join, configuration scope или security semantics. Срок MUST иметь явное
+значение либо документированный default явно выбранной contract edition;
+`prifly-step/2` закрепляет active default 3600000 ms и бессрочное human wait.
+Это MUST NOT изменять deadlines legacy definitions или defaults операторов.
+
+#### Scenario: Автор опускает join rule
+- **WHEN** parallel stage требует join semantics
+- **THEN** compiler отклоняет definition вместо скрытого выбора default

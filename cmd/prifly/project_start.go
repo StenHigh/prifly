@@ -232,7 +232,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	var summary projectLaunchSummary
 	if neutral {
-		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/1", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true}
+		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/2", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true, SessionLimits: requirements.sessionLimits}
 		summary.Requirements = &requirements
 		for _, component := range compiled.Components {
 			if component.Path == workflowPath {

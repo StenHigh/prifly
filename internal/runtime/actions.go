@@ -239,7 +239,7 @@ func (r Run) actionProposalAttempt(principal string, intent ActionIntent, descri
 	if attempt.Session == nil || attempt.Session.PrincipalID != principal || attempt.Session.HostState != SessionAwaiting {
 		return nil, local.Reject("action_forbidden", "only the current assisted host may propose an action")
 	}
-	if err := assistedReportAdmissible(attempt.Admitted, attempt.Deadline, observation); err != nil {
+	if err := sessionReportAdmissible(r, attempt, observation); err != nil {
 		return nil, err
 	}
 	if r.HasUnresolvedEffects || r.admissionsBlockedFor(activation.InvocationID) || r.cancelRequestedFor(activation.InvocationID) {

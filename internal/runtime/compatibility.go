@@ -53,10 +53,18 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreNeutralStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreNeutralReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "neutral_start", "execution_bindings")
+	profile.StateVersion, profile.ReadVersion = CoreTimingStateVersion, CoreTimingReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreTimingStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreTimingReadVersion)
+	profile.StepVersions = append(profile.StepVersions, "6")
+	profile.Capabilities = append(profile.Capabilities, "assisted_session_timing")
 	return manifest
 }
 
 func supportedRun(r Run) bool {
+	if sessionTimingInvariant(r) != nil {
+		return false
+	}
 	if decisionInvariant(r) != nil {
 		return false
 	}
@@ -108,6 +116,12 @@ func supportedRun(r Run) bool {
 				want = AssistedSessionTreeVersion
 			} else if isWorkspaceState(r.SchemaVersion) {
 				want = AssistedSessionWorkspaceVersion
+			}
+			if attempt.Session.Timing != nil {
+				if !isTimingState(r.SchemaVersion) {
+					return false
+				}
+				want = AssistedSessionTimingVersion
 			}
 			if attempt.Session.SchemaVersion != want {
 				return false
@@ -263,6 +277,17 @@ func requiresRepeatState(p *flow.Plan) bool {
 	for _, child := range workflowPlans(p) {
 		if len(child.Repeats) != 0 {
 			return true
+		}
+	}
+	return false
+}
+
+func requiresTimingState(p *flow.Plan) bool {
+	for _, child := range workflowPlans(p) {
+		for _, step := range child.Steps {
+			if step.SessionLimits != nil {
+				return true
+			}
 		}
 	}
 	return false

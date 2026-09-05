@@ -1,9 +1,11 @@
-# yaml-language-server: $schema=../../schemas/authoring/step-v1.schema.json
-# Complete reference for one prifly-step/1 source. Copy only the fields that
+# yaml-language-server: $schema=../../schemas/authoring/step-v2.schema.json
+# Complete reference for one prifly-step/2 assisted source. Copy only the fields that
 # describe this step; the compiler inserts the documented safe defaults before
-# it seals the machine StepDefinition v2 or v5. This file is intentionally verbose.
-authoring: prifly-step/1 # Required marker; authoring is YAML-only.
-schema_version: "5" # Optional: omitted form is v2; workspace_trees requires v5.
+# it seals StepDefinition v6. This file is intentionally verbose, not a ready
+# executable package: replace the illustrative exact refs with real definitions.
+# Managed steps keep prifly-step/1 and their executor configuration limits.
+authoring: prifly-step/2 # Required marker; explicitly opts into separate work/wait time.
+schema_version: "6" # Optional: prifly-step/2 always lowers to v6, even without limits.
 id: example:step/full-reference # Required stable identity.
 version: 1.0.0 # Required; increase when sealed bytes change.
 title: Full step authoring reference # Optional: defaults to id.
@@ -14,7 +16,7 @@ refs:
   output_schema: {id: example:schema/output, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
   plan_manifest: {id: core:schema/workspace-tree-manifest, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
   check: {id: example:check/content, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
-  adapter: {id: example:adapter/session, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  adapter: {id: core:adapter/assisted-session, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
   instructions: {id: example:context/instructions, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
   context: {id: example:context/supporting, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
   result_schema: {id: example:schema/step-result, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
@@ -59,6 +61,20 @@ outputs: # Optional: defaults to {}.
 executor:
   adapter_ref: adapter # Required exact execution adapter.
   operation: session # Required adapter operation.
+# Optional for prifly-step/2; both defaults are sealed even when this block is absent.
+# Each step pins its own values. Editing YAML creates a new revision, not new time
+# for an existing Run. These limits do not bound the whole workflow's lifetime.
+session_limits:
+  # Конечное время разрешённой работы host, в миллисекундах; default 3600000 = 1 час.
+  # Только принятый объявленный runtime-вопрос приостанавливает расход остатка.
+  # Ответ и restart не дают новый полный час. Это не измерение CPU чужого процесса.
+  # Допустимо целое 1..9223372036854; 7200000 задаёт два часа активной работы.
+  active_timeout_ms: 3600000
+  # Срок одного ожидания ответа, в миллисекундах. Default null = без ограничения
+  # времени; например, 86400000 = сутки. Допустимо null либо целое 1..9223372036854.
+  # 0 не означает бесконечность и отвергается. Обычный вопрос в чате, не переданный
+  # через declared DecisionRequest, не создаёт эту паузу. Фонового wakeup нет.
+  decision_wait_timeout_ms: null
 instructions_ref: instructions # Optional primary instruction context.
 context_refs: [context] # Optional supporting contexts; defaults to [].
 required_capabilities: [network] # Optional extra capabilities; defaults to [].
@@ -122,14 +138,14 @@ telemetry:
     code: validation.notice
     message: Validation produced a noteworthy result.
 
-# Optional v5 binding for one manifest-backed file or shallow bundle in the
+# Optional v5/v6 binding for one manifest-backed file or shallow bundle in the
 # claimed Workspace. `path` is exact_file's file path or the parent for a
 # direct-child policy. The host never sends artifact refs; runtime captures and
-# seals the resulting manifest itself. Omit this whole field for a v2 step.
+# seals the resulting manifest itself. Omit this whole field when no tree is needed.
 workspace_trees:
   - input_port: plan_manifest # Optional manifest input; omit when creating a tree.
     output_port: plan_manifest # Required compatible manifest output.
     capture:
       kind: direct_child_tree # exact_file, direct_child_file, direct_child_tree.
-      path: .ai-factory/plans # Workspace-relative fixed file or declared parent.
+      path: plans # Workspace-relative fixed file or declared parent; no AI-specific path.
       entrypoint: index.md # Required only for direct_child_tree.

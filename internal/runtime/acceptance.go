@@ -149,7 +149,7 @@ func (r *Run) beginWorkflowInputAcceptance(p *flow.Plan, invocationID string, ob
 }
 
 func (r *Run) holdAcceptance(pending *PendingAcceptance, obs Observation) error {
-	if r.PendingAcceptance != nil || r.ActiveCheckID != "" || len(r.Active) != 0 || r.HasUnresolvedEffects || r.terminal() || r.cancelRequestedFor(pending.InvocationID) {
+	if r.PendingAcceptance != nil || r.ActiveCheckID != "" || r.executingAttempts() != 0 || r.HasUnresolvedEffects || r.terminal() || r.cancelRequestedFor(pending.InvocationID) {
 		return local.Reject("acceptance_blocked", "another obligation or restriction prevents boundary checks")
 	}
 	pending.Created = obs
@@ -246,7 +246,7 @@ func (e *Engine) prepareBoundaryAcceptance(ctx context.Context, r Run, view loca
 // active-check branch and retains the global uncertainty barrier.
 func (e *Engine) driveAcceptance(ctx context.Context, r Run, view local.ReadView) error {
 	pending := r.PendingAcceptance
-	if pending == nil || r.ActiveCheckID != "" || len(r.Active) != 0 {
+	if pending == nil || r.ActiveCheckID != "" || r.executingAttempts() != 0 {
 		return local.ErrIntegrity
 	}
 	if pending.Status == "passed" && pending.Kind == "step_result" {
@@ -294,7 +294,7 @@ func (e *Engine) driveAcceptance(ctx context.Context, r Run, view local.ReadView
 	}
 	_, err := e.apply(ctx, e.owner, newID("command"), r.ID, "acceptance.passed", map[string]any{"pending_acceptance_id": pending.ID}, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, obs Observation) (local.Change, error) {
 		current := r.PendingAcceptance
-		if current == nil || current.ID != pending.ID || current.Status != "pending" || r.ActiveCheckID != "" || len(r.Active) != 0 || r.HasUnresolvedEffects || r.admissionsBlockedFor(current.InvocationID) || r.cancelRequestedFor(current.InvocationID) {
+		if current == nil || current.ID != pending.ID || current.Status != "pending" || r.ActiveCheckID != "" || r.executingAttempts() != 0 || r.HasUnresolvedEffects || r.admissionsBlockedFor(current.InvocationID) || r.cancelRequestedFor(current.InvocationID) {
 			return local.Change{}, local.Reject("acceptance_blocked", "pending acceptance or control state changed")
 		}
 		// The waivers are rechecked here: a decision that lapsed or was
@@ -350,7 +350,7 @@ func (e *Engine) rejectAcceptance(ctx context.Context, loaded Run, view local.Re
 	commandID := newID("command")
 	_, err = e.apply(ctx, e.owner, commandID, loaded.ID, "acceptance.failed", map[string]any{"pending_acceptance_id": pending.ID, "check_execution_id": checkID, "failure": code}, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, obs Observation) (local.Change, error) {
 		current := r.PendingAcceptance
-		if current == nil || current.ID != pending.ID || r.ActiveCheckID != "" || len(r.Active) != 0 || r.HasUnresolvedEffects || r.cancelRequestedFor(current.InvocationID) {
+		if current == nil || current.ID != pending.ID || r.ActiveCheckID != "" || r.executingAttempts() != 0 || r.HasUnresolvedEffects || r.cancelRequestedFor(current.InvocationID) {
 			return local.Change{}, local.Reject("acceptance_blocked", "unsettled or changed acceptance cannot fail normally")
 		}
 		r.PendingAcceptance = nil
@@ -607,7 +607,7 @@ func (e *Engine) acceptCheckedResult(ctx context.Context, loaded Run, view local
 	commandID := newID("command")
 	_, err = e.apply(ctx, e.owner, commandID, loaded.ID, "attempt.accepted", map[string]any{"pending_acceptance_id": pending.ID, "attempt_id": producer.ID, "candidate_ref": pending.CandidateRef, "evidence_refs": evidenceRefs}, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, obs Observation) (local.Change, error) {
 		current := r.PendingAcceptance
-		if current == nil || current.ID != pending.ID || current.Status != "passed" || r.ActiveCheckID != "" || len(r.Active) != 0 || r.HasUnresolvedEffects || r.admissionsBlockedFor(current.InvocationID) || r.cancelRequestedFor(current.InvocationID) {
+		if current == nil || current.ID != pending.ID || current.Status != "passed" || r.ActiveCheckID != "" || r.executingAttempts() != 0 || r.HasUnresolvedEffects || r.admissionsBlockedFor(current.InvocationID) || r.cancelRequestedFor(current.InvocationID) {
 			return local.Change{}, local.Reject("acceptance_blocked", "checked result no longer owns unrestricted acceptance")
 		}
 		attempt := r.Attempts[current.ProducerAttemptID]
@@ -643,7 +643,7 @@ func acceptanceInvariant(r Run) error {
 		return nil
 	}
 	invalid := func() error { return errors.New("acceptance invariant: invalid check ownership or pending boundary") }
-	if r.terminal() && (r.PendingAcceptance != nil || r.PendingArtifactPublication != nil || r.ActiveCheckID != "") || len(r.CheckExecutions) > 1024 || len(r.Active) != 0 && r.ActiveCheckID != "" && !activeCheckMayOverlapPublisher(r) {
+	if r.terminal() && (r.PendingAcceptance != nil || r.PendingArtifactPublication != nil || r.ActiveCheckID != "") || len(r.CheckExecutions) > 1024 || r.executingAttempts() != 0 && r.ActiveCheckID != "" && !activeCheckMayOverlapPublisher(r) {
 		return invalid()
 	}
 	unsettled := 0
@@ -679,7 +679,7 @@ func acceptanceInvariant(r Run) error {
 	if pending == nil {
 		return nil
 	}
-	if pending.ID != derivedID("acceptance", r.ID, pending.InvocationID, pending.ActivationID, pending.Kind) || len(pending.Checks) < 1 || len(pending.Checks) > 1024 || pending.Bindings == nil || r.Invocations[pending.InvocationID] == nil || invocationTerminal(r.Invocations[pending.InvocationID].Status) || len(r.Active) != 0 || (pending.Status != "pending" && pending.Status != "passed") || (pending.Status == "passed") != (pending.Checked != nil) {
+	if pending.ID != derivedID("acceptance", r.ID, pending.InvocationID, pending.ActivationID, pending.Kind) || len(pending.Checks) < 1 || len(pending.Checks) > 1024 || pending.Bindings == nil || r.Invocations[pending.InvocationID] == nil || invocationTerminal(r.Invocations[pending.InvocationID].Status) || r.executingAttempts() != 0 || (pending.Status != "pending" && pending.Status != "passed") || (pending.Status == "passed") != (pending.Checked != nil) {
 		return invalid()
 	}
 	if pending.Kind == "workflow_input" {

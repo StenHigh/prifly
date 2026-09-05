@@ -44,9 +44,11 @@ var versionContracts = []versionContract{
 	{CoreWorkspaceTreeStateVersion, CoreWorkspaceTreeReadVersion, CoreWorkspaceTreeStepReadVersion},
 	{CoreDecisionStateVersion, CoreDecisionReadVersion, CoreDecisionStepReadVersion},
 	{CoreNeutralStateVersion, CoreNeutralReadVersion, CoreNeutralStepReadVersion},
+	{CoreTimingStateVersion, CoreTimingReadVersion, CoreTimingStepReadVersion},
 }
 
 func isNeutralState(version string) bool { return atLeast(version, CoreNeutralStateVersion) }
+func isTimingState(version string) bool  { return atLeast(version, CoreTimingStateVersion) }
 
 // stateRank is a state version's place in that order, or -1 for a version this
 // build does not know. An unknown version is never "at least" anything.

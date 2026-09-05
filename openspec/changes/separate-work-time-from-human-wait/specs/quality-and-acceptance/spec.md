@@ -13,6 +13,9 @@ public CLI mixed Run MUST пройти программу, вопрос, при�
 release/reacquire capacity при пределе 1, workflow parallelism, sibling
 progress, актуальные Stops/revocation/claims и old-version readers. Само
 истечение MUST не выдаваться за доказанный внешний effect или его отсутствие.
+Claim regression MUST проверять разных Runs на одной authority, restart,
+парковку, stale generation, legacy holders и гонку release/admission;
+cleanup MUST не предшествовать durable запрету новой выдачи.
 
 Новые сроки MUST не менять старые Runs, sealed bytes и historical evidence.
 Managed hour limit, native многонедельное исполнение, lease recovery и UI

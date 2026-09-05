@@ -10,12 +10,14 @@ import (
 )
 
 const (
-	DecisionDefinitionVersion = "run-decision/1"
-	DecisionCatalogVersion    = "run-decision-catalog/1"
-	DecisionSheetVersion      = "decision-sheet/1"
-	DecisionRequestVersion    = "decision-request/1"
-	DecisionAnswerVersion     = "decision-answer/1"
-	DecisionRecordVersion     = "decision-record/1"
+	DecisionDefinitionVersion    = "run-decision/1"
+	DecisionCatalogVersion       = "run-decision-catalog/1"
+	DecisionSheetVersion         = "decision-sheet/1"
+	DecisionRequestVersion       = "decision-request/1"
+	DecisionRequestTimingVersion = "decision-request/2"
+	DecisionRecordTimingVersion  = "decision-record/2"
+	DecisionAnswerVersion        = "decision-answer/1"
+	DecisionRecordVersion        = "decision-record/1"
 )
 
 var decisionID = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,127}$`)
@@ -77,6 +79,7 @@ type DecisionRecord struct {
 	Source           string          `json:"source"`
 	Value            json.RawMessage `json:"value,omitempty"`
 	Observed         *Observation    `json:"observed,omitempty"`
+	ClosureReason    string          `json:"closure_reason,omitempty"`
 }
 
 // DecisionSheet is the immutable set of preflight choices delivered to a Run.
@@ -99,6 +102,7 @@ type DecisionRequest struct {
 	DecisionID         string `json:"decision_id"`
 	DefinitionDigest   string `json:"definition_digest"`
 	ExpectedRunVersion int64  `json:"expected_run_version"`
+	YieldExecution     bool   `json:"yield_execution,omitempty"`
 }
 
 // DecisionAnswer is the typed answer to one current DecisionRequest.

@@ -16,6 +16,9 @@ const WorkflowAuthoringVersion = "prifly-workflow/1"
 // StepDefinition v2. It is lowered before schema validation and sealing.
 const StepAuthoringVersion = "prifly-step/1"
 
+// StepSessionAuthoringVersion opts into pause-aware assisted session limits.
+const StepSessionAuthoringVersion = "prifly-step/2"
+
 // WorkflowJSONBytes returns the machine WorkflowRevision represented by JSON,
 // long-form YAML or the concise YAML authoring form.
 func WorkflowJSONBytes(data []byte, format string) ([]byte, error) {
@@ -52,7 +55,7 @@ func stepValue(data []byte, format string) (any, bool, error) {
 	if format != "yaml" && format != "yml" {
 		return nil, false, problem("unsupported_authoring", "/authoring", "concise step authoring is available only in YAML")
 	}
-	if marker != StepAuthoringVersion {
+	if marker != StepAuthoringVersion && marker != StepSessionAuthoringVersion {
 		return nil, false, problem("unsupported_authoring", "/authoring", "step authoring version is not supported")
 	}
 	lowered, err := lowerStepAuthoring(object)
@@ -146,14 +149,25 @@ func lowerWorkflowAuthoring(source map[string]any) (map[string]any, error) {
 }
 
 func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
+	timed := source["authoring"] == StepSessionAuthoringVersion
+	marker := StepAuthoringVersion
 	allowed := []string{"authoring", "schema_version", "id", "version", "title", "refs", "kind", "inputs", "outputs", "executor", "instructions_ref", "context_refs", "required_capabilities", "effects", "result_check_refs", "result_schema_ref", "hooks", "telemetry", "workspace_trees"}
+	if timed {
+		marker = StepSessionAuthoringVersion
+		allowed = append(allowed, "session_limits")
+	}
 	for key := range source {
 		if !slices.Contains(allowed, key) {
-			return nil, problem("schema_invalid", "/"+escapePointer(key), "field is not part of "+StepAuthoringVersion)
+			return nil, problem("schema_invalid", "/"+escapePointer(key), "field is not part of "+marker)
 		}
 	}
-	if version, exists := source["schema_version"]; exists && version != "2" && version != "5" {
-		return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2 or v5")
+	if version, exists := source["schema_version"]; exists {
+		if timed && version != "6" {
+			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6")
+		}
+		if !timed && version != "2" && version != "5" {
+			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2 or v5")
+		}
 	}
 	refs, err := authorRefs(source["refs"])
 	if err != nil {
@@ -182,6 +196,9 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	schemaVersion := "2"
 	if _, exists := source["workspace_trees"]; exists {
 		schemaVersion = "5"
+	}
+	if timed {
+		schemaVersion = "6"
 	}
 	if value, exists := source["schema_version"]; exists {
 		schemaVersion = value.(string)
@@ -234,6 +251,25 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	}
 	if value, exists := source["workspace_trees"]; exists {
 		result["workspace_trees"] = value
+	}
+	if timed {
+		limits := map[string]any{}
+		if value, exists := source["session_limits"]; exists {
+			limits = cloneObject(value)
+			if limits == nil {
+				return nil, problem("schema_invalid", "/session_limits", "session limits must be an object")
+			}
+		}
+		if _, exists := limits["active_timeout_ms"]; !exists {
+			limits["active_timeout_ms"] = json.Number(fmt.Sprint(DefaultSessionActiveTimeoutMS))
+		}
+		if _, exists := limits["decision_wait_timeout_ms"]; !exists {
+			limits["decision_wait_timeout_ms"] = nil
+		}
+		result["session_limits"] = limits
+		if err := validateProtocolValue("StepDefinitionV6", result, ""); err != nil {
+			return nil, err
+		}
 	}
 	return result, nil
 }

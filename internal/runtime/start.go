@@ -68,7 +68,49 @@ type Preview struct {
 	Validation             ValidationSummary               `json:"validation"`
 	EffectiveConfiguration *EffectiveConfiguration         `json:"effective_configuration,omitempty"`
 	Workflows              map[string]WorkflowPreview      `json:"workflows,omitempty"`
+	SessionLimits          []SessionLimitPreview           `json:"session_limits,omitempty"`
 }
+
+// SessionLimitPreview identifies the exact definition that supplies the time
+// policy. Legacy absolute deadlines are not presented as pause-aware budgets.
+type SessionLimitPreview struct {
+	DefinitionRef           flow.Ref            `json:"definition_ref"`
+	Limits                  *flow.SessionLimits `json:"limits,omitempty"`
+	LegacyAbsoluteTimeoutMS int64               `json:"legacy_absolute_timeout_ms,omitempty"`
+}
+
+// PreviewSessionLimits reads only the selected compiled closure. Callers must
+// still validate executor support; a preview never grants an admission.
+func PreviewSessionLimits(plan *flow.Plan) []SessionLimitPreview {
+	byRef := map[flow.Ref]SessionLimitPreview{}
+	for _, workflow := range workflowPlans(plan) {
+		for id, step := range workflow.Steps {
+			if step.Executor.AdapterRef.ID != "core:adapter/assisted-session" || step.Executor.Operation != "session" {
+				continue
+			}
+			ref := workflow.Workflow.Definition.Stages[id].StepRef
+			item := SessionLimitPreview{DefinitionRef: ref}
+			if step.SessionLimits == nil {
+				item.LegacyAbsoluteTimeoutMS = assistedAttemptTimeoutMS
+			} else {
+				limits := *step.SessionLimits
+				if limits.DecisionWaitTimeoutMS != nil {
+					wait := *limits.DecisionWaitTimeoutMS
+					limits.DecisionWaitTimeoutMS = &wait
+				}
+				item.Limits = &limits
+			}
+			byRef[ref] = item
+		}
+	}
+	result := make([]SessionLimitPreview, 0, len(byRef))
+	for _, item := range byRef {
+		result = append(result, item)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].DefinitionRef.String() < result[j].DefinitionRef.String() })
+	return result
+}
+
 type WorkflowPreview struct {
 	WorkflowRef flow.Ref                        `json:"workflow_ref"`
 	Sequence    []string                        `json:"sequence"`
@@ -479,7 +521,12 @@ func (e *Engine) Preview(options PreviewOptions) (Preview, error) {
 	if options.SchemaVersion == "2" {
 		version = CoreNeutralPreviewVersion
 	}
-	return Preview{SchemaVersion: version, WorkflowRef: planRef(p), Profile: p.Profile, TrustProfile: "core-local/cooperative", Sequence: p.Sequence, Hooks: hooks, Limits: p.Workflow.Limits, Admission: false, Warnings: warnings, Brief: brief, Inputs: inputs, Executors: executors, CheckExecutors: checkExecutors, Validation: ValidationSummary{true, true, true, true, inputStatus, "not_admitted", "not_checked"}, EffectiveConfiguration: effective, Workflows: workflows}, nil
+	var sessionLimits []SessionLimitPreview
+	if requiresTimingState(p) {
+		version = CoreTimingPreviewVersion
+		sessionLimits = PreviewSessionLimits(p)
+	}
+	return Preview{SchemaVersion: version, WorkflowRef: planRef(p), Profile: p.Profile, TrustProfile: "core-local/cooperative", Sequence: p.Sequence, Hooks: hooks, Limits: p.Workflow.Limits, Admission: false, Warnings: warnings, Brief: brief, Inputs: inputs, Executors: executors, CheckExecutors: checkExecutors, Validation: ValidationSummary{true, true, true, true, inputStatus, "not_admitted", "not_checked"}, EffectiveConfiguration: effective, Workflows: workflows, SessionLimits: sessionLimits}, nil
 }
 
 func (e *Engine) inputBytes(path string) ([]byte, error) {
@@ -925,6 +972,9 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 		}
 		if neutral {
 			stateVersion = CoreNeutralStateVersion
+		}
+		if requiresTimingState(plan) {
+			stateVersion = CoreTimingStateVersion
 		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
 		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}}

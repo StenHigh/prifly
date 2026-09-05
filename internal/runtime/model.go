@@ -182,11 +182,17 @@ const (
 	CoreNeutralNextVersion     = "core-next/26"
 	CoreNeutralPreviewVersion  = "core-preview/26"
 	CoreNeutralStepReadVersion = "core-step-read/26"
-	CoreConfigVersion          = "core-configuration/1"
-	CoreContextConfigVersion   = "core-configuration/2"
-	MaxDefinitionBytes         = 2 << 20
-	MaxArtifactBytes           = 16 << 20
-	MaxRunPublications         = 1024
+	// Timed assisted deliveries distinguish active work from declared waiting.
+	CoreTimingReadVersion     = "core-read/27"
+	CoreTimingStateVersion    = "core-state/27"
+	CoreTimingNextVersion     = "core-next/27"
+	CoreTimingPreviewVersion  = "core-preview/27"
+	CoreTimingStepReadVersion = "core-step-read/27"
+	CoreConfigVersion         = "core-configuration/1"
+	CoreContextConfigVersion  = "core-configuration/2"
+	MaxDefinitionBytes        = 2 << 20
+	MaxArtifactBytes          = 16 << 20
+	MaxRunPublications        = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time

@@ -30,7 +30,38 @@ const projectLocalExample = `# Copy this file to local.yaml for machine-only ove
 # prifly_executable: /absolute/path/to/prifly
 `
 
-const projectRunnerSkillTemplate = `---
+// Current instructions are derived from the frozen previous template, never
+// the reverse: updating current behavior must not change recognized old bytes.
+var projectRunnerSkillTemplate = strings.NewReplacer(
+	"project-launch-summary/1", "project-launch-summary/2",
+	"chosen answers and their sources, and reasons the Run might still wait.", `chosen answers and their sources, and reasons the Run might still wait.
+   Show session_limits for each exact step: limits.active_timeout_ms is its
+   finite work allowance; decision_wait_timeout_ms null means "без ограничения
+   времени" (unbounded waiting for one declared question). The /2 defaults are
+   one hour of work and unbounded waiting, sealed in the definition. Do not
+   guess whether an author omitted a field or explicitly chose the same value.
+   legacy_absolute_timeout_ms instead means the old absolute report window,
+   including human waiting; do not describe it as a pause-aware work budget.
+   None of these values is a time limit for the whole Run.`,
+	"question. Submit", `question with its sealed catalog title, description and real options.
+   Explain what the current step needs and what each choice changes; do not
+   invent a recommendation, permission or scope. Show the task's work/wait
+   policy when available. Submit`,
+	"not a command receipt's request_digest. Re-read the redelivered task.", `not a command receipt's request_digest. A successful answer means "answer
+   saved", not "work resumed". Do not ask that known answer again. Drive the
+   same Run, read run next, and fetch the current session task only when a
+   handoff is available. Capacity, Pause/Stop or resource checks may keep the
+   saved answer waiting; neither an old task nor a command receipt permits work.
+   For a capacity conflict, explain "waiting for a free execution slot" and
+   inspect capacity show; do not increase limits yourself. For a claim or
+   resource refusal, explain that ownership of the working folder could not
+   be confirmed, show the actual diagnostic, and inspect run explain and claim
+   list. Use only the recovery action the authority permits and the developer
+   authorizes; never renew/release a claim, change checkout or create a new Run
+   to bypass it. No active host means no automatic wakeup.`,
+).Replace(projectRunnerSkillTemplateBeforeTiming)
+
+const projectRunnerSkillTemplateBeforeTiming = `---
 name: prifly-run
 description: Start and host one declared Pri-Fly project workflow.
 ---
@@ -374,6 +405,36 @@ If the Run waits, ask the declared question and use the normal
 ` + "`run decision RUN_ID answer ...`" + ` flow; if an autonomous policy applies the
 recommendation, re-read the redelivered task. Do not send a request for a raw
 native skill question unless the pinned adapter supplied its exact declared ID.
+`
+
+const projectTimedDecisionBridgeInstructions = `
+
+## Compatible runtime decisions
+
+Only a pinned package adapter that names one exact declared runtime decision
+may turn that question into a Pri-Fly decision. Read the current session task;
+use its exact Attempt, envelope digest, declared decision ID and Run version:
+
+` + "`PRIFLY_BIN --project \"$authority_root\" run decision RUN_ID request --attempt ATTEMPT_ID --envelope-digest ENVELOPE_DIGEST --decision ID --expected-run-version RUN_VERSION`" + `.
+
+For assisted-session/6 add ` + "`--yield-execution`" + `. This explicitly sends
+DecisionRequest/2 with yield_execution:true: after acceptance, stop using that
+delivery. Do not write more files, submit its result, or claim an unknown
+in-flight effect is finished. This is cooperative transfer of control, not
+physical suspension of an external process. The runtime may refuse an unsafe
+transfer; report its actual reason instead of claiming to have paused.
+For legacy assisted tasks omit the flag; their original absolute deadline
+still includes time spent waiting for a person.
+
+Read ` + "`run decisions RUN_ID`" + `. Ask only an unanswered pending declaration,
+using its pinned description and choices. If the policy or a preanswer already
+supplied a value, preserve it without another question. After an accepted
+answer or automatic choice, call ` + "`run drive RUN_ID`" + `, then
+` + "`run next RUN_ID`" + `; obtain ` + "`session task --run RUN_ID --all`" + ` only for
+currently available handoffs. Never assume that saving an answer itself
+created a delivery or replenished time. Do not submit a request for a raw
+native skill question unless its pinned adapter supplied the declared ID;
+Pri-Fly does not intercept native questions automatically.
 `
 
 const projectCatalogInstructions = `
@@ -1691,7 +1752,16 @@ func projectRunnerSkill(host projectHost) string {
 		questionTool = "AskUserQuestion"
 	}
 	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
-	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectDecisionBridgeInstructions + projectNeutralCatalogInstructions
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
+}
+
+func projectRunnerSkillBeforeTiming(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeTiming, questions) + projectDecisionBridgeInstructions + projectNeutralCatalogInstructions
 }
 
 func projectRunnerSkillBeforeNeutral(host projectHost) string {
@@ -1743,7 +1813,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

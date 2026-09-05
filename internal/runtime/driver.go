@@ -51,6 +51,11 @@ func (e *Engine) Drive(ctx context.Context, runID string) (retErr error) {
 		if err != nil {
 			return err
 		}
+		if progressed, err := e.expireSession(ctx, r, v); err != nil {
+			return err
+		} else if progressed {
+			continue
+		}
 		// A deadline that has passed is work nobody scheduled: the wait holds no
 		// frontier, so the driver looks for it directly before asking what is
 		// ready. Nothing fires here on its own - this build owns no timer, and
@@ -88,6 +93,10 @@ func (e *Engine) Drive(ctx context.Context, runID string) (retErr error) {
 			if err := e.finishCancellation(ctx, runID, work); err != nil {
 				return err
 			}
+		case "session_resume":
+			if err := e.resumeTimedSession(ctx, r, v, r.Attempts[work]); err != nil {
+				return err
+			}
 		case "check":
 			check := r.CheckExecutions[work]
 			if check.Dispatch == nil && r.admissionsBlockedFor(check.Request.InvocationID) && !r.cancelRequestedFor(check.Request.InvocationID) {
@@ -123,6 +132,20 @@ func (e *Engine) Drive(ctx context.Context, runID string) (retErr error) {
 				return e.recoverUncertain(ctx, r, "dispatch boundary exists without this driver's live ownership")
 			}
 			if r.cancelRequestedFor(activation.InvocationID) {
+				if a.Session != nil {
+					// Cancellation must settle an already saved report, not
+					// mistake it for an open delivery with an unknown outcome.
+					var err error
+					if a.Session.HostState == SessionReported && a.Settled == nil {
+						err = e.settleAssisted(ctx, runID, a.ID)
+					} else {
+						err = e.closeSession(ctx, r, v, a, "run_cancelled")
+					}
+					if err != nil {
+						return err
+					}
+					continue
+				}
 				if err := e.settleUnstarted(ctx, r.ID, a.ID, "", "cancelled"); err != nil {
 					return err
 				}
@@ -405,6 +428,9 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 	cfg := executor.Config
 	if assisted {
 		cfg.TimeoutMS, cfg.MaxOutputBytes = assistedAttemptTimeoutMS, MaxArtifactBytes
+		if step.SessionLimits != nil {
+			cfg.TimeoutMS = step.SessionLimits.ActiveTimeoutMS
+		}
 	}
 	envelope := map[string]any{"schema_version": "1", "run_id": r.ID, "authority_id": r.AuthorityID, "workflow_invocation_id": a.InvocationID, "stage_activation_id": a.ID, "step_instance_id": a.StepID, "attempt_id": attemptID, "execution_admission_id": admissionID, "admitted_run_version": v.Snapshot.Version + 1, "control_epoch": r.ControlEpoch, "workflow_ref": planRef(p), "step_ref": stage.StepRef, "policy_ref": p.Workflow.PolicyRef, "package_lock_digest": r.LockRef.Digest, "input_artifacts": inputs, "context_manifest_ref": contextArtifact.Ref(), "grant_refs": []any{}, "claims": []any{}, "budget_reservation_id": reservationID, "dispatch_not_after": now.Add(30 * time.Second).Format(time.RFC3339Nano), "attempt_deadline": now.Add(time.Duration(cfg.TimeoutMS) * time.Millisecond).Format(time.RFC3339Nano), "output_contracts": step.Outputs}
 	envelopeBytes, err := canonical(envelope)
@@ -449,6 +475,7 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		}
 	}()
 	var handoff *SessionHandoff
+	var claimBinding *claimRunBinding
 	if assisted {
 		skills := assistedSkillRefs(step)
 		if _, err := e.materializeSkills(r, workspace, skills); err != nil {
@@ -467,24 +494,32 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		if isDecisionState(r.SchemaVersion) {
 			version = AssistedSessionDecisionVersion
 		}
+		if step.SessionLimits != nil {
+			version = AssistedSessionTimingVersion
+		}
 		handoff = &SessionHandoff{SchemaVersion: version, PrincipalID: e.owner, SkillRefs: skills, HostState: SessionAwaiting}
-		if version == AssistedSessionDecisionVersion {
+		if version == AssistedSessionDecisionVersion || version == AssistedSessionTimingVersion {
 			handoff.DecisionContext = decisionSessionContext(r.DecisionCatalog, r.DecisionSheet)
 			handoff.DeliveryGeneration = 1
+		}
+		if version == AssistedSessionTimingVersion {
+			handoff.Timing = &SessionTiming{Limits: *step.SessionLimits, RemainingMS: step.SessionLimits.ActiveTimeoutMS}
+			handoff.DeliveryGeneration = 0
 		}
 		// A worktree is claimed for a step that declared it will write one. A
 		// proposal-only step is handed no worktree, so it cannot quietly share
 		// one with another step that is running beside it.
 		if step.Effects.Class == "workspace_write" {
-			claim, err := e.activeClaim(ctx)
+			claimBinding, err = e.prepareClaimRunBinding(ctx, r.ID, "", 0)
 			if err != nil {
-				return e.failPreparation(ctx, r, v, p, a, err, "claim_unavailable")
+				return err
 			}
+			claim := claimBinding.Claim
 			handoff.ClaimID, handoff.ClaimGeneration = claim.ID, claim.Generation
-			if version == AssistedSessionWorkspaceVersion || version == AssistedSessionDecisionVersion {
+			if version == AssistedSessionWorkspaceVersion || version == AssistedSessionDecisionVersion || version == AssistedSessionTimingVersion {
 				handoff.WorkspaceMode = claimMode(claim)
 			}
-			if version == AssistedSessionTreeVersion || (version == AssistedSessionDecisionVersion && len(step.WorkspaceTrees) != 0) {
+			if version == AssistedSessionTreeVersion || ((version == AssistedSessionDecisionVersion || version == AssistedSessionTimingVersion) && len(step.WorkspaceTrees) != 0) {
 				handoff.WorkspaceMode = claimMode(claim)
 				trees, rollback, err := e.prepareWorkspaceTrees(r, step, inputs, claim)
 				if err != nil {
@@ -509,7 +544,14 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 	if packagePin != nil {
 		pins = append(pins, *packagePin)
 	}
-	_, err = e.applyControlledWithPins(ctx, pin, pins, e.owner, commandID, r.ID, "attempt.admitted", map[string]any{"attempt_id": attemptID, "envelope_digest": rawDigest(envelopeBytes), "reservation_id": reservationID}, &v.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	var claimMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error)
+	if claimBinding != nil {
+		if pin != nil {
+			pins = append(pins, *pin)
+		}
+		pin, claimMutation = &claimBinding.Pin, claimBinding.mutate
+	}
+	_, err = e.applyControlledWithControlMutation(ctx, pin, pins, claimMutation, e.owner, commandID, r.ID, "attempt.admitted", map[string]any{"attempt_id": attemptID, "envelope_digest": rawDigest(envelopeBytes), "reservation_id": reservationID}, &v.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if blocked != nil {
 			return local.Change{}, blocked
 		}
@@ -521,7 +563,7 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		if err != nil {
 			return local.Change{}, err
 		}
-		if r.admissionsBlockedFor(a.InvocationID) || r.cancelRequestedFor(a.InvocationID) || r.HasUnresolvedEffects || r.activeIn(a.InvocationID) != "" || r.ActiveCheckID != "" || int64(len(r.Active)) >= simultaneous {
+		if r.admissionsBlockedFor(a.InvocationID) || r.cancelRequestedFor(a.InvocationID) || r.HasUnresolvedEffects || r.activeIn(a.InvocationID) != "" || r.ActiveCheckID != "" || r.executingAttempts() >= simultaneous {
 			return local.Change{}, local.Reject("admission_blocked", "restriction or unsettled work prevents admission")
 		}
 		stepState := r.Steps[a.StepID]
@@ -543,6 +585,11 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 			handoff.Handed, handoff.DeadlineTrust = obs, obs.UTCTrust
 		}
 		r.Attempts[attemptID] = &Attempt{Session: handoff, ID: attemptID, StepID: a.StepID, ActivationID: a.ID, Status: "pending", AdmissionID: admissionID, ReservationID: reservationID, AdmittedVersion: s.Version + 1, ControlEpoch: r.ControlEpoch, Envelope: envelopeBytes, EnvelopeDigest: rawDigest(envelopeBytes), Workspace: workspace, Context: manifest, Admitted: obs, Deadline: deadline, DispatchDeadline: dispatchDeadline}
+		if timedSession(r.Attempts[attemptID]) {
+			if err := recordTimedDelivery(r.Attempts[attemptID], obs); err != nil {
+				return local.Change{}, err
+			}
+		}
 		stepState.AttemptIDs = append(stepState.AttemptIDs, attemptID)
 		// Attempts accumulate: another scope's running work is not this one's,
 		// and replacing the set would silently drop an admitted attempt.
@@ -556,7 +603,7 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		}
 		change := local.Change{AcquireSlot: attemptID}
 		if isInvocationState(r.SchemaVersion) {
-			data, err := canonical(map[string]any{"attempt_id": attemptID, "step_instance_id": a.StepID, "stage_activation_id": a.ID, "workflow_invocation_id": a.InvocationID, "envelope_digest": rawDigest(envelopeBytes), "observation": obs})
+			data, err := canonical(map[string]any{"attempt_id": attemptID, "step_instance_id": a.StepID, "stage_activation_id": a.ID, "workflow_invocation_id": a.InvocationID, "envelope_digest": r.Attempts[attemptID].EnvelopeDigest, "observation": obs})
 			if err != nil {
 				return local.Change{}, err
 			}
@@ -1476,6 +1523,9 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 			failure = "result_candidate_changed"
 		}
 		current.Settled = &obs
+		if timedSession(current) {
+			current.Session.Timing.SlotHeld = false
+		}
 		removeActive(r, attemptID)
 		stepState := r.Steps[current.StepID]
 		stageState := r.Activations[current.ActivationID]

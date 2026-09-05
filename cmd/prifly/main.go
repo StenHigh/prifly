@@ -769,6 +769,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			envelopeDigest := f.String("envelope-digest", "", "current session envelope digest")
 			decisionID := f.String("decision", "", "declared runtime decision ID")
 			expectedVersion := f.Int64("expected-run-version", -1, "current Run version from session task")
+			yieldExecution := f.Bool("yield-execution", false, "for assisted-session/6: transfer control and stop using this delivery after an accepted request")
 			if err := parse(f, args[3:]); err != nil {
 				return err
 			}
@@ -792,7 +793,11 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 					break
 				}
 			}
-			result, err := e.RequestDecision(ctx, prifly.DecisionRequest{SchemaVersion: prifly.DecisionRequestVersion, RunID: id, AttemptID: *attemptID, EnvelopeDigest: *envelopeDigest, DecisionID: *decisionID, DefinitionDigest: definitionDigest, ExpectedRunVersion: *expectedVersion})
+			version := prifly.DecisionRequestVersion
+			if *yieldExecution {
+				version = prifly.DecisionRequestTimingVersion
+			}
+			result, err := e.RequestDecision(ctx, prifly.DecisionRequest{SchemaVersion: version, RunID: id, AttemptID: *attemptID, EnvelopeDigest: *envelopeDigest, DecisionID: *decisionID, DefinitionDigest: definitionDigest, ExpectedRunVersion: *expectedVersion, YieldExecution: *yieldExecution})
 			if err != nil {
 				return err
 			}
@@ -2129,7 +2134,7 @@ Global: --project DIR  --json  --format text|json|csv
   run status|next|explain|events|timing RUN_ID
   run drive RUN_ID                  Foreground owner; interrupt requests cancel
   run decisions RUN_ID              Read the sealed decision ledger and pending question
-  run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N
+  run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N [--yield-execution]
                                    Compatible executor requests one declared runtime decision
   run decision RUN_ID answer --decision ID --request-digest DIGEST --expected-run-version N --value JSON
                                    Answer exactly the current pending decision; --request-digest is pending_request_digest from run decisions, not the request_digest of a command receipt

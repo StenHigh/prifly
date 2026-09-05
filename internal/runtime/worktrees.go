@@ -24,7 +24,8 @@ import (
 // generation instead of an anonymous directory nobody may remove.
 const (
 	AuthorityClaimsKey           = "claims"
-	AuthorityClaimsVersion       = "authority-claims/2"
+	AuthorityClaimsVersion       = "authority-claims/3"
+	authorityClaimsModeVersion   = "authority-claims/2"
 	authorityClaimsLegacyVersion = "authority-claims/1"
 
 	ClaimRoot         = ".prifly/work/claims"
@@ -66,6 +67,7 @@ type WorktreeClaim struct {
 	BaseCommit string       `json:"base_commit"`
 	Generation int64        `json:"generation"`
 	OwnerID    string       `json:"owner_id"`
+	RunID      string       `json:"run_id,omitempty"`
 	Actor      string       `json:"actor_id"`
 	Status     string       `json:"status"`
 	Device     uint64       `json:"device"`
@@ -89,7 +91,9 @@ type ClaimProcess struct {
 	Started string `json:"started"`
 }
 
-func (c WorktreeClaim) active() bool { return c.Status == "preparing" || c.Status == "active" }
+func (c WorktreeClaim) active() bool {
+	return c.Status == "preparing" || c.Status == "active" || c.Status == "releasing"
+}
 
 type ClaimRequest struct {
 	CommandID     string
@@ -113,15 +117,8 @@ func (e *Engine) readClaims(ctx context.Context) (ClaimRecord, int64, error) {
 	if err != nil {
 		return ClaimRecord{}, 0, err
 	}
-	var record ClaimRecord
-	if err := decode(snapshot.Data, &record); err != nil {
-		return ClaimRecord{}, 0, err
-	}
-	if (record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != authorityClaimsLegacyVersion) || record.AuthorityID != e.Installation.ID {
-		return ClaimRecord{}, 0, errors.New("unsupported or foreign claim record")
-	}
-	record.SchemaVersion = AuthorityClaimsVersion
-	return record, snapshot.Version, nil
+	record, err := e.decodeClaims(snapshot)
+	return record, snapshot.Version, err
 }
 
 // Claims lists the recorded worktree claims of this installation.
@@ -388,15 +385,32 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 }
 
 func (e *Engine) decodeClaims(s local.AuthoritySnapshot) (ClaimRecord, error) {
-	record := ClaimRecord{SchemaVersion: AuthorityClaimsVersion, AuthorityID: e.Installation.ID, Claims: []WorktreeClaim{}}
+	return decodeClaimRecord(s, e.Installation.ID)
+}
+
+func decodeClaimRecord(s local.AuthoritySnapshot, authorityID string) (ClaimRecord, error) {
+	record := ClaimRecord{SchemaVersion: AuthorityClaimsVersion, AuthorityID: authorityID, Claims: []WorktreeClaim{}}
 	if s.Version == 0 {
 		return record, nil
 	}
 	if err := decode(s.Data, &record); err != nil {
 		return ClaimRecord{}, err
 	}
-	if (record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != authorityClaimsLegacyVersion) || record.AuthorityID != e.Installation.ID {
+	if (record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != authorityClaimsModeVersion && record.SchemaVersion != authorityClaimsLegacyVersion) || record.AuthorityID != authorityID {
 		return ClaimRecord{}, errors.New("unsupported or foreign claim record")
+	}
+	if record.SchemaVersion != AuthorityClaimsVersion {
+		var wire struct {
+			Claims []map[string]json.RawMessage `json:"claims"`
+		}
+		if err := json.Unmarshal(s.Data, &wire); err != nil {
+			return ClaimRecord{}, err
+		}
+		for index, fields := range wire.Claims {
+			if _, present := fields["run_id"]; present || record.Claims[index].Status == "releasing" {
+				return ClaimRecord{}, fault("unsupported_claim_contract", "older claims cannot contain Run bindings or a release fence")
+			}
+		}
 	}
 	record.SchemaVersion = AuthorityClaimsVersion
 	return record, nil
@@ -459,10 +473,8 @@ func (e *Engine) activateClaim(ctx context.Context, id string, device, inode uin
 	return activated, nil
 }
 
-// ReleaseWorktree ends the claim and removes only the directory this exact
-// owner and generation created, identified by the device and inode recorded
-// when it was made. A replaced or foreign directory blocks removal instead of
-// being deleted, and the release is recorded either way.
+// ReleaseWorktree fences admissions before touching files. Interrupted cleanup
+// retains a releasing claim, so another Run cannot enter a half-removed tree.
 func (e *Engine) ReleaseWorktree(ctx context.Context, request ClaimReleaseRequest) (WorktreeClaim, error) {
 	if e.ReadOnly {
 		return WorktreeClaim{}, local.ErrReadOnly
@@ -470,9 +482,27 @@ func (e *Engine) ReleaseWorktree(ctx context.Context, request ClaimReleaseReques
 	if request.CommandID == "" || request.ClaimID == "" || request.Generation < 1 {
 		return WorktreeClaim{}, errors.New("explicit command, claim and generation required")
 	}
-	claim, err := e.claim(ctx, request.ClaimID)
+	// Admission materializes workspace inputs before its binding transaction.
+	// Share the authority driver's lock so release cannot delete that directory
+	// between its identity check and commit; the fence still survives a crash.
+	lock, err := e.driverLock("")
 	if err != nil {
 		return WorktreeClaim{}, err
+	}
+	defer lock.Close()
+	record, version, err := e.readClaims(ctx)
+	if err != nil {
+		return WorktreeClaim{}, err
+	}
+	var claim WorktreeClaim
+	for _, candidate := range record.Claims {
+		if candidate.ID == request.ClaimID {
+			claim = candidate
+			break
+		}
+	}
+	if claim.ID == "" {
+		return WorktreeClaim{}, local.ErrNotFound
 	}
 	if claim.Generation != request.Generation {
 		return WorktreeClaim{}, local.Reject("claim_generation_conflict", "a newer generation owns this path")
@@ -480,15 +510,53 @@ func (e *Engine) ReleaseWorktree(ctx context.Context, request ClaimReleaseReques
 	if !claim.active() {
 		return WorktreeClaim{}, local.Reject("claim_state_conflict", "claim is already released")
 	}
-	if err := e.removeWorktree(ctx, claim); err != nil {
+	if err := e.claimReleaseAllowed(ctx, claim); err != nil {
 		return WorktreeClaim{}, err
 	}
 	payload, err := canonical(map[string]any{"operation": "worktree.release", "command_id": request.CommandID, "claim_id": claim.ID, "generation": claim.Generation})
 	if err != nil {
 		return WorktreeClaim{}, err
 	}
+	if claim.Status != "releasing" {
+		result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: derivedID("command", request.CommandID, "release-fence"), Actor: e.owner, Key: AuthorityClaimsKey, Payload: payload, ExpectedVersion: &version}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
+			current, err := e.decodeClaims(s)
+			if err != nil {
+				return local.AuthorityChange{}, err
+			}
+			for index := range current.Claims {
+				candidate := &current.Claims[index]
+				if candidate.ID != claim.ID {
+					continue
+				}
+				if candidate.Generation != claim.Generation || candidate.RunID != claim.RunID || !candidate.active() {
+					return local.AuthorityChange{}, fault("claim_generation_conflict", "claim changed before the release fence committed")
+				}
+				candidate.Status = "releasing"
+				data, err := canonicalState(current)
+				return local.AuthorityChange{Data: data, Result: json.RawMessage(`{"status":"releasing"}`)}, err
+			}
+			return local.AuthorityChange{}, local.ErrNotFound
+		})
+		if err != nil {
+			return WorktreeClaim{}, err
+		}
+		if result.Receipt.Rejection != nil {
+			return WorktreeClaim{}, result.Receipt.Rejection
+		}
+		claim, err = e.claim(ctx, claim.ID)
+		if err != nil {
+			return WorktreeClaim{}, err
+		}
+	}
+	if claim.Status != "releasing" || claim.Generation != request.Generation {
+		return WorktreeClaim{}, fault("claim_generation_conflict", "claim no longer owns this cleanup")
+	}
+	if err := e.removeWorktree(ctx, claim); err != nil {
+		return WorktreeClaim{}, err
+	}
+	observed := e.clock.now()
 	var released WorktreeClaim
-	result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: request.CommandID, Actor: e.owner, Key: AuthorityClaimsKey, Payload: payload}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
+	result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: derivedID("command", request.CommandID, "release-complete"), Actor: e.owner, Key: AuthorityClaimsKey, Payload: payload}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		record, err := e.decodeClaims(s)
 		if err != nil {
 			return local.AuthorityChange{}, err
@@ -499,11 +567,10 @@ func (e *Engine) ReleaseWorktree(ctx context.Context, request ClaimReleaseReques
 			if current.ID != claim.ID {
 				continue
 			}
-			if current.Generation != claim.Generation || !current.active() {
+			if current.Generation != claim.Generation || current.RunID != claim.RunID || current.Status != "releasing" {
 				return local.AuthorityChange{}, local.Reject("claim_generation_conflict", "claim changed before the release committed")
 			}
-			obs := e.clock.now()
-			current.Status, current.Released = "released", &obs
+			current.Status, current.Released = "released", &observed
 			released, found = *current, true
 		}
 		if !found {
@@ -520,6 +587,9 @@ func (e *Engine) ReleaseWorktree(ctx context.Context, request ClaimReleaseReques
 	}
 	if result.Receipt.Rejection != nil {
 		return WorktreeClaim{}, result.Receipt.Rejection
+	}
+	if result.Duplicate {
+		return e.claim(ctx, claim.ID)
 	}
 	return released, nil
 }
@@ -636,7 +706,7 @@ func (e *Engine) removeWorktree(ctx context.Context, claim WorktreeClaim) error 
 	if !ok || !info.IsDir() {
 		return local.ErrUnsafePath
 	}
-	if claim.Status == "active" && (uint64(stat.Dev) != claim.Device || stat.Ino != claim.Inode) {
+	if claim.Device == 0 || claim.Inode == 0 || uint64(stat.Dev) != claim.Device || stat.Ino != claim.Inode {
 		return fault("claim_identity_conflict", "the claimed directory is not the one this claim created")
 	}
 	if _, err := e.git(ctx, claim.Repository.Toplevel, "worktree", "remove", "--force", "--end-of-options", target); err != nil {
@@ -760,7 +830,7 @@ func (e *Engine) HeartbeatClaim(ctx context.Context, c ClaimHeartbeatRequest) (W
 			if claim.ID != c.ClaimID {
 				continue
 			}
-			if claim.Generation != c.Generation || !claim.active() {
+			if claim.Generation != c.Generation || !claim.active() || claim.Status == "releasing" {
 				return local.AuthorityChange{}, local.Reject("claim_generation_conflict", "a newer generation owns this path")
 			}
 			if claim.Process.Session != e.clock.session {
@@ -795,5 +865,5 @@ func ClaimView(record ClaimRecord) map[string]any {
 	claims := make([]WorktreeClaim, len(record.Claims))
 	copy(claims, record.Claims)
 	sort.Slice(claims, func(i, j int) bool { return claims[i].ID < claims[j].ID })
-	return map[string]any{"schema_version": "foundation-claims/1", "claims": claims}
+	return map[string]any{"schema_version": "foundation-claims/2", "claims": claims}
 }

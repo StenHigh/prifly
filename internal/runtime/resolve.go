@@ -18,8 +18,9 @@ const (
 
 // ResolveObligation closes one uncertain attempt or check by the owner's
 // attestation. Recovery deliberately keeps an unproven obligation open and
-// keeps the admission slot it holds, because a lease expiring is not proof its
-// owner stopped. That leaves exactly one way out, and it is this: a person
+// keeps any admission slot it still holds, because a lease expiring is not proof
+// its owner stopped. A parked host may have released capacity without resolving
+// its workspace effects. The way out is the same: a person
 // says what happened. The authority records that statement, closes the
 // obligation as failed and frees the slot; it never infers the outcome, never
 // retries, and never routes the closure through a declared error handler,
@@ -109,7 +110,14 @@ func resolveAttempt(r *Run, commandID, attemptID string, resolution ObligationRe
 	if !r.HasUnresolvedEffects && r.Status == "uncertain" {
 		r.Status = "failed"
 	}
-	return local.Change{ReleaseSlot: attemptID}, nil
+	change := local.Change{}
+	if !timedSession(a) || a.Session.Timing.SlotHeld {
+		change.ReleaseSlot = attemptID
+	}
+	if timedSession(a) {
+		a.Session.Timing.SlotHeld = false
+	}
+	return change, nil
 }
 
 func resolveCheck(r *Run, commandID, checkID string, resolution ObligationResolution, obs Observation) (local.Change, error) {

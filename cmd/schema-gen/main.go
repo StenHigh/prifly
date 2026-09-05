@@ -46,6 +46,7 @@ type generator struct {
 	workspaceTrees        bool
 	decisionState         bool
 	neutralStart          bool
+	timedSessions         bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -144,6 +145,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						continue
 					}
 					if !g.decisionState && decisionStateField(t, field.Name) {
+						continue
+					}
+					if !g.timedSessions && timedSessionField(t, field.Name) {
 						continue
 					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
@@ -256,6 +260,7 @@ var profileContracts = []struct {
 	{"workspace-tree", "generate workspace-tree state/read version 24 contracts", func(g *generator) { g.workspaceTrees = true }},
 	{"decision-state", "generate decision catalog state/read version 25 contracts", func(g *generator) { g.decisionState = true }},
 	{"neutral-start", "generate optional RunBrief state/read version 26 contracts", func(g *generator) { g.neutralStart = true }},
+	{"timed-session", "generate assisted timing state/read version 27 contracts", func(g *generator) { g.timedSessions = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -267,6 +272,7 @@ var documentContracts = []struct {
 	{"step-definition-v3", "generate StepDefinition v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV3") }},
 	{"step-definition-v4", "generate StepDefinition v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV4") }},
 	{"step-definition-v5", "generate StepDefinition v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV5") }},
+	{"step-definition-v6", "generate StepDefinition v6 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV6") }},
 	{"workflow-revision-v3", "generate WorkflowRevision v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV3") }},
 	{"run-start-v2", "generate RunStart v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("RunStartV2") }},
 	{"package-manifest-v2", "generate PackageManifest v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("PackageManifestV2") }},
@@ -734,6 +740,21 @@ func main() {
 			delete(contracts, name+"V25")
 		}
 	}
+	if g.timedSessions {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V27"] = contracts[name+"V26"]
+			delete(contracts, name+"V26")
+		}
+		for _, name := range []string{"SessionHandoff", "SessionTask", "SessionSubmission"} {
+			contracts[name+"V6"] = contracts[name+"V5"]
+			delete(contracts, name+"V5")
+		}
+		delete(contracts, "DecisionRecord")
+		contracts["DecisionRecordV2"] = reflect.TypeFor[prifly.DecisionRecord]()
+		contracts["DecisionRequestV2"] = reflect.TypeFor[prifly.DecisionRequest]()
+		contracts["SessionTiming"] = reflect.TypeFor[prifly.SessionTiming]()
+		contracts["SessionDelivery"] = reflect.TypeFor[prifly.SessionDelivery]()
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -941,6 +962,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-neutral-start:26"
 			bundle["title"] = "Pri-Fly neutral Start contracts"
 			bundle["description"] = "Start v2 admits exact workflow, typed inputs and policy without a synthetic RunBrief. State/read 26 preserve its absence; prior contracts still require a brief. ExecutionEnvelope v1 remains unchanged and does not contain a brief field."
+		}
+		if g.timedSessions {
+			timedSessionConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-timed-session:27"
+			bundle["title"] = "Pri-Fly timed assisted session contracts"
+			bundle["description"] = "State/read 27 preserves the remaining active work budget separately from declared decision waiting. Session 6 binds each delivery to its original envelope, decision context, generation and effective timing; legacy session 5 keeps its absolute deadline even in the same Run. Cooperative handover fences delivery through Core APIs, not the host process. Prior bundles remain unchanged."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

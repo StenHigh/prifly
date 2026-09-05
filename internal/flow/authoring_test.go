@@ -158,12 +158,15 @@ func TestStepAuthoringReferenceIsAValidStepDefinition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateProtocol("StepDefinitionV5", data); err != nil {
+	if err := ValidateProtocol("StepDefinitionV6", data); err != nil {
 		t.Fatal(err)
 	}
 	var step StepDefinition
 	if err := json.Unmarshal(data, &step); err != nil {
 		t.Fatal(err)
+	}
+	if step.SessionLimits == nil || step.SessionLimits.ActiveTimeoutMS != DefaultSessionActiveTimeoutMS || step.SessionLimits.DecisionWaitTimeoutMS != nil {
+		t.Fatalf("full reference lost its documented work/wait defaults: %+v", step.SessionLimits)
 	}
 	if err := (&Plan{}).checkWorkspaceTrees(step, "/step"); err != nil {
 		t.Fatalf("step authoring reference violates workspace-tree constraints: %v", err)

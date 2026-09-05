@@ -14,6 +14,7 @@ type projectLaunchRequirements struct {
 	Assisted      bool              `json:"assisted"`
 	GitWorkspace  bool              `json:"git_workspace"`
 	EffectClasses map[string]string `json:"effect_classes"`
+	sessionLimits []prifly.SessionLimitPreview
 }
 
 func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root string, compiled projectCompileResult, workflowPath, host, workspace string, allow bool, values map[string]json.RawMessage, refs map[string]prifly.ArtifactRef) (*prifly.ExecutionBindings, projectLaunchRequirements, error) {
@@ -112,5 +113,6 @@ func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root stri
 	if err := engine.ValidateStartInputs(plan, values, refs); err != nil {
 		return nil, requirements, err
 	}
+	requirements.sessionLimits = prifly.PreviewSessionLimits(plan)
 	return payload, requirements, nil
 }

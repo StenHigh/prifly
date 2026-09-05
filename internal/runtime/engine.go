@@ -69,7 +69,7 @@ func invariant(r Run) error {
 	if err != nil {
 		return err
 	}
-	if int64(len(r.Active)) > simultaneous {
+	if r.executingAttempts() > simultaneous {
 		return errors.New("declared simultaneity exceeded")
 	}
 	if err := contextPinnedInvariant(r); err != nil {
@@ -435,7 +435,11 @@ func nextKind(r Run) (string, string) {
 		return "publication_checks", r.PendingArtifactPublication.ID
 	}
 	if r.PendingDecision != nil {
-		return "waiting_decision", r.PendingDecision.DecisionID
+		attempt := r.Attempts[r.PendingDecision.AttemptID]
+		// A mixed Run does not upgrade a legacy session's waiting contract.
+		if attempt != nil && !timedSession(attempt) && r.Activations[attempt.ActivationID] != nil && !r.cancelRequestedFor(r.Activations[attempt.ActivationID].InvocationID) {
+			return "waiting_decision", r.PendingDecision.DecisionID
+		}
 	}
 	// An assisted attempt awaiting its host is not work this driver can do:
 	// reporting it would stop the driver from handing out the next branch.
@@ -443,6 +447,12 @@ func nextKind(r Run) (string, string) {
 		attempt := r.Attempts[id]
 		if attempt == nil {
 			return "active", id
+		}
+		if timedSession(attempt) && (attempt.Session.HostState == sessionWaitingDecision || attempt.Session.HostState == SessionWaitingAdmission) {
+			if r.cancelRequestedFor(r.Activations[attempt.ActivationID].InvocationID) {
+				return "active", id
+			}
+			continue
 		}
 		if attempt.Session != nil && attempt.Session.HostState == SessionAwaiting && attempt.Settled == nil {
 			// Awaiting a host is not work this driver can do — unless the scope
@@ -489,8 +499,29 @@ func nextKind(r Run) (string, string) {
 			}
 			return "stage", stageID
 		}
+		// A saved answer does not outrank ready independent work or its checks.
+		// In particular, a stopped/expired claim must not hide a sibling result.
+		for _, id := range r.Active {
+			a := r.Attempts[id]
+			if timedSession(a) && a.Session.HostState == SessionWaitingAdmission {
+				invocationID := r.Activations[a.ActivationID].InvocationID
+				if r.restrictedFor(invocationID) {
+					return "restricted", invocationID
+				}
+				if r.admissionsBlockedFor(invocationID) {
+					return "resume_required", invocationID
+				}
+				return "session_resume", id
+			}
+		}
 		if child := r.blockedChild(); child != "" {
+			if r.PendingDecision != nil {
+				return "waiting_decision", r.PendingDecision.DecisionID
+			}
 			return "blocked_child", child
+		}
+		if r.PendingDecision != nil {
+			return "waiting_decision", r.PendingDecision.DecisionID
 		}
 		return "idle", ""
 	}
@@ -521,6 +552,7 @@ type NextView struct {
 	SafeNextActions []string `json:"safe_next_actions"`
 	InvocationID    string   `json:"workflow_invocation_id,omitempty"`
 	StageID         string   `json:"stage_id,omitempty"`
+	ReasonCode      string   `json:"reason_code,omitempty"`
 }
 
 func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
@@ -529,9 +561,13 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		return NextView{}, err
 	}
 	kind, work := nextKind(r)
+	reason := ""
+	if a, code := sessionTimingIssue(r, e.clock.now()); a != nil && kind != "terminal" && kind != "uncertain" && !r.cancelRequestedFor(r.Activations[a.ActivationID].InvocationID) {
+		kind, work, reason = "session_expired", a.ID, code
+	}
 	actions := []string{"run.status", "run.events"}
 	switch kind {
-	case "stage", "acceptance", "publication_checks":
+	case "stage", "acceptance", "publication_checks", "session_resume", "session_expired":
 		actions = append(actions, "run.drive", "run.pause", "run.cancel")
 	case "restricted":
 		actions = append(actions, "run.release", "run.cancel")
@@ -555,12 +591,16 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 	// without it the view looks like a Run with nothing left in it.
 	for _, attemptID := range r.Active {
 		attempt := r.Attempts[attemptID]
-		if attempt != nil && attempt.Session != nil && attempt.Session.HostState == SessionAwaiting && attempt.Settled == nil {
+		if attempt != nil && attempt.Session != nil && attempt.Session.HostState == SessionAwaiting && attempt.Settled == nil && kind != "session_expired" {
 			actions = append(actions, "session.task")
 			break
 		}
 	}
 	next := NextView{SchemaVersion: "foundation-next/1", RunID: id, RunVersion: v.Snapshot.Version, Cut: v.Cut, Action: kind, WorkID: work, ReadOnly: true, Admission: false, DriverLive: e.driverLiveFor(id), ControlEpoch: r.ControlEpoch, ResumeRequired: r.ResumeRequired, SafeNextActions: actions}
+	next.ReasonCode = reason
+	if reason != "" {
+		next.SafeNextActions = append(next.SafeNextActions, "doctor")
+	}
 	if isInvocationState(r.SchemaVersion) {
 		next.SchemaVersion = CoreInvocationNextVersion
 		if r.SchemaVersion == CoreRepeatStateVersion {
@@ -581,7 +621,7 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		if kind == "stage" {
 			next.InvocationID, next.StageID = r.readyScope()
 		}
-		if kind == "active" {
+		if kind == "active" || kind == "session_resume" || kind == "session_expired" {
 			next.InvocationID = r.Activations[r.Attempts[work].ActivationID].InvocationID
 		}
 		if kind == "check" {
@@ -629,7 +669,9 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		if isPublicationFailureState(r.SchemaVersion) {
 			next.SchemaVersion = CorePublicationFailureNextVersion
 		}
-		if isNeutralState(r.SchemaVersion) {
+		if isTimingState(r.SchemaVersion) {
+			next.SchemaVersion = CoreTimingNextVersion
+		} else if isNeutralState(r.SchemaVersion) {
 			next.SchemaVersion = CoreNeutralNextVersion
 		} else if isDecisionState(r.SchemaVersion) {
 			next.SchemaVersion = CoreDecisionNextVersion
