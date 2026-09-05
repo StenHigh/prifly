@@ -19,10 +19,10 @@
 
 ## 3. Высокий приоритет — общие вопросы и смешанные шаги
 
-- [ ] 3.1 Удалить AIF-процессные правила из текущего generic runner, сохранить frozen templates; проверка: neutral one-step launch не получает reviewers/improve/commit, tests старых runner upgrades проходят без изменения исторических hashes.
-- [ ] 3.2 Расширить существующую questionnaire optional runtime предответами, условиями и summary возможных ожиданий; проверка: read-only preview не создаёт package/claim/Run, invalid/stale selection отвергается, runtime answer проходит ту же validation, что Start.
-- [ ] 3.3 Показать summary до первого dispatch и сохранить его в final result; проверка: worker marker ещё отсутствует в момент предъявления summary, изменённые sources/bindings/answers пересчитываются до эффекта, неизвестный skill question не получает скрытого ответа.
-- [ ] 3.4 Проверить no-Git command → assisted `effects:none` → command с настоящим handoff, typed decision wait, restart и ответом в том же Run; проверка: Git claim отсутствует, порядок outputs верен, завершающая команда не исполняется до принятого ответа/result.
+- [x] 3.1 Удалить AIF-процессные правила из текущего generic runner, сохранить frozen templates; проверка: neutral one-step launch не получает reviewers/improve/commit, tests старых runner upgrades проходят без изменения исторических hashes.
+- [x] 3.2 Расширить существующую questionnaire optional runtime предответами, условиями и summary возможных ожиданий; проверка: read-only preview не создаёт package/claim/Run, invalid/stale selection отвергается, runtime answer проходит ту же validation, что Start.
+- [x] 3.3 Показать summary до первого dispatch и сохранить его в final result; проверка: worker marker ещё отсутствует в момент предъявления summary, изменённые sources/bindings/answers пересчитываются до эффекта, неизвестный skill question не получает скрытого ответа.
+- [x] 3.4 Проверить no-Git command → assisted `effects:none` → command с настоящим handoff, typed decision wait, restart и ответом в том же Run; проверка: Git claim отсутствует, порядок outputs верен, завершающая команда не исполняется до принятого ответа/result.
 - [ ] 3.5 Обновить generic host инструкции и ограничения local-owner trust; выполнить конечные UI observations Codex и Claude по незавершённым tasks существующих changes, связав evidence вместо копирования задач. Проверка: source actor не выдан за доказанную личность человека; отсутствующее наблюдение остаётся открытым. Сохранить отдельный commit среза.
 
 ## 4. Интеграция — внешний AIF на тех же правилах
@@ -162,3 +162,82 @@ published/editor contracts, README и concrete design. Shell-команды не
 превращаются автоматически в native workers, managed scratch не объявляется
 sandbox. Release, установка на компьютер и полигон не менялись. Старые
 release evidence не редактировались. 5.1 остаётся открытой для следующих срезов.
+
+## Срез 3 — общая анкета и mixed protocol, 2026-09-05
+
+Текущий runner больше не содержит число reviewers, improve/review/commit
+правила или обязательный task/brief для обычного workflow. Пять исторических
+форм для трёх hosts сохранены byte-for-byte; все 15 hashes и upgrade проходят.
+Profile `/3` использует одну анкету с optional runtime предответами и
+read-only `--prepare`, затем exact `--expected-launch-digest`. `/2` сохраняет
+старый запуск и отдельный catalog digest, без ложного checked summary и
+неявной миграции. Current runner явно различает эти контракты.
+
+Questionnaire и Start используют одну validation; форма может быть неполной.
+Missing predecessor показан условным, известный false в AND не превращён в
+unknown. Package-profile answer и разрешённый policy default применяются до
+зависимых вопросов. Typed `false` не теряется. Найденное прежнее игнорирование
+`launch_input` исправлено: `/3` связывает JSON answer с обычным input до
+schema/scope validation, конфликты источников отвергаются. Public CLI Run
+действительно получил значение 2 вместо default 3; runtime-перезапись уже
+закреплённого input не объявляется поддержанной.
+
+Summary содержит selected package/root, требования, digests inputs/config,
+программы и argv, ответы с источниками и known wait reasons. Он предъявляется
+до мутаций/dispatch в stderr и остаётся в `project-start/3.launch_summary`;
+stdout сохраняет один final JSON. Изменение source/support/input/answers/local
+binding между prepare и Start отвергается до package/claim/Run. Проверены
+отказ при ошибке вывода и замена executable symlink внутри summary callback.
+В callback не было Run, пакета, claim и worker workspace; после нормального
+старта три настоящих Node worker оставили marker в своих Attempt workspaces
+и дали отчёт Total 24. Review digest не зависит от command ID и installation
+того же exact package. Public Run view по-прежнему скрывает executors;
+read-only runtime comparison проверяет private pinned digests без раскрытия.
+
+Отдельный no-Git mixed Run выполнил native parse → assisted effects:none →
+native report. Typed request остановил тот же Attempt, invalid string answer
+не изменил snapshot. После reopen integer 2 попал в decision_context и ledger;
+Drive не запускал завершающий шаг ни до ответа, ни до принятого session result.
+После host result native report выдал Total 48. Git claim и Brief отсутствуют.
+Это scripted host и настоящий CLI/session protocol, не поведение модели/UI.
+
+Focused команды (GitHub checkout, warm cache; повторы не складываются в новые
+тесты):
+
+```sh
+GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local .tools/go/bin/go test ./cmd/prifly ./internal/runtime -run '^(TestCLIProject.*|TestProject.*|TestHelpNamesTheQuestionnaireFlags|TestCLIHelpDoesNotDenyImplementedCoreOperators|TestExecutionReviewChecksPinnedBytesWithoutDisclosure|TestExecutionBindingsExactVersionsChecksAndRestart|TestGlossaryBindings)$' -count=1 -json
+GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local .tools/go/bin/go test ./cmd/prifly -run '^(TestCLIProjectStartClaimsDeclaredWorkspaceAndStopsAtHostHandoff|TestCLIHelpDoesNotDenyImplementedCoreOperators|TestCLIProjectDecisionInputReachesRun|TestHelpNamesTheQuestionnaireFlags|TestProjectRunnerTextIsPinned|TestProjectFrozenRunnerTextIsPinned|TestProjectCurrentRunnerIsWorkflowNeutral)$' -count=1 -json
+GOCACHE=/private/tmp/prifly-neutral-go-build GOTOOLCHAIN=local .tools/go/bin/go test ./cmd/prifly -run '^(TestHelpNamesTheQuestionnaireFlags|TestCLIHelpDoesNotDenyImplementedCoreOperators)$' -count=1 -json
+make fmt-check refusal-check GO=.tools/go/bin/go
+python3 test/e2e/test_examples.py EditorContractTest
+openspec validate --all --strict --no-interactive
+git diff --check
+git diff --name-only 5b5c4ca -- openspec/changes/archive
+```
+
+Итог по последним результатам каждого теста: **57/57 top-level, 99/99
+subtests, 0 skipped, 0 оставшихся failures**. Первый общий прогон: runtime
+4.566 s, cmd 16.032 s; 54 теста прошли, три остановились на старых ожиданиях
+версии анкеты/справки и missing ignore-file нового fixture. После исправлений
+повторены только затронутые проверки и current/frozen pins: 2.994 s.
+Дополнительно одна новая проверка справки выявила отсутствующую ссылку на
+`questionnaire --prepare` именно в короткой помощи start; исправлена и
+проверена двумя help tests за 0.633 s. Промежуточные отказы не скрыты, полного
+повторного прогона ради справки не было. Editor **1/1**, OpenSpec **19/19**,
+format/refusal/diff чистые, archive diff пуст. Wire/schema bytes не менялись.
+
+**Что в этот срез не входит:** task 3.5 остаётся открытой: инструкции и
+local-owner caveat реализованы, но живые UI observations не завершены. Claude
+Desktop/CLI обнаружены; попытка read-only доступа к UI остановилась на
+системных Accessibility/Screen Recording permissions. Повторных ожиданий и
+запуска модели не было; finite dialog Codex также не наблюдался. Поэтому
+`add-native-host-question-ux` 2.3 и `add-run-decision-catalog` 4.2/6.3 не
+закрыты и не заменены scripted proof. Actor — provenance, не удостоверенный
+отдельный человек; неизвестный native вопрос требует явной остановки/вопроса,
+а не придуманного bridge record. Внешний AIF compatibility/pilot, полные
+candidate gates, полная синхронизация main specs, Release и полигон остаются
+в срезе 4. При mixed-тесте также замечен прежний wire-нюанс Go
+`SessionSubmission`: request нужно отправлять без поля result, поскольку
+`result:null` не равен отсутствию result; тест использует допустимый wire,
+старый DTO/wire контракт этим срезом не переписан. 5.1 остаётся обязательством
+следующих срезов. Все принятые уточнения находятся также в design этого change.

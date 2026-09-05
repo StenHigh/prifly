@@ -166,11 +166,11 @@ when: {profiles: [full]}
 `)
 	authority := filepath.Join(t.TempDir(), "never-opened-authority")
 	var out, errout bytes.Buffer
-	if code := execute(context.Background(), []string{"--project", authority, "project", "questionnaire", "--repository", repository, "--package", "sample", "--json"}, &out, &errout); code != 0 {
+	if code := execute(context.Background(), []string{"--project", authority, "project", "questionnaire", "--repository", repository, "--package", "sample", "--package-profile", "full", "--json"}, &out, &errout); code != 0 {
 		t.Fatalf("questionnaire %d: %s", code, errout.String())
 	}
 	var result projectQuestionnaire
-	if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.SchemaVersion != "project-questionnaire/2" || result.Package.ID != "test:package/sample" || len(result.Profiles) != 2 || len(result.Preflight) != 1 || result.Preflight[0].When == nil || result.CatalogDigest == "" {
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.SchemaVersion != "project-questionnaire/3" || result.Package.ID != "test:package/sample" || len(result.Profiles) != 2 || len(result.Preflight) != 1 || result.Preflight[0].When == nil || result.CatalogDigest == "" {
 		t.Fatalf("questionnaire result: %v %#v", err, result)
 	}
 	if _, err := os.Stat(authority); !os.IsNotExist(err) {
@@ -178,7 +178,7 @@ when: {profiles: [full]}
 	}
 	out.Reset()
 	errout.Reset()
-	if code := execute(context.Background(), []string{"--project", authority, "project", "questionnaire", "--repository", repository, "--launch", "sample", "--json"}, &out, &errout); code != 0 {
+	if code := execute(context.Background(), []string{"--project", authority, "project", "questionnaire", "--repository", repository, "--launch", "sample", "--package-profile", "full", "--json"}, &out, &errout); code != 0 {
 		t.Fatalf("launch questionnaire %d: %s", code, errout.String())
 	}
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.Package.ID != "test:package/sample" {

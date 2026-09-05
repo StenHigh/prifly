@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"strings"
@@ -154,6 +155,25 @@ func (e *Engine) ValidateExecutionBindings(plan *flow.Plan, definitions []Pinned
 	}
 	_, err := e.executionConfiguration(plan, definitions, registry, bindings)
 	return err
+}
+
+// CheckPinnedExecutables compares a caller's reviewed exact executors without
+// exposing the private configuration stripped from ordinary Run views. It is
+// read-only and grants no right to dispatch or bypass normal admission.
+func (e *Engine) CheckPinnedExecutables(ctx context.Context, runID string, expected map[string]string) error {
+	run, _, err := e.load(ctx, runID)
+	if err != nil {
+		return err
+	}
+	if len(run.Executors) != len(expected) {
+		return fault("execution_review_mismatch", "pinned executable set differs from the reviewed set")
+	}
+	for ref, digest := range expected {
+		if executor, exists := run.Executors[ref]; !exists || executor.ExecutableDigest != digest {
+			return fault("execution_review_mismatch", "pinned executable differs from the reviewed bytes")
+		}
+	}
+	return nil
 }
 
 func executorBindingVersion(version string, bindings *ExecutionBindings) error {

@@ -16,6 +16,50 @@ import (
 	"github.com/stenhigh/prifly/internal/local"
 )
 
+func TestExecutionReviewChecksPinnedBytesWithoutDisclosure(t *testing.T) {
+	e, options := acceptanceProject(t, []string{"workflow_input", "step_result"}, "", "pass", false)
+	options.SchemaVersion = "2"
+	started, err := e.Start(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := started.Receipt.RunID
+	run, before, err := e.load(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := map[string]string{}
+	for ref, executor := range run.Executors {
+		expected[ref] = executor.ExecutableDigest
+	}
+	if len(expected) == 0 {
+		t.Fatal("fixture must pin actual executables")
+	}
+	if err := e.CheckPinnedExecutables(context.Background(), id, expected); err != nil {
+		t.Fatal(err)
+	}
+	wrong := maps.Clone(expected)
+	for ref := range wrong {
+		wrong[ref] = "sha256:" + strings.Repeat("0", 64)
+		break
+	}
+	for _, candidate := range []map[string]string{nil, wrong} {
+		err := e.CheckPinnedExecutables(context.Background(), id, candidate)
+		var refused *Fault
+		if !errors.As(err, &refused) || refused.Code != "execution_review_mismatch" {
+			t.Fatalf("changed review accepted: %v", err)
+		}
+	}
+	view, err := e.View(context.Background(), id)
+	if err != nil || view.Run.Executors != nil {
+		t.Fatal("review check exposed private executor configuration", err)
+	}
+	_, after, err := e.load(context.Background(), id)
+	if err != nil || !bytes.Equal(before.Snapshot.Data, after.Snapshot.Data) || before.Snapshot.Version != after.Snapshot.Version {
+		t.Fatal("read-only review changed the Run", err)
+	}
+}
+
 func TestExecutionBindingsExactVersionsChecksAndRestart(t *testing.T) {
 	e, firstOptions := acceptanceProject(t, []string{"workflow_input", "step_result"}, "", "pass", false)
 	read := func(path string, target any) {

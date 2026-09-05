@@ -29,6 +29,7 @@ type projectStartResult struct {
 	AutonomyUnanswered *[]prifly.UnansweredDecision `json:"autonomy_unanswered,omitempty"`
 	Run                prifly.RunView               `json:"run"`
 	Workspace          *prifly.WorktreeClaim        `json:"workspace,omitempty"`
+	LaunchSummary      *projectLaunchSummary        `json:"launch_summary,omitempty"`
 }
 
 type projectPreflight struct {
@@ -42,6 +43,10 @@ type projectPreflight struct {
 // seals declared YAML into a disposable package and uses the existing engine.
 // An assisted step waits for its host; a managed step uses its approved worker.
 func (c *cli) projectStart(ctx context.Context, args []string) error {
+	return c.projectPrepareAndStart(ctx, args, false)
+}
+
+func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare bool) error {
 	f := flags("project start")
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
@@ -52,6 +57,7 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	packageProfile := f.String("package-profile", "", "per-Run package profile")
 	decisionPolicy := f.String("decision-policy", "attended", "attended or autonomous declared-decision policy")
 	expectedCatalog := f.String("expected-decision-catalog-digest", "", "catalog digest returned by project questionnaire")
+	expectedLaunch := f.String("expected-launch-digest", "", "review digest returned by project questionnaire --prepare")
 	command := f.String("command-id", "", "stable command identity for an explicit retry")
 	inputs := bindings{}
 	refFiles := bindings{}
@@ -83,6 +89,9 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	}
 	neutral := profile.SchemaVersion == projectVariantProfileVersion
 	if !neutral {
+		if prepare || *expectedLaunch != "" {
+			return usageError("project_questionnaire_prepare_requires_profile_3: exact launch review requires an explicit Project profile /3 migration; legacy start remains supported")
+		}
 		if *host == "" || *brief == "" {
 			return usageError("project start requires --launch, --host and --brief for profile /2")
 		}
@@ -139,6 +148,11 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 		_ = authority.Close()
 		return err
 	}
+	configurationDigest, err := projectReviewConfiguration(authority.Config)
+	if err != nil {
+		_ = authority.Close()
+		return err
+	}
 	if err := authority.Close(); err != nil {
 		return err
 	}
@@ -177,6 +191,9 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 		inputValues[port] = data
 		inputPaths[port] = resolved
 	}
+	if err := projectDecisionInputs(preflight, inputValues, refs, neutral); err != nil {
+		return err
+	}
 
 	temporary, err := os.MkdirTemp("", "prifly-project-start-")
 	if err != nil {
@@ -196,13 +213,15 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 		return err
 	}
 	var execution *prifly.ExecutionBindings
+	var requirements projectLaunchRequirements
 	needsWorkspace := !neutral
 	if neutral {
 		preflightEngine, err := prifly.Open(c.project, true)
 		if err != nil {
 			return err
 		}
-		execution, needsWorkspace, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, workflowPath, *host, *workspace, *allowExecution, inputValues, refs)
+		execution, requirements, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, workflowPath, *host, *workspace, *allowExecution, inputValues, refs)
+		needsWorkspace = requirements.GitWorkspace
 		closeErr := preflightEngine.Close()
 		if err != nil {
 			return err
@@ -211,12 +230,81 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 			return closeErr
 		}
 	}
+	var summary projectLaunchSummary
+	if neutral {
+		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/1", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true}
+		summary.Requirements = &requirements
+		for _, component := range compiled.Components {
+			if component.Path == workflowPath {
+				summary.Workflow = component.Ref
+			}
+		}
+		for name, data := range inputValues {
+			summary.InputDigests[name] = projectBytesDigest(data)
+		}
+		if len(briefBytes) != 0 {
+			summary.BriefDigest = projectBytesDigest(briefBytes)
+		}
+		summary.Execution, err = projectReviewExecutors(execution)
+		if err != nil {
+			return err
+		}
+		summary.ReviewDigest, err = projectReviewDigest(summary)
+		if err != nil {
+			return err
+		}
+		if *expectedLaunch != "" && *expectedLaunch != summary.ReviewDigest {
+			return usageError("project_start_stale_launch: sources, inputs, bindings or decisions changed; repeat project questionnaire --prepare and review the new summary")
+		}
+		if prepare {
+			return c.emit(summary)
+		}
+		// Keep stdout's one final result intact. The pre-dispatch summary is on
+		// stderr, and a failed write stops before registration, claim or Run.
+		if c.errout != nil {
+			if err := json.NewEncoder(c.errout).Encode(summary); err != nil {
+				return err
+			}
+		}
+	} else if preflight.Declared && c.errout != nil {
+		// Legacy still presents its decisions before dispatch, but does not
+		// advertise checked inputs/executors under the neutral review contract.
+		if err := json.NewEncoder(c.errout).Encode(map[string]any{"decision_sheet": preflight.Sheet, "autonomy_unanswered": prifly.DecisionsAutonomyCannotTake(&preflight.Catalog, &preflight.Sheet)}); err != nil {
+			return err
+		}
+	}
 
 	engine, err := prifly.Open(c.project, false)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = engine.Close() }()
+	if neutral {
+		// Recheck mutable machine configuration after publishing the summary.
+		// Package/source/input bytes are already held in the prepared request.
+		currentConfiguration, err := projectReviewConfiguration(engine.Config)
+		if err != nil {
+			return err
+		}
+		currentExecution, err := projectReviewExecutors(execution)
+		if err != nil {
+			return err
+		}
+		currentSummary := summary
+		currentSummary.ConfigurationDigest, currentSummary.Execution, currentSummary.ReviewDigest = currentConfiguration, currentExecution, ""
+		currentDigest, err := projectReviewDigest(currentSummary)
+		if err != nil {
+			return err
+		}
+		if currentDigest != summary.ReviewDigest {
+			return usageError("project_start_stale_launch: local execution configuration changed after the summary; prepare and review again")
+		}
+		// Keep the resolved reviewed path in the request. A later retarget of a
+		// machine-local symlink must not select a different installed program.
+		for index := range execution.Bindings {
+			execution.Bindings[index].Config.Executable = summary.Execution[index].Executable
+		}
+	}
 	var claim *prifly.WorktreeClaim
 	createdClaim := false
 	if needsWorkspace {
@@ -275,6 +363,15 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 		}
 		return err
 	}
+	if neutral {
+		expected := map[string]string{}
+		for _, reviewed := range summary.Execution {
+			expected[reviewed.DefinitionRef.String()] = reviewed.ExecutableDigest
+		}
+		if err := engine.CheckPinnedExecutables(ctx, started.Receipt.RunID, expected); err != nil {
+			return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s was not driven: inspect its pinned executors before explicit continuation", started.Receipt.RunID), Cause: err}
+		}
+	}
 	if err := engine.Drive(ctx, started.Receipt.RunID); err != nil {
 		return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s", started.Receipt.RunID), Cause: err}
 	}
@@ -294,6 +391,7 @@ func (c *cli) projectStart(ctx context.Context, args []string) error {
 	if compiled.AuthorPackage != nil {
 		result.SchemaVersion = "project-start/3"
 		result.AuthorPackage, result.BuildKey = compiled.AuthorPackage, compiled.BuildKey
+		result.LaunchSummary = &summary
 	}
 	return c.emit(result)
 }
@@ -341,6 +439,12 @@ func projectStartInputs(launch projectLaunchDetail, inputs, refs bindings, requi
 }
 
 func projectStartPreflight(root string, profile projectProfile, packageName, requestedProfile, decisionPolicy string, rawAnswers, rawRuntimeAnswers []string) (projectPreflight, error) {
+	return projectDecisionPreflight(root, profile, packageName, requestedProfile, decisionPolicy, rawAnswers, rawRuntimeAnswers, true)
+}
+
+// The questionnaire validates the same selections as Start, but can display
+// missing required answers while the owner is still filling out the form.
+func projectDecisionPreflight(root string, profile projectProfile, packageName, requestedProfile, decisionPolicy string, rawAnswers, rawRuntimeAnswers []string, complete bool) (projectPreflight, error) {
 	if decisionPolicy != "attended" && decisionPolicy != "autonomous" {
 		return projectPreflight{}, usageError("project_start_invalid_decision_policy: use attended or autonomous")
 	}
@@ -388,7 +492,7 @@ func projectStartPreflight(root string, profile projectProfile, packageName, req
 	}
 	for id, value := range answers {
 		definition, exists := definitions[id]
-		if !exists || definition.Phase != "preflight" || !projectDecisionApplies(definition, selected, answers) {
+		if !exists || definition.Phase != "preflight" {
 			return projectPreflight{}, usageError("project_start_unknown_decision: " + id)
 		}
 		if definition.Destination.Kind == "package_profile" {
@@ -402,22 +506,29 @@ func projectStartPreflight(root string, profile projectProfile, packageName, req
 	if err != nil {
 		return projectPreflight{}, err
 	}
-	for id, value := range runtime {
-		definition, exists := definitions[id]
-		if !exists || definition.Phase != "runtime" || !projectDecisionApplies(definition, selected, answers) {
-			return projectPreflight{}, usageError("project_start_unknown_decision: " + id)
-		}
-		if err := projectValidateDecisionValue(definition, value); err != nil {
-			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + ": " + err.Error())
-		}
-	}
 	answerSources := map[string]string{}
 	for _, definition := range source.DecisionCatalog {
-		if definition.Phase != "preflight" || definition.Destination.Kind == "package_profile" || !definition.Required || !projectDecisionApplies(definition, selected, answers) {
+		if definition.Phase != "preflight" || !projectDecisionApplies(definition, selected, answers) {
+			continue
+		}
+		if definition.Destination.Kind == "package_profile" {
+			if selected != "" {
+				value, err := json.Marshal(selected)
+				if err != nil {
+					return projectPreflight{}, err
+				}
+				answers[definition.ID], answerSources[definition.ID] = value, profileSource
+			}
+			continue
+		}
+		if !definition.Required {
 			continue
 		}
 		if _, answered := answers[definition.ID]; !answered {
 			if decisionPolicy != "autonomous" || !definition.Automatic || definition.Sensitivity != "ordinary" || len(definition.Recommendation) == 0 {
+				if !complete {
+					continue
+				}
 				return projectPreflight{}, usageError("project_start_missing_decision: " + definition.ID)
 			}
 			value, err := flow.Canonical(definition.Recommendation)
@@ -425,6 +536,23 @@ func projectStartPreflight(root string, profile projectProfile, packageName, req
 				return projectPreflight{}, usageError("project_start_invalid_decision_default: " + definition.ID)
 			}
 			answers[definition.ID], answerSources[definition.ID] = value, "autonomous_policy"
+		}
+	}
+	// Conditions see the effective answers, including allowed policy choices
+	// above. Validating raw runtime preanswers earlier rejects a legitimate
+	// dependent answer merely because its predecessor was selected by policy.
+	for id := range answers {
+		if !projectDecisionApplies(definitions[id], selected, answers) {
+			return projectPreflight{}, usageError("project_start_unknown_decision: " + id)
+		}
+	}
+	for id, value := range runtime {
+		definition, exists := definitions[id]
+		if !exists || definition.Phase != "runtime" || !projectDecisionApplies(definition, selected, answers) {
+			return projectPreflight{}, usageError("project_start_unknown_decision: " + id)
+		}
+		if err := projectValidateDecisionValue(definition, value); err != nil {
+			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + ": " + err.Error())
 		}
 	}
 	catalog := prifly.DecisionCatalog{SchemaVersion: prifly.DecisionCatalogVersion, Decisions: source.DecisionCatalog}

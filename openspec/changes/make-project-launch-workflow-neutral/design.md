@@ -190,6 +190,50 @@ preflight и optional runtime предответы, условия, итог pol
 при устаревших sources/ответах пересчитывается до эффектов. JSON-клиент может
 получить preview и передать explicit answers без чата или LLM.
 
+Конкретный CLI среза 3: `project-questionnaire/3` принимает те же typed
+profile/policy/preflight/runtime selections и catalog digest, что Start.
+Незавершённая форма показывает missing required answers и conditional
+применимость; полного набора ответов до просмотра не требует. Разрешённый
+default и выбранный profile участвуют в условиях раньше зависимых вопросов.
+Условия нынешнего каталога читают только profile и прежние preflight answers;
+runtime-зависимые predicates этим изменением не вводятся.
+
+В ходе проверки обнаружено, что `destination: launch_input` ранее только
+проверял наличие порта и сохранял ответ в листе, но не связывал его со Start.
+Для `/3` применимый preflight answer теперь передаётся как typed JSON bytes
+в обычный input до schema/scope validation и review digest. Два ответа в один
+порт либо одновременный file/ref binding дают отказ, не скрытый приоритет.
+Runtime destination такого вида отвергается: он не может менять уже pinned
+Run inputs. `/2` не выдаёт прежнее игнорирование за поддержку — выбранный
+launch_input явно требует `/3`. Конвертация типов/форматов не угадывается.
+
+`project questionnaire --prepare` использует тот же код подготовки, что
+`project start`, но останавливается после read-only validation. Temporary
+compiled files удаляются; import, claim, Run и worker не создаются. Выдаётся
+`project-launch-summary/1`: exact package/root, требования effects/host/Git,
+digest входов и configuration, resolved executables/argv/supporting digests,
+Decision Sheet и known wait reasons. `review_digest` включает эти данные,
+не время или command ID. `start --expected-launch-digest` отказывает
+`project_start_stale_launch` до мутаций, если подготовленные данные отличаются.
+Это проверка просмотренного варианта, не новое право или подтверждение личности.
+
+Прямой `start` печатает тот же итог в stderr до registration/claim/Run и
+сохраняет его в `project-start/3.launch_summary`; stdout остаётся одним
+конечным JSON. Machine configuration перепроверяется после вывода, actual
+pinned executable — до Drive. Подмена в этом позднем окне оставляет Run
+неисполненным с явным diagnostic, а не запускает другой binary. Cooperative
+local-owner boundary не обещает защиты от malicious same-UID mutation или
+закрепления всех dynamic libraries. Input/source/supporting bytes уже
+принадлежат подготовленному request и не перечитываются для нового смысла.
+Сводка показывает declared answers/argv владельцу; sensitivity не является
+secret classification. Input-file/supporting/environment bytes не печатаются.
+
+Строгий prepare/review digest относится к новому profile `/3`. `/2` сохраняет
+прежний Start и explicit catalog digest; его authority-based managed bindings
+не выдаются за checked neutral summary. Новый runner различает это по
+`project_profile_version`, предлагает только явную миграцию и не правит YAML
+сам. Исторические runner bytes сохранены как пять frozen форм для трёх hosts.
+
 Dynamic bridge остаётся для объявленных runtime requests. Неизвестный native
 вопрос не «перехвачен автоматически». Attended/autonomous можно продолжить
 с известной возможностью ожидания; unattended нельзя обещать по одному

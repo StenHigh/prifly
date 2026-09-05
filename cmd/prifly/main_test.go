@@ -888,7 +888,7 @@ stages:
 			t.Fatalf("project questionnaire %d: %s", code, questionnaireErr.String())
 		}
 		var questionnaire projectQuestionnaire
-		if err := json.Unmarshal(questionnaireOut.Bytes(), &questionnaire); err != nil || questionnaire.SchemaVersion != "project-questionnaire/2" || questionnaire.CatalogDigest == "" {
+		if err := json.Unmarshal(questionnaireOut.Bytes(), &questionnaire); err != nil || questionnaire.SchemaVersion != "project-questionnaire/3" || questionnaire.CatalogDigest == "" {
 			t.Fatalf("project questionnaire did not return a stable catalog: %v %#v", err, questionnaire)
 		}
 		if workspace == "" {
@@ -1360,10 +1360,10 @@ func TestCLIHelpDoesNotDenyImplementedCoreOperators(t *testing.T) {
 	if !strings.Contains(help, "project workflows [--repository DIR]") {
 		t.Fatalf("help does not describe project launch discovery: %s", help)
 	}
-	if !strings.Contains(help, "project compile --repository DIR --package NAME --host codex-cli|codex-app|claude-code --output DIR") {
+	if !strings.Contains(help, "project compile --repository DIR --package NAME [--host codex-cli|codex-app|claude-code] --output DIR") {
 		t.Fatalf("help does not describe YAML package compilation: %s", help)
 	}
-	if !strings.Contains(help, "project start --repository DIR --launch ID --host codex-cli|codex-app|claude-code --brief FILE") || !strings.Contains(help, "[--workspace worktree|checkout]") {
+	if !strings.Contains(help, "project start --repository DIR --launch ID [--host codex-cli|codex-app|claude-code] [--brief FILE]") || !strings.Contains(help, "[--workspace worktree|checkout]") {
 		t.Fatalf("help does not describe the declared project launch: %s", help)
 	}
 }
@@ -2411,7 +2411,7 @@ func TestHelpNamesTheQuestionnaireFlags(t *testing.T) {
 	if code := execute(context.Background(), []string{"help", "project", "start"}, &out, &errout); code != 0 {
 		t.Fatalf("help: %s", errout.String())
 	}
-	for _, flag := range []string{"--preflight-answer", "--package-profile", "--decision-policy", "--expected-decision-catalog-digest"} {
+	for _, flag := range []string{"--preflight-answer", "--runtime-answer", "--package-profile", "--decision-policy", "--expected-decision-catalog-digest", "--prepare", "--expected-launch-digest", "--allow-execution"} {
 		if !strings.Contains(out.String(), flag) {
 			t.Fatalf("the help does not name %s: %s", flag, out.String())
 		}

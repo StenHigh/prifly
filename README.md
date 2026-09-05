@@ -103,6 +103,7 @@ prifly project workflows --repository . --json
 ```sh
 prifly project local set --allow-executable worker=/absolute/path/to/worker
 prifly project compile --package NAME --output ../NAME.package
+prifly project questionnaire --launch NAME --prepare --input source=./input.csv --allow-execution --json
 prifly project start --launch NAME --input source=./input.csv --allow-execution
 ```
 
@@ -112,6 +113,20 @@ programs, arguments и supporting files этого запуска. Compile ни�
 исполняет и не импортирует. Программа должна поддерживать существующий Pri-Fly
 worker protocol — произвольный shell script не становится worker автоматически.
 Рабочая папка шага не является sandbox: используйте доверенные программы.
+
+`questionnaire` показывает объявленные вопросы; с `--prepare` — итог перед
+стартом с теми же параметрами, которые получит `start`. Этот просмотр не
+запускает программы и не создаёт Run. Чтобы стартовал именно просмотренный
+вариант, добавьте к `start` `--expected-launch-digest` со значением
+`review_digest` из итога. Изменились файлы, ответы или настройки программы —
+нужно посмотреть новый итог. Прямой `start` также выводит итог до исполнения
+в stderr, оставляя один окончательный JSON в stdout.
+
+Известные вопросы шага можно предответить через `--runtime-answer ID=JSON`;
+это необязательно. Анкета показывает, почему запуск может остановиться, но
+не угадывает вопросы из текста skills и не обещает работу без остановок.
+Выбранные ответы и аргументы программ видны владельцу в итогах; не храните
+в них секреты. Содержимое входных файлов и environment в итог не печатается.
 
 Чтобы подключить ИИ, явно добавьте только нужный host:
 
@@ -124,9 +139,13 @@ prifly project runners add --host codex-app
 этот `--host` при compile, assisted шаги — при start. Git-запись через assisted
 шаг требует explicit `--workspace worktree` или `checkout`; обычной обработке
 файлов эти параметры не нужны. RunBrief передаётся, когда нужен объявленному
-входу сценария, а не сочиняется для каждого Run. Нейтральный command-only путь
-запускается через CLI; переработка общего host runner — отдельный следующий
-[срез](openspec/changes/make-project-launch-workflow-neutral/tasks.md).
+входу сценария, а не сочиняется для каждого Run. Общий `prifly-run` следует
+выбранному YAML и не добавляет правила AI Factory. Уже установленные exact
+инструкции обновляются командой `prifly project runners update`.
+Проверенный итог с `--prepare` доступен профилю `/3`; `/2` сохраняет старый
+запуск и не мигрирует автоматически. Проверки протокола не заменяют живое
+наблюдение диалогов Codex/Claude; его статус указан в
+[плане](openspec/changes/make-project-launch-workflow-neutral/tasks.md).
 
 Для contributor-проверки:
 

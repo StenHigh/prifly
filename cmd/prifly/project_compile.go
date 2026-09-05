@@ -737,6 +737,9 @@ func projectValidateDecisionDefinition(definition prifly.DecisionDefinition, wor
 			}
 		}
 	case "launch_input":
+		if definition.Phase != "preflight" {
+			return errors.New("launch input decision requires preflight phase")
+		}
 		inputs, ok := workflow["inputs"].(map[string]any)
 		if !ok || inputs[definition.Destination.Name] == nil {
 			return errors.New("decision destination names unknown launch input " + definition.Destination.Name)

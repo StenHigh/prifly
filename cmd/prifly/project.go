@@ -37,6 +37,109 @@ description: Start and host one declared Pri-Fly project workflow.
 
 # Pri-Fly project host
 
+Follow the selected workflow's inputs, ready tasks, permitted effects,
+decisions and outputs. Operate the CLI session protocol yourself; do not add
+stages or process rules. All authority commands below use the exact local
+PRIFLY_BIN with --project "$authority_root"; never edit authority state.
+
+1. Read .prifly/local.yaml for authority_root and prifly_executable. Use that
+   exact executable as PRIFLY_BIN, not an assumed PATH entry. List launches
+   with PRIFLY_BIN project workflows --repository "$PWD" --json. If the
+   developer has not named one exact launch ID, show the list and wait for
+   their choice. Do not infer a default from task wording or nearby files.
+2. Read ` + "`PRIFLY_BIN project questionnaire --repository \"$PWD\" --launch ID --json`" + `.
+   Use its project_profile_version to distinguish /3 from legacy /2, not the
+   questionnaire response version. Never migrate shared YAML automatically.
+   Keep one continuous questionnaire: select a package profile only when
+   declared, collect applicable preflight answers, offer optional runtime
+   preanswers, and choose the attended or autonomous policy. Re-read it with
+   the selected ` + "`--package-profile`" + `, ` + "`--decision-policy`" + `,
+   ` + "`--preflight-answer ID=JSON`" + ` and ` + "`--runtime-answer ID=JSON`" + ` values.
+   Use its decision_states and declared conditions; unknown applicability is
+   conditional, not false. Do not require optional runtime answers or ask
+   questions for inapplicable entries. Preserve a supplied exact choice and
+   ask only for missing values. Autonomous can use only catalog-permitted
+   automatic choices; do not promise unattended execution from an empty list.
+3. Collect the selected workflow's typed inputs using ` + "`--input NAME=FILE`" + `
+   or ` + "`--input-ref NAME=FILE`" + `. Respect declared defaults and ask for missing
+   required values; never invent a task or brief for a file-only workflow.
+   In /3, an applicable preflight answer with destination launch_input already
+   binds its port: do not also pass that port through --input or --input-ref;
+   using such an answer in legacy /2 requires explicit profile /3 migration.
+   This host is {{host}}: pass ` + "`--host {{host}}`" + ` only when its contract needs
+   assisted execution or host-bound sources (and for legacy profile /2).
+   Never infer a host from folders or read another host's skills. Pass
+   ` + "`--brief FILE`" + ` only for the legacy required brief; a declared typed brief
+   in /3 is an ordinary input. Ask worktree or checkout only when Git work
+   requires it, then pass ` + "`--workspace worktree|checkout`" + `. Legacy /2 keeps
+   its required Git workspace choice. No Git work in /3 means no workspace
+   question or claim. A missing-host/input/workspace diagnostic
+   calls for that choice, not a guessed value or an automatic profile rewrite.
+4. For /3 only, prepare with ` + "`PRIFLY_BIN project questionnaire --repository \"$PWD\" --launch ID --prepare --json`" + `
+   and the same selected host, workspace, inputs, profile, policy and answer
+   arguments intended for start, plus ` + "`--expected-decision-catalog-digest DIGEST`" + `
+   from the questionnaire. If local programs are declared, show their logical
+   names and local paths; any ` + "`project local set --allow-executable NAME=PATH`" + `
+   change needs the owner's explicit permission. ` + "`--allow-execution`" + ` lets
+   prepare validate those selected bindings but does not execute or grant
+   anything. Prepare is read-only: temporary compilation is allowed, not
+   package import, repository claim, Run creation or worker execution.
+5. For /3, show the returned project-launch-summary/1 before starting: exact package,
+   inputs, resource/effect requirements, programs/arguments/supporting files,
+   chosen answers and their sources, and reasons the Run might still wait.
+   Obtain explicit confirmation of that summary and any executable effects.
+   Then call ` + "`PRIFLY_BIN project start --repository \"$PWD\" --launch ID --expected-launch-digest DIGEST`" + `
+   using its review_digest and exactly the prepared arguments (without
+   ` + "`--prepare`" + `), including ` + "`--allow-execution`" + ` only when authorized.
+   If sources, files, answers or bindings changed, prepare again and show the
+   new summary before any start retry. Never drop a stale-digest check to
+   force progress. Start may execute managed tasks immediately; it does not
+   start a model or provider. Keep its launch_summary for the final report.
+   For legacy /2, do not pass --prepare or --expected-launch-digest: explain
+   that the checked summary requires an explicit profile migration. Show the
+   collected inputs, profile, answers, policy and workspace choice and obtain
+   confirmation, then use project start with those selected arguments, its
+   required host/brief/workspace and --expected-decision-catalog-digest from
+   the questionnaire. Do not claim a checked summary or invent launch_summary.
+6. Follow ` + "`run next RUN_ID`" + ` and read outstanding handoffs with
+   ` + "`session task --run RUN_ID --all`" + `. Handle only those tasks, regardless of
+   their number; use separate host sessions only if the platform provides
+   them. Read each task's pinned context from ` + "`workspace`" + ` and respect its
+   ` + "`permitted_effects`" + `. Only a task carrying ` + "`repository_workspace`" + ` may
+   change that repository; otherwise use scratch and declared output slots.
+   Carry applicable ` + "`decision_sheet`" + ` and ` + "`decision_context`" + ` values into
+   the pinned instructions without replacing them or asking them again.
+   Write each host-owned output to the port path in ` + "`context.json`" + ` and
+   report it in ` + "`outputs`" + ` with that slot's ` + "`artifact_id`" + `, ` + "`revision`" + ` and
+   the ` + "`digest`" + ` of the actual bytes. Pri-Fly seals them; do not invent refs
+   or report unwritten ports. Pri-Fly fills workspace-tree output slots itself.
+   Submit the typed result, then drive the same Run.
+7. For ` + "`waiting_decision`" + `, read ` + "`run decisions RUN_ID`" + ` and ask its declared
+   question. Submit ` + "`run decision RUN_ID answer --decision ID --request-digest DIGEST --expected-run-version N --value JSON`" + `
+   with the current read's exact ID, pending_request_digest and Run version,
+   not a command receipt's request_digest. Re-read the redelivered task.
+   For an undeclared native skill question, stop that task, explain the
+   limitation and ask the developer; do not choose a hidden model answer,
+   invent a decision ID or claim that Pri-Fly recorded the native answer.
+8. Continue only while the Run permits progress. Respect pause, stop, cancel,
+   deadlines and uncertain outcomes; a suggested next action is not authority
+   to retry or widen scope. At completion report the actual outcome, outputs,
+   launch_summary when present and decision ledger, including policy-selected answers and
+   any remaining obligations. Do not present actor provenance as proof that
+   a separate human answered: local owner and host can share the same OS
+   account. Decisions do not create Approval, Grant or new effects. Unknown
+   skill questions and conditional waits prevent an unattended guarantee.
+`
+
+// Frozen pre-neutral forms below are recognition-only. Their shared suffixes
+// must stay byte-identical when the current runner changes.
+const projectRunnerSkillTemplateBeforeNeutral = `---
+name: prifly-run
+description: Start and host one declared Pri-Fly project workflow.
+---
+
+# Pri-Fly project host
+
 You are the host of the Pri-Fly run. Do not ask the developer to operate
 Pri-Fly's internal session protocol: do that work yourself and ask the
 developer only at the workflow's declared decision points.
@@ -328,6 +431,36 @@ explicit text question and wait without mutation. RunBrief text, a file path
 and arbitrary JSON or text input remain ordinary free-form input.
 `
 
+const projectNeutralQuestionInstructions = `
+
+## Native developer decisions
+
+For each applicable finite choice, use ` + "`{{question_tool}}`" + ` when available,
+not Markdown buttons. Ask one dependent decision at a time, keep the real
+mutually exclusive options, and explain the recommendation's consequence.
+Do not turn a recommendation into a default. For larger sets use deterministic
+pages with navigation and refusal, without hiding choices. If the tool is
+unavailable, ask one explicit text question and wait without mutation.
+RunBrief text, file paths and arbitrary JSON/text values remain free-form.
+Only ask worktree/checkout for required Git work and package-specific choices
+that the questionnaire actually declares. A native answer is not itself a
+Pri-Fly decision record or technical proof of an independent human identity.
+`
+
+const projectNeutralCatalogInstructions = `
+
+## Finding and installing a workflow
+
+Only when the developer explicitly asks, run
+` + "`PRIFLY_BIN project workflows search [QUERY] --json`" + `, with ` + "`--catalog URL`" + `
+only for a catalog they named. Present the categories and entries as a finite
+native choice. After their explicit choice call
+` + "`PRIFLY_BIN project workflows add NAME --repository \"$PWD\" --json`" + `
+(or ` + "`add URL`" + ` for their named repository), and ask them to review the shared
+.prifly changes. Search results are not installation requests. Installation
+does not seal, trust or execute the package; starting is a separate request.
+`
+
 type projectProfileInit struct {
 	SchemaVersion string `json:"schema_version"`
 	Repository    string `json:"repository"`
@@ -395,12 +528,17 @@ type projectQuestionnaireProfile struct {
 // projectQuestionnaire is a read-only preflight description. Its decisions
 // remain source declarations until project start seals an exact Run choice.
 type projectQuestionnaire struct {
-	SchemaVersion string                        `json:"schema_version"`
-	Repository    string                        `json:"repository"`
-	Package       flow.Ref                      `json:"package"`
-	Profiles      []projectQuestionnaireProfile `json:"profiles"`
-	Preflight     []prifly.DecisionDefinition   `json:"preflight"`
-	CatalogDigest string                        `json:"catalog_digest"`
+	ProjectProfileVersion string                        `json:"project_profile_version"`
+	SchemaVersion         string                        `json:"schema_version"`
+	Repository            string                        `json:"repository"`
+	Package               flow.Ref                      `json:"package"`
+	Profiles              []projectQuestionnaireProfile `json:"profiles"`
+	Preflight             []prifly.DecisionDefinition   `json:"preflight"`
+	CatalogDigest         string                        `json:"catalog_digest"`
+	Runtime               []prifly.DecisionDefinition   `json:"runtime"`
+	DecisionSheet         prifly.DecisionSheet          `json:"decision_sheet"`
+	DecisionStates        []projectDecisionState        `json:"decision_states"`
+	KnownQuestionsOnly    bool                          `json:"known_questions_only"`
 }
 
 func (c *cli) projectCommand(ctx context.Context, args []string) error {
@@ -560,10 +698,19 @@ func (c *cli) projectAddRunners(root string, profile projectProfile, ids []strin
 }
 
 func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
+	if index := slices.Index(args, "--prepare"); index >= 0 {
+		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true)
+	}
 	f := flags("project questionnaire")
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	name := f.String("package", "", "named package from project.yaml")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
+	selectedProfile := f.String("package-profile", "", "per-Run package profile")
+	policy := f.String("decision-policy", "attended", "attended or autonomous declared-decision policy")
+	expectedCatalog := f.String("expected-decision-catalog-digest", "", "catalog from the preceding questionnaire")
+	var answers, runtimeAnswers stringsFlag
+	f.Var(&answers, "preflight-answer", "declared preflight decision ID=JSON")
+	f.Var(&runtimeAnswers, "runtime-answer", "optional runtime preanswer ID=JSON")
 	if err := parse(f, args); err != nil {
 		return err
 	}
@@ -605,18 +752,27 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 		profiles = append(profiles, projectQuestionnaireProfile{ID: id, Default: id == source.DefaultProfile})
 	}
 	sort.Slice(profiles, func(left, right int) bool { return profiles[left].ID < profiles[right].ID })
-	preflight := make([]prifly.DecisionDefinition, 0, len(source.DecisionCatalog))
-	for _, definition := range source.DecisionCatalog {
-		if definition.Phase == "preflight" {
-			preflight = append(preflight, definition)
-		}
-	}
-	catalog := prifly.DecisionCatalog{SchemaVersion: prifly.DecisionCatalogVersion, Decisions: source.DecisionCatalog}
-	digest, err := prifly.DecisionCatalogDigest(catalog)
+	selection, err := projectDecisionPreflight(root, profile, *name, *selectedProfile, *policy, answers, runtimeAnswers, false)
 	if err != nil {
 		return err
 	}
-	return c.emit(projectQuestionnaire{SchemaVersion: "project-questionnaire/2", Repository: root, Package: flow.Ref{ID: source.ID, Version: source.Version}, Profiles: profiles, Preflight: preflight, CatalogDigest: digest})
+	if *expectedCatalog != "" && *expectedCatalog != selection.Sheet.CatalogDigest {
+		return usageError("project_start_stale_decision_catalog: questionnaire differs from the current project catalog")
+	}
+	result := projectQuestionnaire{SchemaVersion: "project-questionnaire/3", Repository: root, Package: flow.Ref{ID: source.ID, Version: source.Version}, Profiles: profiles, Preflight: []prifly.DecisionDefinition{}, Runtime: []prifly.DecisionDefinition{}, CatalogDigest: selection.Sheet.CatalogDigest, DecisionSheet: selection.Sheet, DecisionStates: projectDecisionStates(selection), KnownQuestionsOnly: true}
+	result.ProjectProfileVersion = profile.SchemaVersion
+	for index, state := range result.DecisionStates {
+		if state.Applicability == "inactive" {
+			continue
+		}
+		definition := selection.Catalog.Decisions[index]
+		if definition.Phase == "preflight" {
+			result.Preflight = append(result.Preflight, definition)
+		} else {
+			result.Runtime = append(result.Runtime, definition)
+		}
+	}
+	return c.emit(result)
 }
 
 func (c *cli) projectInit(ctx context.Context, args []string) error {
@@ -1530,6 +1686,15 @@ func projectRunnerPath(root string, host projectHost) string {
 }
 
 func projectRunnerSkill(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectDecisionBridgeInstructions + projectNeutralCatalogInstructions
+}
+
+func projectRunnerSkillBeforeNeutral(host projectHost) string {
 	return projectRunnerSkillBeforeCatalog(host) + projectCatalogInstructions
 }
 
@@ -1538,7 +1703,7 @@ func projectRunnerSkillBeforeCatalog(host projectHost) string {
 }
 
 func projectRunnerSkillBeforeDecisionBridge(host projectHost) string {
-	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, projectRunnerQuestions(host))
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeNeutral, projectRunnerQuestions(host))
 }
 
 func projectRunnerSkillBeforeRequestDigest(host projectHost) string {
@@ -1578,7 +1743,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

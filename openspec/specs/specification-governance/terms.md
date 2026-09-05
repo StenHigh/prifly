@@ -281,11 +281,16 @@ Approval, Grant, ActionIntent либо DecisionArtifact. Точные прави
 <a id="decision-sheet"></a>
 ### DecisionSheet — Лист предзапусковых решений
 
-Неизменяемый набор profile и applicable preflight values для одного запуска:
+Неизменяемый набор profile, applicable preflight values и явных optional
+runtime предответов для одного запуска:
 catalog digest, источник profile, policy и записи ответов. Он передаётся
 совместимому host как контекст уже принятого выбора, а не как permission
 переспрашивать или заменить этот выбор. Изменение листа требует нового Run;
 он не меняет tracked `extend.yaml` или предыдущий Run.
+Предзапусковый просмотр неполной анкеты не является уже запечатанным листом;
+его условия и причины ожидания пересчитываются перед Start. Actor source в
+local-owner profile описывает происхождение ответа, не доказывает присутствие
+отдельного человека при общем OS principal агента и владельца.
 
 <a id="decision-request"></a>
 ### DecisionRequest / DecisionAnswer — Запрос и ответ runtime-решения

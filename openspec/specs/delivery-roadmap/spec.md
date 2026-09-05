@@ -146,7 +146,7 @@ runtime contract.
 
 | Уровень | Запись | Статус | Prerequisite | Следующий шаг |
 |---|---|---|---|---|
-| Highest | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md): универсальный Project launch | В работе: b1 variants и managed Project запуск без Git/ИИ реализованы; 62 теста и реальный CSV report | Versioned Start/пакеты, существующие local-process и assisted-session | Далее: общий runner, анкета и mixed flow → внешний AIF gate; Release отдельно |
+| Highest | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md): универсальный Project launch | В работе: variants, no-Git managed запуск, общая анкета/review и mixed flow; 17/24 задач, текущий срез 57 тестов | Versioned Start/пакеты, существующие local-process и assisted-session | Далее: реальные UI observations и внешний AIF gate; Release отдельно |
 | Active | `add-run-decision-catalog`: per-Run Fast/Full/Ultra и universal decision bridge | В работе | Versioned Project launch, sealed package profile и durable Run-state | Завершить typed catalog, preflight, wait/recovery и host/CLI evidence, не выдавая upstream AIF compatibility или live-pilot qualification за результат Core |
 | Active | `add-native-host-question-ux`: один конечный вопрос в Codex и Claude Code | Осталось ручное наблюдение UI | Доступ к обоим host runtimes | Закрыть task 2.3 active change без заявления product qualification |
 | High | `assisted-model-profile-protocol` | Не начато | Versioned assisted-host contract | Создать OpenSpec change до заявления о provider/model/reasoning selection |

@@ -46,6 +46,7 @@ func main() {
 type cli struct {
 	project, format string
 	out             io.Writer
+	errout          io.Writer
 	help, version   bool
 	projectExplicit bool
 }
@@ -66,7 +67,7 @@ func commandID() string {
 }
 
 func execute(ctx context.Context, args []string, out, errout io.Writer) int {
-	c := cli{project: ".", format: "text", out: out}
+	c := cli{project: ".", format: "text", out: out, errout: errout}
 	args, err := c.globals(args)
 	if err == nil {
 		err = c.run(ctx, args)
@@ -2076,7 +2077,7 @@ Global: --project DIR  --json  --format text|json|csv
 
   update                           Install the newest signed stable release for this managed binary
   init [--profile PROFILE] [DIR]    Empty installation; default foundation-sequence/1
-  project init [--repository DIR] [--state-root DIR]
+  project init [--repository DIR] [--state-root DIR] [--host codex-cli|codex-app|claude-code]
                                    Create a tracked .prifly project profile and separate local authority state
   project workflows [--repository DIR]
                                    List the project scenarios that the launcher may start and their declared inputs
@@ -2089,19 +2090,27 @@ Global: --project DIR  --json  --format text|json|csv
   project workflows remove NAME [--repository DIR]
                                    Delete the folder and its launches from the tracked profile; authority packages and Runs stay
   project questionnaire --repository DIR (--package NAME|--launch ID)
-                                   Read declared launch decisions without creating a Run
+                [--package-profile NAME] [--decision-policy attended|autonomous] [--preflight-answer ID=JSON] [--runtime-answer ID=JSON]
+                [--expected-decision-catalog-digest DIGEST]
+                                   Read applicable/conditional decisions and optional typed preanswers without creating a Run
+  project questionnaire --prepare --launch ID [the same arguments as project start]
+                                   Profile /3: validate and show the exact launch summary read-only; pass its review_digest to start
   project runners update [--repository DIR]
                                    Replace only exact known generated host runners; customized files are refused
-  project local set --executable PATH [--repository DIR]
-                                   Point the machine-only local.yaml at another prifly binary; the authority stays as project init chose it
-  project compile --repository DIR --package NAME --host codex-cli|codex-app|claude-code --output DIR [--value NAME=JSON]
+  project runners add --host codex-cli|codex-app|claude-code [--repository DIR]
+                                   Attach selected hosts explicitly; repeat --host to add more than one
+  project local set [--executable PATH] [--allow-executable NAME=PATH] [--repository DIR]
+                                   Set machine-only local.yaml paths; the authority and shared workflow stay unchanged
+  project compile --repository DIR --package NAME [--host codex-cli|codex-app|claude-code] --output DIR [--value NAME=JSON]
                                    Seal one declared YAML package; import remains a separate owner decision
-  project start --repository DIR --launch ID --host codex-cli|codex-app|claude-code --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--workspace worktree|checkout]
+  project start --repository DIR --launch ID [--host codex-cli|codex-app|claude-code] [--brief FILE] [--input PORT=FILE] [--input-ref PORT=REF.json] [--workspace worktree|checkout]
                 [--package-profile NAME] [--preflight-answer ID=JSON] [--decision-policy attended|autonomous] [--expected-decision-catalog-digest DIGEST]
-                [--runtime-answer ID=JSON]
+                [--runtime-answer ID=JSON] [--allow-execution] [--expected-launch-digest DIGEST]
                                    A runtime answer is sealed before the Run starts: the step that raises that decision gets this value and does not wait
-                                   Seal, claim and drive one declared launch to its first honest handoff; direct CLI defaults to worktree
+                                   Show a pre-dispatch summary on stderr, then seal and drive; stdout keeps one final result
+                                   Profile /3 needs host/Git/brief only when declared; Git writes require explicit workspace. Legacy /2 retains its defaults
                                    Answer the declared questions up front with repeated --preflight-answer; project questionnaire lists them and returns the digest
+                                   Profile /3: get --expected-launch-digest from project questionnaire --prepare with the same start arguments
                                    A package profile is chosen once: with --package-profile, do not also answer the decision that selects it
   capabilities                     Implemented contracts/profiles, not permission grants
   version | doctor | inventory     Versions, integrity, exact local definitions

@@ -19,4 +19,7 @@ when:
   # answers: {roadmap_linkage: link} # Optional exact prior preflight answer.
 destination:
   kind: package_profile # Other declared forms: launch_input, session_context.
+  # launch_input: preflight only, Project /3 binds the typed JSON value to that
+  # port before ordinary schema/scope validation. Do not also pass --input or
+  # --input-ref for the same port. No implicit conversion from JSON to text.
   # name: verbosity # Required only for launch_input and session_context.
