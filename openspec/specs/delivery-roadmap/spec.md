@@ -146,15 +146,20 @@ runtime contract.
 
 | Уровень | Запись | Статус | Prerequisite | Следующий шаг |
 |---|---|---|---|---|
+| Highest | [`separate-work-time-from-human-wait`](../../changes/separate-work-time-from-human-wait/tasks.md): ожидание человека без расхода рабочего времени | План готов, реализация не начата | Существующие assisted session, decision bridge и admission queue | Реализовать отдельные сроки, безопасное ожидание и regression двухнедельной паузы до дальнейшей квалификации живых диалогов |
 | Highest | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md): универсальный Project launch | В работе: variants, no-Git managed запуск, общая анкета/review и mixed flow; 17/24 задач, текущий срез 57 тестов | Versioned Start/пакеты, существующие local-process и assisted-session | Далее: реальные UI observations и внешний AIF gate; Release отдельно |
 | Active | `add-run-decision-catalog`: per-Run Fast/Full/Ultra и universal decision bridge | В работе | Versioned Project launch, sealed package profile и durable Run-state | Завершить typed catalog, preflight, wait/recovery и host/CLI evidence, не выдавая upstream AIF compatibility или live-pilot qualification за результат Core |
 | Active | `add-native-host-question-ux`: один конечный вопрос в Codex и Claude Code | Осталось ручное наблюдение UI | Доступ к обоим host runtimes | Закрыть task 2.3 active change без заявления product qualification |
 | High | `assisted-model-profile-protocol` | Не начато | Versioned assisted-host contract | Создать OpenSpec change до заявления о provider/model/reasoning selection |
 
-Приоритет на 2026-09-05 — общий путь запуска, а не расширение AIF или управление
-моделями. Детальные задачи и условия приёмки находятся только в linked change.
-Его первые два среза снимают блокеры самостоятельного использования Pri-Fly;
-затем общий decision UX и внешний AIF проверяются поверх тех же mechanisms.
+Приоритет на 2026-09-06 — исправить расходование рабочего срока при ожидании
+человека, затем продолжить общий путь запуска, а не расширение AIF или
+управление моделями. Долгая пауза в живом тесте выявила этот дефект; короткий
+повтор успешно создал отчёт, но исправлением сроков не является. Детальные
+задачи и условия приёмки находятся только в linked changes. Первые два среза
+универсального запуска снимают блокеры самостоятельного использования Pri-Fly;
+после исправления ожидания общий decision UX и внешний AIF проверяются
+поверх тех же mechanisms.
 Незакрытые ручные наблюдения двух Active changes сохраняются и получают ссылки
 на evidence, а не отметки готовности по факту нового плана. Этот порядок не
 меняет формальную последовательность P1/P2 и не удаляет future catalogue.
