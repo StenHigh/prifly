@@ -27,11 +27,11 @@
 
 ## 4. Интеграция — внешний AIF на тех же правилах
 
-- [ ] 4.1 Во внешнем `prifly-aif-workflows` добавить compatibility check против exact candidate после явной миграции fixture Project на `/3`: Classic Fast → Full → Ultra → default → Fast в одной authority, custom setting/exclude/insert и разные host skill bytes; проверка: import/start проходят, старые Runs и tracked defaults сохранены. Core fixture не импортирует AIF.
+- [x] 4.1 Во внешнем `prifly-aif-workflows` добавить compatibility check против exact candidate после явной миграции fixture Project на `/3`: Classic Fast → Full → Ultra → default → Fast в одной authority, custom setting/exclude/insert и разные host skill bytes; проверка: import/start проходят, старые Runs и tracked defaults сохранены. Core fixture не импортирует AIF. (сделано 2026-09-06: `tests/compatibility.py` в `prifly-aif-workflows` `e263720`, CI репозитория зелёный; пять запусков в одной authority, четыре различные сборки, пятая совпадает с первой по `build_key`; `verify.py` сохраняет прежнюю гарантию `before == after` по `package list`, то есть Core fixture по-прежнему не импортирует AIF)
 - [ ] 4.2 Перенести необходимые прикладные указания из прежнего runner в AIF YAML/contexts и проверить Classic/Fanout; проверка: canonical порядок/циклы, изменённый plan между improve rounds, вопросы и notes сохранены без AIF-ветвей в Core.
 - [ ] 4.3 Выполнить один ограниченный живой AIF pilot на согласованной небольшой задаче; записать binary/package/host versions, решения и итоговый artifact/commit. Проверка: наблюдался реальный путь, а не только compile; task 6.3 decision-catalog связывается с этим evidence лишь при совпадении её критериев.
-- [ ] 4.4 На собранном candidate один раз выполнить `make check` и `make e2e`, а внешние проверки — в AIF repo; записать точные итоги и scope. Не считать scripted host живым UI, не повторять одинаковые дорогие gates после docs-only правки; новый release/version согласовывается отдельно.
-- [ ] 4.5 Синхронизировать delta, glossary, published contracts, editor references, README и текущую очередь; проверка: `openspec validate --all --strict --no-interactive`, `TestGlossaryBindings` при изменении карты, `git diff --check`. `git diff --name-only 5b5c4ca -- openspec/changes/archive` должен быть пустым: historical evidence не меняется. Формальные P1/P2 gates и deferred backlog остаются незакрытыми.
+- [x] 4.4 На собранном candidate один раз выполнить `make check` и `make e2e`, а внешние проверки — в AIF repo; записать точные итоги и scope. Не считать scripted host живым UI, не повторять одинаковые дорогие gates после docs-only правки; новый release/version согласовывается отдельно. (сделано 2026-09-06: локальная половина — `make check` PASS 986.72 с и `make e2e` в [записи выпуска](release-0.10.0.md), включая честно записанный отказ первого прогона `make e2e` на устаревшей фикстуре каталога и его исправление; внешняя — четыре ворот `prifly-aif-workflows` против опубликованного `prifly 0.10.0`, зафиксированы в их `e263720` с зелёным CI. Scripted host живым UI не считается; версия 0.10.0 согласована владельцем отдельно)
+- [x] 4.5 Синхронизировать delta, glossary, published contracts, editor references, README и текущую очередь; проверка: `openspec validate --all --strict --no-interactive`, `TestGlossaryBindings` при изменении карты, `git diff --check`. `git diff --name-only 5b5c4ca -- openspec/changes/archive` должен быть пустым: historical evidence не меняется. Формальные P1/P2 gates и deferred backlog остаются незакрытыми. (сделано 2026-09-06 в `9238d8f`, подробности — в записи среза 4: мерж двусторонний, все 26 блоков дельты совпадают с main, песочная архивация даёт нулевые added/modified/removed. `openspec validate --all --strict --no-interactive` 20 passed 0 failed; `TestGlossaryBindings` PASS; `make schemas-check` 46/46; `git diff --check` чист; `git diff --name-only 5b5c4ca -- openspec/changes/archive` пуст; branch `verify` 34033376071 success. Формальные P1/P2 gates и deferred backlog не закрывались)
 
 ## 5. Правило проверки каждого среза
 
@@ -284,8 +284,12 @@ roots. Прочего в том change не менялось. Отдельно �
 где `preflight` перечисляет только применимые к выбранному profile решения.
 Счётчики заменены картой применимости по всем девяти решениям, обращения по
 индексу — обращениями по `id`; перевёрнутый ассерт про `improve_apply`
-сохранён. Правки лежат в рабочем дереве того репозитория и ждут ревью его
-владельца, поэтому 4.4 остаётся открытой до их фиксации.
+сохранён. Правки отревьюены владельцем того репозитория и зафиксированы в `e263720`
+с зелёным CI; он дополнительно проверил границу собственной мутацией — удалил
+`gate_warnings` из каталога решений, и `verify.py` упал, назвав недостающее
+решение. Пакет при этом не менялся: `v1.10.0` остаётся выпущенным. Задачи 4.1
+и 4.4 этим закрыты; 4.2 ждёт ответа о том, где живут прикладные указания,
+удалённые из generic runner.
 
 Проверки этого среза: `openspec validate --all --strict --no-interactive`
 20 passed 0 failed; `git diff --check` чист; `git diff --name-only 5b5c4ca --
