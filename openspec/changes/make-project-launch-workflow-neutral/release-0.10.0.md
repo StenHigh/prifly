@@ -50,9 +50,9 @@ product test batch в CI не запускается. При обнаружен�
 
 - [x] Исправление устаревших ожиданий проверено адресно.
 - [x] Полные проверки candidate завершены; точные итоги записаны ниже.
-- [ ] Candidate commit опубликован, tag `v0.10.0` указывает на него.
-- [ ] Native сборки и protected публикация завершены.
-- [ ] Оба скачанных assets, manifest и подписи проверены; latest — 0.10.0.
+- [x] Candidate commit опубликован, tag `v0.10.0` указывает на него.
+- [x] Native сборки и protected публикация завершены.
+- [x] Оба скачанных assets, manifest и подписи проверены; latest — 0.10.0.
 
 ## Verification
 
@@ -91,9 +91,54 @@ neutral init больше не подключает codex-cli автоматич
 `/private/tmp/prifly-release-0.10.0.xb3Jmo/`; эта временная копия не заменяет
 проверки в репозитории и настоящую запись результатов.
 
-Tag будет создан на candidate commit без skip-инструкций и опубликован
+Tag создан на candidate commit без skip-инструкций и опубликован
 отдельно от branch push, чтобы штатный release workflow не оказался пропущен.
 Итоговая docs-only запись будет отдельным branch commit с `[skip ci]`.
 Это использует существующие trigger filters, не меняет protections и не
 переопределяет required gates. Семантика skip-инструкций сверена с
 [документацией GitHub](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs).
+
+## Publication
+
+Candidate commit: `032fbc45d464f6f2fb9948243b7b98fdcdf6644f`.
+Annotated tag `v0.10.0`:
+`9bfa90ba320b253c11e3395d74b4e778beda583c`, peeled commit совпадает с candidate.
+Tag опубликован отдельно от branch push через разрешённую owner role
+действующего ruleset; ruleset и required environment reviewer не изменялись.
+[Release workflow 34029647337](https://github.com/StenHigh/prifly/actions/runs/34029647337)
+завершён успешно: 3/3 jobs (`build-linux-amd64`, `build-darwin-arm64`,
+`release`). Штатное ожидание environment approval подтверждено владельцем
+через его действующую роль; signing key не читался и не переносился.
+
+[Stable release v0.10.0](https://github.com/StenHigh/prifly/releases/tag/v0.10.0)
+опубликован 2026-09-06 в 11:17:59 UTC. GitHub `releases/latest` возвращает
+именно `v0.10.0`, `draft=false`, `prerelease=false`. Опубликованы ровно шесть
+assets: installer, manifest, legacy/JCS signatures и два platform archives.
+Release notes явно сохраняют ограничения scope и известный cleanup defect.
+
+Проверены фактически скачанные файлы, не только локальные build outputs:
+
+- Manifest: `prifly-release/1`, version `0.10.0`, stable, точная матрица
+  `darwin/arm64` и `linux/amd64` — PASS.
+- Обе Ed25519 signatures проверены публичным release key: legacy над
+  опубликованным JSON без завершающего newline и JCS над canonical JSON — PASS.
+- SHA-256 архивов совпадают с подписанным manifest; каждый архив содержит
+  только один обычный файл `prifly`, без дополнительных entries — PASS.
+- Скачанный `install.sh` совпадает байт в байт с файлом в tag — PASS.
+
+SHA-256 `prifly-darwin-arm64.tar.gz`:
+`2b8db12d26be71df9976ee8e3ab153f8c9fa8abe798d34b401ddbf2a9f668915`.
+SHA-256 `prifly-linux-amd64.tar.gz`:
+`3be9ad0c88464dccec786313119d715d436031921e6e71a421177da5a86e5c3a`.
+
+Пользовательский installer исполнен с release URL, закреплённым на `v0.10.0`,
+и отдельным `PRIFLY_INSTALL_DIR` во временной папке. Установленный binary
+сообщил `0.10.0`, `darwin/arm64`, Go 1.27.0. `init` отдельного временного
+проекта и `doctor` — PASS. `prifly update` проверил публичный latest и его
+подпись, вернул `previous_version=0.10.0`, `version=0.10.0`, `updated=false`.
+Это проверка уже актуальной установки, не заявление о проверенном переходе
+с 0.9.1. Постоянная установка пользователя и его полигон не изменялись.
+
+Итоговая запись публикуется docs-only commit поверх candidate в исходной
+ветке с `[skip ci]`: повторный product batch не нужен, release уже проверен.
+Tag не перемещается, main не меняется, parent change не архивируется.
