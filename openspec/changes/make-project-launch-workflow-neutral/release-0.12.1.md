@@ -73,8 +73,8 @@ verdicts`), а не игнорируется молча.
 | `make check` | локально | зелёный; `cmd/prifly` 23.490 с и 137.408 с под `-race` |
 | `make schemas-check` | локально | 48 бандлов совпали побайтно |
 | `make e2e` | локально | зелёный; установщик, примеры, authoring, CLI, Core 169 команд, контекст 75 команд |
-| `verify` | GitHub Actions | ожидается |
-| `race` | GitHub Actions | ожидается |
+| `verify` | GitHub Actions 34064216512 | success |
+| `race` | GitHub Actions 34064234127 | success |
 
 Формы контрактов не двигаются: `core-timing/3` и `WorkflowRevision v4` те же,
 что в 0.12.0. Обе зависимые сессии уже предупреждены и на 0.12.0 не
