@@ -9,7 +9,12 @@ import (
 const maxDurationMS int64 = 1<<53 - 1
 
 const TimingCalculatorRevisionCore = "core-timing/1"
-const TimingCalculatorRevisionContext = "core-timing/2"
+
+// Revision 3 publishes the authority's wall-clock estimate for a calendar span
+// whose ends belong to different clock sessions. Earlier revisions reported
+// such a span as the control-loop prefix alone, which reads as a near-zero
+// duration; their numbers stay exactly as they were published.
+const TimingCalculatorRevisionContext = "core-timing/3"
 
 // Duration follows OBS-002. Nil is unknown/inapplicable, never a measured zero.
 // The caller must publish TimingTree with the same RunView journal cut used to
@@ -119,11 +124,18 @@ func clockDelta(a, b Observation) (int64, string) {
 	return delta, ""
 }
 
-func utcEstimate(a, b Observation) *int64 {
+func utcEstimate(a, b Observation, authorityWall bool) *int64 {
 	// A locally observed wall timestamp is not a claim that UTC stayed correct
 	// across a crash or suspend. Qualification is explicit in the observation.
+	// The unqualified mark says the value is not comparable between machines,
+	// not that this authority may not read the clock it wrote both timestamps
+	// with: a span that leaves one clock session has no other quantity, and the
+	// engine already debits a session allowance by exactly this difference. The
+	// caller publishes it as an estimate, never as a measurement.
 	if a.UTCTrust != "trusted" || b.UTCTrust != "trusted" {
-		return nil
+		if !authorityWall || a.Source == "" || a.Source != b.Source {
+			return nil
+		}
 	}
 	start, err1 := time.Parse(time.RFC3339Nano, a.UTC)
 	end, err2 := time.Parse(time.RFC3339Nano, b.UTC)
@@ -278,9 +290,18 @@ func (c timingCalculator) measure(span timingSpan, calendar, executor bool, anch
 		d.Quality = "unavailable"
 	}
 	if calendar && !executor {
-		d.EstimateMS = utcEstimate(start, end)
-		if d.EstimateMS != nil && len(segments) == 0 {
-			d.Quality = "estimated"
+		d.EstimateMS = utcEstimate(start, end, isContextState(c.r.SchemaVersion))
+		if d.EstimateMS != nil {
+			if start.UTCTrust != "trusted" || end.UTCTrust != "trusted" {
+				// The reader must never mistake this for a monotonic measurement:
+				// the known prefix is control-loop time inside one process, and the
+				// value that spans the whole interval is the authority's own wall
+				// clock, which no observation qualifies against suspend or reboot.
+				addReason(&d, "authority_wall_estimate")
+			}
+			if len(segments) == 0 {
+				d.Quality = "estimated"
+			}
 		}
 	}
 	return d, segments

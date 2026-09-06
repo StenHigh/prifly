@@ -624,7 +624,7 @@ type projectQuestionnaire struct {
 
 func (c *cli) projectCommand(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return usageError("project requires init, local, workflows, questionnaire, compile, start, extend or runners")
+		return operationError("project", args)
 	}
 	switch args[0] {
 	case "init":
@@ -644,7 +644,7 @@ func (c *cli) projectCommand(ctx context.Context, args []string) error {
 	case "runners":
 		return c.projectRunners(ctx, args[1:])
 	default:
-		return usageError("project requires init, local, workflows, questionnaire, compile, start, extend or runners")
+		return operationError("project", args)
 	}
 }
 

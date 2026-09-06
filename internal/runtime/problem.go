@@ -173,6 +173,9 @@ func ProblemFor(err error) (Problem, int) {
 	if actions, ok := map[string][]string{
 		"authority_not_found": {"init", "doctor"},
 		"no_active_handoff":   {"run.explain", "run.drive"},
+		// Nothing is wrong with the state when the call itself was mistyped, so
+		// a state diagnostic only leads away from the form that has to be fixed.
+		"invalid_usage": {"help"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
 	}

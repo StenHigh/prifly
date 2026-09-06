@@ -310,7 +310,7 @@ func TestTimingQualityOverflowAndTrustedEstimate(t *testing.T) {
 	}
 	// Fractional timestamps round the elapsed difference down, not the endpoints.
 	from.UTC, to.UTC, from.UTCTrust, to.UTCTrust = "2026-08-28T00:00:00.000999999Z", "2026-08-28T00:00:00.001000001Z", "trusted", "trusted"
-	if estimate := utcEstimate(from, to); estimate == nil || *estimate != 0 {
+	if estimate := utcEstimate(from, to, false); estimate == nil || *estimate != 0 {
 		t.Fatalf("sub-millisecond gap rounded up: %v", estimate)
 	}
 }

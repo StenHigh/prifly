@@ -146,10 +146,10 @@ func flags(name string) *flag.FlagSet {
 }
 func parse(f *flag.FlagSet, args []string) error {
 	if err := f.Parse(args); err != nil {
-		return usageError("Invalid flags for " + f.Name() + "; run prifly help")
+		return usageError(f.Name() + ": " + err.Error() + acceptedForm(f.Name()))
 	}
 	if f.NArg() != 0 {
-		return usageError("Unexpected arguments for " + f.Name())
+		return usageError(f.Name() + " received unexpected arguments " + strconv.Quote(strings.Join(f.Args(), " ")) + acceptedForm(f.Name()))
 	}
 	return nil
 }
@@ -188,12 +188,24 @@ func helpEntries() [][]string {
 	return entries
 }
 
-// helpMatches reports whether one entry documents the asked-for command. A
-// token may list alternatives (`status|next|explain`), so each asked word is
-// matched against the alternatives of the token in its position.
+// helpMatches reports whether one entry documents the asked-for command. An
+// entry may state several whole forms separated by ` | ` (`capacity show |
+// capacity set ...`), and any one of them documents the command; a refusal that
+// could not read the form of `capacity set` had none to show.
 func helpMatches(entry []string, topic []string) bool {
 	command, _, _ := strings.Cut(strings.TrimSpace(entry[0]), "  ")
-	tokens := strings.Fields(command)
+	for _, form := range strings.Split(command, " | ") {
+		if helpFormMatches(strings.Fields(form), topic) {
+			return true
+		}
+	}
+	return false
+}
+
+// helpFormMatches matches one form. A token may list alternatives
+// (`status|next|explain`), so each asked word is matched against the
+// alternatives of the token in its position.
+func helpFormMatches(tokens []string, topic []string) bool {
 	if len(tokens) < len(topic) {
 		return false
 	}
@@ -218,6 +230,70 @@ func helpTopic(topic []string) string {
 		return ""
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// acceptedForm states the usage a refusal should have been given, read from the
+// same help text `prifly help` prints, so the two can never disagree about the
+// form. A flag set whose name documents no command adds nothing rather than a
+// guess: "unexpected arguments" with no form at all is what this replaces.
+func acceptedForm(name string) string {
+	entry := helpTopic(strings.Fields(name))
+	if entry == "" {
+		return ""
+	}
+	// Only the first line of an entry carries the form; the rest of it explains
+	// the command, and an entry that ends its form at the newline would take the
+	// indentation of the explanation with it.
+	line, _, _ := strings.Cut(strings.TrimSpace(entry), "\n")
+	form, _, _ := strings.Cut(line, "  ")
+	return "; the accepted form is " + strings.TrimSpace(form)
+}
+
+// operationError names both what was asked for and what the group accepts, and
+// reads one list per group, so an operation added to a switch cannot go on
+// missing from the refusal: `claim create-set` and `claim heartbeat` shipped
+// while the fall-through still offered three of the five.
+// operationForms reads the operations a group accepts from the same help text
+// `prifly help GROUP` prints, so a refusal cannot offer a set the documentation
+// does not: the claim fall-through offered three of the five for two releases,
+// omitting create-set and heartbeat, which the group's own first line listed.
+func operationForms(group string) []string {
+	operations := []string{}
+	for _, line := range strings.Split(helpTopic([]string{group}), "\n") {
+		// Only the first line of an entry states forms; the explanation under it
+		// is indented further and must not be read as one.
+		if !strings.HasPrefix(line, "  "+group+" ") {
+			continue
+		}
+		form, _, _ := strings.Cut(strings.TrimSpace(line), "  ")
+		for _, alternative := range strings.Split(form, " | ") {
+			fields := strings.Fields(alternative)
+			if len(fields) < 2 || fields[0] != group || strings.HasPrefix(fields[1], "-") {
+				continue
+			}
+			for _, name := range strings.Split(fields[1], "|") {
+				if !slices.Contains(operations, name) {
+					operations = append(operations, name)
+				}
+			}
+		}
+	}
+	return operations
+}
+
+// operationError names both what was asked for and what the group accepts. A
+// mistyped operation used to be answered with a flag it never mentioned, or
+// with a list that had stopped matching the switch below it.
+func operationError(group string, args []string) error {
+	forms := strings.Join(operationForms(group), "|")
+	if len(args) == 0 {
+		return usageError(group + " requires " + forms)
+	}
+	article := "a "
+	if strings.ContainsRune("aeiou", rune(group[0])) {
+		article = "an "
+	}
+	return usageError(strconv.Quote(args[0]) + " is not " + article + group + " operation; " + group + " requires " + forms)
 }
 
 func (c *cli) versionView() map[string]any {
@@ -418,7 +494,10 @@ func (c *cli) run(ctx context.Context, args []string) error {
 		}
 		return c.emit(c.versionView())
 	}
-	if c.help || len(args) == 0 || args[0] == "help" {
+	// exit-codes is a topic, not an operation on a project, but it is listed
+	// among the commands and a reader types what the list shows. Both spellings
+	// reach the same entry.
+	if c.help || len(args) == 0 || args[0] == "help" || args[0] == "exit-codes" {
 		topic := args
 		if len(topic) != 0 && topic[0] == "help" {
 			topic = topic[1:]
@@ -446,7 +525,7 @@ func (c *cli) run(ctx context.Context, args []string) error {
 		f := flags("init")
 		profile := f.String("profile", flow.Profile, "explicit execution semantics profile")
 		if err := f.Parse(args[1:]); err != nil {
-			return usageError("Invalid flags for init; run prifly help")
+			return usageError("init: " + err.Error() + acceptedForm("init"))
 		}
 		if f.NArg() > 1 {
 			return usageError("init takes at most one directory")
@@ -602,15 +681,17 @@ func (c *cli) run(ctx context.Context, args []string) error {
 		}
 		return c.emit(map[string]any{"schema_version": "foundation-receipt/1", "receipt": receipt})
 	default:
-		return usageError("Unsupported operation. Run prifly help for the foundation command set.")
+		return usageError(strconv.Quote(args[0]) + " is not a Pri-Fly command; run prifly help for the command set")
 	}
 }
 
 // action exposes the two durable parts of a managed operation. Both commands
 // stop before delivery, so no adapter or external target is contacted here.
 func (c *cli) action(ctx context.Context, e *prifly.Engine, args []string) error {
-	if len(args) == 0 {
-		return usageError("action requires propose|admit")
+	// The operation is checked before the flags: a mistyped one was answered
+	// with "requires --file COMMAND.json", a flag the reader never asked about.
+	if len(args) == 0 || !slices.Contains(operationForms("action"), args[0]) {
+		return operationError("action", args)
 	}
 	f := flags("action " + args[0])
 	file := f.String("file", "", "")
@@ -646,7 +727,7 @@ func (c *cli) action(ctx context.Context, e *prifly.Engine, args []string) error
 		}
 		return c.emit(commandResponse(result))
 	default:
-		return usageError("action requires propose|admit")
+		return operationError("action", args)
 	}
 }
 
@@ -665,8 +746,10 @@ func (b bindings) Set(s string) error {
 	return nil
 }
 func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) error {
-	if len(args) == 0 {
-		return usageError("run requires start|fork|status|next|explain|events|timing|drive|decision|decisions|pause|cancel|release|resume")
+	if len(args) == 0 || !slices.Contains(operationForms("run"), args[0]) {
+		// Before the Run ID is demanded: `run bogus` was answered with the
+		// missing ID of an operation that does not exist.
+		return operationError("run", args)
 	}
 	if args[0] == "start" {
 		f := flags("run start")
@@ -1021,7 +1104,10 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		}
 		return c.emit(commandResponse(result))
 	default:
-		return usageError("Unsupported run operation; automatic retry and terminal reopening are not available")
+		// What this build does not do belongs in the help, not in the answer to a
+		// mistyped name: a reader who asked "run show" was told about automatic
+		// retry, which is not what they got wrong.
+		return operationError("run", args)
 	}
 }
 
@@ -1029,7 +1115,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 // cannot deliver a right its subject does not already have.
 func (c *cli) grant(ctx context.Context, e *prifly.Engine, args []string) error {
 	if len(args) == 0 {
-		return usageError("grant requires issue|revoke|list")
+		return operationError("grant", args)
 	}
 	f := flags("grant " + args[0])
 	command := f.String("command-id", "", "")
@@ -1093,7 +1179,7 @@ func (c *cli) grant(ctx context.Context, e *prifly.Engine, args []string) error 
 		}
 		return c.emit(authorityResponse(result))
 	}
-	return usageError("grant requires issue|revoke|list")
+	return operationError("grant", args)
 }
 
 // An approval is a decision about one exact protected payload, not a switch.
@@ -1102,7 +1188,7 @@ func (c *cli) grant(ctx context.Context, e *prifly.Engine, args []string) error 
 // The number a workflow declares is a separate statement; the smaller governs.
 func (c *cli) capacity(ctx context.Context, e *prifly.Engine, args []string) error {
 	if len(args) == 0 {
-		return usageError("capacity requires show or set")
+		return operationError("capacity", args)
 	}
 	f := flags("capacity " + args[0])
 	switch args[0] {
@@ -1138,12 +1224,12 @@ func (c *cli) capacity(ctx context.Context, e *prifly.Engine, args []string) err
 		}
 		return c.emit(authorityResponse(result))
 	}
-	return usageError("capacity requires show or set")
+	return operationError("capacity", args)
 }
 
 func (c *cli) approval(ctx context.Context, e *prifly.Engine, args []string) error {
 	if len(args) == 0 {
-		return usageError("approval requires policy|request|decide|revoke|list")
+		return operationError("approval", args)
 	}
 	f := flags("approval " + args[0])
 	command := f.String("command-id", "", "")
@@ -1227,14 +1313,14 @@ func (c *cli) approval(ctx context.Context, e *prifly.Engine, args []string) err
 		}
 		return c.emit(authorityResponse(result))
 	}
-	return usageError("approval requires policy|request|decide|revoke|list")
+	return operationError("approval", args)
 }
 
 // The host is not a process this authority started, so it reads its task and
 // reports through explicit commands rather than through a pipe we own.
 func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) error {
 	if len(args) == 0 {
-		return usageError("session requires task|publish|action|submit|disconnect")
+		return operationError("session", args)
 	}
 	f := flags("session " + args[0])
 	run := f.String("run", "", "")
@@ -1336,14 +1422,14 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 		}
 		return c.emit(commandResponse(result))
 	}
-	return usageError("session requires task|publish|action|submit|disconnect")
+	return operationError("session", args)
 }
 
 // A claim is authority state, so a crashed session leaves an owned record
 // instead of an anonymous directory nobody is allowed to remove.
 func (c *cli) claims(ctx context.Context, e *prifly.Engine, args []string) error {
 	if len(args) == 0 {
-		return usageError("claim requires create|create-set|list|heartbeat|release")
+		return operationError("claim", args)
 	}
 	f := flags("claim " + args[0])
 	command := f.String("command-id", "", "")
@@ -1433,13 +1519,13 @@ func (c *cli) claims(ctx context.Context, e *prifly.Engine, args []string) error
 		}
 		return c.emit(map[string]any{"schema_version": "foundation-claim/1", "claim": claim})
 	}
-	return usageError("claim requires create|list|release")
+	return operationError("claim", args)
 }
 
 // Import checks and registers; it never runs anything the package carries.
 func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) error {
 	if len(args) == 0 {
-		return usageError("package requires import|list|inspect|verify|remove|quarantine|revoke|restore|trust-root")
+		return operationError("package", args)
 	}
 	f := flags("package " + args[0])
 	switch args[0] {
@@ -1570,14 +1656,14 @@ func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) err
 		}
 		return c.emit(authorityResponse(result))
 	}
-	return usageError("package requires import|list|inspect|verify|remove|quarantine|revoke|restore")
+	return operationError("package", args)
 }
 
 // Authority control is separate from a Run: an installation or project stop has
 // no run id, and releasing it consumes a ControlIntent instead of inventing one.
 func (c *cli) control(ctx context.Context, e *prifly.Engine, args []string) error {
 	if len(args) == 0 {
-		return usageError("control requires status|stop|release")
+		return operationError("control", args)
 	}
 	f := flags("control " + args[0])
 	scope := f.String("scope", "project", "installation or project")
@@ -1642,7 +1728,7 @@ func (c *cli) control(ctx context.Context, e *prifly.Engine, args []string) erro
 		}
 		return c.emit(authorityResponse(result))
 	}
-	return usageError("control requires status|stop|release")
+	return operationError("control", args)
 }
 
 func authorityResponse(result local.AuthorityApplyResult) map[string]any {
@@ -1801,8 +1887,9 @@ func (c *cli) source(e *prifly.Engine, args []string) error {
 }
 
 func (c *cli) artifact(e *prifly.Engine, args []string) error {
-	if len(args) == 0 {
-		return usageError("artifact requires import|inspect|export")
+	// Checked before --ref is read, for the same reason as action above.
+	if len(args) == 0 || !slices.Contains(operationForms("artifact"), args[0]) {
+		return operationError("artifact", args)
 	}
 	f := flags("artifact " + args[0])
 	file := f.String("file", "", "")
@@ -1858,7 +1945,7 @@ func (c *cli) artifact(e *prifly.Engine, args []string) error {
 		}
 		return c.emit(map[string]any{"schema_version": "foundation-export/1", "ref": ref, "output": *output, "exported": true})
 	default:
-		return usageError("Unsupported artifact operation")
+		return operationError("artifact", args)
 	}
 }
 func (c *cli) telemetry(ctx context.Context, e *prifly.Engine, args []string) error {
@@ -2036,10 +2123,17 @@ func renderTiming(w io.Writer, t prifly.TimingTree, cut int64) error {
 	visit = func(n prifly.TimingNode, depth int) error {
 		duration := n.Metrics["elapsed"]
 		value := "unknown"
-		if duration.ValueMS != nil {
-			value = strconv.FormatInt(*duration.ValueMS, 10) + "ms"
-		} else if duration.KnownMS != nil {
-			value = "known " + strconv.FormatInt(*duration.KnownMS, 10) + "ms"
+		// A known part is the prefix one clock session could measure, not the
+		// time the node took: printed bare it reported 0 ms for seventeen
+		// minutes of work. Lead with the value that covers the whole span and
+		// name the clock it came from.
+		switch {
+		case duration.ValueMS != nil:
+			value = strconv.FormatInt(*duration.ValueMS, 10) + "ms measured"
+		case duration.EstimateMS != nil:
+			value = "~" + strconv.FormatInt(*duration.EstimateMS, 10) + "ms by wall clock"
+		case duration.KnownMS != nil:
+			value = "at least " + strconv.FormatInt(*duration.KnownMS, 10) + "ms measured"
 		}
 		if _, err := fmt.Fprintf(w, "%s%s %s status=%s elapsed=%s quality=%s\n", strings.Repeat("  ", depth), n.Kind, strconv.Quote(n.ID), n.Status, value, duration.Quality); err != nil {
 			return err
@@ -2119,6 +2213,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    Attach selected hosts explicitly; repeat --host to add more than one
   project local set [--executable PATH] [--allow-executable NAME=PATH] [--repository DIR]
                                    Set machine-only local.yaml paths; the authority and shared workflow stay unchanged
+  project extend --workflow FILE --workflow-id ID --extensions FILE --output FILE [--step-ref NAME=JSON] [--step-source NAME=FILE]
+                                   Insert declared steps into one exact compiled workflow; nothing is sealed, imported or run
   project compile --repository DIR --package NAME [--host codex-cli|codex-app|claude-code] --output DIR [--value NAME=JSON]
                                    Seal one declared YAML package; import remains a separate owner decision
   project start --repository DIR --launch ID [--host codex-cli|codex-app|claude-code] [--brief FILE] [--input PORT=FILE] [--input-ref PORT=REF.json] [--workspace worktree|checkout]
@@ -2131,6 +2227,20 @@ Global: --project DIR  --json  --format text|json|csv
                                    Profile /3: get --expected-launch-digest from project questionnaire --prepare with the same start arguments
                                    A package profile is chosen once: with --package-profile, do not also answer the decision that selects it
   capabilities                     Implemented contracts/profiles, not permission grants
+  exit-codes                       What every exit status of this tool means, for a driver that reads $?
+   0 the command was carried out. Waiting is reported this way too: run drive returns 0 while an
+     assisted attempt is outstanding, so read status/outcome/verdict for the workflow's own result
+   2 refused with no narrower class: the form, the input, an object that does not exist, or a
+     refusal this build does not sort further
+   3 refused by the authority's state or object policy: the version, epoch, claim, slot, admission
+     or access this command assumed is not the one held
+   4 refused as forbidden: the authority is read-only, or this principal or file may not do it
+   5 refused because it cannot be done now: unsupported by this build, an exhausted allowance, or
+     a bound that was not met in time
+   6 the authority needs attention before more work: recovery, integrity, storage version, persistence
+   7 interrupted: the client was stopped; inspect the recorded run before any retry
+   Every nonzero status is a refusal and prints one Problem envelope on stderr whose code names the
+   exact reason; no nonzero status means a healthy wait. 5 in particular is a refusal, not a handoff
   version | doctor | inventory     Versions, integrity, exact local definitions
   ref FILE --id ID --version X.Y.Z [--raw-text]
                                    Canonical JSON/YAML; --raw-text hashes exact UTF-8 resource bytes
@@ -2151,7 +2261,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    Compatible executor requests one declared runtime decision
   run decision RUN_ID answer --decision ID --request-digest DIGEST --expected-run-version N --value JSON
                                    Answer exactly the current pending decision; --request-digest is pending_request_digest from run decisions, not the request_digest of a command receipt
-  run pause|cancel RUN_ID --reason TEXT [--command-id ID]
+  run pause|cancel|stop RUN_ID --reason TEXT [--command-id ID]
+                                   stop reads the restriction from --kind pause|cancel; pause and cancel state it in the operation
   run release RUN_ID --expected-epoch N --stop ID:GENERATION --reason TEXT
   run resume RUN_ID --expected-version N --reason TEXT
   run resolve RUN_ID (--attempt ID | --check ID) --outcome not_applied|applied --reason TEXT [--expected-version N]

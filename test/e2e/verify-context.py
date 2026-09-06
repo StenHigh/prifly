@@ -362,7 +362,7 @@ def main():
                 nodes.append(node)
                 pending.extend(node["children"])
             check_nodes = [node for node in nodes if node["kind"] == "check_execution"]
-            assert timing["calculator_revision"] == "core-timing/2" and len(check_nodes) == 5
+            assert timing["calculator_revision"] == "core-timing/3" and len(check_nodes) == 5
             assert {node["id"] for node in check_nodes} == set(run["check_executions"])
             assert timing["root"]["attempt_count"] == 1 and all(node["attempt_count"] == 0 and not node.get("verdict") for node in check_nodes)
             assert all(node["metrics"]["executor_time"]["quality"] == "measured" and node["metrics"]["executor_time"]["value_ms"] >= 0 for node in check_nodes)

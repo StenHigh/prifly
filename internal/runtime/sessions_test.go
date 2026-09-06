@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -218,6 +219,50 @@ func TestAssistedWorkingWindowOpensAtTheHandoff(t *testing.T) {
 	if err := json.Unmarshal(attempt.Envelope, &envelope); err != nil || envelope.DispatchDeadline != envelope.Deadline {
 		t.Fatalf("the handed envelope still declares a pickup window nothing checks: %+v %v", envelope, err)
 	}
+}
+
+// The pilot read `elapsed=known 0ms` on an attempt whose host had worked for
+// seventeen minutes: the handoff and the report were written by two processes,
+// so only the control-loop prefix inside one clock session could be measured.
+// The authority's own wall clock is what spans them, and it is the same
+// difference consumeSessionTime already debits from a session allowance.
+func TestAssistedAttemptPublishesItsWorkingWindowWithoutSubtraction(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	synctest.Test(t, func(t *testing.T) {
+		ctx := context.Background()
+		e, runID, _ := assistedFixture(t)
+		task := handOver(t, e, runID)
+		const working = 17*time.Minute + 42*time.Second
+		// The bubble advances the clock; no real wait and no machine clock move.
+		time.Sleep(working)
+		e.clock = newClock() // the report is accepted by another process
+		if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "planned")); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.Drive(ctx, runID); err != nil {
+			t.Fatal(err)
+		}
+		view, err := e.View(ctx, runID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		attempt := view.Run.Attempts[task.AttemptID]
+		if view.Timing.CalculatorRevision != TimingCalculatorRevisionContext || attempt.Admitted.Session == attempt.Settled.Session {
+			t.Fatalf("fixture no longer crosses a clock session: revision=%s %+v", view.Timing.CalculatorRevision, attempt.Admitted)
+		}
+		elapsed := timingFind(t, view.Timing.Root, task.AttemptID).Metrics["elapsed"]
+		if elapsed.EstimateMS == nil || *elapsed.EstimateMS != working.Milliseconds() {
+			t.Fatalf("the host's working window is still reachable only by subtracting two timestamps: %+v", elapsed)
+		}
+		if elapsed.Quality != "partial" || elapsed.ValueMS != nil || !slices.Contains(elapsed.Reasons, "authority_wall_estimate") {
+			t.Fatalf("an unqualified wall clock was published as a monotonic measurement: %+v", elapsed)
+		}
+		root := view.Timing.Root.Metrics["elapsed"]
+		if root.EstimateMS == nil || *root.EstimateMS < working.Milliseconds() {
+			t.Fatalf("the run reports less time than the attempt it contains: %+v", root)
+		}
+	})
 }
 
 func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {

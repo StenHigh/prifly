@@ -411,7 +411,7 @@ def main():
             fixed_telemetry("after-all-writes")
             same("terminal old events retain all facts", histories[completed_id]["events"], history(new, "new-final-old-completed-events", completed_id)["events"])
             same("continued old history is unchanged by state4", continued_events, history(new, "new-final-old-continued-events", ready_id)["events"])
-            for label, identifiers, expected in (("old-cohort", list(baseline), ("core-telemetry/2", "core-timing/1")), ("context-cohort", [context_id], ("core-telemetry/3", "core-timing/2"))):
+            for label, identifiers, expected in (("old-cohort", list(baseline), ("core-telemetry/2", "core-timing/1")), ("context-cohort", [context_id], ("core-telemetry/3", "core-timing/3"))):
                 write("verification/" + label + ".json", {"schema_version": "telemetry-query/1", "mode": "records", "run_ids": identifiers, "metrics": ["timing.elapsed"], "limit": 1000})
                 current = cli(new, "new-final-" + label, "telemetry", "query", "--file", "verification/" + label + ".json")
                 assert (current["calculator_revision"], current["timing_revision"]) == expected and not current.get("next_cursor")

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -2175,6 +2176,157 @@ func TestUsageRefusalRepeatsTheReceivedValue(t *testing.T) {
 	}
 	if !strings.Contains(errout.String(), "yaml") {
 		t.Fatalf("the refusal hid the received value: %s", errout.String())
+	}
+}
+
+// A driver that reads $? must tell a Run that is waiting from a Run that
+// refused. The mapping lived only in exitForCode, and `prifly help exit-codes`
+// answered that no command matches, so an unexplained 5 could only be guessed
+// at from stdout. Each documented status is pinned to the exit the engine
+// actually returns for that class, so the description cannot drift from it.
+func TestExitCodesAreDescribedByTheToolAndMatchTheEngine(t *testing.T) {
+	var full, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"help"}, &full, &errout); code != 0 {
+		t.Fatalf("help: %d %s", code, errout.String())
+	}
+	for _, args := range [][]string{{"help", "exit-codes"}, {"exit-codes"}} {
+		var out bytes.Buffer
+		errout.Reset()
+		if code := execute(context.Background(), args, &out, &errout); code != 0 {
+			t.Fatalf("%v was refused: %d %s", args, code, errout.String())
+		}
+		text := out.String()
+		if out.Len() >= full.Len() {
+			t.Fatalf("%v printed the whole help: %d of %d bytes", args, out.Len(), full.Len())
+		}
+		for _, c := range []struct {
+			err  error
+			exit int
+		}{
+			{errors.New("output_required_missing: plan"), 2},
+			{errors.New("workspace_tree_capture_conflict"), 3},
+			{os.ErrPermission, 4},
+			{errors.New("unsupported_evidence: local output checks"), 5},
+			{errors.New("recovery_required"), 6},
+			{context.Canceled, 7},
+		} {
+			if _, exit := prifly.ProblemFor(c.err); exit != c.exit {
+				t.Fatalf("%v now exits %d, so the description of %d is wrong", c.err, exit, c.exit)
+			}
+			if !strings.Contains(text, fmt.Sprintf("\n   %d ", c.exit)) {
+				t.Fatalf("exit %d is not described: %s", c.exit, text)
+			}
+		}
+		// The status a healthy wait uses is what the pilot could not find: a
+		// nonzero code read as "handed off" is the mistake this describes away.
+		if !strings.Contains(text, "\n   0 ") || !strings.Contains(text, "run drive returns 0") {
+			t.Fatalf("the description does not say which status means waiting: %s", text)
+		}
+	}
+}
+
+// `session task RUN_ID` answered "Unexpected arguments for session task" while
+// the help text knew the exact form, and offered doctor and run.status, which
+// have nothing to do with a mistyped call.
+func TestRefusalByFormNamesTheOffendingPartAndTheAcceptedForm(t *testing.T) {
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"init", authority}, &out, &errout); code != 0 {
+		t.Fatalf("init: %d %s", code, errout.String())
+	}
+	for _, test := range []struct {
+		name     string
+		args     []string
+		contains []string
+	}{
+		{"positional instead of a flag", []string{"session", "task", "run:1"}, []string{"run:1", "session task --run RUN_ID"}},
+		{"mistyped flag", []string{"session", "task", "--runn", "run:1"}, []string{"-runn", "session task --run RUN_ID"}},
+		{"stray argument", []string{"run", "drive", "run:1", "extra"}, []string{"extra", "run drive RUN_ID"}},
+		{"unknown command", []string{"bogus"}, []string{"bogus", "prifly help"}},
+		{"unknown run operation", []string{"run", "bogus", "run:1"}, []string{"bogus", "run requires start|fork"}},
+		{"unknown run operation without a Run ID", []string{"run", "bogus"}, []string{"bogus", "run requires start|fork"}},
+		{"unknown operation of a group that reads flags first", []string{"artifact", "bogus"}, []string{"bogus", "artifact requires import|inspect|export"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var out, errout bytes.Buffer
+			code := execute(context.Background(), append([]string{"--json", "--project", authority}, test.args...), &out, &errout)
+			if code == 0 {
+				t.Fatal("the call was accepted")
+			}
+			var problem prifly.Problem
+			if err := json.Unmarshal(errout.Bytes(), &problem); err != nil {
+				t.Fatal(err)
+			}
+			if problem.Code != "invalid_usage" {
+				t.Fatalf("got %s, want invalid_usage: %s", problem.Code, problem.Message)
+			}
+			for _, want := range test.contains {
+				if !strings.Contains(problem.Message, want) {
+					t.Fatalf("the refusal does not name %q: %s", want, problem.Message)
+				}
+			}
+			if !slices.Contains(problem.SafeNextActions, "help") || slices.Contains(problem.SafeNextActions, "doctor") {
+				t.Fatalf("a mistyped call was sent to a state diagnostic: %+v", problem.SafeNextActions)
+			}
+		})
+	}
+}
+
+// Every group refused a mistyped operation with a list of its own, and two of
+// them had drifted from the switch below: claim offered three of its five
+// operations, package omitted trust-root. The lists are now read from the help
+// text, so a documented operation cannot go missing from a refusal and a
+// refusal cannot offer one the tool does not accept.
+func TestGroupRefusalsOfferExactlyTheOperationsTheGroupAccepts(t *testing.T) {
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"init", authority}, &out, &errout); code != 0 {
+		t.Fatalf("init: %d %s", code, errout.String())
+	}
+	refuse := func(t *testing.T, args ...string) prifly.Problem {
+		t.Helper()
+		var out, errout bytes.Buffer
+		// Every probe carries an undefined flag, so the call is refused before
+		// it does anything: what is under test is which refusal comes back.
+		if code := execute(context.Background(), append([]string{"--json", "--project", authority}, append(args, "--not-a-prifly-flag")...), &out, &errout); code == 0 {
+			t.Fatalf("%v was accepted", args)
+		}
+		var problem prifly.Problem
+		if err := json.Unmarshal(errout.Bytes(), &problem); err != nil {
+			t.Fatalf("%v: %v: %s", args, err, errout.String())
+		}
+		return problem
+	}
+	// The operations each group lost from its refusal, or never documented.
+	required := map[string][]string{
+		"claim":    {"create-set", "heartbeat"},
+		"package":  {"trust-root"},
+		"project":  {"extend"},
+		"run":      {"stop"},
+		"artifact": {"export"},
+	}
+	for _, group := range []string{"action", "approval", "artifact", "capacity", "claim", "control", "grant", "package", "project", "run", "session"} {
+		t.Run(group, func(t *testing.T) {
+			problem := refuse(t, group, "bogus")
+			if problem.Code != "invalid_usage" || !strings.Contains(problem.Message, `"bogus" is not `) || !strings.Contains(problem.Message, " "+group+" operation") {
+				t.Fatalf("the refusal does not name what was mistyped: %s %s", problem.Code, problem.Message)
+			}
+			_, forms, ok := strings.Cut(problem.Message, group+" requires ")
+			if !ok {
+				t.Fatalf("the refusal states no accepted operations: %s", problem.Message)
+			}
+			operations := strings.Split(forms, "|")
+			for _, want := range required[group] {
+				if !slices.Contains(operations, want) {
+					t.Fatalf("%s %s is accepted but not offered: %s", group, want, forms)
+				}
+			}
+			for _, operation := range operations {
+				if message := refuse(t, group, operation).Message; strings.Contains(message, "is not a "+group+" operation") {
+					t.Fatalf("%s %s is offered but not accepted: %s", group, operation, message)
+				}
+			}
+		})
 	}
 }
 
