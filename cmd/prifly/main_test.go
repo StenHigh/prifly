@@ -2532,6 +2532,68 @@ func TestHelpNamesTheAuthoringReferences(t *testing.T) {
 	}
 }
 
+// Every extend.yaml written before impossible_verdicts existed omits it, and
+// reading the absent key as a list crashed the process on all of them: the
+// released build answered project compile with a stack trace instead of a
+// Problem. The test above builds the extension struct directly, so it could
+// never have caught this — the defect lived in the parser, one layer below.
+func TestExtensionYAMLWithoutImpossibleVerdictsIsRead(t *testing.T) {
+	const head = "profile: full\nextensions:\n  - id: hold\n    workflow: classic\n    step: continue\n    between: {from: commit, to: done}\n    on: {pass: done}\n"
+	// The pilot's own file, verbatim: two insertions, the second aimed at an
+	// edge the first creates, next to exclude and per-workflow settings, and
+	// neither insertion declaring impossible verdicts. Every extend.yaml that
+	// exists has this shape, and no test had it.
+	const inTheField = `profile: fast
+settings:
+  improve-batch: {improve_round_limit: 3}
+  improve-series: {improve_batch_limit: 3}
+exclude: [security]
+extensions:
+  - id: merge-request
+    workflow: classic
+    step: merge-request
+    between: {from: commit, to: done}
+    on: {pass: done}
+  - id: tests
+    workflow: classic
+    step: tests
+    between: {from: commit, to: merge-request}
+    on: {pass: merge-request}
+`
+	for _, test := range []struct {
+		name, extend, refusal string
+		want                  []string
+		count                 int
+	}{
+		{name: "the field is absent", extend: head, count: 1},
+		{name: "the field lists verdicts", extend: head + "    impossible_verdicts: [fail, no_work]\n", want: []string{"fail", "no_work"}, count: 1},
+		{name: "the field is not a list", extend: head + "    impossible_verdicts: no_work\n", refusal: "impossible_verdicts must be a list"},
+		{name: "the list names something else", extend: head + "    impossible_verdicts: [skipped]\n", refusal: "must name StepResult verdicts"},
+		{name: "no extensions key at all", extend: "profile: full\n", count: 0},
+		{name: "an empty extension list", extend: "profile: full\nextensions: []\n", count: 0},
+		{name: "two insertions as written in the field", extend: inTheField, count: 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options, err := parseProjectWorkflowOptions([]byte(test.extend))
+			if test.refusal != "" {
+				if err == nil || !strings.Contains(err.Error(), test.refusal) {
+					t.Fatalf("got %v, want a refusal naming %q", err, test.refusal)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(options.Extensions) != test.count {
+				t.Fatalf("read %d extensions, want %d: %+v", len(options.Extensions), test.count, options.Extensions)
+			}
+			if test.count == 1 && !slices.Equal(options.Extensions[0].ImpossibleVerdicts, test.want) {
+				t.Fatalf("read %+v, want impossible verdicts %v", options.Extensions, test.want)
+			}
+		})
+	}
+}
+
 // impossible_verdicts exists only in WorkflowRevision v4, so an insertion that
 // declares one has to raise the revision it is spliced into; otherwise the
 // spliced bytes carry a field their own contract forbids. An insertion that
@@ -2562,6 +2624,46 @@ func TestExtensionDeclaringImpossibleVerdictsRaisesTheRevision(t *testing.T) {
 				t.Fatalf("the declaration did not survive the insertion: %+v", stage)
 			}
 		})
+	}
+}
+
+// The second insertion in the pilot's file aims at an edge the first one
+// creates: tests goes between commit and merge-request, and merge-request
+// exists only because the insertion before it put it there. Order is load
+// bearing, and nothing covered it.
+func TestChainedExtensionInsertsIntoTheEdgeTheFirstOneCreated(t *testing.T) {
+	ref := map[string]any{"id": "test:step/extra", "version": "1.0.0", "digest": "sha256:" + strings.Repeat("0", 64)}
+	workflow := map[string]any{"schema_version": "1", "definition": map[string]any{"stages": map[string]any{
+		"commit": map[string]any{"kind": "step", "on": map[string]any{"pass": "done"}},
+		"done":   map[string]any{"kind": "finish", "outcome": "succeeded"},
+	}}}
+	for _, extension := range []projectWorkflowExtension{
+		{From: "commit", To: "done", Step: "merge-request", On: map[string]string{"pass": "done"}},
+		{From: "commit", To: "merge-request", Step: "tests", On: map[string]string{"pass": "merge-request"}},
+		// This one leaves an inserted stage, which is where the route search
+		// used to stop seeing the graph.
+		{From: "merge-request", To: "done", Step: "announce", On: map[string]string{"pass": "done"}},
+	} {
+		if err := applyProjectExtension(workflow, extension, ref); err != nil {
+			t.Fatalf("%s: %v", extension.Step, err)
+		}
+	}
+	stages := workflow["definition"].(map[string]any)["stages"].(map[string]any)
+	for _, step := range []struct{ from, verdict, to string }{
+		{"commit", "pass", "tests"},
+		{"tests", "pass", "merge-request"},
+		{"merge-request", "pass", "announce"},
+		{"announce", "pass", "done"},
+	} {
+		on := stages[step.from].(map[string]any)["on"].(map[string]any)
+		if on[step.verdict] != step.to {
+			t.Fatalf("%s routes %s to %v, want %s: %+v", step.from, step.verdict, on[step.verdict], step.to, stages)
+		}
+	}
+	// Neither insertion declared an impossible verdict, so the sealed revision
+	// must not have moved.
+	if workflow["schema_version"] != "1" {
+		t.Fatalf("a silent insertion raised the revision to %v", workflow["schema_version"])
 	}
 }
 

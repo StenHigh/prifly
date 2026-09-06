@@ -1176,7 +1176,15 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		}
 		// An inserted step answers for its verdicts like any other step stage,
 		// so the insertion carries the same explicit "cannot happen here" list.
-		for _, verdict := range object["impossible_verdicts"].([]any) {
+		// Declaring none is the ordinary case and the only one every extend.yaml
+		// written before this field existed can be in: reading it as a list
+		// without asking crashed the process on every one of them.
+		declared, present := object["impossible_verdicts"]
+		verdicts, isList := declared.([]any)
+		if present && !isList {
+			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d impossible_verdicts must be a list of StepResult verdicts", index))
+		}
+		for _, verdict := range verdicts {
 			name, ok := verdict.(string)
 			if !ok || !slices.Contains(flow.StepVerdicts, name) {
 				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d impossible_verdicts must name StepResult verdicts", index))
@@ -1307,7 +1315,15 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 	} else {
 		from[selected.group].(map[string]any)[selected.verdict] = extension.Step
 	}
-	stages[extension.Step] = map[string]any{"kind": "step", "step_ref": ref, "input_bindings": map[string]any{}, "on": extension.On}
+	// The routes go in as the same map type an authored stage carries: stored
+	// as map[string]string, an inserted stage was invisible to the route search
+	// above, so a second insertion aimed at an edge leaving the first was
+	// refused with "route missing" for a route that was plainly there.
+	on := make(map[string]any, len(extension.On))
+	for verdict, target := range extension.On {
+		on[verdict] = target
+	}
+	stages[extension.Step] = map[string]any{"kind": "step", "step_ref": ref, "input_bindings": map[string]any{}, "on": on}
 	if len(extension.ImpossibleVerdicts) != 0 {
 		stages[extension.Step].(map[string]any)["impossible_verdicts"] = extension.ImpossibleVerdicts
 		// Only v4 admits the declaration, so an insertion that carries one

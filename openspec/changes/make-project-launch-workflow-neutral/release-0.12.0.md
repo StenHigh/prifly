@@ -94,7 +94,7 @@ P1/P2 gates. Известное ограничение переносится б
 | `verify` | GitHub Actions 34062676767 | success |
 | `race` | GitHub Actions 34062678215 | success |
 | `openspec validate --all --strict --no-interactive` | локально | 19 passed, 0 failed |
-| `make schemas-check` | локально | 47 бандлов совпали побайтно |
+| `make schemas-check` | локально | 48 бандлов совпали побайтно |
 | `git diff --check` | локально | чисто |
 
 Кандидат признан годным: ворота выше зелёные, кода после `a48c8c8` не
