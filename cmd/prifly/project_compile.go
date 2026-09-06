@@ -133,7 +133,10 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 		return usageError("project_compile_unsafe_output: output must stay outside the repository and local authority")
 	}
 	if _, err := os.Lstat(outputRoot); err == nil {
-		return usageError("project_compile_output_exists: output directory was not overwritten")
+		// Saying only that nothing was overwritten answers the wrong question:
+		// the reader wants to know what to do, and there is no flag that would
+		// have allowed it.
+		return usageError("project_compile_output_exists: " + outputRoot + " already exists; --output names a directory this command creates, so pass a path that does not exist or remove that one yourself")
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
