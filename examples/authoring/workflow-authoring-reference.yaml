@@ -86,6 +86,15 @@ stages:
     on: {pass: call_child, fail: rejected, needs_revision: rejected, skipped: rejected, waived: rejected}
     # Every verdict a step can return is either routed above or declared
     # impossible here; saying nothing about one is refused when sealing.
+    # Declare a verdict impossible only where the step cannot produce it: the
+    # runtime never reads this list, so a wrong entry costs exactly what a
+    # forgotten route costs — the report is accepted, the step completes, and
+    # only the routing fails. Where you are unsure, route a real outcome.
+    # Worked example of closing all four on a real package, including why a
+    # round whose step never ran routes to no_work rather than to an outcome
+    # declared as carrying a gate result (which would mean inventing an empty
+    # one — lying in the artifact to satisfy the graph):
+    # https://github.com/StenHigh/prifly-aif-workflows/blob/98fd856/README.md
     impossible_verdicts: [no_work]
     compensation:
       workflow_ref: compensation_workflow
