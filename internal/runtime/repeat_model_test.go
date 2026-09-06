@@ -202,13 +202,15 @@ func TestRepeatModelBudgetUsesPinnedBodyAndAncestors(t *testing.T) {
 }
 
 func TestRepeatModelVersionedWire(t *testing.T) {
-	for _, version := range []string{StateVersion, CoreStateVersion, "core-state/26", ""} {
+	for _, version := range []string{StateVersion, CoreStateVersion, "core-state/unknown", ""} {
 		if isInvocationState(version) {
 			t.Fatal("unknown or flat state entered the invocation whitelist", version)
 		}
 	}
-	if !isInvocationState(CoreInvocationStateVersion) || !isInvocationState(CoreRepeatStateVersion) || !isInvocationState(CoreContextStateVersion) || !isInvocationState(CoreSessionStateVersion) || !isInvocationState(CoreWaiverStateVersion) || !isInvocationState(CoreParallelStateVersion) || !isInvocationState(CoreMapStateVersion) || !isInvocationState(CoreWaitStateVersion) || !isInvocationState(CoreGuardStateVersion) || !isInvocationState(CoreReportedCostStateVersion) || !isInvocationState(CoreArtifactPublicationStateVersion) || !isInvocationState(CoreArtifactClosureStateVersion) || !isInvocationState(CorePublicationSubscriptionStateVersion) || !isInvocationState(CorePublicationChecksStateVersion) || !isInvocationState(CorePublicationNewOnlyStateVersion) || !isInvocationState(CorePublicationFailureStateVersion) || !isInvocationState(CoreActionIntentStateVersion) || !isInvocationState(CoreActionAdmissionStateVersion) || !isInvocationState(CoreActionGrantAdmissionStateVersion) || !isInvocationState(CoreActionDeliveryStateVersion) || !isInvocationState(CoreForkStateVersion) || !isInvocationState(CoreWorkspaceStateVersion) || !isInvocationState(CoreWorkspaceTreeStateVersion) || !isInvocationState(CoreDecisionStateVersion) {
-		t.Fatal("supported invocation state disappeared")
+	for _, contract := range versionContracts {
+		if contract.State != CoreStateVersion && !isInvocationState(contract.State) {
+			t.Fatal("supported invocation state disappeared", contract.State)
+		}
 	}
 	r := repeatModelFixture(t, 1)
 	data, err := canonicalState(r)

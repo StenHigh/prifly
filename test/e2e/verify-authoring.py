@@ -163,6 +163,10 @@ def check_workflow_catalog(binary):
         git("init", "-q", "-b", "main", repository)
         initialized = run(binary, "project", "init", "--repository", repository, "--state-root", authority)
         assert initialized.returncode == 0, initialized.stderr
+        assert not any((repository / path).exists() for path in (".codex", ".agents", ".claude")), "neutral init attached an undeclared host"
+        attached = run(binary, "project", "runners", "add", "--repository", repository, "--host", "codex-cli")
+        assert attached.returncode == 0, attached.stderr
+        assert json.loads(attached.stdout)["added_hosts"] == ["codex-cli"], attached.stdout
         shutil.copytree(fixture / ".codex", repository / ".codex", dirs_exist_ok=True)
         searched = run(binary, "project", "workflows", "search", "sample", "--catalog", catalog)
         assert searched.returncode == 0, searched.stderr

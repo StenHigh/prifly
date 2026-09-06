@@ -271,24 +271,20 @@ func TestContextFieldsNeverExtendOlderStateContracts(t *testing.T) {
 	}
 	capabilities := Capabilities()
 	core := capabilities.Profiles[1]
-	if core.StateVersion != CoreNeutralStateVersion || core.ReadVersion != CoreNeutralReadVersion || !slices.Contains(core.Capabilities, "publication_subscription_terminal_failure") || !slices.Contains(core.Capabilities, "publication_subscription_blob") || !slices.Contains(core.Capabilities, "action_intent_proposal") || !slices.Contains(core.Capabilities, "action_admission") || !slices.Contains(core.Capabilities, "action_grant_admission") || !slices.Contains(core.Capabilities, "action_delivery_prepared") || !slices.Contains(core.Capabilities, "run_fork") || !slices.Contains(core.Capabilities, "workspace_modes") || !slices.Contains(core.Capabilities, "decision_catalog") {
+	current := versionContracts[len(versionContracts)-1]
+	if core.StateVersion != current.State || core.ReadVersion != current.Read || !slices.Contains(core.Capabilities, "publication_subscription_terminal_failure") || !slices.Contains(core.Capabilities, "publication_subscription_blob") || !slices.Contains(core.Capabilities, "action_intent_proposal") || !slices.Contains(core.Capabilities, "action_admission") || !slices.Contains(core.Capabilities, "action_grant_admission") || !slices.Contains(core.Capabilities, "action_delivery_prepared") || !slices.Contains(core.Capabilities, "run_fork") || !slices.Contains(core.Capabilities, "workspace_modes") || !slices.Contains(core.Capabilities, "decision_catalog") {
 		t.Fatal("capability manifest omits the current contracts")
 	}
 	// A newer current version does not withdraw support for the delivered ones.
-	for _, delivered := range [][2]string{{CoreWaiverStateVersion, CoreWaiverReadVersion}, {CoreParallelStateVersion, CoreParallelReadVersion}, {CoreMapStateVersion, CoreMapReadVersion}, {CoreWaitStateVersion, CoreWaitReadVersion}, {CoreDecisionStateVersion, CoreDecisionReadVersion}} {
-		if !slices.Contains(core.StateVersions, delivered[0]) || !slices.Contains(core.ReadVersions, delivered[1]) {
-			t.Fatal("capability manifest dropped a delivered contract", delivered[0])
+	for _, delivered := range versionContracts {
+		if !slices.Contains(core.StateVersions, delivered.State) || !slices.Contains(core.ReadVersions, delivered.Read) {
+			t.Fatal("capability manifest dropped a delivered contract", delivered.State)
 		}
 	}
 	// The manifest must not call an implemented operator unsupported.
 	for _, operator := range []string{"parallel", "map", "wait", "live_guards", "artifact_publication_checks"} {
 		if slices.Contains(capabilities.Unsupported, operator) || !slices.Contains(core.Capabilities, operator) {
 			t.Fatal("capability manifest misreports an implemented operator", operator)
-		}
-	}
-	for _, delivered := range []string{CoreContextStateVersion, CoreSessionStateVersion} {
-		if !slices.Contains(core.StateVersions, delivered) {
-			t.Fatalf("a delivered contract disappeared from the supported set: %s", delivered)
 		}
 	}
 	if !slices.Contains(core.Capabilities, "automatic_checks") || slices.Contains(capabilities.Unsupported, "automatic_checks") || slices.Contains(capabilities.Profiles[0].Capabilities, "automatic_checks") {
