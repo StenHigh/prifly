@@ -30,3 +30,6 @@ extensions:
     between: {from: build, to: commit}
     step: lint
     on: {pass: commit}
+    # Every verdict the inserted step can return is routed above or named here.
+    # Sealing refuses an insertion that stays silent about one of them.
+    impossible_verdicts: [fail, needs_revision, no_work]

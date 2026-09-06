@@ -1964,6 +1964,19 @@ func renderRun(w io.Writer, v prifly.RunView) error {
 			}
 		}
 	}
+	// The deadline was reachable only through --json, so a reader of the text
+	// summary reported that the state named no deadline at all and worked from
+	// that. Only the attempts still in force answer "how long does the work I am
+	// doing now have"; settled ones are history and stay in --json.
+	for _, id := range v.Run.Active {
+		attempt := v.Run.Attempts[id]
+		if attempt == nil || attempt.Deadline.UTC == "" {
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "attempt %s deadline=%s\n", strconv.Quote(id), attempt.Deadline.UTC); err != nil {
+			return err
+		}
+	}
 	// Two different things were one counter: a Run with sealed step outputs and
 	// no finished stage read as if nothing had been captured at all.
 	sealed := 0

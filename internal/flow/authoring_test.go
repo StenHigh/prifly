@@ -253,7 +253,9 @@ func TestWorkflowAuthoringReferenceIsAValidWorkflowRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateProtocol("WorkflowRevisionV3", data); err != nil {
+	// The reference documents every authoring field, and only v4 admits
+	// impossible_verdicts, so that is the contract it lowers to.
+	if err := ValidateProtocol("WorkflowRevisionV4", data); err != nil {
 		t.Fatal(err)
 	}
 }

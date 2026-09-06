@@ -200,8 +200,8 @@ func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testi
 				}
 			}
 			first := handOver(t, e, runID)
-			if first.SchemaVersion != AssistedSessionTreeVersion || len(first.WorkspaceTrees) != 1 || first.WorkspaceTrees[0].InputManifest != nil {
-				t.Fatalf("first tree handoff is not output-only v4: %+v", first)
+			if first.SchemaVersion != AssistedSessionRoutedVersion || len(first.WorkspaceTrees) != 1 || first.WorkspaceTrees[0].InputManifest != nil {
+				t.Fatalf("first tree handoff is not output-only: %+v", first)
 			}
 			writeWorkspace(first.RepositoryWorkspace, test.original)
 			if _, err := e.SubmitSession(context.Background(), treeSubmission(t, first, "plan", []WorkspaceTreeLocation{{OutputPort: "plan", Path: test.location}})); err != nil {
@@ -214,7 +214,7 @@ func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testi
 			if err != nil {
 				t.Fatal(err)
 			}
-			if second.SchemaVersion != AssistedSessionTreeVersion || len(second.WorkspaceTrees) != 1 || second.WorkspaceTrees[0].InputManifest == nil {
+			if second.SchemaVersion != AssistedSessionRoutedVersion || len(second.WorkspaceTrees) != 1 || second.WorkspaceTrees[0].InputManifest == nil {
 				t.Fatalf("improve handoff lost the captured input: %+v", second)
 			}
 			assertWorkspace(second.RepositoryWorkspace, test.original)
@@ -229,7 +229,7 @@ func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testi
 			if err != nil {
 				t.Fatal(err)
 			}
-			if third.SchemaVersion != AssistedSessionTreeVersion || len(third.WorkspaceTrees) != 1 || third.WorkspaceTrees[0].InputManifest == nil {
+			if third.SchemaVersion != AssistedSessionRoutedVersion || len(third.WorkspaceTrees) != 1 || third.WorkspaceTrees[0].InputManifest == nil {
 				t.Fatalf("implement handoff lost the improved plan: %+v", third)
 			}
 			assertWorkspace(third.RepositoryWorkspace, test.improved)
@@ -241,7 +241,7 @@ func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testi
 				t.Fatal(err)
 			}
 			r := driverRun(t, e, runID)
-			if r.SchemaVersion != CoreWorkspaceTreeStateVersion || r.Status != "completed" {
+			if r.SchemaVersion != CoreRoutedStateVersion || r.Status != "completed" {
 				t.Fatalf("tree run did not use and settle the v24 contract: %+v", r)
 			}
 			ref := r.Attempts[third.AttemptID].Accepted.Outputs["final"]
@@ -305,11 +305,11 @@ func TestWorkspaceTreeRefusesPreHandoffDriftAndPolicyEscape(t *testing.T) {
 // session version and whatever the host names. At assisted-session/5 an absent
 // workspace_trees once skipped capture entirely, so the port the runtime owns
 // was then reported missing and the host had no accepted submission form at all.
-func TestWorkspaceTreeCaptureFollowsDeclaredBindingsAtDecisionSessionVersion(t *testing.T) {
+func TestWorkspaceTreeCaptureFollowsDeclaredBindingsAtRoutedSessionVersion(t *testing.T) {
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	e, runID := treeDecisionSessionFixture(t, policy)
 	first := handOver(t, e, runID)
-	if first.SchemaVersion != AssistedSessionDecisionVersion || len(first.WorkspaceTrees) != 1 || first.WorkspaceTrees[0].InputManifest != nil {
+	if first.SchemaVersion != AssistedSessionRoutedVersion || len(first.WorkspaceTrees) != 1 || first.WorkspaceTrees[0].InputManifest != nil {
 		t.Fatalf("first handoff is not an output-only v5 tree binding: %+v", first)
 	}
 	writeWorkspaceTreeFile(t, first.RepositoryWorkspace, policy.Path, "# Original\n")

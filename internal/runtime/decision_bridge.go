@@ -265,7 +265,7 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 			return local.Change{}, local.Reject("decision_conflict", "the request definition differs from the sealed catalog")
 		}
 		attempt := r.Attempts[request.AttemptID]
-		if attempt == nil || attempt.Session == nil || (attempt.Session.SchemaVersion != AssistedSessionDecisionVersion && !timedSession(attempt)) || attempt.Session.PrincipalID != e.owner || attempt.Session.HostState != SessionAwaiting || attempt.EnvelopeDigest != request.EnvelopeDigest || (request.SchemaVersion == DecisionRequestTimingVersion) != timedSession(attempt) {
+		if attempt == nil || attempt.Session == nil || (attempt.Session.SchemaVersion != AssistedSessionDecisionVersion && attempt.Session.SchemaVersion != AssistedSessionRoutedVersion && !timedSession(attempt)) || attempt.Session.PrincipalID != e.owner || attempt.Session.HostState != SessionAwaiting || attempt.EnvelopeDigest != request.EnvelopeDigest || (request.SchemaVersion == DecisionRequestTimingVersion) != timedSession(attempt) {
 			return local.Change{}, local.Reject("decision_request_unsupported", "this attempt is not an awaiting decision-bridge session delivery")
 		}
 		activation := r.Activations[attempt.ActivationID]
@@ -393,7 +393,7 @@ func (e *Engine) AnswerDecision(ctx context.Context, answer DecisionAnswer) (loc
 			return local.Change{}, local.Reject("invalid_decision_answer", err.Error())
 		}
 		attempt := r.Attempts[request.AttemptID]
-		if attempt == nil || attempt.Session == nil || (attempt.Session.SchemaVersion != AssistedSessionDecisionVersion && !timedSession(attempt)) || attempt.Session.HostState != sessionWaitingDecision || attempt.EnvelopeDigest != request.EnvelopeDigest {
+		if attempt == nil || attempt.Session == nil || (attempt.Session.SchemaVersion != AssistedSessionDecisionVersion && attempt.Session.SchemaVersion != AssistedSessionRoutedVersion && !timedSession(attempt)) || attempt.Session.HostState != sessionWaitingDecision || attempt.EnvelopeDigest != request.EnvelopeDigest {
 			return local.Change{}, local.Reject("decision_conflict", "the pending request no longer owns this session delivery")
 		}
 		activation := r.Activations[attempt.ActivationID]

@@ -108,7 +108,7 @@ func TestWorkspaceCheckoutHandoffKeepsScratchOutsideRepository(t *testing.T) {
 	e, runID, claim := assistedWorkspaceFixture(t, "checkout")
 	task := handOver(t, e, runID)
 	r := driverRun(t, e, runID)
-	if r.SchemaVersion != CoreWorkspaceStateVersion || task.SchemaVersion != AssistedSessionWorkspaceVersion || task.WorkspaceMode != "checkout" || task.RepositoryWorkspace != claim.Repository.Toplevel || task.Workspace == task.RepositoryWorkspace {
+	if r.SchemaVersion != CoreRoutedStateVersion || task.SchemaVersion != AssistedSessionRoutedVersion || task.WorkspaceMode != "checkout" || task.RepositoryWorkspace != claim.Repository.Toplevel || task.Workspace == task.RepositoryWorkspace {
 		t.Fatalf("checkout handoff did not keep workspace identities separate: run=%s task=%+v claim=%+v", r.SchemaVersion, task, claim)
 	}
 	if _, err := os.Stat(filepath.Join(task.RepositoryWorkspace, "context")); !os.IsNotExist(err) {
@@ -118,7 +118,7 @@ func TestWorkspaceCheckoutHandoffKeepsScratchOutsideRepository(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, value := range map[string]any{"CoreRunStateV23": r, "CoreRunViewV23": view, "SessionTaskV3": task} {
+	for name, value := range map[string]any{"CoreRunStateV28": r, "CoreRunViewV28": view, "SessionTaskV7": task} {
 		if err := validatePublic(t, name, value); err != nil {
 			t.Fatalf("%s rejected checkout state: %v", name, err)
 		}
@@ -206,10 +206,10 @@ func TestAssistedWorkingWindowOpensAtTheHandoff(t *testing.T) {
 	if attempt.DispatchDeadline != attempt.Deadline {
 		t.Fatalf("the attempt still declares a pickup window of its own: dispatch=%+v deadline=%+v", attempt.DispatchDeadline, attempt.Deadline)
 	}
-	// The window the engine enforces is real; what a legacy task must not carry
-	// is the unqualified wall-clock copy of it.
-	if task.Deadline != "" {
-		t.Fatalf("a legacy task carries a deadline its receiver cannot check: %q", task.Deadline)
+	// The window the engine enforces is real, and the task names it. Withholding
+	// it did not remove the bound; it only kept the executor from reading it.
+	if task.Deadline != attempt.Deadline.UTC {
+		t.Fatalf("the task does not name the window the engine enforces: %q want %q", task.Deadline, attempt.Deadline.UTC)
 	}
 	var envelope struct {
 		Deadline         string `json:"attempt_deadline"`
@@ -223,7 +223,7 @@ func TestAssistedWorkingWindowOpensAtTheHandoff(t *testing.T) {
 func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
-	if task.SchemaVersion != AssistedSessionCostVersion {
+	if task.SchemaVersion != AssistedSessionRoutedVersion {
 		t.Fatalf("new assisted handoff uses %s", task.SchemaVersion)
 	}
 	submission := hostResult(t, e, task, "planned with two reports")
@@ -242,16 +242,16 @@ func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {
 	if !reflect.DeepEqual(attempt.ReportedCosts, submission.ReportedCosts) {
 		t.Fatalf("reported amounts were reconciled or changed: got %+v want %+v", attempt.ReportedCosts, submission.ReportedCosts)
 	}
-	if view.Run.SchemaVersion != CoreActionDeliveryStateVersion || view.SchemaVersion != CoreActionDeliveryReadVersion {
+	if view.Run.SchemaVersion != CoreRoutedStateVersion || view.SchemaVersion != CoreRoutedReadVersion {
 		t.Fatalf("reported cost used old state/read contracts: %s %s", view.Run.SchemaVersion, view.SchemaVersion)
 	}
 	next, err := e.Next(context.Background(), runID)
-	if err != nil || next.SchemaVersion != CoreActionDeliveryNextVersion {
+	if err != nil || next.SchemaVersion != CoreRoutedNextVersion {
 		t.Fatalf("reported cost used old next contract: %+v %v", next, err)
 	}
 	for name, value := range map[string]any{
-		"CoreRunStateV21": view.Run, "CoreRunViewV21": view, "CoreNextViewV21": next,
-		"SessionTaskV2": task, "SessionSubmissionV2": submission, "ReportedCost": submission.ReportedCosts[0],
+		"CoreRunStateV28": view.Run, "CoreRunViewV28": view, "CoreNextViewV28": next,
+		"SessionTaskV7": task, "SessionSubmissionV7": submission, "ReportedCost": submission.ReportedCosts[0],
 	} {
 		if err := validatePublic(t, name, value); err != nil {
 			t.Fatalf("%s rejected an actual value: %v", name, err)
@@ -315,11 +315,13 @@ func TestAssistedHandoffCarriesPinnedSkillClaimAndDeadline(t *testing.T) {
 	if task.ClaimPath == "" || task.EnvelopeDigest == "" {
 		t.Fatalf("the handoff omits its boundary: %+v", task)
 	}
-	// The deadline left this boundary on purpose: a session without declared
-	// limits has no deadline its receiver could check, and handing over the
-	// unqualified wall clock only looked like one.
-	if task.Deadline != "" {
-		t.Fatalf("the handoff carries a deadline its receiver cannot check: %q", task.Deadline)
+	// A session that declared no limits still works under the inherited hour,
+	// so the handoff names it rather than leaving the executor to find it in
+	// our sources, as one package author did after thirteen releases.
+	deadline, parseErr := time.Parse(time.RFC3339Nano, task.Deadline)
+	handed, handedErr := time.Parse(time.RFC3339Nano, driverRun(t, e, runID).Attempts[task.AttemptID].Session.Handed.UTC)
+	if parseErr != nil || handedErr != nil || deadline.Sub(handed) != time.Duration(assistedAttemptTimeoutMS)*time.Millisecond {
+		t.Fatalf("the handoff does not name the inherited deadline: %q %v %v", task.Deadline, parseErr, handedErr)
 	}
 	skill, err := os.ReadFile(filepath.Join(e.Root, e.Config.Configuration.WorkspaceRoot, strings.TrimPrefix(task.AttemptID, "attempt:"), "context/skills", skillFileName(task.SkillRefs[0])))
 	if err != nil || rawDigest(skill) != task.SkillRefs[0].Digest {
@@ -786,17 +788,56 @@ func TestAcceptedVerdictIsVisibleInTheRunState(t *testing.T) {
 	}
 }
 
-// A deadline the receiver cannot check is worse than none. The engine marks its
-// own wall clock unqualified and measures by a monotonic reading that belongs
-// to its session, so a legacy task carried a number the executor had no way to
-// verify — and could be refused for missing it.
-func TestLegacyAssistedTaskCarriesNoUncheckableDeadline(t *testing.T) {
+// A step that declared no session limits is bound by the inherited hour all the
+// same: the report path enforces it. Withholding the number therefore hid a
+// live constraint instead of protecting anyone from an unqualified clock, which
+// is how a package author lived thirteen releases without knowing it existed.
+func TestUntimedAssistedTaskNamesTheInheritedDeadline(t *testing.T) {
 	e, runID, _ := assistedWorkspaceFixture(t, "")
 	task := handOver(t, e, runID)
-	if task.Deadline != "" {
-		t.Fatalf("a legacy task still carries a deadline its receiver cannot check: %q", task.Deadline)
+	attempt := driverRun(t, e, runID).Attempts[task.AttemptID]
+	if task.Deadline == "" || task.Deadline != attempt.Deadline.UTC {
+		t.Fatalf("the task does not name the deadline in force: %q want %q", task.Deadline, attempt.Deadline.UTC)
 	}
-	if task.Delivery != nil {
-		t.Fatalf("a legacy task carries a timed delivery: %+v", task.Delivery)
+	if task.Delivery != nil || attempt.Session.Timing != nil {
+		t.Fatalf("a step without declared limits acquired an allowance: %+v", task.Delivery)
+	}
+	// The absent case is expressed by absence, never by an empty string that
+	// reads as false and present at the same time.
+	encoded, err := json.Marshal(SessionTask{})
+	if err != nil || bytes.Contains(encoded, []byte(`"deadline"`)) {
+		t.Fatalf("a task without a deadline still serializes the field: %s %v", encoded, err)
+	}
+}
+
+// The graph's own routes reach the executor, so a truthful verdict the node
+// cannot receive is no longer a choice it can make blind. A pilot returned a
+// legal needs_revision to a node that routed only pass and lost six accepted
+// steps to it.
+func TestRoutedTaskNamesTheVerdictsItsNodeRoutes(t *testing.T) {
+	e, runID, _ := assistedWorkspaceFixture(t, "")
+	task := handOver(t, e, runID)
+	r := driverRun(t, e, runID)
+	attempt := r.Attempts[task.AttemptID]
+	plan, err := r.planFor(r.Activations[attempt.ActivationID].InvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := plan.Workflow.Definition.Stages[r.Activations[attempt.ActivationID].StageID]
+	if len(task.RoutedVerdicts) == 0 || len(task.RoutedVerdicts) != len(stage.On) {
+		t.Fatalf("the task does not carry this node's own verdicts: %v want %v", task.RoutedVerdicts, stage.On)
+	}
+	for _, verdict := range task.RoutedVerdicts {
+		if _, routed := stage.On[verdict]; !routed {
+			t.Fatalf("the task offers a verdict the node does not route: %q of %v", verdict, stage.On)
+		}
+		// The node owns its own set and nothing beyond it: what a verdict leads
+		// to belongs to the graph, so only verdict names ever cross this line.
+		if !slices.Contains([]string{"pass", "fail", "needs_revision", "no_work"}, verdict) {
+			t.Fatalf("the task carries something that is not a StepResult verdict: %q", verdict)
+		}
+	}
+	if slices.Contains(task.RoutedVerdicts, "needs_revision") != (stage.On["needs_revision"] != "") {
+		t.Fatalf("the offered set does not match the declared routes: %v %v", task.RoutedVerdicts, stage.On)
 	}
 }

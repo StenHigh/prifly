@@ -712,6 +712,19 @@ func authorFieldRef(expression, path string) (map[string]any, error) {
 }
 
 func authorSchemaVersion(inputs, stages map[string]any) string {
+	// Deriving the lowest contract that can express the source keeps concise
+	// YAML and hand-written JSON sealing to the same bytes. Naming a verdict
+	// impossible is the one thing only v4 can express, so it alone raises the
+	// version, and with it the completeness the contract requires.
+	for _, raw := range stages {
+		stage := cloneObject(raw)
+		if stage == nil {
+			continue
+		}
+		if _, declared := stage["impossible_verdicts"]; declared {
+			return WorkflowRevisionVerdictVersion
+		}
+	}
 	configured := false
 	for _, raw := range inputs {
 		if port := cloneObject(raw); port != nil && port["configuration"] != nil {

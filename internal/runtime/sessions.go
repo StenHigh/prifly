@@ -28,6 +28,7 @@ const (
 	AssistedSessionTreeVersion      = "assisted-session/4"
 	AssistedSessionDecisionVersion  = "assisted-session/5"
 	AssistedSessionTimingVersion    = "assisted-session/6"
+	AssistedSessionRoutedVersion    = "assisted-session/7"
 	ReportedCostVersion             = "reported-cost/1"
 	MaxReportedCosts                = 8
 
@@ -76,7 +77,7 @@ func validateReportedCosts(costs []ReportedCost) error {
 
 func hasReportedCostStateFields(r Run) bool {
 	for _, attempt := range r.Attempts {
-		if attempt != nil && (len(attempt.ReportedCosts) != 0 || attempt.Session != nil && (attempt.Session.SchemaVersion == AssistedSessionCostVersion || attempt.Session.SchemaVersion == AssistedSessionWorkspaceVersion || attempt.Session.SchemaVersion == AssistedSessionTreeVersion || attempt.Session.SchemaVersion == AssistedSessionDecisionVersion || attempt.Session.SchemaVersion == AssistedSessionTimingVersion)) {
+		if attempt != nil && (len(attempt.ReportedCosts) != 0 || attempt.Session != nil && (attempt.Session.SchemaVersion == AssistedSessionCostVersion || attempt.Session.SchemaVersion == AssistedSessionWorkspaceVersion || attempt.Session.SchemaVersion == AssistedSessionTreeVersion || attempt.Session.SchemaVersion == AssistedSessionDecisionVersion || attempt.Session.SchemaVersion == AssistedSessionTimingVersion || attempt.Session.SchemaVersion == AssistedSessionRoutedVersion)) {
 			return true
 		}
 	}
@@ -297,8 +298,17 @@ type SessionTask struct {
 	DecisionBridge      bool                       `json:"decision_bridge,omitempty"`
 	Delivery            *SessionDelivery           `json:"delivery,omitempty"`
 	ResultSchemaRef     flow.Ref                   `json:"result_schema_ref"`
-	Deadline            string                     `json:"deadline"`
-	PermittedEffects    []string                   `json:"permitted_effects"`
+	// RoutedVerdicts names the StepResult verdicts this node declares a route
+	// for. A verdict outside it is a legal StepResult that the graph cannot
+	// receive: the report is accepted and the invocation then fails routing,
+	// which is how a pilot lost six accepted steps to a truthful answer. The
+	// node owns only its own set; the targets of its routes stay unpublished.
+	RoutedVerdicts []string `json:"routed_verdicts,omitempty"`
+	// Deadline is the deadline actually in force, whether the step declared it
+	// or inherited the default. Absent means no deadline exists, never an
+	// empty string that reads as false and present at the same time.
+	Deadline         string   `json:"deadline,omitempty"`
+	PermittedEffects []string `json:"permitted_effects"`
 }
 
 // SessionSubmission is the host's terminal report. It names the attempt and the
@@ -313,6 +323,21 @@ type SessionSubmission struct {
 	ReportedCosts   []ReportedCost          `json:"reported_costs,omitempty"`
 	WorkspaceTrees  []WorkspaceTreeLocation `json:"workspace_trees,omitempty"`
 	DecisionRequest *DecisionRequest        `json:"decision_request,omitempty"`
+}
+
+// routedVerdicts is the node's own declared set, read in the fixed StepResult
+// order rather than map order so the same node hands over the same list twice.
+// It answers only "what may this step return here": the stages those verdicts
+// lead to are the graph's business and stay out of the handoff.
+func routedVerdicts(p *flow.Plan, stageID string) []string {
+	stage := p.Workflow.Definition.Stages[stageID]
+	verdicts := []string{}
+	for _, verdict := range []string{"pass", "fail", "needs_revision", "no_work"} {
+		if _, routed := stage.On[verdict]; routed {
+			verdicts = append(verdicts, verdict)
+		}
+	}
+	return verdicts
 }
 
 // SessionTask returns one outstanding handoff for a Run, or a not-found error
@@ -357,22 +382,27 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 			ResultSchemaRef:  step.ResultSchemaRef,
 			PermittedEffects: []string{"write_inside_declared_output_slot"},
 		}
-		if a.Session.SchemaVersion == AssistedSessionDecisionVersion || timedSession(a) {
+		if a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionRoutedVersion || timedSession(a) {
 			task.RunVersion = view.Snapshot.Version
 			task.DecisionBridge, task.DecisionSheet = decisionRuntimeAvailable(r.DecisionCatalog, r.DecisionSheet), r.DecisionSheet
 		}
-		// A deadline the receiver cannot check is worse than none: the wall clock
-		// this engine stamps is marked unqualified, and the monotonic reading it
-		// trusts belongs to another process's session clock. A timed session
-		// carries the whole observation in its delivery and can be checked, so
-		// it keeps the plain field too; a legacy one is told nothing rather than
-		// a number it has no way to verify.
+		// Every assisted attempt is bounded, so every task names the bound. The
+		// engine used to withhold it from a session without declared limits,
+		// reasoning that an unqualified wall clock is worse than no deadline.
+		// It is not: the report path enforces that hour anyway, so withholding
+		// it left the bound in force and unstated, and a package author read
+		// our sources after thirteen releases to find it. A timed session also
+		// carries the whole observation in its delivery, which can be checked.
+		task.Deadline = a.Deadline.UTC
 		if timedSession(a) {
 			delivery := sessionDelivery(a)
-			task.Delivery, task.Deadline = &delivery, a.Deadline.UTC
+			task.Delivery = &delivery
+		}
+		if a.Session.SchemaVersion == AssistedSessionRoutedVersion {
+			task.RoutedVerdicts = routedVerdicts(p, activation.StageID)
 		}
 		if step.Effects.Class == "workspace_write" {
-			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionTimingVersion {
+			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionTimingVersion || a.Session.SchemaVersion == AssistedSessionRoutedVersion {
 				task.PermittedEffects = []string{"write_inside_claimed_workspace", "local_git_commit_on_claimed_workspace"}
 			} else {
 				task.PermittedEffects = []string{"write_inside_claimed_worktree", "local_git_commit_on_claimed_base"}
@@ -384,7 +414,7 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 				return SessionTask{}, err
 			}
 			task.ClaimPath = claim.Path
-			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionTimingVersion {
+			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionTimingVersion || a.Session.SchemaVersion == AssistedSessionRoutedVersion {
 				if a.Session.WorkspaceMode != claimMode(claim) {
 					return SessionTask{}, local.ErrIntegrity
 				}
@@ -523,13 +553,13 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
-	if (submission.SchemaVersion != AssistedSessionVersion && submission.SchemaVersion != AssistedSessionCostVersion && submission.SchemaVersion != AssistedSessionWorkspaceVersion && submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion) || submission.RunID == "" || submission.AttemptID == "" || submission.EnvelopeDigest == "" {
+	if (submission.SchemaVersion != AssistedSessionVersion && submission.SchemaVersion != AssistedSessionCostVersion && submission.SchemaVersion != AssistedSessionWorkspaceVersion && submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && submission.SchemaVersion != AssistedSessionRoutedVersion) || submission.RunID == "" || submission.AttemptID == "" || submission.EnvelopeDigest == "" {
 		return local.ApplyResult{}, submissionProblem("/schema_version", "a submission names a supported schema version, run, attempt and envelope digest")
 	}
 	if submission.DecisionRequest != nil {
 		request := submission.DecisionRequest
-		if submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion || len(submission.Result) != 0 || len(submission.ReportedCosts) != 0 || len(submission.WorkspaceTrees) != 0 || request.RunID != submission.RunID || request.AttemptID != submission.AttemptID || request.EnvelopeDigest != submission.EnvelopeDigest {
-			return local.ApplyResult{}, submissionProblem("/decision_request", "a decision request is the only assisted-session/5 submission and must name its delivery")
+		if submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && submission.SchemaVersion != AssistedSessionRoutedVersion || len(submission.Result) != 0 || len(submission.ReportedCosts) != 0 || len(submission.WorkspaceTrees) != 0 || request.RunID != submission.RunID || request.AttemptID != submission.AttemptID || request.EnvelopeDigest != submission.EnvelopeDigest {
+			return local.ApplyResult{}, submissionProblem("/decision_request", "a decision request is the only submission that carries no result, and it must name its delivery")
 		}
 		return e.RequestDecision(ctx, *request)
 	}
@@ -594,7 +624,7 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if !exists {
 		return local.ApplyResult{}, local.ErrIntegrity
 	}
-	if submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && len(submission.WorkspaceTrees) != 0 {
+	if submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && submission.SchemaVersion != AssistedSessionRoutedVersion && len(submission.WorkspaceTrees) != 0 {
 		return local.ApplyResult{}, &flow.Problem{Code: "submission_trees_unsupported", Path: "/workspace_trees", Message: "this assisted-session version cannot report workspace trees"}
 	}
 	// Capture follows the step's declared bindings, not the wording of the

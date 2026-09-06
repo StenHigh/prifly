@@ -181,7 +181,7 @@ destination: {kind: session_context, name: multiplier}
 	originalEnvelope := bytes.Clone(run.Attempts[task.AttemptID].Envelope)
 	var remainingMS int64
 	if timed {
-		if run.SchemaVersion != prifly.CoreTimingStateVersion || task.SchemaVersion != prifly.AssistedSessionTimingVersion || task.Delivery == nil || task.Delivery.Timing.RemainingMS != 3600000 {
+		if run.SchemaVersion != prifly.CoreRoutedStateVersion || task.SchemaVersion != prifly.AssistedSessionRoutedVersion || task.Delivery == nil || task.Delivery.Timing.RemainingMS != 3600000 {
 			t.Fatalf("mixed fixture did not enter the new timed contract: %+v", task)
 		}
 	}

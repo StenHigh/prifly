@@ -58,6 +58,11 @@ func Capabilities() CapabilityManifest {
 	profile.ReadVersions = append(profile.ReadVersions, CoreTimingReadVersion)
 	profile.StepVersions = append(profile.StepVersions, "6")
 	profile.Capabilities = append(profile.Capabilities, "assisted_session_timing")
+	profile.StateVersion, profile.ReadVersion = CoreRoutedStateVersion, CoreRoutedReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreRoutedStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreRoutedReadVersion)
+	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionVerdictVersion)
+	profile.Capabilities = append(profile.Capabilities, "routed_session_verdicts", "declared_impossible_verdicts")
 	return manifest
 }
 
@@ -122,6 +127,11 @@ func supportedRun(r Run) bool {
 					return false
 				}
 				want = AssistedSessionTimingVersion
+			}
+			// The routed contract is state-wide: every assisted step of such a
+			// Run is handed it, with or without a declared allowance.
+			if isRoutedState(r.SchemaVersion) {
+				want = AssistedSessionRoutedVersion
 			}
 			if attempt.Session.SchemaVersion != want {
 				return false

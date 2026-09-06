@@ -338,26 +338,45 @@ func TestCoreCancellationDoesNotConsumeErrorHandler(t *testing.T) {
 	}
 }
 
-func TestCoreMissingVerdictPreservesAcceptedResult(t *testing.T) {
-	e, workflow := coreDriverFixture(t, "pass")
-	work := workflow.Definition.Stages["work"]
-	work.On = map[string]string{"fail": "done"}
-	workflow.Definition.Stages["work"] = work
-	runID := coreDriverStart(t, e, workflow)
-	if err := e.Drive(context.Background(), runID); err != nil {
-		t.Fatal(err)
-	}
-	r := driverRun(t, e, runID)
-	if r.Status != "failed" || r.Outcome != nil || len(r.Attempts) != 1 || len(r.Activations) != 1 || len(coreErrorEvents(t, e, runID)) != 0 {
-		t.Fatalf("unhandled verdict became a technical error route: %+v", r)
-	}
-	for _, a := range r.Attempts {
-		if a.Accepted == nil || a.Accepted.Verdict != "pass" || a.Status != "completed" || r.Steps[a.StepID].Status != "completed" {
-			t.Fatalf("accepted StepResult was erased by a missing handler: %+v", a)
-		}
-	}
-	if len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "unhandled_verdict" {
-		t.Fatalf("missing handler has no precise diagnostic: %+v", r.Diagnostics)
+// Two graphs can hand an accepted result to a stage with no route for it: one
+// sealed at v4, where the author declared the verdict impossible and was wrong,
+// and one sealed under an older revision, which was never asked to answer for
+// every verdict and is still loaded and driven by this build. Neither may erase
+// work that was already accepted.
+func TestCoreUnroutedVerdictThatHappensPreservesAcceptedResult(t *testing.T) {
+	for _, test := range []struct {
+		name, schemaVersion string
+		impossible          []string
+	}{
+		{"declared impossible at v4", flow.WorkflowRevisionVerdictVersion, []string{"pass", "needs_revision", "no_work"}},
+		{"never declared in an older revision", "", nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			e, workflow := coreDriverFixture(t, "pass")
+			work := workflow.Definition.Stages["work"]
+			work.On = map[string]string{"fail": "done"}
+			work.ImpossibleVerdicts = test.impossible
+			workflow.Definition.Stages["work"] = work
+			if test.schemaVersion != "" {
+				workflow.SchemaVersion = test.schemaVersion
+			}
+			runID := coreDriverStart(t, e, workflow)
+			if err := e.Drive(context.Background(), runID); err != nil {
+				t.Fatal(err)
+			}
+			r := driverRun(t, e, runID)
+			if r.Status != "failed" || r.Outcome != nil || len(r.Attempts) != 1 || len(r.Activations) != 1 || len(coreErrorEvents(t, e, runID)) != 0 {
+				t.Fatalf("unhandled verdict became a technical error route: %+v", r)
+			}
+			for _, a := range r.Attempts {
+				if a.Accepted == nil || a.Accepted.Verdict != "pass" || a.Status != "completed" || r.Steps[a.StepID].Status != "completed" {
+					t.Fatalf("accepted StepResult was erased by a missing handler: %+v", a)
+				}
+			}
+			if len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "unhandled_verdict" {
+				t.Fatalf("missing handler has no precise diagnostic: %+v", r.Diagnostics)
+			}
+		})
 	}
 }
 

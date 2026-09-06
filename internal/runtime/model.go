@@ -188,6 +188,14 @@ const (
 	CoreTimingNextVersion     = "core-next/27"
 	CoreTimingPreviewVersion  = "core-preview/27"
 	CoreTimingStepReadVersion = "core-step-read/27"
+	// A routed handoff names the verdicts its own node routes and the deadline
+	// actually in force. Older Runs keep their handoffs, where the executor
+	// chose from the whole StepResult set and inherited an undeclared hour.
+	CoreRoutedReadVersion     = "core-read/28"
+	CoreRoutedStateVersion    = "core-state/28"
+	CoreRoutedNextVersion     = "core-next/28"
+	CoreRoutedPreviewVersion  = "core-preview/28"
+	CoreRoutedStepReadVersion = "core-step-read/28"
 	CoreConfigVersion         = "core-configuration/1"
 	CoreContextConfigVersion  = "core-configuration/2"
 	MaxDefinitionBytes        = 2 << 20

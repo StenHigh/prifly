@@ -9,9 +9,12 @@ import (
 	"time"
 )
 
-// This is deliberately a legacy regression, not the new pause-aware promise:
-// the old bridge accepts a late answer but keeps the original report deadline.
-func TestLegacyAssistedDecisionAcceptsLateAnswerButRejectsResult(t *testing.T) {
+// This is deliberately the untimed promise, not the pause-aware one: a step
+// that declared no session limits keeps one absolute report deadline, and an
+// answer arriving after it is accepted while the result it precedes is not.
+// The routed contract serves such a step too, so the edition no longer marks
+// the difference: the absence of a saved allowance does.
+func TestUntimedAssistedDecisionAcceptsLateAnswerButRejectsResult(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
@@ -33,8 +36,8 @@ func TestLegacyAssistedDecisionAcceptsLateAnswerButRejectsResult(t *testing.T) {
 		attempt := before.Attempts[task.AttemptID]
 		originalDeadline := attempt.Deadline
 		originalEnvelope := string(attempt.Envelope)
-		if before.SchemaVersion != "core-state/25" || task.SchemaVersion != "assisted-session/5" {
-			t.Fatalf("fixture did not select the legacy contract: state=%s session=%s", before.SchemaVersion, task.SchemaVersion)
+		if before.SchemaVersion != "core-state/28" || task.SchemaVersion != "assisted-session/7" || attempt.Session.Timing != nil {
+			t.Fatalf("fixture did not select an untimed routed delivery: state=%s session=%s timing=%+v", before.SchemaVersion, task.SchemaVersion, attempt.Session.Timing)
 		}
 		admitted, err := time.Parse(time.RFC3339Nano, attempt.Admitted.UTC)
 		if err != nil {
@@ -132,7 +135,7 @@ func TestLegacyAssistedRunsCannotShareInstallationClaim(t *testing.T) {
 	if err != nil || bound.RunID != first.RunID || bound.Generation != first.ClaimGeneration || bound.ID != first.ClaimID || bound.Repository.Toplevel != first.RepositoryWorkspace {
 		t.Fatalf("first admission did not bind the exact checkout: %+v %v", bound, err)
 	}
-	if second := driverRun(t, e, started.Receipt.RunID); len(second.Attempts) != 0 || second.SchemaVersion != "core-state/23" {
-		t.Fatalf("refusal changed the legacy contract or admitted work: %+v", second.Attempts)
+	if second := driverRun(t, e, started.Receipt.RunID); len(second.Attempts) != 0 || second.SchemaVersion != "core-state/28" {
+		t.Fatalf("refusal changed the run contract or admitted work: %+v", second.Attempts)
 	}
 }

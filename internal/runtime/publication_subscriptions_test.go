@@ -224,7 +224,7 @@ func TestOncePublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := driverRun(t, e, runID)
-	if before.SchemaVersion != CoreActionDeliveryStateVersion || len(before.Active) != 1 {
+	if before.SchemaVersion != CoreRoutedStateVersion || len(before.Active) != 1 {
 		t.Fatalf("terminal-failure source did not establish current-session producer overlap: state=%s active=%v", before.SchemaVersion, before.Active)
 	}
 	producer, err := e.SessionTask(ctx, runID, before.Active[0])
@@ -251,7 +251,7 @@ func TestOncePublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
 	if registration == nil || registration.Status != "interrupted" {
 		t.Fatalf("once producer failure retained an active or expired registration: %+v", registration)
 	}
-	if err := validatePublic(t, "CoreRunStateV21", after); err != nil {
+	if err := validatePublic(t, "CoreRunStateV28", after); err != nil {
 		t.Fatalf("current session state rejects the terminal-failure interruption: %v", err)
 	}
 }
@@ -478,7 +478,7 @@ func TestNewOnlyOncePublicationRejectsItemsBeforeItsAuthorityCut(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := driverRun(t, e, runID)
-	if r.SchemaVersion != CoreActionDeliveryStateVersion {
+	if r.SchemaVersion != CoreRoutedStateVersion {
 		t.Fatalf("new-only source did not select the current session state: %s", r.SchemaVersion)
 	}
 	root, err := r.plan()
@@ -509,7 +509,7 @@ func TestNewOnlyOncePublicationRejectsItemsBeforeItsAuthorityCut(t *testing.T) {
 	if _, _, matched, err := publicationWait(&r, root, registration, publication); err != nil || !matched {
 		t.Fatalf("new-only once source refused its first later publication: matched=%v err=%v", matched, err)
 	}
-	if err := validatePublic(t, "CoreRunStateV21", r); err != nil {
+	if err := validatePublic(t, "CoreRunStateV28", r); err != nil {
 		t.Fatalf("current session state rejects the persisted once cut: %v", err)
 	}
 }

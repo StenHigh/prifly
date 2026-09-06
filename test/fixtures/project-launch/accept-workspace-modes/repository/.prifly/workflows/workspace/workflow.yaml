@@ -19,5 +19,5 @@ entry: work
 limits: {max_step_instances: 1, max_control_transitions: 2}
 policy_ref: local_policy
 stages:
-  work: {kind: step, step_ref: step_work, input_bindings: {}, on: {pass: done}}
+  work: {kind: step, step_ref: step_work, input_bindings: {}, on: {pass: done}, impossible_verdicts: [fail, needs_revision, no_work]}
   done: {kind: finish, outcome: succeeded, output_bindings: {}}

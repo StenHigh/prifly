@@ -43,7 +43,14 @@
             }
           },
           "step": {"type": "string", "minLength": 1},
-          "on": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}}
+          "on": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+          "impossible_verdicts": {
+            "type": "array",
+            "items": {"enum": ["pass", "fail", "needs_revision", "no_work"]},
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+          }
         }
       }
     }

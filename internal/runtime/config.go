@@ -202,7 +202,7 @@ func timingWireFields(fields map[string]json.RawMessage, r Run) error {
 			}
 		}
 		if _, exists := session["timing"]; exists {
-			if !isTimingState(r.SchemaVersion) || r.Attempts[id] == nil || r.Attempts[id].Session == nil || r.Attempts[id].Session.SchemaVersion != AssistedSessionTimingVersion {
+			if !isTimingState(r.SchemaVersion) || r.Attempts[id] == nil || r.Attempts[id].Session == nil || !timedEdition(r.Attempts[id].Session.SchemaVersion) {
 				return errors.New("older session cannot contain timing fields")
 			}
 		}

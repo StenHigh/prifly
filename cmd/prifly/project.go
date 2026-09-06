@@ -62,11 +62,24 @@ var projectRunnerSkillTemplateBeforeStateID = strings.NewReplacer(
    to bypass it. No active host means no automatic wakeup.`,
 ).Replace(projectRunnerSkillTemplateBeforeTiming)
 
+// projectRunnerSkillTemplateBeforeAttemptID is the exact template v0.11.0
+// emitted, kept only so `project runners update` still recognizes runners that
+// release installed.
+var projectRunnerSkillTemplateBeforeAttemptID = strings.NewReplacer(
+	"project-launch-summary/2", "project-launch-summary/3",
+).Replace(projectRunnerSkillTemplateBeforeStateID)
+
 // Current instructions are derived from the frozen previous template, never
 // the reverse: updating current behavior must not change recognized old bytes.
 var projectRunnerSkillTemplate = strings.NewReplacer(
-	"project-launch-summary/2", "project-launch-summary/3",
-).Replace(projectRunnerSkillTemplateBeforeStateID)
+	`Handle only those tasks, regardless of
+   their number; use separate host sessions only if the platform provides
+   them. Read each task's pinned context from `+"`workspace`"+` and respect its`, `Handle only those tasks, however many
+   there are; use separate host sessions only if the platform provides them.
+   `+"`session task --all`"+` returns them as a list, but a Run keys
+   `+"`run.attempts`"+` by `+"`attempt_id`"+`: read one by that ID, never by position.
+   Read each task's pinned context from `+"`workspace`"+` and respect its`,
+).Replace(projectRunnerSkillTemplateBeforeAttemptID)
 
 const projectRunnerSkillTemplateBeforeTiming = `---
 name: prifly-run
@@ -940,6 +953,10 @@ type projectWorkflowExtension struct {
 	To       string
 	Step     string
 	On       map[string]string
+	// Absent stays absent in the b1 build key: an insertion that declares no
+	// impossible verdict seals exactly the bytes it sealed before the field
+	// existed, while declaring one is a different input and a different key.
+	ImpossibleVerdicts []string `json:",omitempty"`
 }
 
 type projectWorkflowOptions struct {
@@ -1117,7 +1134,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		}
 		for key := range object {
 			switch key {
-			case "id", "workflow", "between", "step", "on":
+			case "id", "workflow", "between", "step", "on", "impossible_verdicts":
 			default:
 				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d has unknown field %s", index, key))
 			}
@@ -1156,6 +1173,15 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d on routes must be non-empty strings", index))
 			}
 			extension.On[verdict] = target
+		}
+		// An inserted step answers for its verdicts like any other step stage,
+		// so the insertion carries the same explicit "cannot happen here" list.
+		for _, verdict := range object["impossible_verdicts"].([]any) {
+			name, ok := verdict.(string)
+			if !ok || !slices.Contains(flow.StepVerdicts, name) {
+				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d impossible_verdicts must name StepResult verdicts", index))
+			}
+			extension.ImpossibleVerdicts = append(extension.ImpossibleVerdicts, name)
 		}
 		extensions = append(extensions, extension)
 	}
@@ -1282,6 +1308,13 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 		from[selected.group].(map[string]any)[selected.verdict] = extension.Step
 	}
 	stages[extension.Step] = map[string]any{"kind": "step", "step_ref": ref, "input_bindings": map[string]any{}, "on": extension.On}
+	if len(extension.ImpossibleVerdicts) != 0 {
+		stages[extension.Step].(map[string]any)["impossible_verdicts"] = extension.ImpossibleVerdicts
+		// Only v4 admits the declaration, so an insertion that carries one
+		// raises the revision it is spliced into, exactly as authoring does.
+		// An insertion without one leaves the sealed version untouched.
+		workflow["schema_version"] = flow.WorkflowRevisionVerdictVersion
+	}
 	return nil
 }
 
@@ -1762,6 +1795,15 @@ func projectRunnerSkill(host projectHost) string {
 	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
 }
 
+func projectRunnerSkillBeforeAttemptID(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeAttemptID, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
+}
+
 func projectRunnerSkillBeforeStateID(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -1829,7 +1871,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

@@ -122,7 +122,7 @@ func TestPackageProfileAnswerIsOneOfTheDeclaredAnswers(t *testing.T) {
 	if task.DecisionSheet == nil || task.DecisionSheet.PackageProfile != "fast" {
 		t.Fatalf("the profile stopped arriving on the channel packages already read: %+v", task.DecisionSheet)
 	}
-	if err := validatePublic(t, "SessionTaskV5", task); err != nil {
+	if err := validatePublic(t, "SessionTaskV7", task); err != nil {
 		t.Fatalf("the reserved answer name broke the published task contract: %v", err)
 	}
 }
@@ -142,7 +142,7 @@ func TestDecisionBridgeResumesSameAssistedAttempt(t *testing.T) {
 	sheet := DecisionSheet{SchemaVersion: DecisionSheetVersion, CatalogDigest: catalogDigest, ProfileSource: "none", Records: []DecisionRecord{{SchemaVersion: DecisionRecordVersion, DefinitionID: preflight.ID, DefinitionDigest: preflightDigest, Status: "answered", Source: "actor", Value: json.RawMessage(`"concise"`)}}}
 	e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", &catalog, &sheet)
 	task := handOver(t, e, runID)
-	if task.SchemaVersion != AssistedSessionDecisionVersion || !task.DecisionBridge || string(task.DecisionContext["logging"]) != `"concise"` {
+	if task.SchemaVersion != AssistedSessionRoutedVersion || !task.DecisionBridge || string(task.DecisionContext["logging"]) != `"concise"` {
 		t.Fatalf("decision bridge handoff is incomplete: %+v", task)
 	}
 	runtimeDigest, err := DecisionDefinitionDigest(runtime)
@@ -166,7 +166,7 @@ func TestDecisionBridgeResumesSameAssistedAttempt(t *testing.T) {
 		t.Fatalf("paused delivery remained available: %v", err)
 	}
 	next, err := e.Next(context.Background(), runID)
-	if err != nil || next.SchemaVersion != CoreDecisionNextVersion || next.Action != "waiting_decision" {
+	if err != nil || next.SchemaVersion != CoreRoutedNextVersion || next.Action != "waiting_decision" {
 		t.Fatalf("pending bridge state is not visible: %+v %v", next, err)
 	}
 	requestDigest, err := DecisionRequestDigest(request)
@@ -395,7 +395,7 @@ func TestDecisionBridgeServesTwoPackagesWithOneProtocol(t *testing.T) {
 			sheet := DecisionSheet{SchemaVersion: DecisionSheetVersion, CatalogDigest: catalogDigest, ProfileSource: "none", Records: []DecisionRecord{}}
 			e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", &catalog, &sheet)
 			task := handOver(t, e, runID)
-			if task.SchemaVersion != AssistedSessionDecisionVersion || !task.DecisionBridge {
+			if task.SchemaVersion != AssistedSessionRoutedVersion || !task.DecisionBridge {
 				t.Fatalf("handoff does not declare the bridge: %+v", task)
 			}
 			definitionDigest, err := DecisionDefinitionDigest(pkg.definition)

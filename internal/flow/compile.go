@@ -79,6 +79,8 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 			contract = "WorkflowRevisionV2"
 		case "3":
 			contract = "WorkflowRevisionV3"
+		case WorkflowRevisionVerdictVersion:
+			contract = "WorkflowRevisionV4"
 		}
 	}
 	if err := validateProtocolValue(contract, value, ""); err != nil {
@@ -268,9 +270,18 @@ func supportedWorkflowProfile(workflow map[string]any, profile string) error {
 					}
 					continue
 				}
-				if !slices.Contains([]string{"pass", "fail", "needs_revision", "no_work"}, verdict) {
+				if !slices.Contains(StepVerdicts, verdict) {
 					return problem("unsupported", path+"/on/"+verdict, "verdict route is not supported by "+profile)
 				}
+			}
+		}
+		// Only the revision that introduced impossible_verdicts answers for
+		// completeness. A Run sealed under an older contract is recompiled on
+		// every load, so applying the new rule to it would refuse to resume
+		// work that was already accepted.
+		if stage["kind"] == "step" && workflowVersion == WorkflowRevisionVerdictVersion {
+			if err := checkVerdictCoverage(stage, path); err != nil {
+				return err
 			}
 		}
 		for _, field := range []string{"input_bindings", "output_bindings", "initial_bindings", "next_bindings"} {
@@ -278,7 +289,7 @@ func supportedWorkflowProfile(workflow map[string]any, profile string) error {
 			for _, port := range keys(bindings) {
 				binding := bindings[port].(map[string]any)
 				bindingPath := path + "/" + field + "/" + escapePointer(port)
-				streamBinding := profile == CoreProfile && workflowVersion == "3" && (binding["from"] == "publication" && stage["kind"] == "call" && field == "input_bindings" || binding["from"] == "subscription" && stage["kind"] == "repeat" && (field == "initial_bindings" || field == "next_bindings"))
+				streamBinding := profile == CoreProfile && (workflowVersion == "3" || workflowVersion == WorkflowRevisionVerdictVersion) && (binding["from"] == "publication" && stage["kind"] == "call" && field == "input_bindings" || binding["from"] == "subscription" && stage["kind"] == "repeat" && (field == "initial_bindings" || field == "next_bindings"))
 				if !slices.Contains([]any{"workflow_input", "stage_output", "literal"}, binding["from"]) && !(profile == CoreProfile && stage["kind"] == "repeat" && field == "next_bindings" && binding["from"] == "iteration_output") && !streamBinding {
 					return problem("unsupported", bindingPath+"/from", "binding source is not supported by "+profile)
 				}
@@ -313,6 +324,41 @@ func supportedWorkflowProfile(workflow map[string]any, profile string) error {
 		core := profile == CoreProfile && (outcome == "partial" || outcome == "completed_with_waivers")
 		if !slices.Contains([]any{"succeeded", "rejected", "no_work"}, outcome) && !core {
 			return problem("unsupported", "/allowed_outcomes", "outcome is not supported by "+profile)
+		}
+	}
+	return nil
+}
+
+// StepVerdicts is the closed set a StepResult may carry. Nothing in the
+// protocol narrows it by step kind, adapter or effect class, so every step
+// stage answers for all four.
+var StepVerdicts = []string{"pass", "fail", "needs_revision", "no_work"}
+
+// WorkflowRevisionVerdictVersion is the WorkflowRevision schema_version that
+// introduced impossible_verdicts and, with it, the requirement that a step
+// stage answer for every verdict. Bytes sealed under an earlier version cannot
+// carry the declaration and are not judged by the rule: they keep accepting the
+// report and reporting the routing gap at run time.
+const WorkflowRevisionVerdictVersion = "4"
+
+// checkVerdictCoverage refuses a step stage that leaves a verdict its step can
+// return undeclared. An author certain a verdict cannot occur here says so in
+// impossible_verdicts; saying nothing is not that statement, and the sealed
+// graph used to carry the difference into a Run that died on the seventh step.
+func checkVerdictCoverage(stage map[string]any, path string) error {
+	on, _ := stage["on"].(map[string]any)
+	declared, _ := stage["impossible_verdicts"].([]any)
+	impossible := make(map[string]bool, len(declared))
+	for _, verdict := range declared {
+		impossible[verdict.(string)] = true
+	}
+	for _, verdict := range StepVerdicts {
+		_, routed := on[verdict]
+		switch {
+		case routed && impossible[verdict]:
+			return problem("contradictory_verdict", path+"/impossible_verdicts", "this stage routes "+verdict+" and also declares it impossible: keep the route or drop the declaration")
+		case !routed && !impossible[verdict]:
+			return problem("missing_handler", path+"/on/"+verdict, "this stage does not say where "+verdict+" leads: add on."+verdict+" or list "+verdict+" in impossible_verdicts")
 		}
 	}
 	return nil
@@ -700,7 +746,7 @@ func (p *Plan) checkGraph() error {
 		for _, verdict := range []string{"fail", "needs_revision", "no_work"} {
 			target, exists := stage.On[verdict]
 			if !exists {
-				continue // Unhandled results are accepted, then runtime reports routing error.
+				continue // Declared impossible at v4, or simply unrouted in an older revision; either way runtime reports the routing error.
 			}
 			finish, exists := w.Definition.Stages[target]
 			if !exists {
@@ -900,11 +946,15 @@ func (p *Plan) Next(stageID, verdict string) (string, error) {
 	if !exists || stage.Kind != "step" {
 		return "", problem("invalid_stage", "/definition/stages/"+escapePointer(stageID), "expected a compiled step stage")
 	}
-	if !slices.Contains([]string{"pass", "fail", "needs_revision", "no_work"}, verdict) {
+	if !slices.Contains(StepVerdicts, verdict) {
 		return "", problem("invalid_verdict", "", "not a StepResult verdict")
 	}
 	next, exists := stage.On[verdict]
 	if !exists {
+		// Two revisions reach here: a v4 stage whose author asserted this
+		// verdict was impossible and was wrong, and an older stage sealed
+		// before completeness was required. The accepted result stands either
+		// way; only the routing fails.
 		return "", problem("unhandled_verdict", "/definition/stages/"+escapePointer(stageID)+"/on", "accepted result has no declared route: "+verdict)
 	}
 	return next, nil

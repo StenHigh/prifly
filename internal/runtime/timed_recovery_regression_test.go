@@ -93,8 +93,11 @@ func TestMixedTimedRunKeepsLegacyDecisionVisible(t *testing.T) {
 	runID := started.Receipt.RunID
 	task := handOver(t, e, runID)
 	before := driverRun(t, e, runID)
-	if before.SchemaVersion != CoreTimingStateVersion || task.SchemaVersion != AssistedSessionDecisionVersion || task.Delivery != nil {
-		t.Fatal("mixed fixture did not retain the legacy session edition")
+	// Both steps of a mixed Run are handed the same routed contract now. What
+	// still separates them is the allowance: this one declared none, so it has
+	// no delivery and works to one absolute deadline.
+	if before.SchemaVersion != CoreRoutedStateVersion || task.SchemaVersion != AssistedSessionRoutedVersion || task.Delivery != nil {
+		t.Fatal("mixed fixture did not hand the untimed step an untimed delivery")
 	}
 	definition := before.DecisionCatalog.Decisions[0]
 	digest, err := DecisionDefinitionDigest(definition)
@@ -117,12 +120,14 @@ func TestMixedTimedRunKeepsLegacyDecisionVisible(t *testing.T) {
 		t.Fatal(err)
 	}
 	resumed, err := e.SessionTask(ctx, runID, task.AttemptID)
-	if err != nil || resumed.SchemaVersion != AssistedSessionDecisionVersion || resumed.Delivery != nil || resumed.EnvelopeDigest == task.EnvelopeDigest {
-		t.Fatalf("answer changed the legacy timing contract: %+v %v", resumed, err)
+	if err != nil || resumed.SchemaVersion != AssistedSessionRoutedVersion || resumed.Delivery != nil || resumed.EnvelopeDigest == task.EnvelopeDigest {
+		t.Fatalf("answer changed the untimed contract: %+v %v", resumed, err)
 	}
-	// The legacy window is absolute: answering does not reopen it. Neither task
-	// carries the deadline any more, so the guarantee is read from the attempt
-	// the engine still enforces, not from a field that is empty on both sides.
+	// The untimed window is absolute: answering does not reopen it. Both tasks
+	// name it now, so the same guarantee is readable from either side.
+	if resumed.Deadline != admitted.UTC || task.Deadline != admitted.UTC {
+		t.Fatalf("the named deadline moved across the answer: %q then %q want %q", task.Deadline, resumed.Deadline, admitted.UTC)
+	}
 	if after := driverRun(t, e, runID).Attempts[task.AttemptID].Deadline; after != admitted {
 		t.Fatalf("answering reopened the legacy working window: %+v then %+v", admitted, after)
 	}
@@ -130,7 +135,7 @@ func TestMixedTimedRunKeepsLegacyDecisionVisible(t *testing.T) {
 		t.Fatal(err)
 	}
 	timed := handOver(t, e, runID)
-	if timed.SchemaVersion != AssistedSessionTimingVersion || timed.Delivery == nil {
+	if timed.SchemaVersion != AssistedSessionRoutedVersion || timed.Delivery == nil {
 		t.Fatal("mixed Run lost the later timed step")
 	}
 }

@@ -283,6 +283,102 @@ func TestUnsupportedUnreachableOperators(t *testing.T) {
 	}
 }
 
+// A Run died on its seventh step because a gate reported needs_revision at a
+// stage that routed only pass: the graph was sealed incomplete and the engine
+// discovered it at run time, failing the invocation and losing six accepted
+// steps. WorkflowRevision v4 settles that at sealing, and an author certain a
+// verdict cannot occur here says so instead of saying nothing.
+func TestV4StepStageAnswersForEveryVerdictItsStepCanReturn(t *testing.T) {
+	for _, test := range []struct {
+		name, code, path string
+		edit             func(map[string]any)
+	}{
+		{"silence about a verdict is refused", "missing_handler", "/definition/stages/check_first/on/needs_revision", func(w map[string]any) {
+			delete(stages(w)["check_first"].(map[string]any), "impossible_verdicts")
+		}},
+		{"a route satisfies the verdict", "", "", func(w map[string]any) {
+			// The step guarantees its report only for pass and fail, so the
+			// revision exit stops exporting one rather than promising bytes.
+			w["outputs"].(map[string]any)["report_first"].(map[string]any)["required_for"] = []any{"succeeded"}
+			first := stages(w)["check_first"].(map[string]any)
+			first["on"].(map[string]any)["needs_revision"] = "rejected_first"
+			first["impossible_verdicts"] = []any{"no_work"}
+		}},
+		{"a declaration satisfies the verdict", "", "", func(map[string]any) {}},
+		{"routed and impossible is refused", "contradictory_verdict", "/definition/stages/check_first/impossible_verdicts", func(w map[string]any) {
+			stages(w)["check_first"].(map[string]any)["on"].(map[string]any)["no_work"] = "rejected_first"
+		}},
+		{"an unknown verdict cannot be declared impossible", "schema_invalid", "", func(w map[string]any) {
+			stages(w)["check_first"].(map[string]any)["impossible_verdicts"] = []any{"skipped"}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			workflow, registry := verdictFixture(t)
+			test.edit(workflow)
+			_, err := CompileProfile(encoded(t, workflow), "json", registry, CoreProfile)
+			if test.code == "" {
+				if err != nil {
+					t.Fatalf("refused a complete graph: %v", err)
+				}
+				return
+			}
+			p := expectProblem(t, err, test.code)
+			if test.path != "" && p.Path != test.path {
+				t.Fatalf("named the wrong place: %s", p.Path)
+			}
+			if test.code == "missing_handler" && !strings.Contains(p.Message, "impossible_verdicts") {
+				t.Fatalf("did not say what to do: %s", p.Message)
+			}
+		})
+	}
+}
+
+// The completeness rule belongs to the revision that introduced the way to
+// satisfy it. Every Run is recompiled from its sealed bytes on each load, so a
+// rule applied to older revisions would refuse to resume work already accepted;
+// and a revision that cannot carry impossible_verdicts cannot be asked for it.
+func TestOlderRevisionsKeepTheRuleTheyWereSealedUnder(t *testing.T) {
+	for _, version := range []string{"1", "2", "3"} {
+		t.Run("v"+version, func(t *testing.T) {
+			workflow, registry := fixture(t)
+			workflow["schema_version"] = version
+			for _, profile := range []string{Profile, CoreProfile} {
+				if profile == Profile && version != "1" {
+					continue // v2 and v3 are core-only contracts.
+				}
+				plan, err := CompileProfile(encoded(t, workflow), "json", registry, profile)
+				if err != nil {
+					t.Fatalf("%s v%s refused a graph it sealed before: %v", profile, version, err)
+				}
+				// The gap survives into the plan and is reported when the
+				// verdict actually arrives, never by rewriting the verdict.
+				if _, err := plan.Next("check_first", "needs_revision"); expectProblem(t, err, "unhandled_verdict") == nil {
+					t.Fatalf("%s v%s lost the runtime routing error", profile, version)
+				}
+			}
+			// The declaration itself belongs to v4 alone: an older revision
+			// carrying it is refused by the contract, exactly as a binary that
+			// predates the field refuses bytes that carry it.
+			stages(workflow)["check_first"].(map[string]any)["impossible_verdicts"] = []any{"needs_revision", "no_work"}
+			_, err := CompileProfile(encoded(t, workflow), "json", registry, CoreProfile)
+			expectProblem(t, err, "schema_invalid")
+		})
+	}
+}
+
+// verdictFixture is the two-checks graph raised to the revision that requires
+// every verdict to be answered for, with the two checks declaring the verdicts
+// their step cannot return.
+func verdictFixture(t *testing.T) (map[string]any, Registry) {
+	t.Helper()
+	workflow, registry := fixture(t)
+	workflow["schema_version"] = WorkflowRevisionVerdictVersion
+	for _, id := range []string{"check_first", "check_second"} {
+		stages(workflow)[id].(map[string]any)["impossible_verdicts"] = []any{"needs_revision", "no_work"}
+	}
+	return workflow, registry
+}
+
 func TestCoreGraphAvailability(t *testing.T) {
 	for _, test := range []struct {
 		name, code string

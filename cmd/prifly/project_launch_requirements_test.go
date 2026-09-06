@@ -69,6 +69,7 @@ stages:
     step_ref: inspect
     input_bindings: {value: $inputs.value}
     on: {pass: done}
+    impossible_verdicts: [fail, needs_revision, no_work]
   done: {kind: finish, outcome: succeeded}
 `)
 	writeFixtureFile(t, root, folder+"extend.yaml", "extensions: []\n")

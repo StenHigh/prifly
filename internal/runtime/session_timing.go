@@ -33,8 +33,17 @@ type SessionDelivery struct {
 	Deadline           Observation                `json:"deadline"`
 }
 
+// timedSession reads the saved allowance, not the edition alone. The timing
+// edition was reached only by a step that declared limits, but the routed one
+// serves every assisted step, so within it the allowance is what separates a
+// declared budget from an inherited absolute deadline.
 func timedSession(a *Attempt) bool {
-	return a != nil && a.Session != nil && a.Session.SchemaVersion == AssistedSessionTimingVersion && a.Session.Timing != nil
+	return a != nil && a.Session != nil && timedEdition(a.Session.SchemaVersion) && a.Session.Timing != nil
+}
+
+// timedEdition names the assisted contracts that can carry a saved allowance.
+func timedEdition(version string) bool {
+	return version == AssistedSessionTimingVersion || version == AssistedSessionRoutedVersion
 }
 
 func sessionDelivery(a *Attempt) SessionDelivery {
@@ -150,6 +159,26 @@ func (r Run) executingAttempts() int64 {
 	return count
 }
 
+// pinnedSessionLimits reads the allowance the attempt's own pinned definition
+// declares, or nil when the step declared none or the pin cannot be read. A
+// saved session is compared against this, never against a definition on disk.
+func pinnedSessionLimits(r Run, a *Attempt) *flow.SessionLimits {
+	step := r.Steps[a.StepID]
+	if step == nil {
+		return nil
+	}
+	for _, pin := range r.Definitions {
+		if pin.Ref == step.Ref {
+			var definition flow.StepDefinition
+			if json.Unmarshal(pin.Bytes, &definition) != nil {
+				return nil
+			}
+			return definition.SessionLimits
+		}
+	}
+	return nil
+}
+
 func sessionTimingInvariant(r Run) error {
 	for _, a := range r.Attempts {
 		if a == nil || a.Session == nil {
@@ -157,24 +186,20 @@ func sessionTimingInvariant(r Run) error {
 		}
 		s := a.Session
 		if s.Timing == nil && s.SchemaVersion != AssistedSessionTimingVersion {
+			// The routed edition also serves steps that declared no limits, so
+			// a missing allowance is only a contradiction when the pinned
+			// definition declares one. Saying nothing here would let a saved
+			// session drop a declared budget back to the inherited hour.
+			if s.SchemaVersion == AssistedSessionRoutedVersion && pinnedSessionLimits(r, a) != nil {
+				return errors.New("session with declared limits saved no allowance")
+			}
 			continue
 		}
 		if !isTimingState(r.SchemaVersion) || !timedSession(a) {
 			return errors.New("session timing requires the timed state and session editions")
 		}
 		timing := s.Timing
-		step := r.Steps[a.StepID]
-		matched := false
-		if step != nil {
-			for _, pin := range r.Definitions {
-				if pin.Ref == step.Ref {
-					var definition flow.StepDefinition
-					matched = json.Unmarshal(pin.Bytes, &definition) == nil && reflect.DeepEqual(definition.SessionLimits, &timing.Limits)
-					break
-				}
-			}
-		}
-		if !matched {
+		if !reflect.DeepEqual(pinnedSessionLimits(r, a), &timing.Limits) {
 			return errors.New("session allowance differs from its pinned definition")
 		}
 		if timing.Limits.ActiveTimeoutMS < 1 || timing.Limits.ActiveTimeoutMS > flow.MaxSessionTimeoutMS || timing.RemainingMS < 1 || timing.RemainingMS > timing.Limits.ActiveTimeoutMS || s.DeliveryGeneration < 1 {

@@ -109,9 +109,13 @@ type Stage struct {
 	OnComplete         map[string]string `json:"on_complete,omitempty"`
 	OnLimit            string            `json:"on_limit,omitempty"`
 	On                 map[string]string `json:"on,omitempty"`
-	OnError            string            `json:"on_error,omitempty"`
-	Selection          string            `json:"selection,omitempty"`
-	Branches           []ChoiceBranch    `json:"branches,omitempty"`
+	// ImpossibleVerdicts names the verdicts this step cannot return at this
+	// stage. It is the author's statement, not an inference: a verdict that is
+	// neither routed nor listed here is an oversight, and sealing refuses it.
+	ImpossibleVerdicts []string       `json:"impossible_verdicts,omitempty"`
+	OnError            string         `json:"on_error,omitempty"`
+	Selection          string         `json:"selection,omitempty"`
+	Branches           []ChoiceBranch `json:"branches,omitempty"`
 	// The published contracts reuse the name "branches" for two different
 	// shapes, discriminated by kind, so a parallel stage decodes its own.
 	ParallelBranches []ParallelBranch `json:"-"`
@@ -194,6 +198,9 @@ func (s Stage) MarshalJSON() ([]byte, error) {
 	switch s.Kind {
 	case "step":
 		value["step_ref"], value["input_bindings"], value["on"] = s.StepRef, s.InputBindings, s.On
+		if len(s.ImpossibleVerdicts) != 0 {
+			value["impossible_verdicts"] = s.ImpossibleVerdicts
+		}
 		if s.OnError != "" {
 			value["on_error"] = s.OnError
 		}

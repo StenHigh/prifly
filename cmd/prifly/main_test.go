@@ -400,6 +400,7 @@ definition:
     between: {from: build, to: commit}
     step: qa
     on: {pass: commit}
+    impossible_verdicts: [fail, needs_revision, no_work]
 `
 	if err := os.WriteFile(extensionsPath, []byte(extensions), 0600); err != nil {
 		t.Fatal(err)
@@ -554,6 +555,7 @@ extensions:
     between: {from: build, to: commit}
     step: qa
     on: {pass: commit}
+    impossible_verdicts: [fail, needs_revision, no_work]
 `)
 	write(".prifly/workflows/cycle/workflow.yaml", `authoring: prifly-project-workflow/1
 package:
@@ -596,8 +598,8 @@ stages:
         predicate: {op: eq, left: $inputs.quality_enabled, right: true}
         next: build
     default: commit
-  build: {kind: step, step_ref: step_build, on: {pass: commit}}
-  commit: {kind: step, step_ref: step_commit, on: {pass: done}}
+  build: {kind: step, step_ref: step_build, on: {pass: commit}, impossible_verdicts: [fail, needs_revision, no_work]}
+  commit: {kind: step, step_ref: step_commit, on: {pass: done}, impossible_verdicts: [fail, needs_revision, no_work]}
   done: {kind: finish, outcome: succeeded}
 `)
 	var out, errout bytes.Buffer
@@ -864,7 +866,7 @@ entry: work
 limits: {max_step_instances: 1, max_control_transitions: 2}
 policy_ref: local_policy
 stages:
-  work: {kind: step, step_ref: step_work, input_bindings: {}, on: {pass: done}}
+  work: {kind: step, step_ref: step_work, input_bindings: {}, on: {pass: done}, impossible_verdicts: [fail, needs_revision, no_work]}
   done: {kind: finish, outcome: succeeded, output_bindings: {}}
 `)
 		write(".prifly/.gitignore", "local.yaml\n")
@@ -1005,7 +1007,7 @@ stages:
 		if result.Workspace.Mode == "worktree" {
 			wantRepositoryWorkspace = filepath.Join(e.Root, result.Workspace.Path)
 		}
-		if err != nil || task.SchemaVersion != prifly.AssistedSessionDecisionVersion || task.RepositoryWorkspace != wantRepositoryWorkspace || task.Workspace == task.RepositoryWorkspace {
+		if err != nil || task.SchemaVersion != prifly.AssistedSessionRoutedVersion || task.RepositoryWorkspace != wantRepositoryWorkspace || task.Workspace == task.RepositoryWorkspace {
 			t.Fatalf("project start did not stop at the workspace handoff: want_repository_workspace=%q got=%q task_schema=%q err=%v", wantRepositoryWorkspace, task.RepositoryWorkspace, task.SchemaVersion, err)
 		}
 		if _, err := os.Stat(filepath.Join(task.RepositoryWorkspace, "context")); !os.IsNotExist(err) {
@@ -1152,7 +1154,7 @@ entry: work
 limits: {max_step_instances: 1, max_control_transitions: 2}
 policy_ref: local_policy
 stages:
-  work: {kind: step, step_ref: step_work, input_bindings: {}, on: {pass: done}}
+  work: {kind: step, step_ref: step_work, input_bindings: {}, on: {pass: done}, impossible_verdicts: [fail, needs_revision, no_work]}
   done: {kind: finish, outcome: succeeded, output_bindings: {}}
 `)
 	extendPath := filepath.Join(repository, ".prifly", "workflows", "sample", "extend.yaml")
@@ -2053,7 +2055,7 @@ entry: work
 limits: {max_step_instances: 1, max_control_transitions: 2}
 policy_ref: local_policy
 stages:
-  work: {kind: step, step_ref: step_work, input_bindings: {}, on: {pass: done}}
+  work: {kind: step, step_ref: step_work, input_bindings: {}, on: {pass: done}, impossible_verdicts: [fail, needs_revision, no_work]}
   done: {kind: finish, outcome: succeeded, output_bindings: {}}
 `)
 		writeFixtureFile(t, repository, ".prifly/workflows/sample/extend.yaml", "profile: file\nextensions: []\n")
@@ -2378,6 +2380,39 @@ func TestHelpNamesTheAuthoringReferences(t *testing.T) {
 	}
 }
 
+// impossible_verdicts exists only in WorkflowRevision v4, so an insertion that
+// declares one has to raise the revision it is spliced into; otherwise the
+// spliced bytes carry a field their own contract forbids. An insertion that
+// declares nothing must leave the sealed version exactly where it was.
+func TestExtensionDeclaringImpossibleVerdictsRaisesTheRevision(t *testing.T) {
+	ref := map[string]any{"id": "test:step/extra", "version": "1.0.0", "digest": "sha256:" + strings.Repeat("0", 64)}
+	for _, test := range []struct {
+		name, want string
+		impossible []string
+	}{
+		{"declared", flow.WorkflowRevisionVerdictVersion, []string{"fail", "needs_revision", "no_work"}},
+		{"silent", "1", nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			workflow := map[string]any{"schema_version": "1", "definition": map[string]any{"stages": map[string]any{
+				"work": map[string]any{"kind": "step", "on": map[string]any{"pass": "done"}},
+				"done": map[string]any{"kind": "finish", "outcome": "succeeded"},
+			}}}
+			extension := projectWorkflowExtension{From: "work", To: "done", Step: "extra", On: map[string]string{"pass": "done"}, ImpossibleVerdicts: test.impossible}
+			if err := applyProjectExtension(workflow, extension, ref); err != nil {
+				t.Fatal(err)
+			}
+			if workflow["schema_version"] != test.want {
+				t.Fatalf("insertion sealed revision %v, expected %s", workflow["schema_version"], test.want)
+			}
+			stage := workflow["definition"].(map[string]any)["stages"].(map[string]any)["extra"].(map[string]any)
+			if _, declared := stage["impossible_verdicts"]; declared != (test.impossible != nil) {
+				t.Fatalf("the declaration did not survive the insertion: %+v", stage)
+			}
+		})
+	}
+}
+
 // An extension names components by their short folder name, while every
 // component file carries a full id inside it. Taking that id is the natural
 // guess, so the refusal lists the names that would have worked.
@@ -2504,6 +2539,36 @@ func TestRunSummaryPrintsStepVerdicts(t *testing.T) {
 	}
 	if strings.Index(text, "step:one") > strings.Index(text, "step:two") {
 		t.Fatalf("the summary printed steps in map order: %s", text)
+	}
+}
+
+// The deadline was in --json and nowhere in the text, and a reader of the text
+// wrote into a sealed summary that the state carried no deadline at all.
+func TestRunSummaryPrintsTheDeadlineOfWorkInForce(t *testing.T) {
+	var out bytes.Buffer
+	view := prifly.RunView{}
+	view.Run.ID = "run:example"
+	view.Run.Status = "running"
+	view.Run.Diagnostics = []prifly.Diagnostic{}
+	view.Run.Outputs = map[string]prifly.ArtifactRef{}
+	view.Run.Active = []string{"attempt:live", "attempt:undated"}
+	view.Run.Attempts = map[string]*prifly.Attempt{
+		"attempt:live":    {ID: "attempt:live", Status: "pending", Deadline: prifly.Observation{UTC: "2026-09-06T19:52:45.533241Z"}},
+		"attempt:undated": {ID: "attempt:undated", Status: "pending"},
+		"attempt:settled": {ID: "attempt:settled", Status: "completed", Deadline: prifly.Observation{UTC: "2026-09-06T18:52:55.274598Z"}},
+	}
+	if err := renderRun(&out, view); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, `attempt "attempt:live" deadline=2026-09-06T19:52:45.533241Z`) {
+		t.Fatalf("the text summary still hides the deadline --json shows: %s", text)
+	}
+	if strings.Contains(text, "attempt:settled") {
+		t.Fatalf("the summary dumped attempts that are no longer in force: %s", text)
+	}
+	if strings.Contains(text, "deadline=\n") || strings.Contains(text, "attempt:undated") {
+		t.Fatalf("an attempt with no deadline was given an empty one: %s", text)
 	}
 }
 

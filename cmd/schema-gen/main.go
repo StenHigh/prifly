@@ -47,6 +47,7 @@ type generator struct {
 	decisionState         bool
 	neutralStart          bool
 	timedSessions         bool
+	routedSessions        bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -150,6 +151,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.timedSessions && timedSessionField(t, field.Name) {
 						continue
 					}
+					if !g.routedSessions && routedSessionField(t, field.Name) {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -168,6 +172,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						if value == "omitempty" {
 							optional = true
 						}
+					}
+					if !g.routedSessions && routedSessionRequired(t, field.Name) {
+						optional = false
 					}
 					if !optional {
 						required = append(required, key)
@@ -261,6 +268,7 @@ var profileContracts = []struct {
 	{"decision-state", "generate decision catalog state/read version 25 contracts", func(g *generator) { g.decisionState = true }},
 	{"neutral-start", "generate optional RunBrief state/read version 26 contracts", func(g *generator) { g.neutralStart = true }},
 	{"timed-session", "generate assisted timing state/read version 27 contracts", func(g *generator) { g.timedSessions = true }},
+	{"routed-session", "generate routed assisted session state/read version 28 contracts", func(g *generator) { g.routedSessions = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -274,6 +282,7 @@ var documentContracts = []struct {
 	{"step-definition-v5", "generate StepDefinition v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV5") }},
 	{"step-definition-v6", "generate StepDefinition v6 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV6") }},
 	{"workflow-revision-v3", "generate WorkflowRevision v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV3") }},
+	{"workflow-revision-v4", "generate WorkflowRevision v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV4") }},
 	{"run-start-v2", "generate RunStart v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("RunStartV2") }},
 	{"package-manifest-v2", "generate PackageManifest v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("PackageManifestV2") }},
 	{"execution-bindings", "generate explicit execution bindings contract", func() ([]byte, error) { return prifly.PublicSchema("ExecutionBindings") }},
@@ -755,6 +764,16 @@ func main() {
 		contracts["SessionTiming"] = reflect.TypeFor[prifly.SessionTiming]()
 		contracts["SessionDelivery"] = reflect.TypeFor[prifly.SessionDelivery]()
 	}
+	if g.routedSessions {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V28"] = contracts[name+"V27"]
+			delete(contracts, name+"V27")
+		}
+		for _, name := range []string{"SessionHandoff", "SessionTask", "SessionSubmission"} {
+			contracts[name+"V7"] = contracts[name+"V6"]
+			delete(contracts, name+"V6")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -968,6 +987,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-timed-session:27"
 			bundle["title"] = "Pri-Fly timed assisted session contracts"
 			bundle["description"] = "State/read 27 preserves the remaining active work budget separately from declared decision waiting. Session 6 binds each delivery to its original envelope, decision context, generation and effective timing; legacy session 5 keeps its absolute deadline even in the same Run. Cooperative handover fences delivery through Core APIs, not the host process. Prior bundles remain unchanged."
+		}
+		if g.routedSessions {
+			routedSessionConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-routed-session:28"
+			bundle["title"] = "Pri-Fly routed assisted session contracts"
+			bundle["description"] = "State/read 28 hands every assisted step of a Run the same session 7 contract. A task names the StepResult verdicts its own node routes, so an executor no longer picks a legal verdict the graph cannot receive, and it names the deadline actually in force, whether the step declared session limits or inherited the runtime default. An absent deadline is absent rather than an empty string. Route targets, the rest of the graph and every prior bundle remain unchanged."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

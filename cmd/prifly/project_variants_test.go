@@ -99,8 +99,8 @@ stages:
         predicate: {op: eq, left: $inputs.quality_enabled, right: true}
         next: quality
     default: inspect
-  quality: {kind: step, step_ref: quality, on: {pass: inspect}}
-  inspect: {kind: step, step_ref: inspect, on: {pass: done}}
+  quality: {kind: step, step_ref: quality, on: {pass: inspect}, impossible_verdicts: [fail, needs_revision, no_work]}
+  inspect: {kind: step, step_ref: inspect, on: {pass: done}, impossible_verdicts: [fail, needs_revision, no_work]}
   done: {kind: finish, outcome: succeeded}
 `)
 	writeFixtureFile(t, repository, folder+"extend.yaml", initialExtend)
@@ -312,7 +312,7 @@ stages:
 	for _, change := range []struct{ name, extend string }{
 		{"setting", "profile: a\nsettings: {sample: {batch_limit: 2}}\nextensions: []\n"},
 		{"exclude", "profile: a\nexclude: [quality]\nextensions: []\n"},
-		{"insert", "profile: a\nextensions:\n  - id: extra-inspection\n    workflow: sample\n    between: {from: inspect, to: done}\n    step: extra\n    on: {pass: done}\n"},
+		{"insert", "profile: a\nextensions:\n  - id: extra-inspection\n    workflow: sample\n    between: {from: inspect, to: done}\n    step: extra\n    on: {pass: done}\n    impossible_verdicts: [fail, needs_revision, no_work]\n"},
 	} {
 		t.Logf("same-authority variation: %s", change.name)
 		writeFixtureFile(t, repository, folder+"extend.yaml", change.extend)

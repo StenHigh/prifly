@@ -74,7 +74,7 @@ func (b *predicateBudget) field(value any, path string) error {
 func preflightConditions(name string, value any, path string) error {
 	object, _ := value.(map[string]any)
 	switch name {
-	case "WorkflowRevision", "WorkflowRevisionV2", "WorkflowRevisionV3":
+	case "WorkflowRevision", "WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4":
 		definition, _ := object["definition"].(map[string]any)
 		stages, _ := definition["stages"].(map[string]any)
 		for _, id := range keys(stages) {

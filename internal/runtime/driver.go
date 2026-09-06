@@ -507,12 +507,18 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		if step.SessionLimits != nil {
 			version = AssistedSessionTimingVersion
 		}
+		// The routed contract is reached by the state alone: what it adds — the
+		// verdicts this node routes and the deadline in force — is owed to every
+		// assisted step, not only to one that declared its own limits.
+		if isRoutedState(r.SchemaVersion) {
+			version = AssistedSessionRoutedVersion
+		}
 		handoff = &SessionHandoff{SchemaVersion: version, PrincipalID: e.owner, SkillRefs: skills, HostState: SessionAwaiting}
-		if version == AssistedSessionDecisionVersion || version == AssistedSessionTimingVersion {
+		if version == AssistedSessionDecisionVersion || timedEdition(version) {
 			handoff.DecisionContext = decisionSessionContext(r.DecisionCatalog, r.DecisionSheet)
 			handoff.DeliveryGeneration = 1
 		}
-		if version == AssistedSessionTimingVersion {
+		if timedEdition(version) && step.SessionLimits != nil {
 			handoff.Timing = &SessionTiming{Limits: *step.SessionLimits, RemainingMS: step.SessionLimits.ActiveTimeoutMS}
 			handoff.DeliveryGeneration = 0
 		}
@@ -526,10 +532,10 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 			}
 			claim := claimBinding.Claim
 			handoff.ClaimID, handoff.ClaimGeneration = claim.ID, claim.Generation
-			if version == AssistedSessionWorkspaceVersion || version == AssistedSessionDecisionVersion || version == AssistedSessionTimingVersion {
+			if version == AssistedSessionWorkspaceVersion || version == AssistedSessionDecisionVersion || timedEdition(version) {
 				handoff.WorkspaceMode = claimMode(claim)
 			}
-			if version == AssistedSessionTreeVersion || ((version == AssistedSessionDecisionVersion || version == AssistedSessionTimingVersion) && len(step.WorkspaceTrees) != 0) {
+			if version == AssistedSessionTreeVersion || ((version == AssistedSessionDecisionVersion || timedEdition(version)) && len(step.WorkspaceTrees) != 0) {
 				handoff.WorkspaceMode = claimMode(claim)
 				trees, rollback, err := e.prepareWorkspaceTrees(r, step, inputs, claim)
 				if err != nil {

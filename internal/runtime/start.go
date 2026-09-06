@@ -526,6 +526,11 @@ func (e *Engine) Preview(options PreviewOptions) (Preview, error) {
 		version = CoreTimingPreviewVersion
 		sessionLimits = PreviewSessionLimits(p)
 	}
+	// An assisted plan previews under the routed contract because its Run will
+	// start there: every one of its handoffs names its routes and its deadline.
+	if builtins, _, err := Builtins(); err == nil && requiresSessionState(builtins, p) {
+		version = CoreRoutedPreviewVersion
+	}
 	return Preview{SchemaVersion: version, WorkflowRef: planRef(p), Profile: p.Profile, TrustProfile: "core-local/cooperative", Sequence: p.Sequence, Hooks: hooks, Limits: p.Workflow.Limits, Admission: false, Warnings: warnings, Brief: brief, Inputs: inputs, Executors: executors, CheckExecutors: checkExecutors, Validation: ValidationSummary{true, true, true, true, inputStatus, "not_admitted", "not_checked"}, EffectiveConfiguration: effective, Workflows: workflows, SessionLimits: sessionLimits}, nil
 }
 
@@ -975,6 +980,12 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 		}
 		if requiresTimingState(plan) {
 			stateVersion = CoreTimingStateVersion
+		}
+		// Routed handoffs are not an opt-in feature of the graph: an assisted
+		// step anywhere in the closure is enough, because every such step owes
+		// its host the verdicts it routes and the deadline it works under.
+		if configurations != nil && requiresSessionState(defs, plan) {
+			stateVersion = CoreRoutedStateVersion
 		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
 		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}}

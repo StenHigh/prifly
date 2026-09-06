@@ -33,7 +33,7 @@ launches:
 	workflow = strings.Replace(workflow, "  references:\n", "  references:\n    assisted: core:adapter/assisted-session@1.0.0\n    result: core:schema/step-result@1.0.0\n", 1)
 	workflow = strings.Replace(workflow, "entry: done", "entry: inspect", 1)
 	workflow = strings.Replace(workflow, "max_control_transitions: 1", "max_control_transitions: 3", 1)
-	workflow = strings.Replace(workflow, "stages:\n", "stages:\n  inspect: {kind: step, step_ref: \"{{step_inspect}}\", on: {pass: done}}\n", 1)
+	workflow = strings.Replace(workflow, "stages:\n", "stages:\n  inspect: {kind: step, step_ref: \"{{step_inspect}}\", on: {pass: done}, impossible_verdicts: [fail, needs_revision, no_work]}\n", 1)
 	writeFixtureFile(t, root, folder+"workflow.yaml", workflow)
 	writeFixtureFile(t, root, folder+"contexts/inspect.yaml", `id: test:context/inspect
 version: 1.0.0

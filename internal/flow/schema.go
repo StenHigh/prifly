@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -128,7 +129,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
 		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6",
-		"WorkflowRevisionV2", "WorkflowRevisionV3",
+		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4",
 	}
 	for name := range defs {
 		names = append(names, name)
@@ -224,6 +225,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV3":
 		extension = workflowRevisionV2Schema
+	case "WorkflowRevisionV4":
+		extension = workflowRevisionV2Schema
 	}
 	if extension != nil {
 		value, err := Parse(extension, "json")
@@ -244,8 +247,11 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		if name == "StepDefinitionV6" {
 			stepDefinitionV6(root)
 		}
-		if name == "WorkflowRevisionV3" {
+		if name == "WorkflowRevisionV3" || name == "WorkflowRevisionV4" {
 			workflowRevisionV3(root, defs)
+		}
+		if name == "WorkflowRevisionV4" {
+			workflowRevisionV4(root, defs)
 		}
 	} else if _, exists := defs[name]; !exists {
 		return nil, problem("unsupported_contract", "", "unknown protocol contract")
@@ -343,6 +349,36 @@ func workflowRevisionV3(root map[string]any, baseline map[string]any) {
 	wait := clone("WaitStage")
 	wait["properties"].(map[string]any)["cursor_input"] = map[string]any{"$ref": "#/$defs/InputBinding"}
 	defs["WaitStage"] = wait
+}
+
+// WorkflowRevision v4 adds only impossible_verdicts, and it is the version that
+// carries the completeness requirement: a v4 step stage answers for every
+// verdict its step can return. Older revisions cannot say "cannot happen here",
+// so they keep the rule they were sealed under and are still routed at run time.
+// Running the derivation on top of v3 keeps the delivered v2 and v3 bytes intact.
+func workflowRevisionV4(root map[string]any, baseline map[string]any) {
+	root["$id"] = "urn:prifly:workflow-revision:4"
+	defs := root["$defs"].(map[string]any)
+	workflow := defs["WorkflowRevisionV3"].(map[string]any)
+	delete(defs, "WorkflowRevisionV3")
+	defs["WorkflowRevisionV4"] = workflow
+	root["$ref"] = "#/$defs/WorkflowRevisionV4"
+	workflow["properties"].(map[string]any)["schema_version"].(map[string]any)["const"] = "4"
+
+	data, _ := json.Marshal(baseline["StepStage"])
+	var step map[string]any
+	_ = json.Unmarshal(data, &step)
+	verdicts := make([]any, len(StepVerdicts))
+	for i, verdict := range StepVerdicts {
+		verdicts[i] = verdict
+	}
+	step["properties"].(map[string]any)["impossible_verdicts"] = map[string]any{
+		"type": "array", "items": map[string]any{"enum": verdicts},
+		// A step stage must keep at least one route, so declaring the whole
+		// set impossible is a stage that can never be left: at most three.
+		"minItems": json.Number("1"), "maxItems": json.Number(strconv.Itoa(len(StepVerdicts) - 1)), "uniqueItems": true,
+	}
+	defs["StepStage"] = step
 }
 
 // StepDefinition v3 changes only the hook variant. Deriving it from the

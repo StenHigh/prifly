@@ -106,7 +106,7 @@ func TestTimedSessionWaitReopenAndCapacityKeepRemainingAllowance(t *testing.T) {
 		task := handOver(t, e, runID)
 		before := driverRun(t, e, runID)
 		envelope := bytes.Clone(before.Attempts[task.AttemptID].Envelope)
-		if task.Delivery == nil || task.Delivery.Generation != 1 || task.SchemaVersion != AssistedSessionTimingVersion {
+		if task.Delivery == nil || task.Delivery.Generation != 1 || task.SchemaVersion != AssistedSessionRoutedVersion {
 			t.Fatalf("initial timed delivery: %+v", task)
 		}
 		time.Sleep(10 * time.Minute)
@@ -172,7 +172,7 @@ func TestTimedSessionWaitReopenAndCapacityKeepRemainingAllowance(t *testing.T) {
 		if !bytes.Equal(envelope, current.Attempts[task.AttemptID].Envelope) || len(current.Attempts) != 1 {
 			t.Fatal("resume replaced pinned work")
 		}
-		for name, value := range map[string]any{"CoreRunStateV27": current, "SessionTaskV6": resumed} {
+		for name, value := range map[string]any{"CoreRunStateV28": current, "SessionTaskV7": resumed} {
 			if err := validatePublic(t, name, value); err != nil {
 				t.Fatal(name, err)
 			}
@@ -330,7 +330,7 @@ func TestTimedSessionExpiryAndCancellation(t *testing.T) {
 				if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "late")); err == nil {
 					t.Fatal("closed delivery accepted result")
 				}
-				if err := validatePublic(t, "CoreRunStateV27", final); err != nil {
+				if err := validatePublic(t, "CoreRunStateV28", final); err != nil {
 					t.Fatal(err)
 				}
 			})

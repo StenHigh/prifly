@@ -4,7 +4,7 @@
 # deliberately make this a reference, not an executable package: copy only
 # the pieces you need and replace refs with exact bytes from `prifly inventory`.
 authoring: prifly-workflow/1 # Required marker; this YAML is lowered before sealing.
-schema_version: "3" # Optional only when v3 sources below are used; otherwise compiler derives it.
+schema_version: "4" # Optional: the compiler derives the lowest version the source needs; impossible_verdicts below needs v4.
 id: example:workflow/full-reference # Required stable identity.
 version: 1.0.0 # Required; increase when sealed bytes change.
 title: Full workflow authoring reference # Optional: defaults to id.
@@ -83,7 +83,10 @@ stages:
         from: $inputs.request#/subject # $inputs.PORT is workflow_input; # needs a projected schema.
         projected_schema_ref: projection_schema
       fixed_mode: {from: literal, schema_ref: value_schema, value: preview} # Literal is explicit.
-    on: {pass: call_child, fail: rejected, needs_revision: rejected, no_work: rejected, skipped: rejected, waived: rejected}
+    on: {pass: call_child, fail: rejected, needs_revision: rejected, skipped: rejected, waived: rejected}
+    # Every verdict a step can return is either routed above or declared
+    # impossible here; saying nothing about one is refused when sealing.
+    impossible_verdicts: [no_work]
     compensation:
       workflow_ref: compensation_workflow
       input_bindings:

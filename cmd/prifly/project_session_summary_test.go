@@ -26,7 +26,7 @@ func TestCLIProjectSessionLimitsPrepareShowsPinnedPolicies(t *testing.T) {
 	}
 	text := strings.Replace(string(workflow), "on: {pass: done}", "on: {pass: legacy}", 1)
 	text = strings.Replace(text, "max_step_instances: 1", "max_step_instances: 2", 1)
-	text = strings.Replace(text, "stages:\n", "stages:\n  legacy: {kind: step, step_ref: \"{{step_legacy}}\", on: {pass: done}}\n", 1)
+	text = strings.Replace(text, "stages:\n", "stages:\n  legacy: {kind: step, step_ref: \"{{step_legacy}}\", on: {pass: done}, impossible_verdicts: [fail, needs_revision, no_work]}\n", 1)
 	writeFixtureFile(t, root, folder+"workflow.yaml", text)
 	prepare := func() projectLaunchSummary {
 		t.Helper()

@@ -65,6 +65,9 @@ func TestStatePredicatesFollowTheLadder(t *testing.T) {
 		{"workspaces", CoreWorkspaceStateVersion, isWorkspaceState},
 		{"workspace trees", CoreWorkspaceTreeStateVersion, isWorkspaceTreeState},
 		{"decisions", CoreDecisionStateVersion, isDecisionState},
+		{"neutral start", CoreNeutralStateVersion, isNeutralState},
+		{"timed sessions", CoreTimingStateVersion, isTimingState},
+		{"routed sessions", CoreRoutedStateVersion, isRoutedState},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			rank := stateRank(c.version)
