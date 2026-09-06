@@ -97,6 +97,12 @@ func refusalDetail(err error) string {
 func ProblemFor(err error) (Problem, int) {
 	p := Problem{"1", "invalid_input", "The command could not be applied. Check its arguments and selected files.", false, newID("correlation"), []Violation{}, []string{"doctor", "run.status"}}
 	exit := 2
+	// A caller with no error has nothing to describe. Reading the code out of a
+	// nil error crashed the process instead, so a test that stopped refusing
+	// reported a segmentation fault rather than the refusal it expected.
+	if err == nil {
+		return p, exit
+	}
 	var fp *flow.Problem
 	var rejected *local.Rejection
 	switch {

@@ -16,6 +16,7 @@ type claimRunBinding struct {
 	Claim       WorktreeClaim
 	Pin         local.ControlPin
 	runID       string
+	actor       string
 	authorityID string
 }
 
@@ -44,7 +45,7 @@ func (e *Engine) prepareClaimRunBinding(ctx context.Context, runID, claimID stri
 	if claimID != "" && selected.Generation != generation {
 		return nil, fault("claim_generation_conflict", "the requested claim generation is no longer current")
 	}
-	if err := claimAdmissibleForRun(*selected, runID, e.clock.now()); err != nil {
+	if err := claimAdmissibleForRun(*selected, runID, e.owner, e.clock.now()); err != nil {
 		return nil, err
 	}
 	if selected.RunID == "" {
@@ -64,10 +65,18 @@ func (e *Engine) prepareClaimRunBinding(ctx context.Context, runID, claimID stri
 	if !ok || !info.IsDir() || selected.Device == 0 || selected.Inode == 0 || uint64(stat.Dev) != selected.Device || stat.Ino != selected.Inode {
 		return nil, fault("claim_identity_conflict", "the claimed directory identity changed before admission")
 	}
-	return &claimRunBinding{Claim: *selected, Pin: local.ControlPin{Key: AuthorityClaimsKey, Version: version}, runID: runID, authorityID: e.Installation.ID}, nil
+	return &claimRunBinding{Claim: *selected, Pin: local.ControlPin{Key: AuthorityClaimsKey, Version: version}, runID: runID, actor: e.owner, authorityID: e.Installation.ID}, nil
 }
 
-func claimAdmissibleForRun(claim WorktreeClaim, runID string, observed Observation) error {
+// A lease bounds presence, not ownership. The same actor coming back to the Run
+// this claim is already bound to is the owner returning from a pause between its
+// steps, where there is nothing to observe: only that Run's progress is at stake,
+// and every exclusivity check above still stands.
+func claimOwnerReturned(claim WorktreeClaim, runID, actor string) bool {
+	return claim.RunID != "" && claim.RunID == runID && claim.Actor != "" && claim.Actor == actor
+}
+
+func claimAdmissibleForRun(claim WorktreeClaim, runID, actor string, observed Observation) error {
 	if claim.Status != "active" {
 		return fault("claim_state_conflict", "the claim is not active or is fenced for release")
 	}
@@ -87,8 +96,8 @@ func claimAdmissibleForRun(claim WorktreeClaim, runID string, observed Observati
 		if dueErr != nil {
 			return local.ErrIntegrity
 		}
-		if !now.Before(due) {
-			return fault("claim_owner_unproven", "the claim lease expired; an answer or free slot does not renew ownership")
+		if !now.Before(due) && !claimOwnerReturned(claim, runID, actor) {
+			return fault("claim_owner_unproven", "the claim lease expired and this admission does not prove its owner; extend it with claim heartbeat as the actor claim list names for it")
 		}
 	}
 	return nil
@@ -107,10 +116,16 @@ func (binding *claimRunBinding) mutate(snapshot local.AuthoritySnapshot, observe
 		if claim.Generation != binding.Claim.Generation || claim.RunID != binding.Claim.RunID {
 			return nil, fault("claim_generation_conflict", "claim ownership changed before admission")
 		}
-		if err := claimAdmissibleForRun(*claim, binding.runID, observed); err != nil {
+		if err := claimAdmissibleForRun(*claim, binding.runID, binding.actor, observed); err != nil {
 			return nil, err
 		}
-		claim.RunID = binding.runID
+		// Handing work to this claim is the authority observing its owner, so it
+		// renews the lease here rather than leaving a live step to outlast it.
+		now, err := time.Parse(time.RFC3339Nano, observed.UTC)
+		if err != nil {
+			return nil, local.ErrIntegrity
+		}
+		claim.RunID, claim.LeaseUntil = binding.runID, now.Add(claimLease).Format(time.RFC3339Nano)
 		return canonicalState(record)
 	}
 	return nil, fault("claim_missing", "the selected claim no longer exists")
@@ -151,7 +166,7 @@ func (e *Engine) claimReleaseAllowed(ctx context.Context, claim WorktreeClaim) e
 		return err
 	}
 	if !claimRunFinished(run) {
-		return fault("claim_run_active", "the bound Run is unfinished or uncertain; settle it before releasing its workspace")
+		return fault("claim_run_active", "the bound Run is unfinished or uncertain; finish it with run drive or end it with run cancel, then release its workspace; the lease is not read here")
 	}
 	return nil
 }

@@ -112,12 +112,19 @@ func TestMixedTimedRunKeepsLegacyDecisionVisible(t *testing.T) {
 	if err := e.Drive(ctx, runID); err != nil {
 		t.Fatal(err)
 	}
+	admitted := driverRun(t, e, runID).Attempts[task.AttemptID].Deadline
 	if _, err := e.AnswerDecision(ctx, timedAnswer(t, e, request)); err != nil {
 		t.Fatal(err)
 	}
 	resumed, err := e.SessionTask(ctx, runID, task.AttemptID)
-	if err != nil || resumed.SchemaVersion != AssistedSessionDecisionVersion || resumed.Deadline != task.Deadline || resumed.Delivery != nil || resumed.EnvelopeDigest == task.EnvelopeDigest {
+	if err != nil || resumed.SchemaVersion != AssistedSessionDecisionVersion || resumed.Delivery != nil || resumed.EnvelopeDigest == task.EnvelopeDigest {
 		t.Fatalf("answer changed the legacy timing contract: %+v %v", resumed, err)
+	}
+	// The legacy window is absolute: answering does not reopen it. Neither task
+	// carries the deadline any more, so the guarantee is read from the attempt
+	// the engine still enforces, not from a field that is empty on both sides.
+	if after := driverRun(t, e, runID).Attempts[task.AttemptID].Deadline; after != admitted {
+		t.Fatalf("answering reopened the legacy working window: %+v then %+v", admitted, after)
 	}
 	if _, err := e.SubmitSession(ctx, hostResult(t, e, resumed, "legacy work finished")); err != nil {
 		t.Fatal(err)

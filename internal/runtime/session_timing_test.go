@@ -223,19 +223,17 @@ func TestTimedSessionTwoWeekHumanWaitPreservesExactOutputAndClaimBoundary(t *tes
 					t.Fatal(err)
 				}
 				err = e.Drive(ctx, runID)
-				if effect == "workspace_write" {
-					if refusalCode(err) != "claim_owner_unproven" {
-						t.Fatalf("expired claim renewed through an answer: %v", err)
-					}
-					current := driverRun(t, e, runID)
-					claim, err := e.claim(ctx, task.ClaimID)
-					if err != nil || claim.RunID != runID || current.PendingDecision != nil || current.Attempts[task.AttemptID].Session.HostState != SessionWaitingAdmission {
-						t.Fatal("claim or accepted answer was lost", err)
-					}
-					return
-				}
 				if err != nil {
 					t.Fatal(err)
+				}
+				if effect == "workspace_write" {
+					// Two weeks of human wait outlive any lease. The boundary that
+					// holds is the binding: admitting the answered delivery renews
+					// the lease of the same actor's own Run instead of refusing it.
+					claim, err := e.claim(ctx, task.ClaimID)
+					if err != nil || claim.RunID != runID || claimPresence(claim, e.clock.now()) != "present" {
+						t.Fatalf("the returning owner lost or did not renew its claim: %+v %v", claim, err)
+					}
 				}
 				resumed, err := e.SessionTask(ctx, runID, task.AttemptID)
 				if err != nil {

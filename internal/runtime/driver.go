@@ -432,7 +432,17 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 			cfg.TimeoutMS = step.SessionLimits.ActiveTimeoutMS
 		}
 	}
-	envelope := map[string]any{"schema_version": "1", "run_id": r.ID, "authority_id": r.AuthorityID, "workflow_invocation_id": a.InvocationID, "stage_activation_id": a.ID, "step_instance_id": a.StepID, "attempt_id": attemptID, "execution_admission_id": admissionID, "admitted_run_version": v.Snapshot.Version + 1, "control_epoch": r.ControlEpoch, "workflow_ref": planRef(p), "step_ref": stage.StepRef, "policy_ref": p.Workflow.PolicyRef, "package_lock_digest": r.LockRef.Digest, "input_artifacts": inputs, "context_manifest_ref": contextArtifact.Ref(), "grant_refs": []any{}, "claims": []any{}, "budget_reservation_id": reservationID, "dispatch_not_after": now.Add(30 * time.Second).Format(time.RFC3339Nano), "attempt_deadline": now.Add(time.Duration(cfg.TimeoutMS) * time.Millisecond).Format(time.RFC3339Nano), "output_contracts": step.Outputs}
+	attemptDeadline := now.Add(time.Duration(cfg.TimeoutMS) * time.Millisecond).Format(time.RFC3339Nano)
+	dispatchNotAfter := now.Add(dispatchWindow).Format(time.RFC3339Nano)
+	if assisted {
+		// An assisted envelope is handed over inside the admission transaction
+		// itself, so no interval exists between admission and dispatch for a
+		// pickup window to bound. Declaring a shorter one states a deadline
+		// nothing ever checks; the working window is the only deadline this
+		// attempt has, and the report path enforces that one.
+		dispatchNotAfter = attemptDeadline
+	}
+	envelope := map[string]any{"schema_version": "1", "run_id": r.ID, "authority_id": r.AuthorityID, "workflow_invocation_id": a.InvocationID, "stage_activation_id": a.ID, "step_instance_id": a.StepID, "attempt_id": attemptID, "execution_admission_id": admissionID, "admitted_run_version": v.Snapshot.Version + 1, "control_epoch": r.ControlEpoch, "workflow_ref": planRef(p), "step_ref": stage.StepRef, "policy_ref": p.Workflow.PolicyRef, "package_lock_digest": r.LockRef.Digest, "input_artifacts": inputs, "context_manifest_ref": contextArtifact.Ref(), "grant_refs": []any{}, "claims": []any{}, "budget_reservation_id": reservationID, "dispatch_not_after": dispatchNotAfter, "attempt_deadline": attemptDeadline, "output_contracts": step.Outputs}
 	envelopeBytes, err := canonical(envelope)
 	if err != nil {
 		return err
@@ -579,9 +589,20 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		deadline, dispatchDeadline := created, created
 		deadline.MonotonicMS += cfg.TimeoutMS
 		dispatchDeadline.MonotonicMS += dispatchWindow.Milliseconds()
-		deadline.UTC = now.Add(time.Duration(cfg.TimeoutMS) * time.Millisecond).Format(time.RFC3339Nano)
-		dispatchDeadline.UTC = now.Add(dispatchWindow).Format(time.RFC3339Nano)
+		deadline.UTC = attemptDeadline
+		dispatchDeadline.UTC = dispatchNotAfter
 		if handoff != nil {
+			// The host's working window opens when the envelope is handed over.
+			// Canonicalizing context, materializing the workspace and claiming a
+			// worktree is the authority's time, not the host's, and the pilot
+			// measured it running 32 ms before anyone held the envelope. Only the
+			// assisted branch may move the anchor: a native attempt is dispatched
+			// later and verifyWorkspace re-reads its envelope byte for byte.
+			handed, err := sessionDeadline(obs, cfg.TimeoutMS)
+			if err != nil {
+				return local.Change{}, err
+			}
+			deadline, dispatchDeadline = handed, handed
 			handoff.Handed, handoff.DeadlineTrust = obs, obs.UTCTrust
 		}
 		r.Attempts[attemptID] = &Attempt{Session: handoff, ID: attemptID, StepID: a.StepID, ActivationID: a.ID, Status: "pending", AdmissionID: admissionID, ReservationID: reservationID, AdmittedVersion: s.Version + 1, ControlEpoch: r.ControlEpoch, Envelope: envelopeBytes, EnvelopeDigest: rawDigest(envelopeBytes), Workspace: workspace, Context: manifest, Admitted: obs, Deadline: deadline, DispatchDeadline: dispatchDeadline}

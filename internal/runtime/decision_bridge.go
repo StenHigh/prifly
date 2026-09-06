@@ -57,6 +57,13 @@ func decisionApplies(definition DecisionDefinition, profile string, records []De
 	return true
 }
 
+// packageProfileContext carries the answered package_profile decision in the
+// same map as every other answer, so a step that reads the declared answers
+// does not lose the one answer that has no destination name. A destination
+// name is a decisionID and can never contain a colon, so no package can occupy
+// or shadow this key.
+const packageProfileContext = "core:package_profile"
+
 func decisionSessionContext(catalog *DecisionCatalog, sheet *DecisionSheet) map[string]json.RawMessage {
 	if catalog == nil || sheet == nil {
 		return nil
@@ -64,10 +71,18 @@ func decisionSessionContext(catalog *DecisionCatalog, sheet *DecisionSheet) map[
 	values := map[string]json.RawMessage{}
 	for _, record := range sheet.Records {
 		definition, exists := decisionDefinition(catalog, record.DefinitionID)
-		if !exists || definition.Destination.Kind != "session_context" || !decisionApplies(definition, sheet.PackageProfile, sheet.Records) || len(record.Value) == 0 {
+		if !exists || !decisionApplies(definition, sheet.PackageProfile, sheet.Records) || len(record.Value) == 0 {
 			continue
 		}
-		values[definition.Destination.Name] = append(json.RawMessage(nil), record.Value...)
+		name := definition.Destination.Name
+		switch definition.Destination.Kind {
+		case "session_context":
+		case "package_profile":
+			name = packageProfileContext
+		default:
+			continue
+		}
+		values[name] = append(json.RawMessage(nil), record.Value...)
 	}
 	if len(values) == 0 {
 		return nil

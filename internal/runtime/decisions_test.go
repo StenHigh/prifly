@@ -91,6 +91,42 @@ func TestDecisionConditionRequiresSealedPredecessorAnswer(t *testing.T) {
 	}
 }
 
+// A profile decision has no destination name, so its answer used to reach the
+// host on the decision sheet alone. A step told to read the declared answers
+// lost the answer the owner gave.
+func TestPackageProfileAnswerIsOneOfTheDeclaredAnswers(t *testing.T) {
+	profile := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "plan_profile", Title: "Plan profile", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "fast", Title: "Fast", Value: json.RawMessage(`"fast"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "package_profile"}}
+	logging := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "logging", Title: "Logging", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "concise", Title: "Concise", Value: json.RawMessage(`"concise"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "logging"}}
+	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{profile, logging}}
+	catalogDigest, err := DecisionCatalogDigest(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileDigest, err := DecisionDefinitionDigest(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loggingDigest, err := DecisionDefinitionDigest(logging)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sheet := DecisionSheet{SchemaVersion: DecisionSheetVersion, CatalogDigest: catalogDigest, PackageProfile: "fast", ProfileSource: "actor", Records: []DecisionRecord{
+		{SchemaVersion: DecisionRecordVersion, DefinitionID: profile.ID, DefinitionDigest: profileDigest, Status: "answered", Source: "actor", Value: json.RawMessage(`"fast"`)},
+		{SchemaVersion: DecisionRecordVersion, DefinitionID: logging.ID, DefinitionDigest: loggingDigest, Status: "answered", Source: "actor", Value: json.RawMessage(`"concise"`)},
+	}}
+	e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", &catalog, &sheet)
+	task := handOver(t, e, runID)
+	if string(task.DecisionContext[packageProfileContext]) != `"fast"` || string(task.DecisionContext["logging"]) != `"concise"` {
+		t.Fatalf("the owner's profile answer is not among the declared answers: %v", task.DecisionContext)
+	}
+	if task.DecisionSheet == nil || task.DecisionSheet.PackageProfile != "fast" {
+		t.Fatalf("the profile stopped arriving on the channel packages already read: %+v", task.DecisionSheet)
+	}
+	if err := validatePublic(t, "SessionTaskV5", task); err != nil {
+		t.Fatalf("the reserved answer name broke the published task contract: %v", err)
+	}
+}
+
 func TestDecisionBridgeResumesSameAssistedAttempt(t *testing.T) {
 	preflight := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "logging", Title: "Logging", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "concise", Title: "Concise", Value: json.RawMessage(`"concise"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "logging"}}
 	runtime := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}, {ID: "no", Title: "No", Value: json.RawMessage(`false`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}

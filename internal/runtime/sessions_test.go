@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
@@ -184,6 +185,41 @@ func hostResult(t *testing.T, e *Engine, task SessionTask, summary string) Sessi
 	return SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: encoded}
 }
 
+// The pilot measured a working window that had already been running for 32 ms
+// when the envelope was handed over, and a pickup window of its own that
+// nothing checked at any later boundary.
+func TestAssistedWorkingWindowOpensAtTheHandoff(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	task := handOver(t, e, runID)
+	attempt := driverRun(t, e, runID).Attempts[task.AttemptID]
+	handed, err := time.Parse(time.RFC3339Nano, attempt.Session.Handed.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline, err := time.Parse(time.RFC3339Nano, attempt.Deadline.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deadline.Sub(handed) != time.Duration(assistedAttemptTimeoutMS)*time.Millisecond || attempt.Deadline.MonotonicMS-attempt.Session.Handed.MonotonicMS != assistedAttemptTimeoutMS {
+		t.Fatalf("preparation before the handoff was billed to the host: handed=%+v deadline=%+v", attempt.Session.Handed, attempt.Deadline)
+	}
+	if attempt.DispatchDeadline != attempt.Deadline {
+		t.Fatalf("the attempt still declares a pickup window of its own: dispatch=%+v deadline=%+v", attempt.DispatchDeadline, attempt.Deadline)
+	}
+	// The window the engine enforces is real; what a legacy task must not carry
+	// is the unqualified wall-clock copy of it.
+	if task.Deadline != "" {
+		t.Fatalf("a legacy task carries a deadline its receiver cannot check: %q", task.Deadline)
+	}
+	var envelope struct {
+		Deadline         string `json:"attempt_deadline"`
+		DispatchDeadline string `json:"dispatch_not_after"`
+	}
+	if err := json.Unmarshal(attempt.Envelope, &envelope); err != nil || envelope.DispatchDeadline != envelope.Deadline {
+		t.Fatalf("the handed envelope still declares a pickup window nothing checks: %+v %v", envelope, err)
+	}
+}
+
 func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
@@ -276,8 +312,14 @@ func TestAssistedHandoffCarriesPinnedSkillClaimAndDeadline(t *testing.T) {
 	if len(task.SkillRefs) != 1 || task.SkillRefs[0].ID != "aif:context/plan-skill" {
 		t.Fatalf("the handoff does not carry the pinned skill: %+v", task.SkillRefs)
 	}
-	if task.ClaimPath == "" || task.Deadline == "" || task.EnvelopeDigest == "" {
+	if task.ClaimPath == "" || task.EnvelopeDigest == "" {
 		t.Fatalf("the handoff omits its boundary: %+v", task)
+	}
+	// The deadline left this boundary on purpose: a session without declared
+	// limits has no deadline its receiver could check, and handing over the
+	// unqualified wall clock only looked like one.
+	if task.Deadline != "" {
+		t.Fatalf("the handoff carries a deadline its receiver cannot check: %q", task.Deadline)
 	}
 	skill, err := os.ReadFile(filepath.Join(e.Root, e.Config.Configuration.WorkspaceRoot, strings.TrimPrefix(task.AttemptID, "attempt:"), "context/skills", skillFileName(task.SkillRefs[0])))
 	if err != nil || rawDigest(skill) != task.SkillRefs[0].Digest {
@@ -741,5 +783,20 @@ func TestAcceptedVerdictIsVisibleInTheRunState(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("no step carries the verdict its result was accepted with")
+	}
+}
+
+// A deadline the receiver cannot check is worse than none. The engine marks its
+// own wall clock unqualified and measures by a monotonic reading that belongs
+// to its session, so a legacy task carried a number the executor had no way to
+// verify — and could be refused for missing it.
+func TestLegacyAssistedTaskCarriesNoUncheckableDeadline(t *testing.T) {
+	e, runID, _ := assistedWorkspaceFixture(t, "")
+	task := handOver(t, e, runID)
+	if task.Deadline != "" {
+		t.Fatalf("a legacy task still carries a deadline its receiver cannot check: %q", task.Deadline)
+	}
+	if task.Delivery != nil {
+		t.Fatalf("a legacy task carries a timed delivery: %+v", task.Delivery)
 	}
 }

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/stenhigh/prifly/internal/local"
 )
@@ -68,6 +70,90 @@ func TestClaimBindingCommitIsAtomic(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(claim.Repository.Toplevel, "README.md")); err != nil {
 		t.Fatal("refused release changed checkout files", err)
 	}
+}
+
+// An expired lease is waived for exactly one triple: this claim, bound to this
+// Run, asked for by the actor recorded on it. Every other case still stands on it.
+func TestExpiredLeaseAdmitsOnlyTheReturningOwner(t *testing.T) {
+	lapsed := WorktreeClaim{
+		Status: "active", RunID: "run:one", Actor: "local:uid:501",
+		Claimed: Observation{UTC: "2026-09-01T00:00:00Z"}, LeaseUntil: "2026-09-01T00:30:00Z",
+	}
+	observed := Observation{UTC: "2026-09-01T02:00:00Z"}
+	for _, c := range []struct {
+		name     string
+		recorded func(*WorktreeClaim)
+		runID    string
+		actor    string
+		code     string
+	}{
+		{"returning owner", func(*WorktreeClaim) {}, "run:one", "local:uid:501", ""},
+		{"unbound claim", func(c *WorktreeClaim) { c.RunID = "" }, "run:one", "local:uid:501", "claim_owner_unproven"},
+		{"another actor", func(*WorktreeClaim) {}, "run:one", "local:uid:999999", "claim_owner_unproven"},
+		{"another Run", func(*WorktreeClaim) {}, "run:two", "local:uid:501", "claim_run_conflict"},
+		{"no recorded actor", func(c *WorktreeClaim) { c.Actor = "" }, "run:one", "", "claim_owner_unproven"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			claim := lapsed
+			c.recorded(&claim)
+			err := claimAdmissibleForRun(claim, c.runID, c.actor, observed)
+			if c.code == "" {
+				if err != nil {
+					t.Fatalf("the returning owner was refused its own claim: %v", err)
+				}
+				return
+			}
+			if code := refusalCode(err); code != c.code {
+				t.Fatalf("wanted %s, got %s (%v)", c.code, code, err)
+			}
+		})
+	}
+}
+
+// The pilot's live run: three steps admitted, and between them the owner's own
+// pause outlived the lease. Nothing is observable in that pause by construction,
+// so the fourth step must still be admissible without cancelling the Run.
+func TestOwnerPauseBetweenStepsKeepsWorkspaceOwnership(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	// The pilot measured ninety minutes between two of its steps; nights are longer.
+	const ownerPause = 90 * time.Minute
+	synctest.Test(t, func(t *testing.T) {
+		ctx := context.Background()
+		e, runID, claim := assistedWorkspaceFixture(t, "checkout")
+		for step := 1; step <= 3; step++ {
+			binding, err := e.prepareClaimRunBinding(ctx, runID, claim.ID, claim.Generation)
+			if err != nil {
+				t.Fatalf("step %d was refused admission after an owner's pause: %v", step, err)
+			}
+			if err := commitClaimBinding(t, e, runID, binding, false); err != nil {
+				t.Fatalf("step %d could not commit its admission: %v", step, err)
+			}
+			admitted, err := e.claim(ctx, claim.ID)
+			if err != nil || admitted.RunID != runID || claimPresence(admitted, e.clock.now()) != "present" {
+				t.Fatalf("admission did not renew the lease of its own claim: %+v %v", admitted, err)
+			}
+			time.Sleep(ownerPause)
+			lapsed, err := e.claim(ctx, claim.ID)
+			if err != nil || claimPresence(lapsed, e.clock.now()) != "suspected" {
+				t.Fatalf("the pause did not outlive the lease, so nothing was reproduced: %+v %v", lapsed, err)
+			}
+		}
+		// The fourth admission is the real one: the Run hands its work over and
+		// finishes on the same claim, with no cancellation in between.
+		task := handOver(t, e, runID)
+		if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "fourth step after three pauses")); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.Drive(ctx, runID); err != nil {
+			t.Fatal(err)
+		}
+		final := driverRun(t, e, runID)
+		bound, err := e.claim(ctx, claim.ID)
+		if err != nil || final.Status != "completed" || bound.RunID != runID {
+			t.Fatalf("the paused Run lost its workspace or its progress: %s %+v %v", final.Status, bound, err)
+		}
+	})
 }
 
 func TestClaimReleaseFencesPreparedAdmission(t *testing.T) {

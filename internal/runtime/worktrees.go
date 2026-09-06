@@ -83,8 +83,9 @@ type WorktreeClaim struct {
 	Process    ClaimProcess `json:"process"`
 }
 
-// ClaimProcess identifies the owner beyond a PID: a reused number must not let
-// a later process inherit an earlier owner's claim.
+// ClaimProcess records which process created the claim, beyond a PID a later
+// process could reuse. It is evidence in the record, not a right: an owner's
+// next command is always a different process, so ownership is held by the actor.
 type ClaimProcess struct {
 	PID     int    `json:"pid"`
 	Session string `json:"clock_session"`
@@ -806,8 +807,9 @@ type ClaimHeartbeatRequest struct {
 	Generation int64
 }
 
-// HeartbeatClaim extends a lease from the owning process. A different process
-// cannot extend it: that would let a stranger keep a resource alive.
+// HeartbeatClaim extends a lease for the owning actor. An owner drives its Run
+// with short commands, each a new process with its own clock session, so the
+// right to extend belongs to the actor; a stranger still cannot keep it alive.
 func (e *Engine) HeartbeatClaim(ctx context.Context, c ClaimHeartbeatRequest) (WorktreeClaim, error) {
 	if e.ReadOnly {
 		return WorktreeClaim{}, local.ErrReadOnly
@@ -833,8 +835,8 @@ func (e *Engine) HeartbeatClaim(ctx context.Context, c ClaimHeartbeatRequest) (W
 			if claim.Generation != c.Generation || !claim.active() || claim.Status == "releasing" {
 				return local.AuthorityChange{}, local.Reject("claim_generation_conflict", "a newer generation owns this path")
 			}
-			if claim.Process.Session != e.clock.session {
-				return local.AuthorityChange{}, local.Reject("claim_owner_conflict", "only the owning process extends its own lease")
+			if claim.Actor != e.owner {
+				return local.AuthorityChange{}, local.Reject("claim_owner_conflict", "only the claim's own actor extends its lease; re-run claim heartbeat as the actor claim list names for it")
 			}
 			obs := e.clock.now()
 			now, err := time.Parse(time.RFC3339Nano, obs.UTC)

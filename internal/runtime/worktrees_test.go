@@ -282,10 +282,18 @@ func TestExpiredLeaseBlocksInsteadOfHandingOverOwnership(t *testing.T) {
 	if beaten.Heartbeat == nil || claimPresence(beaten, e.clock.now()) != "present" {
 		t.Fatalf("the owner could not extend its own lease: %+v", beaten)
 	}
+	// The owner's next command is a new process with a new clock session. That is
+	// the ordinary way a lease is extended from the CLI, not a stranger.
+	next := *e
+	next.clock = newClock()
+	extended, err := next.HeartbeatClaim(ctx, ClaimHeartbeatRequest{CommandID: "command:next-call", ClaimID: claim.ID, Generation: claim.Generation})
+	if err != nil || claimPresence(extended, next.clock.now()) != "present" {
+		t.Fatalf("a new call of the same owner could not extend its lease: %+v %v", extended, err)
+	}
 	stranger := *e
-	stranger.clock = newClock()
+	stranger.owner = "local:uid:999999"
 	if _, err := stranger.HeartbeatClaim(ctx, ClaimHeartbeatRequest{CommandID: "command:stranger", ClaimID: claim.ID, Generation: claim.Generation}); err == nil {
-		t.Fatal("a different process extended someone else's lease")
+		t.Fatal("a different actor extended someone else's lease")
 	} else {
 		rejectionCode(t, err, "claim_owner_conflict")
 	}

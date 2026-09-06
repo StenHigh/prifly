@@ -354,16 +354,22 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 			EnvelopeDigest: a.EnvelopeDigest, PrincipalID: a.Session.PrincipalID, SkillRefs: a.Session.SkillRefs,
 			Context: a.Context, Workspace: a.Workspace, ClaimID: a.Session.ClaimID, ClaimGeneration: a.Session.ClaimGeneration,
 			WorkspaceTrees: slices.Clone(a.Session.WorkspaceTrees), DecisionContext: cloneDecisionContext(a.Session.DecisionContext),
-			ResultSchemaRef: step.ResultSchemaRef, Deadline: a.Deadline.UTC,
+			ResultSchemaRef:  step.ResultSchemaRef,
 			PermittedEffects: []string{"write_inside_declared_output_slot"},
 		}
 		if a.Session.SchemaVersion == AssistedSessionDecisionVersion || timedSession(a) {
 			task.RunVersion = view.Snapshot.Version
 			task.DecisionBridge, task.DecisionSheet = decisionRuntimeAvailable(r.DecisionCatalog, r.DecisionSheet), r.DecisionSheet
 		}
+		// A deadline the receiver cannot check is worse than none: the wall clock
+		// this engine stamps is marked unqualified, and the monotonic reading it
+		// trusts belongs to another process's session clock. A timed session
+		// carries the whole observation in its delivery and can be checked, so
+		// it keeps the plain field too; a legacy one is told nothing rather than
+		// a number it has no way to verify.
 		if timedSession(a) {
 			delivery := sessionDelivery(a)
-			task.Delivery = &delivery
+			task.Delivery, task.Deadline = &delivery, a.Deadline.UTC
 		}
 		if step.Effects.Class == "workspace_write" {
 			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionTimingVersion {

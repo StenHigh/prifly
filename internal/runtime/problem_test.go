@@ -71,3 +71,13 @@ func refusalCode(err error) string {
 	problem, _ := ProblemFor(err)
 	return problem.Code
 }
+
+// Reading a refusal out of nothing used to crash: a caller that stopped
+// refusing got a segmentation fault instead of an answer, which hid the real
+// failure behind a panic in the reporting path.
+func TestProblemForNoErrorDoesNotCrash(t *testing.T) {
+	problem, exit := ProblemFor(nil)
+	if problem.Code != "invalid_input" || exit != 2 || problem.CorrelationID == "" {
+		t.Fatalf("a missing error did not produce the default problem: %+v %d", problem, exit)
+	}
+}
