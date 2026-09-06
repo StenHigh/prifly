@@ -2330,6 +2330,104 @@ func TestGroupRefusalsOfferExactlyTheOperationsTheGroupAccepts(t *testing.T) {
 	}
 }
 
+// A command the authority recorded and rejected exited zero and printed the
+// rejection inside its receipt, so a driver reading $? saw success. Nothing
+// read Receipt.Rejection anywhere in the CLI, across every command that returns
+// one, and the exit-codes topic had meanwhile promised that zero means the
+// command was carried out.
+func TestRecordedRejectionRefusesInsteadOfReportingSuccess(t *testing.T) {
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"init", authority}, &out, &errout); code != 0 {
+		t.Fatalf("init: %d %s", code, errout.String())
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"--json", "--project", authority, "control", "stop", "--scope", "project", "--reason", "hold the epoch"}, &out, &errout); code != 0 {
+		t.Fatalf("stop: %d %s", code, errout.String())
+	}
+	// The epoch moved with the stop above, so releasing against epoch zero is
+	// recorded and rejected rather than refused before it reaches the store.
+	out.Reset()
+	errout.Reset()
+	code := execute(context.Background(), []string{"--json", "--project", authority, "control", "release", "--scope", "project", "--expected-epoch", "0", "--stop", "bogus:1", "--reason", "stale epoch"}, &out, &errout)
+	if code == 0 {
+		t.Fatalf("a rejected command reported success: %s", out.String())
+	}
+	var problem prifly.Problem
+	if err := json.Unmarshal(errout.Bytes(), &problem); err != nil {
+		t.Fatalf("%v: %s", err, errout.String())
+	}
+	if problem.Code != "control_epoch_conflict" {
+		t.Fatalf("the refusal lost the rejection's own code: %s %s", problem.Code, problem.Message)
+	}
+	if code != 3 {
+		t.Fatalf("a state conflict exited %d, not the status its class uses", code)
+	}
+	// The command was written whether or not it was applied, so the reader can
+	// still find the record it is being told about.
+	if !strings.Contains(problem.Message, "recorded as command \"command:") {
+		t.Fatalf("the refusal does not name the receipt: %s", problem.Message)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("a refused command still printed a result: %s", out.String())
+	}
+}
+
+// A claim outlives the Run that took it and is only ended explicitly, so a
+// refusal that asks for that has to name the command: "resolve it explicitly"
+// left the reader with claim status, which does not exist, and safe next
+// actions pointed at a state diagnostic that shows no claims at all.
+func TestClaimRefusalNamesTheCommandThatEndsIt(t *testing.T) {
+	authority := t.TempDir()
+	repository := filepath.Join(t.TempDir(), "repository")
+	if err := os.MkdirAll(repository, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command("git", "init", "-q", repository).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	// A claim names a base commit, so a repository without one cannot be
+	// claimed at all.
+	commit := exec.Command("git", "-c", "user.email=test@example.invalid", "-c", "user.name=test", "commit", "-q", "--allow-empty", "-m", "base")
+	commit.Dir = repository
+	if output, err := commit.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v: %s", err, output)
+	}
+	repository, err := canonicalProjectPath(repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"init", authority}, &out, &errout); code != 0 {
+		t.Fatalf("init: %d %s", code, errout.String())
+	}
+	claim := []string{"--json", "--project", authority, "claim", "create", "--repository", repository, "--owner", "first"}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), claim, &out, &errout); code != 0 {
+		t.Fatalf("claim: %d %s", code, errout.String())
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), append(append([]string{}, claim[:len(claim)-1]...), "second"), &out, &errout); code == 0 {
+		t.Fatal("a second owner claimed the same repository")
+	}
+	var problem prifly.Problem
+	if err := json.Unmarshal(errout.Bytes(), &problem); err != nil {
+		t.Fatalf("%v: %s", err, errout.String())
+	}
+	if problem.Code != "claim_conflict" {
+		t.Fatalf("got %s: %s", problem.Code, problem.Message)
+	}
+	if !strings.Contains(problem.Message, "claim release --id CLAIM --generation N") {
+		t.Fatalf("the refusal does not name the way out: %s", problem.Message)
+	}
+	if !slices.Contains(problem.SafeNextActions, "claim.release") || slices.Contains(problem.SafeNextActions, "doctor") {
+		t.Fatalf("a claim refusal was sent to a state diagnostic: %+v", problem.SafeNextActions)
+	}
+}
+
 // A caller that must name an exact contract has to be able to read the set of
 // names, and to use the reference form its own task already carries.
 func TestSchemaListsContractsAndAcceptsDeclaredReferences(t *testing.T) {

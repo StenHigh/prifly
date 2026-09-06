@@ -323,7 +323,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			}
 		}
 	}
-	imported := false
+	importedPackage := false
 	if err := projectPackageAvailable(ctx, engine, compiled.Package); err != nil {
 		if !errors.Is(err, local.ErrNotFound) {
 			if createdClaim {
@@ -331,7 +331,15 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			}
 			return err
 		}
-		if _, err := engine.ImportPackage(ctx, prifly.PackageImportRequest{CommandID: *command + ":import", Directory: packageDirectory, Reason: "declared project launch " + *launchID}); err != nil {
+		// An import the authority records and rejects returns no error, so the
+		// launch used to walk on and refuse further down with "package not
+		// installed", naming neither the real reason nor the claim it had
+		// taken. The rejection is the reason, and it stops the launch here.
+		imported, err := engine.ImportPackage(ctx, prifly.PackageImportRequest{CommandID: *command + ":import", Directory: packageDirectory, Reason: "declared project launch " + *launchID})
+		if err == nil && imported.Receipt.Rejection != nil {
+			err = recordedRejection(imported.Receipt.Rejection, imported.Receipt.ID)
+		}
+		if err != nil {
 			if createdClaim {
 				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
 			}
@@ -339,10 +347,16 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 		// The engine holds the imported package already; closing and reopening
 		// the authority only to see it re-verified the store for nothing.
-		imported = true
+		importedPackage = true
 	}
 	workflowPath, err = projectInstalledWorkflowPath(ctx, engine, compiled.Package, workflowPath)
 	if err != nil {
+		// The three refusals above roll the claim back and this one did not, so
+		// a start that failed here left the repository claimed by a launch that
+		// never became a Run, and the next start was refused by it.
+		if createdClaim {
+			_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
+		}
 		return err
 	}
 	startOptions := prifly.StartOptions{CommandID: *command, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
@@ -355,7 +369,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	started, err := engine.Start(ctx, startOptions)
 	if err != nil {
-		if imported {
+		if importedPackage {
 			_, _ = engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: *command + ":rollback-package", ID: compiled.Package.ID, Version: compiled.Package.Version, Status: prifly.PackageRemoved, Reason: "project start did not create a Run"})
 		}
 		if createdClaim {

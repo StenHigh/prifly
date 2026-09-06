@@ -715,7 +715,7 @@ func (c *cli) action(ctx context.Context, e *prifly.Engine, args []string) error
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	case "admit":
 		command, err := prifly.ParseAdmitActionCommand(data)
 		if err != nil {
@@ -725,7 +725,7 @@ func (c *cli) action(ctx context.Context, e *prifly.Engine, args []string) error
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	default:
 		return operationError("action", args)
 	}
@@ -783,7 +783,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			return err
 		}
 		if !*drive {
-			return c.emit(commandResponse(result))
+			return c.commandResult(result)
 		}
 		if err := e.Drive(ctx, result.Receipt.RunID); err != nil {
 			return err
@@ -811,7 +811,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	}
 	if len(args) < 2 || strings.HasPrefix(args[1], "-") {
 		return usageError("An explicit run ID is required immediately after the run operation")
@@ -884,7 +884,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			if err != nil {
 				return err
 			}
-			return c.emit(commandResponse(result))
+			return c.commandResult(result)
 		case "answer":
 			decisionID := f.String("decision", "", "pending decision ID")
 			requestDigest := f.String("request-digest", "", "pending_request_digest from run decisions")
@@ -925,7 +925,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			if err != nil {
 				return err
 			}
-			return c.emit(commandResponse(result))
+			return c.commandResult(result)
 		default:
 			return usageError("run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N | answer --decision ID --request-digest DIGEST --expected-run-version N --value JSON")
 		}
@@ -1001,7 +1001,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	case "release":
 		epoch := f.Int64("expected-epoch", -1, "")
 		stops := stringsFlag{}
@@ -1031,7 +1031,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	case "waivers":
 		if err := parse(f, args[2:]); err != nil {
 			return err
@@ -1060,7 +1060,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	case "resolve":
 		attempt := f.String("attempt", "", "uncertain attempt to resolve")
 		check := f.String("check", "", "uncertain check to resolve")
@@ -1086,7 +1086,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	case "resume":
 		version := f.Int64("expected-version", -1, "")
 		if err := parse(f, args[2:]); err != nil {
@@ -1102,7 +1102,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	default:
 		// What this build does not do belongs in the help, not in the answer to a
 		// mistyped name: a reader who asked "run show" was told about automatic
@@ -1162,7 +1162,7 @@ func (c *cli) grant(ctx context.Context, e *prifly.Engine, args []string) error 
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	case "revoke":
 		if err := parse(f, args[1:]); err != nil {
 			return err
@@ -1177,7 +1177,7 @@ func (c *cli) grant(ctx context.Context, e *prifly.Engine, args []string) error 
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	}
 	return operationError("grant", args)
 }
@@ -1222,7 +1222,7 @@ func (c *cli) capacity(ctx context.Context, e *prifly.Engine, args []string) err
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	}
 	return operationError("capacity", args)
 }
@@ -1263,7 +1263,7 @@ func (c *cli) approval(ctx context.Context, e *prifly.Engine, args []string) err
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	case "request":
 		operation := f.String("operation", "", "")
 		digest := f.String("intent-digest", "", "")
@@ -1280,7 +1280,7 @@ func (c *cli) approval(ctx context.Context, e *prifly.Engine, args []string) err
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	case "decide":
 		decision := f.String("decision", "", "approve or reject")
 		if err := parse(f, args[1:]); err != nil {
@@ -1296,7 +1296,7 @@ func (c *cli) approval(ctx context.Context, e *prifly.Engine, args []string) err
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	case "revoke":
 		if err := parse(f, args[1:]); err != nil {
 			return err
@@ -1311,7 +1311,7 @@ func (c *cli) approval(ctx context.Context, e *prifly.Engine, args []string) err
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	}
 	return operationError("approval", args)
 }
@@ -1369,7 +1369,7 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	case "action":
 		file := f.String("file", "", "")
 		if err := parse(f, args[1:]); err != nil {
@@ -1390,7 +1390,7 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	case "submit":
 		file := f.String("file", "", "")
 		if err := parse(f, args[1:]); err != nil {
@@ -1407,7 +1407,7 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	case "disconnect":
 		attempt := f.String("attempt", "", "")
 		if err := parse(f, args[1:]); err != nil {
@@ -1420,7 +1420,7 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 		if err != nil {
 			return err
 		}
-		return c.emit(commandResponse(result))
+		return c.commandResult(result)
 	}
 	return operationError("session", args)
 }
@@ -1606,7 +1606,7 @@ func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) err
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	case "trust-root":
 		id := f.String("id", "", "")
 		key := f.String("public-key", "", "hex ed25519 public key")
@@ -1627,7 +1627,7 @@ func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) err
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	case "import":
 		dir := f.String("dir", "", "sealed package source directory")
 		archive := f.String("archive", "", "sealed package archive")
@@ -1654,7 +1654,7 @@ func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) err
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	}
 	return operationError("package", args)
 }
@@ -1693,7 +1693,7 @@ func (c *cli) control(ctx context.Context, e *prifly.Engine, args []string) erro
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	case "release":
 		epoch := f.Int64("expected-epoch", -1, "")
 		stops := stringsFlag{}
@@ -1726,13 +1726,37 @@ func (c *cli) control(ctx context.Context, e *prifly.Engine, args []string) erro
 		if err != nil {
 			return err
 		}
-		return c.emit(authorityResponse(result))
+		return c.authorityResult(result)
 	}
 	return operationError("control", args)
 }
 
 func authorityResponse(result local.AuthorityApplyResult) map[string]any {
 	return map[string]any{"schema_version": "foundation-control-command/1", "duplicate": result.Duplicate, "receipt": result.Receipt}
+}
+
+// A command that was recorded and rejected did not happen. Printing its receipt
+// and exiting zero said the opposite to every driver that reads $?, and the
+// exit-codes topic had promised that zero means the command was carried out.
+// The rejection keeps its own stable code, so it classifies exactly as the same
+// refusal raised any other way; the receipt is still the record of the attempt,
+// so its command id travels in the refusal instead of being lost with stdout.
+func recordedRejection(rejection *local.Rejection, receiptID string) error {
+	return local.Reject(rejection.Code, rejection.Message+"; recorded as command "+strconv.Quote(receiptID))
+}
+
+func (c *cli) commandResult(result local.ApplyResult) error {
+	if result.Receipt.Rejection != nil {
+		return recordedRejection(result.Receipt.Rejection, result.Receipt.ID)
+	}
+	return c.emit(commandResponse(result))
+}
+
+func (c *cli) authorityResult(result local.AuthorityApplyResult) error {
+	if result.Receipt.Rejection != nil {
+		return recordedRejection(result.Receipt.Rejection, result.Receipt.ID)
+	}
+	return c.emit(authorityResponse(result))
 }
 
 type stringsFlag []string
