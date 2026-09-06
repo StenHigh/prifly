@@ -150,7 +150,13 @@ func ProblemFor(err error) (Problem, int) {
 		if validProblemCode(code) {
 			p.Code = code
 			p.Message = "The selected operation was refused (" + code + "). Inspect status/doctor and the documented capability limits."
+			// The detail stays out of the message: a code raised from an
+			// executor's own output carries that output with it, and this
+			// envelope never puts foreign bytes there. But sending the reader
+			// to a state diagnostic while the answer sits in violations is the
+			// wrong direction, so the message says where it is.
 			if detail := refusalDetail(base); detail != "" {
+				p.Message = "The selected operation was refused (" + code + "); violations names the exact subject and what to change."
 				p.Violations = []Violation{{"", detail}}
 			}
 			exit = exitForCode(code)
@@ -173,6 +179,11 @@ func ProblemFor(err error) (Problem, int) {
 	if actions, ok := map[string][]string{
 		"authority_not_found": {"init", "doctor"},
 		"no_active_handoff":   {"run.explain", "run.drive"},
+		// A claim outlives the Run that took it and is only ended explicitly,
+		// so a state diagnostic never shows the way out of one.
+		"claim_conflict":       {"claim.list", "claim.release"},
+		"claim_owner_unproven": {"claim.list", "claim.release"},
+		"claim_owner_conflict": {"claim.list", "claim.release"},
 		// Nothing is wrong with the state when the call itself was mistyped, so
 		// a state diagnostic only leads away from the form that has to be fixed.
 		"invalid_usage": {"help"},

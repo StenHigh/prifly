@@ -688,7 +688,15 @@ func (e *Engine) failPreparation(ctx context.Context, loaded Run, view local.Rea
 		if err := r.failInvocation(a.InvocationID, obs); err != nil {
 			return local.Change{}, err
 		}
-		if err := recordDiagnostic(r, Diagnostic{ID: derivedID("diagnostic", r.ID, commandID, "preparation", code), RunID: r.ID, ActivationID: a.ID, Origin: "core", Severity: "error", Code: code, Category: category, Phase: "preparation", Message: "Stage binding or preparation failed without an execution admission", Observed: obs, CauseRefs: []string{}}); err != nil {
+		// One sentence for every preparation failure said only that one had
+		// happened. Where the refusal wrote its own detail — which file, which
+		// binding — that is the answer, and it is engine-authored, so it
+		// carries no foreign text into the record.
+		message := "Stage binding or preparation failed without an execution admission"
+		if detail := refusalDetail(leafError(cause)); detail != "" {
+			message = detail
+		}
+		if err := recordDiagnostic(r, Diagnostic{ID: derivedID("diagnostic", r.ID, commandID, "preparation", code), RunID: r.ID, ActivationID: a.ID, Origin: "core", Severity: "error", Code: code, Category: category, Phase: "preparation", Message: message, Observed: obs, CauseRefs: []string{}}); err != nil {
 			return local.Change{}, err
 		}
 		event, handled, err := routeKnownError(r, p, a.ID, "", code, obs)

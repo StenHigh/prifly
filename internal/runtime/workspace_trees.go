@@ -344,7 +344,11 @@ func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs m
 			if binding.Capture.Kind == "exact_file" {
 				if _, err := root.Lstat(binding.Capture.Path); !errors.Is(err, os.ErrNotExist) {
 					cleanup()
-					return nil, nil, fault("workspace_tree_output_exists", "")
+					// The path is the whole answer: a step whose output is a
+					// declared file cannot start while that file is already
+					// there, and a bare code left the reader to guess which
+					// binding and which file the run had stopped on.
+					return nil, nil, fault("workspace_tree_output_exists", binding.Capture.Path+" already exists in the workspace; this step declares it as its own output, so remove or move it before the step runs")
 				}
 			}
 		}

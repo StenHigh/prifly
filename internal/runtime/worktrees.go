@@ -214,9 +214,9 @@ func (e *Engine) ClaimWorktrees(ctx context.Context, commandID string, requests 
 				}
 				if existing.active() {
 					if claimPresence(existing, obs) == "suspected" {
-						return local.AuthorityChange{}, local.Reject("claim_owner_unproven", "an existing claim's lease expired without proof its owner stopped; resolve it explicitly")
+						return local.AuthorityChange{}, local.Reject("claim_owner_unproven", "an existing claim's lease expired without proof its owner stopped; claim list names it and claim release --id CLAIM --generation N ends it")
 					}
-					return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim")
+					return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim; a settled Run does not release it, so claim list names the holder and claim release --id CLAIM --generation N ends it")
 				}
 				if existing.Path == claim.Path && existing.Generation > generation {
 					generation = existing.Generation
@@ -344,9 +344,9 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 					// An expired lease is not proof the old owner stopped. Until
 					// that is settled the conflicting claim stays blocked rather
 					// than creating a second owner of one resource.
-					return local.AuthorityChange{}, local.Reject("claim_owner_unproven", "the existing claim's lease expired without proof its owner stopped; resolve it explicitly")
+					return local.AuthorityChange{}, local.Reject("claim_owner_unproven", "the existing claim's lease expired without proof its owner stopped; claim list names it and claim release --id CLAIM --generation N ends it")
 				}
-				return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim")
+				return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim; a settled Run does not release it, so claim list names the holder and claim release --id CLAIM --generation N ends it")
 			}
 			if existing.Path == path && existing.Generation > generation {
 				generation = existing.Generation

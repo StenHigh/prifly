@@ -419,6 +419,11 @@ func TestExistingOutputFileIsRefusedByName(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := driverRun(t, e, runID)
+	// The reader gets the path from the refusal itself: the pilot lost a Run to
+	// this and could not tell from the envelope that a file was in the way.
+	if len(r.Diagnostics) == 1 && !strings.Contains(r.Diagnostics[0].Message, "already exists in the workspace") {
+		t.Fatalf("the refusal does not name the file that blocked the step: %q", r.Diagnostics[0].Message)
+	}
 	if r.Status != "failed" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "workspace_tree_output_exists" {
 		t.Fatalf("an existing output file was not refused by name: status=%s diagnostics=%+v", r.Status, r.Diagnostics)
 	}
