@@ -146,21 +146,27 @@ runtime contract.
 
 | Уровень | Запись | Статус | Prerequisite | Следующий шаг |
 |---|---|---|---|---|
-| Highest | [`separate-work-time-from-human-wait`](../../changes/separate-work-time-from-human-wait/tasks.md): ожидание человека без расхода рабочего времени | Реализация завершена: 14/14; versioned сроки, безопасное ожидание и исключительное использование claim проверены | Существующие assisted session, decision bridge и admission queue; исключительное использование claim одним Run включено в scope | Продолжить общий candidate: полные ворота, реальные UI observations и внешний AIF gate; Release отдельно |
-| Highest | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md): универсальный Project launch | В работе: variants, no-Git managed запуск, общая анкета/review и mixed flow; 17/24 задач, текущий срез 57 тестов | Versioned Start/пакеты, существующие local-process и assisted-session | Далее: реальные UI observations и внешний AIF gate; Release отдельно |
+| Highest | [`separate-work-time-from-human-wait`](../../changes/separate-work-time-from-human-wait/tasks.md): ожидание человека без расхода рабочего времени | Реализация завершена: 14/14; versioned сроки, безопасное ожидание и исключительное использование claim проверены | Существующие assisted session, decision bridge и admission queue; исключительное использование claim одним Run включено в scope | Реализация и выпуск закрыты: срез вышел в public stable 0.10.0, требования синхронизированы в main. Открытыми остаются полные ворота, реальные UI observations и внешний AIF gate общего candidate |
+| Highest | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md): универсальный Project launch | В работе: variants, no-Git managed запуск, общая анкета/review и mixed flow; 17/24 задач, текущий срез 57 тестов | Versioned Start/пакеты, существующие local-process и assisted-session | Выпущено в public stable 0.10.0 с известным ограничением cleanup input tree. Открыто: живые UI observations (task 3.5), внешний AIF (tasks 4.1-4.4) и синхронизация документации и очереди (task 4.5). Выпуск не превращает 17/24 в 24/24 |
 | Active | `add-run-decision-catalog`: per-Run Fast/Full/Ultra и universal decision bridge | В работе | Versioned Project launch, sealed package profile и durable Run-state | Завершить typed catalog, preflight, wait/recovery и host/CLI evidence, не выдавая upstream AIF compatibility или live-pilot qualification за результат Core |
 | Active | `add-native-host-question-ux`: один конечный вопрос в Codex и Claude Code | Осталось ручное наблюдение UI | Доступ к обоим host runtimes | Закрыть task 2.3 active change без заявления product qualification |
 | High | `workspace-tree-preparation-rollback`: очистка файлов при отказе до admission | Выявлен прежний дефект: cleanup input tree использует уже закрытый os.Root | Существующие workspace tree materialization и rollback | Описать отдельный change и проверить удаление только созданных подготовкой файлов без потери файлов пользователя |
 | High | `assisted-model-profile-protocol` | Не начато | Versioned assisted-host contract | Создать OpenSpec change до заявления о provider/model/reasoning selection |
 
 На 2026-09-06 расходование рабочего срока при ожидании человека исправлено
-в новом явном контракте. Далее — общий путь запуска, а не расширение AIF или
-управление моделями. Длительное ожидание проверено отдельным runtime regression,
-короткий живой mixed Run создал отчёт; это не квалификация native UI. Детальные
-задачи и условия приёмки находятся только в linked changes. Первые два среза
-универсального запуска снимают блокеры самостоятельного использования Pri-Fly;
-после исправления ожидания общий decision UX и внешний AIF проверяются
-поверх тех же mechanisms.
+в новом явном контракте, и этот срез выпущен как public stable 0.10.0:
+нейтральный profile `/3`, запуск программ без Git и ИИ, общая анкета с просмотром
+запуска и timed `prifly-step/2` доступны из установленной программы. Выпуск не
+закрывает parent change и не отменяет его незавершённые задачи; известное
+ограничение — при отказе допуска уже после подготовки input tree созданные
+подготовкой файлы могут остаться в рабочей папке, это учтённый в очереди дефект
+`workspace-tree-preparation-rollback`. Далее — общий путь запуска, а не
+расширение AIF или управление моделями. Длительное ожидание проверено отдельным
+runtime regression, короткий живой mixed Run создал отчёт; это не квалификация
+native UI. Детальные задачи и условия приёмки находятся только в linked
+changes. Первые два среза универсального запуска снимают блокеры
+самостоятельного использования Pri-Fly; после исправления ожидания общий
+decision UX и внешний AIF проверяются поверх тех же mechanisms.
 Незакрытые ручные наблюдения двух Active changes сохраняются и получают ссылки
 на evidence, а не отметки готовности по факту нового плана. Этот порядок не
 меняет формальную последовательность P1/P2 и не удаляет future catalogue.

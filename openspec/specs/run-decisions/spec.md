@@ -79,7 +79,9 @@ Launch MUST принимать typed ответ владельца на объя
 объявленных choices или value schema при запуске, а не при запросе. Когда мост
 получает request на решение с запечатанным ответом, Run MUST применить ровно
 это значение, продолжить ту же доставку и записать источником `actor`, а не
-policy: выбор сделал человек, только раньше.
+policy. Источник `actor` MUST означать происхождение ответа, а не доказанное
+присутствие отдельного человека: при общем OS principal local owner и агент
+неотличимы.
 
 Launch под autonomous policy MUST объявлять до первого dispatch, какие
 объявленные runtime-решения, применимые к выбранному profile, эта политика
@@ -118,6 +120,25 @@ MUST означать, что ни одно применимое runtime-реш�
   choices решения
 - **THEN** launch отказывает до создания Run, а не посреди работы
 
+### Requirement: Общая анкета не подменяет runtime request
+Предзапусковая форма SHALL показывать объявленные и применимые к profile
+runtime decisions вместе с preflight, сохраняя различие фаз. Владелец MAY
+запечатать typed runtime answer заранее, но отсутствие такого ответа MUST NOT
+само по себе запрещать attended/autonomous launch: runtime request может не
+возникнуть. Для условия, зависящего от ещё неизвестного runtime value, форма
+MUST показывать условность, не угадывать значение и не обещать отсутствие
+ожидания. Необъявленные native skill questions MUST NOT считаться перехваченными
+или покрытыми анкетой.
+
+#### Scenario: Runtime вопрос не возник
+- **WHEN** владелец оставил optional runtime answer пустым, а step не поднял request
+- **THEN** workflow не останавливается ради этого вопроса и не фабрикует ответ
+
+#### Scenario: Skill задаёт неописанный вопрос
+- **WHEN** host встречает вопрос, отсутствующий в sealed catalog/bridge
+- **THEN** он сообщает ограничение и запрашивает решение, не применяет скрытый
+  ответ модели и не выдаёт этот путь за квалифицированный unattended
+
 ### Requirement: Журнал решений остаётся читаемым и отличает источник ответа
 Run MUST хранить immutable record каждого presented, answered, defaulted,
 rejected или pending decision: catalog/definition digest, stable ID, allowed
@@ -130,6 +151,18 @@ MUST NOT стать Grant, Approval или заменой ActionIntent.
 - **WHEN** он читает terminal report
 - **THEN** он видит выбранный package profile и все автоматические/ручные
   ответы с их источником, не предполагая, что они были его личным выбором
+
+### Requirement: Источник ответа не обещает разделения local owner и агента
+UI, runner и документация SHALL отличать actor/policy provenance от
+технического доказательства присутствия человека. При общем OS principal
+local-owner profile MUST NOT обещать изоляцию агентского ответа от ответа
+владельца. Scope-changing и approval-like decisions MUST NOT становиться
+ordinary ради автономного запуска; прежние admission/approval boundaries
+сохраняются. Более сильная аутентификация требует отдельного qualified contract.
+
+#### Scenario: Агент использует тот же local owner account
+- **WHEN** decision ledger называет actor
+- **THEN** интерфейс не утверждает, что это технически доказанный ответ человека
 
 ### Requirement: Universal Decision Bridge не зависит от package или skill
 Core MUST предоставлять один versioned Decision Bridge для compatible executor

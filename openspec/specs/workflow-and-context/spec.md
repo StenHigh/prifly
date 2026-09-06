@@ -182,15 +182,15 @@ join, configuration scope или security semantics. Срок MUST иметь я
 
 ### Requirement: YAML authoring имеет локальный editor contract
 Repository MUST публиковать versioned local JSON Schema documents и manifest
-для Project profiles `/2` и `/3`, workflow folder root, extension list, workflow, step и
-context YAML. Contract MUST называть document kind, version marker, known
-top-level fields и portable local schema association. Он MUST работать без
-сети, AI Factory, credentials или обязательного editor dependency.
+для поддержанных Project profiles `/2` и `/3`, workflow folder root,
+execution bindings, extension list, workflow, step и context YAML. Contract
+MUST называть kind, version marker, known fields и portable local schema
+association. Он MUST работать без сети, AI Factory, credentials или обязательного
+editor dependency, не принимать новые поля как старый contract.
 
 #### Scenario: Автор подключает local schema
 - **WHEN** автор открывает YAML source или reference в совместимом editor
-- **THEN** он может связать document с published local schema и получает
-  completion и diagnostics простых полей до compiler
+- **THEN** published local schema даёт completion и diagnostics до compiler
 
 ### Requirement: Editor metadata не меняет YAML compiler contract
 Portable editor association MUST использовать YAML comments или editor-local
@@ -212,28 +212,28 @@ MUST не объявляться semantic authority: compiler MUST продол�
   compiler contract
 
 ### Requirement: Project authoring имеет один YAML route
-Project execution profile MUST принимать `prifly-project-profile/2` и `/3`.
-Первый срез `/3` меняет compilation identity, сохраняя обязательные Git,
-host roots и RunBrief. Переход с `/2` MUST быть явной правкой shared profile,
-не побочным эффектом init/start или workflow add/update. Fresh init пока
-создаёт `/2`. Каждый declared package MUST ссылаться только на
-directory `.prifly/workflows/NAME/` с root `workflow.yaml`, а каждый Project
-launch MUST быть `workflow`, ссылающимся на такой root. Profile v1, его
-отдельные source roots, `task_recipe`, direct machine workflow и file source
+Project execution profile SHALL принимать текущий нейтральный
+`prifly-project-profile/3` и опубликованный `/2`. Каждый declared package MUST
+ссылаться только на directory `.prifly/workflows/NAME/` с root `workflow.yaml`,
+а Project launch MUST быть `workflow`, ссылающимся на такой root. Profile v1,
+его отдельные source roots, `task_recipe`, direct machine workflow и file source
 `prifly-package-source/1` MUST быть отклонены до sealing с понятной diagnostic.
-Для этих дорелизных authoring forms не создаётся compatibility или migration
-obligation.
+Для этих дорелизных forms не создаётся migration obligation. Поддержка `/2`
+MUST сохранять его опубликованный смысл; переход на `/3` MUST быть явной
+правкой shared profile, а не побочным эффектом start или workflow add/update.
 
 #### Scenario: Старый authoring source подан compiler
 - **WHEN** profile содержит v1, `task_recipe`, direct machine workflow или
   file package source
-- **THEN** Pri-Fly отказывает до создания output package, authority mutation
-  или Run
+- **THEN** Pri-Fly отказывает до output package, authority mutation или Run
 
 #### Scenario: YAML folder подан compiler
-- **WHEN** profile v2 называет допустимую workflow folder и workflow launch
-- **THEN** `project workflows` объявляет её inputs, а `project compile`
-  выпускает тот же sealed package contract
+- **WHEN** поддержанный profile называет допустимую workflow folder и launch
+- **THEN** listing объявляет inputs, а compile выпускает sealed package
+
+#### Scenario: Опубликованный Project profile используется после обновления
+- **WHEN** пользователь открывает существующий `/2` profile новым binary
+- **THEN** profile читается без неявного переписывания tracked YAML или Runs
 
 ### Requirement: Project YAML authoring имеет независимый corpus
 Repository MUST хранить author-visible positive и negative `.prifly` YAML
@@ -255,28 +255,35 @@ compile`. Corpus MUST подтверждать accepted workflow folder и от�
   Run
 
 ### Requirement: Project source компилируется из declared files
-Tracked `.prifly/` project source MUST использовать только Project execution
-profile `/2` или `/3` и declared workflow folders. Root `workflow.yaml` folder MUST
-объявлять package identity, external refs, graph и known component directories;
-compiler рекурсивно читает только YAML documents из этих declared locations.
+Tracked `.prifly/` source MUST использовать поддержанный versioned Project
+profile и declared workflow folders. Root `workflow.yaml` MUST объявлять
+авторскую package identity, external refs, graph и known component directories;
+compiler рекурсивно читает только YAML из этих declared locations.
 Placeholder MUST заменять только whole YAML scalar exact ref или explicit
-value; environment, shell, tags, anchors и prose interpolation MUST быть
-запрещены. `project compile` MUST создать sealed package без import, authority
-mutation или Run.
+value; environment, shell, tags, anchors и prose interpolation запрещены.
+`project compile` MUST создать sealed package без import, authority mutation
+или Run. В `/3` разрешение paths и compilation сами по себе MUST NOT требовать Git
+или host, если выбранный source от них не зависит.
 
 #### Scenario: Placeholder не найден
 - **WHEN** YAML ссылается на undeclared component
 - **THEN** compile отказывает без угадывания ref или изменения authority
 
+#### Scenario: Компиляция обычного сценария
+- **WHEN** profile `/3` находится в папке без Git и не читает host skills
+- **THEN** compile работает без host, не создаёт repository и не читает AI roots
+
 ### Requirement: Project context resolves the selected host skills root
-`prifly-project-profile/2` и первый срез `/3` SHALL объявлять repository-relative skills roots
-для `codex-cli`, `codex-app` и `claude-code`; compilation MUST назвать один
-из них явно. Context source MAY назвать
-regular file относительно skills root явного host compilation через YAML mapping
-`{root: host_skills, path: PATH}`. Compiler MUST отвергать неизвестный host,
-absolute path, traversal, symlink escape, отсутствующий file или source вне
-`.prifly` и declared skills root до sealing. Он MUST закреплять выбранные exact
-bytes; host identity MUST NOT менять YAML graph или давать полномочия.
+Profile `/2` SHALL сохранять объявление стандартных roots для `codex-cli`,
+`codex-app` и `claude-code`. Profile `/3` SHALL позволять отсутствие hosts или
+подмножество поддержанных hosts. Context source с
+`{root: host_skills, path: PATH}` MUST требовать явно выбранный declared host;
+компиляция `/3` без такого source MUST NOT требовать host; `/2` сохраняет
+explicit host. Host MUST NOT выводиться
+из наличия папки. Compiler MUST отвергать неизвестный host, absolute path,
+traversal, symlink escape, отсутствующий file или source вне `.prifly` и
+declared skills root до sealing. Exact bytes закрепляются; host identity
+MUST NOT сама менять YAML graph или давать полномочия.
 
 #### Scenario: Claude Code skill закрепляется
 - **WHEN** compiler получает `claude-code`, а context называет
@@ -284,25 +291,25 @@ bytes; host identity MUST NOT менять YAML graph или давать пол
 - **THEN** он закрепляет exact bytes этого файла и не читает Codex root
 
 #### Scenario: Context выходит за свой root
-- **WHEN** context source использует `..` или после разрешения находится вне
-  `.prifly` и selected host skills root
+- **WHEN** source использует `..` или выходит за `.prifly` и selected skills root
 - **THEN** compiler отказывает до output, authority mutation или Run
 
 #### Scenario: Два host используют один Project workflow
-- **WHEN** Codex CLI и Claude Code компилируют одну Project workflow folder
-- **THEN** каждый закрепляет bytes своего declared skills root без изменения
-  авторского YAML; в `/3` одинаковые bytes дают одинаковую сборку независимо
-  от host label, разные bytes дают разные compiled identities
+- **WHEN** Codex и Claude компилируют одну folder в `/3` с разными context bytes
+- **THEN** авторские package identity и YAML graph сохраняются, а exact
+  сборки различаются и могут сосуществовать в одной authority; одинаковые
+  bytes дают одинаковую сборку независимо от host label
 
 ### Requirement: Сборки одного авторского package сосуществуют
 Compiler `/3` MUST сохранять авторские IDs, но назначать package и всем owned
 components детерминированные compiled versions алгоритма b1. Build key MUST
 покрывать effective profile/values/settings/exclude/extensions, normalized
-definition closure, exact external refs, context bytes, manifest metadata и
-decision catalog. Порядок файлов и absolute source paths MUST NOT влиять на
-сборку. Version MUST использовать `0.0.0-b1.` и lower-case base32 полного
-SHA-256 без padding: package из build key, component из canonical tuple
-`[build key, kind, author ID, author version]`.
+definition closure, exact external refs, context и supporting-file bytes,
+manifest metadata и decision catalog. Порядок файлов, время сборки, absolute
+source paths и порядок установки MUST NOT влиять на сборку: повтор одинакового
+входа MUST давать одинаковые refs. Version MUST использовать `0.0.0-b1.` и
+lower-case base32 полного SHA-256 без padding: package из build key, component
+из canonical tuple `[build key, kind, author ID, author version]`.
 
 Compile и start MUST использовать один resolver и один прочитанный набор
 исходников. Owned refs MUST перепривязываться; external refs, literal values,
@@ -310,7 +317,8 @@ configuration defaults и instance data внутри schemas MUST NOT переп
 `build-provenance.json` MUST быть inert manifest file закрытого формата
 `prifly-build-provenance/1`, проверяемого по
 [schema](../../../cmd/prifly/project_build.schema.json). Он MUST связывать
-author refs с compiled exports/root и не включать собственный package digest.
+author refs с compiled exports/root и не включать собственный package digest;
+все его generated поля MUST быть детерминированы тем же входом.
 Перед выбором root CLI MUST проверять schema, полную mapping, derivation
 versions и соответствие exports. Эти сведения MUST NOT заменять trust admission.
 External consumers MUST получать exact compiled refs, не author alias latest.
@@ -333,6 +341,26 @@ External consumers MUST получать exact compiled refs, не author alias 
 #### Scenario: Изменился только вопрос или описание
 - **WHEN** author меняет только decision catalog либо manifest description
 - **THEN** `/3` получает новую identity, не заменяя прежнюю сборку
+
+### Requirement: Project объявляет локальные команды без нового исполнителя
+Project YAML SHALL описывать переносимую привязку объявленных steps/checks к
+локальным программам: логическое имя executable, argv и declared supporting
+files. Пути установленной программы и machine-specific environment MUST
+оставаться локальными; секреты MUST NOT включаться в tracked YAML или отчёт.
+Владелец MUST явно допустить binding до первого исполнения. Launch MUST
+проверять полный набор нужных bindings до dispatch и закреплять effective
+configuration для Run, не перезаписывая настройки других packages/Runs.
+Само add/compile MUST NOT исполнять команды или выдавать им полномочия.
+Работа без Git MUST использовать существующую Attempt workspace и typed
+artifacts; произвольная запись в shared directory этим не разрешается.
+
+#### Scenario: Коллега запускает общий command workflow
+- **WHEN** YAML получен вместе с проектом, а executable установлен в другом месте
+- **THEN** достаточно локальной привязки executable; graph и shared argv не меняются
+
+#### Scenario: Binding отсутствует или пытается заменить чужой
+- **WHEN** нужная программа не разрешена либо binding выходит за выбранный closure
+- **THEN** launch отказывает до исполнения и не изменяет чужую конфигурацию
 
 ### Requirement: YAML authoring явно объявляет Workspace artifact tree transform
 
@@ -489,58 +517,55 @@ stale worker result MUST not close the new activation.
 - **THEN** Run waits or follows its declared refusal path
 
 ### Requirement: Project init prepares a context-capable authority
-
-`prifly project init` MUST create its separate authority with the current Core
-context configuration required to pin selected host skills and other context
-resources. A Project launch MUST reject an older or incompatible authority
-before package registration, Workspace claim or Run creation; it MUST NOT
-silently reinterpret that authority's existing Runs. When a clone already has
-a valid tracked profile and exact host runners, init MUST create only its absent
-ignored local authority configuration; shared Project YAML and runners remain
-unchanged.
+`project init` MUST создавать отдельную authority с current Core context
+configuration для selected skills и других context resources, в том числе
+для `/3` без host. Launch MUST отвергать incompatible authority до package,
+claim или Run и не переинтерпретировать прежние Runs. Если copied/cloned
+Project уже имеет valid profile и exact runners объявленных hosts, init MUST
+создавать только отсутствующую local authority configuration без перезаписи
+shared YAML/runners. Отсутствие hosts в `/3` MUST быть допустимым состоянием.
 
 #### Scenario: Старый Core authority выбран для Project launch
-- **WHEN** declared Project launch получает authority без current context
-  configuration
-- **THEN** CLI возвращает stable incompatibility diagnostic без package, claim
-  или Run
+- **WHEN** authority не имеет required current context configuration
+- **THEN** CLI возвращает incompatibility diagnostic без package, claim или Run
 
 #### Scenario: Clone получает свою authority
-- **WHEN** tracked Project profile and host runners are already present, but the
-  machine-local configuration is absent
-- **THEN** `project init` creates the local authority configuration without
-  replacing the profile or runners
+- **WHEN** valid profile и declared runners есть, а local configuration отсутствует
+- **THEN** init создаёт только local configuration
+
+#### Scenario: Project без host позже получает mixed workflow
+- **WHEN** authority создана нейтральным init без hosts
+- **THEN** она уже поддерживает current context pinning без пересоздания history
 
 ### Requirement: Project launch является единственной исполнимой точкой входа
-
-Public Project launch MUST принимать exact ID объявленного `workflow` launch,
-explicit host и typed значения только его объявленных input ports. Он MUST
-compile, seal и зарегистрировать exact package before creating Run; source YAML,
-host skill bytes и effective inputs MUST become pinned Run inputs. Launch MUST
-not выбирать сценарий по тексту задачи, default launch или наличию файлов.
-Interactive project host MUST require an explicit `worktree` or `checkout`
-selection before it invokes the launch; absence of that answer is a wait, not
-a fallback to a different Workspace. A non-interactive CLI invocation MAY use
-the declared command default. Запуск Project workflow не запускает
-model/provider и не даёт host новых полномочий: assisted handoff остаётся
-отдельным existing contract.
+Public Project launch MUST принимать exact ID объявленного workflow launch и
+typed значения его inputs, compile/seal/register exact package до Run и
+закреплять выбранные source/context bytes и inputs. Launch MUST NOT выбирать
+сценарий по тексту задачи, default launch или наличию файлов.
+Для `/3` host, Git Workspace и RunBrief MUST требоваться только по объявленному
+контракту выбранного сценария. Обычный command launch MUST обходиться без них.
+Interactive host MUST получить explicit `worktree` или `checkout` до запуска
+работы, требующей Git Workspace; отсутствие ответа означает ожидание.
+Без такой работы вопрос и claim MUST отсутствовать. CLI `/3` MUST требовать
+явный workspace mode для Git-записи; default `/2` сохраняется для совместимости.
+Запуск MUST NOT неявно запускать model/provider или расширять права host.
 
 #### Scenario: Объявленный launch запускается
-- **WHEN** пользователь называет существующий launch, declared host и все
-  required inputs
-- **THEN** система создаёт Run только из sealed revision этого launch и
-  возвращает его identity вместе с выбранным workspace
+- **WHEN** пользователь назвал launch, required inputs и нужные ему ресурсы
+- **THEN** Run использует только sealed revision этого launch и сообщает
+  выбранный Workspace, если он требуется
 
 #### Scenario: Launch не объявлен
 - **WHEN** пользователь называет отсутствующий или не-workflow launch
-- **THEN** система отказывает до compilation, package registration, claim или
-  Run creation
+- **THEN** система отказывает до compilation, registration, claim или Run
 
 #### Scenario: Host не получил выбор Workspace
-- **WHEN** пользователь выбрал launch в диалоге, но не назвал worktree или
-  checkout
-- **THEN** host задаёт этот единственный вопрос и не создаёт package, claim или
-  Run до ответа
+- **WHEN** launch требует Git-запись, а worktree/checkout не выбран
+- **THEN** host спрашивает и не создаёт package, claim или Run до ответа
+
+#### Scenario: Обычная папка содержит command workflow
+- **WHEN** launch `/3` не требует Git или assisted execution
+- **THEN** он исполняется без host, Git claim и фиктивного RunBrief
 
 ### Requirement: Project YAML объявляет решения без скрытого control flow
 Project workflow authoring source MUST поддерживать один декларативный каталог
@@ -669,32 +694,30 @@ origin не подлежит `update`.
 - **THEN** чтение профиля отказывает с понятной diagnostic
 
 ### Requirement: Update сохраняет exact identity и правки команды
-`prifly project workflows update NAME` MUST требовать записанный origin,
-пересчитать digest текущей папки без `extend.yaml` и при расхождении
-отказать с перечнем изменённых путей, ничего не перезаписывая. Если удалённый
-commit для ref не изменился и digest совпадает, команда MUST завершиться
-успешным read-only результатом. Иначе она MUST получить новую папку по тому
-же `path`, проверить её как при установке, перенести локальный `extend.yaml`
-byte-for-byte, атомарно заменить папку и обновить `origin`. Результат MUST
-сообщать, изменился ли upstream `extend.yaml` и остался ли `package.version`
-прежним. Sealed packages, locks, Runs и evidence в authority MUST NOT
-меняться. `/3` MUST создавать новую exact сборку при изменении исходников
-с прежней авторской версией. `/2` MUST сохранять legacy identity conflict и
-объяснять явный переход на `/3`; подмена уже sealed identity MUST оставаться
-отказом в обоих путях, а не тихой заменой.
+`project workflows update NAME` MUST требовать origin, пересчитать digest
+folder без `extend.yaml` и при расхождении отказать с изменёнными paths без
+перезаписи. Неизменный remote commit при совпадающем digest MUST давать read-only
+успех. Иначе команда MUST получить новую folder по тому же path, проверить её
+как при add, перенести локальный `extend.yaml` byte-for-byte, атомарно заменить
+folder и origin. Результат MUST сообщать изменение upstream `extend.yaml` и
+сохранение авторской `package.version`. Sealed packages, locks, Runs и evidence
+MUST NOT меняться. В `/3` новые source bytes при прежней авторской версии MUST
+давать новую exact сборку. `/2` сохраняет legacy identity conflict и явное
+сообщение о необходимости миграции для вариантов. Подмена bytes уже sealed
+identity MUST оставаться отказом в обоих путях, а не тихой заменой.
 
 #### Scenario: Папка изменена локально
-- **WHEN** digest установленной папки без `extend.yaml` отличается от origin
-- **THEN** `update` отказывает, перечисляет изменённые пути и не трогает файлы
+- **WHEN** digest folder без `extend.yaml` отличается от origin
+- **THEN** update перечисляет изменённые paths и ничего не переписывает
 
 #### Scenario: Удалённый commit не изменился
 - **WHEN** ref указывает на тот же commit, а digest совпадает
-- **THEN** `update` сообщает актуальность и ничего не записывает
+- **THEN** update сообщает актуальность и ничего не записывает
 
 #### Scenario: Upstream не поднял версию package
-- **WHEN** новая папка отличается по bytes, но `package.version` тот же
-- **THEN** `update` применяет папку и объясняет: `/3` создаст отдельную сборку,
-  а `/2` столкнётся с конфликтом, если прежняя identity уже установлена
+- **WHEN** новая folder отличается bytes, но авторская `package.version` та же
+- **THEN** update явно сообщает этот факт; `/3` создаст другую exact сборку,
+  а `/2` предупреждает о конфликте при существующей sealed identity
 
 ### Requirement: Remove убирает folder из tracked profile, а не из authority
 `prifly project workflows remove NAME` MUST удалить `.prifly/workflows/NAME`,

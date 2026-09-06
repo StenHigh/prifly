@@ -93,8 +93,8 @@ prifly project workflows --repository . --json
 нужны сами по себе. `init` не создаёт Git или AI folders; история хранится
 отдельно, а machine-local пути — в ignored `.prifly/local.yaml`.
 
-Путь `/3`, описанный здесь, относится к текущим исходникам. До включения этих
-изменений в Release используйте binary, собранный из этого checkout.
+Путь `/3`, описанный здесь, доступен в public stable release начиная с 0.10.0:
+собирать binary из checkout ради него не нужно.
 
 Первый пример без ИИ — [CSV → проверка → отчёт](examples/workflows/csv-report/README.md).
 Он показывает готовый YAML, настройку установленного Node.js и фактический

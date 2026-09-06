@@ -97,7 +97,8 @@ WorkflowRevision и не меняет уже начатый Run.
 
 Предмет работы, ожидаемый результат, границы, критерии завершения и исходные материалы, сформулированные владельцем. Это собственное понятие Pri-Fly; не prompt модели, не workflow и не разрешение на любые действия. Go-имя сейчас `runtime.Brief`; подтверждение локального владельца в F1 не объявляется независимым многосторонним Approval.
 
-Start `/2` и state/read `/26` допускают отсутствие отдельного RunBrief:
+Start `/2` и state/read `/26` — как и наследующая эту границу `/27` —
+допускают отсутствие отдельного RunBrief:
 обычный файловый workflow получает только объявленные typed inputs. Если
 RunBrief нужен workflow как input, действует его schema и requiredness, а не
 особое имя порта. Прежний Start `/1` и старые сохранённые state/read contracts
@@ -213,6 +214,20 @@ Launcher
 каталог процесса проекта, не adapter внешней системы, не пакетный plugin и не
 разрешение начать незакреплённый workflow.
 
+<a id="project-result"></a>
+### Project compile result / Project start result — Типизированные итоги компиляции и запуска
+
+Объявленные JSON-итоги двух Project команд. Для profile `/3` compile выдаёт
+`project-compile/2`, а start — `project-start/3`; оба несут `author_package`
+с авторскими `id`/`version`, `build_key` и exact compiled ref в `package`,
+поэтому потребитель отличает редактируемый источник от одной сборки. Итог
+start дополнительно сохраняет Run, Workspace, применимый DecisionSheet,
+autonomy summary и `launch_summary` — тот самый проверенный обзор, по которому
+запуск был подтверждён. Legacy profile `/2` сохраняет `project-compile/1` и
+`project-start/1` либо `/2` с прежними полями: новые поля не дописываются в
+старую версию ответа. Версия ответа описывает форму итога, а не версию shared
+`project.yaml`.
+
 <a id="workflow-repository"></a>
 ### Workflow repository — Репозиторий сценариев
 
@@ -280,6 +295,31 @@ Run. **DecisionDefinition** задаёт stable ID, typed values или schema,
 capability или permission. Каталог не извлекается из prose skill и не является
 Approval, Grant, ActionIntent либо DecisionArtifact. Точные правила — в
 [каталоге решений Run](../run-decisions/spec.md).
+
+<a id="project-questionnaire"></a>
+### Project questionnaire / Launch summary — Анкета запуска и проверенный обзор
+
+**Анкета** (`project-questionnaire/3`) — read-only представление объявленных
+решений выбранного сценария до первого эффекта: она читает profile и catalog,
+но не импортирует package, не заявляет Workspace и не создаёт Run. `preflight`
+и `runtime` перечисляют только применимые к выбранному package profile
+решения, а полный список с применимостью, фактом ответа и причиной ожидания
+даёт `decision_states`: неизвестная применимость остаётся условной, а не
+false. `known_questions_only` говорит лишь, что перечислены объявленные
+вопросы, и не обещает, что Run больше нигде не остановится.
+`project_profile_version` называет версию shared `project.yaml` (`/3` против
+legacy `/2`); версию самого ответа для этого не используют. Анкета не является
+DecisionSheet: до Start её условия и ответы пересчитываются.
+
+**Launch summary** (`project-launch-summary/2`, исторически `/1`) — отдельное
+представление той же границы: `project questionnaire --prepare` с аргументами
+будущего start возвращает exact package, входы, требования, программы и
+объявленные SessionLimits, ничего не исполняя и не импортируя. Его
+`review_digest` передаётся в `project start --expected-launch-digest`, где
+расхождение отклоняет запуск до создания Run. Это optimistic проверка
+совпадения, не Approval, не permission и не доказательство, что ответ дал
+отдельный человек. Legacy profile `/2` такого обзора не имеет: `--prepare` и
+`--expected-launch-digest` требуют явного перехода профиля на `/3`.
 
 <a id="decision-sheet"></a>
 ### DecisionSheet — Лист предзапусковых решений
@@ -624,6 +664,12 @@ archive digest, manifest bytes и signature остаются тремя разн
 
 **PackageComponent** — объявленный экспорт пакета, разрешаемый как обычная запись реестра по exact ref. Его bytes проверяются по digest при каждом разрешении, поэтому изменённый после импорта файл перестаёт разрешаться, а не подменяет закреплённое содержимое. Компоненты, расширяющие policy, trust или исполнение (`policy`, `tool`, `adapter`, `redaction_profile`), в этой поставке отклоняются.
 
+**PackageManifest `/2`** — версия манифеста, которую compilation выбирает
+только для пакета с собственным owned check: `schema_version: "2"` добавляет
+в перечень component kinds `check` и ничего больше. Пакет без таких
+компонентов сохраняет `/1`; опубликованный `/1` этим не расширяется, поэтому
+reader без `/2` отказывает новому манифесту, а не читает его как прежний.
+
 **TrustDecision** — записанное authority решение принять exact manifest digest, связанное с ControlIntent операции `package.trust` и committed ControlAdmission. Та же пара id/version с другими bytes является конфликтом, а не обновлением: прежнее решение не наследуется. Локальное решение владельца не является внешней подписью или provenance-доказательством; `origin.location` — заявление импортирующего, а не проверенный факт.
 
 <a id="worktree-claim"></a>
@@ -694,6 +740,11 @@ effect сохраняет `uncertain`; effects:none без иных обязат
 
 <a id="session-timing"></a>
 ### SessionTiming / SessionDelivery — Учёт времени и текущая доставка
+
+Состояние `core-state/27` / `core-read/27` — граница, на которой Run отличает
+активную работу от объявленного ожидания. Сохранённые `/26` и более ранние
+Runs не переписываются, а legacy assisted шаг внутри `/27` сохраняет
+`assisted-session/5` и прежний абсолютный срок.
 
 SessionTiming в SessionHandoff `/6` хранит закреплённые limits, `remaining_ms`,
 последнюю `observed`, optional `wait_deadline` и факт `slot_held`. Это не CPU

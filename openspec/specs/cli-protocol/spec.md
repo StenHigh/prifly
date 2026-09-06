@@ -19,31 +19,42 @@ properties и не является обязательным.
 - **THEN** authority не принимает mutation
 
 ### Requirement: Project entry points select their host mechanically
-`prifly project init` SHALL записывать fixed repository-relative skills roots
-для `codex-cli`, `codex-app` и `claude-code` и создавать один `prifly-run`
-entry point внутри каждой соответствующей host directory. Каждый entry point
-SHALL вызывать Project compilation со своим host identity. Public compile
-command MUST требовать host identity и MUST NOT выводить его из существующих
-directory. Fresh init MUST отвергать unsafe root или existing runner, не
-перезаписывая runner или profile. Для valid tracked profile после clone init
-MUST проверить exact runners и создать только отсутствующий ignored `local.yaml`;
-он не переписывает shared profile или runner. Эти entry points поддерживают
-Codex CLI, Codex app и Claude Code, не делая ни один из них Core dependency.
+`project init` SHALL создавать нейтральный profile `/3` в обычной папке без
+обязательного Git и без AI skills. Host entry points SHALL добавляться только
+явно выбранным поддержанным hosts; каждый передаёт свой identity, не угадывает
+его по directory. Compile `/3` MUST требовать host лишь при чтении host-bound
+source; `/2` сохраняет explicit host. Fresh init MUST отвергать unsafe root или конфликт runner без
+перезаписи. Для valid existing profile после clone/copy init MUST создавать
+только отсутствующую local configuration, сохраняя shared YAML и exact runners.
+Чтение `/2` и распознавание опубликованных frozen runners MUST сохраняться.
 
 #### Scenario: Claude Code запускает общий проект
-- **WHEN** developer вызывает `prifly-run` из `.claude/skills`
-- **THEN** он компилирует с host `claude-code` и никогда не читает Codex skills
-  root
+- **WHEN** developer вызывает установленный `.claude/skills/prifly-run`
+- **THEN** он передаёт `claude-code` и не читает Codex root
 
 #### Scenario: Existing host runner останавливает init
-- **WHEN** любой из трёх путей runner уже существует
-- **THEN** fresh init возвращает safe diagnostic и не создаёт profile или другой runner
+- **WHEN** создание выбранного runner конфликтует с существующим файлом
+- **THEN** init возвращает diagnostic без частичной перезаписи profile/runners
 
 #### Scenario: Clone получает только local authority configuration
-- **WHEN** repository уже содержит valid tracked Project profile и exact runners,
-  но не содержит ignored `.prifly/local.yaml`
-- **THEN** init создаёт только эту local configuration и не меняет shared YAML
-  или host runners
+- **WHEN** shared profile и его runners уже есть, а local configuration отсутствует
+- **THEN** init создаёт только machine-local configuration
+
+#### Scenario: Пользователь не использует ИИ
+- **WHEN** init выполняется без host в папке без `.git`
+- **THEN** Project готов к managed workflow, AI directories и Git не создаются
+
+### Requirement: Общий runner не содержит правил отраслевого процесса
+Текущий `prifly-run` SHALL исполнять только общий protocol выбранного launch:
+объявленные inputs, ready tasks, effects, typed decisions, control и outputs.
+Он MUST NOT добавлять improve/review/fix, число рецензентов, обязательный commit
+или правило завершения отраслевого цикла. Такие правила MUST принадлежать
+workflow package. Frozen исторические templates остаются только для exact
+recognition и безопасного upgrade, не как default инструкции нового runner.
+
+#### Scenario: Package использует один шаг без planning/review
+- **WHEN** host запускает такой package
+- **THEN** runner не добавляет рецензента, цикл улучшений или commit
 
 ### Requirement: Project результат различает авторскую версию и сборку
 При compilation profile `/3` CLI MUST выдавать `project-compile/2`, а при
@@ -500,22 +511,28 @@ states this boundary explicitly.
 - **THEN** report does not claim remote effect was executed or authorized
 
 ### Requirement: CLI запускает declared Project workflow с explicit workspace mode
-
-CLI MUST provide one typed `project start` command for a declared Project
-launch. It MUST require repository, launch ID, host and RunBrief/input sources;
-it MUST accept only `worktree` and `checkout` as workspace mode. When invoked
-without an interactive host, omitted mode MUST default to `worktree`. Invalid
-launch, host, input, repository identity or workspace mode MUST return a stable
-diagnostic without partial package registration, claim or Run. The response
-MUST name Run and selected Workspace identities.
+CLI SHALL предоставлять один `project start` для declared launch. В profile
+`/3` путь проекта MUST не подразумевать Git; нужны только declared typed inputs,
+а RunBrief MUST требоваться лишь как объявленный вход. Host MUST требоваться
+для assisted launch/host-bound source, Git — для заявленной Git Workspace.
+Без Git работы workspace mode MUST не запрашиваться; её результат MUST
+явно отличаться от worktree/checkout. При Git-записи `/3` MUST требовать explicit
+`worktree` или `checkout`, без неявного изменения текущего checkout. `/2` MUST
+сохранять прежний default `worktree`. Invalid launch, host, inputs, bindings и
+workspace MUST давать stable diagnostic до registration, claim или Run.
+Ответ MUST называть Run и фактически используемые ресурсы без фиктивного claim.
 
 #### Scenario: CLI starts default isolated workspace
-- **WHEN** user starts a valid Project launch without workspace flag
-- **THEN** response reports an isolated worktree Workspace and its Run identity
+- **WHEN** пользователь запускает valid `/2` launch без workspace flag
+- **THEN** результат сообщает isolated worktree и Run identity
 
 #### Scenario: CLI rejects an unknown workspace mode
-- **WHEN** user passes a workspace mode other than `worktree` or `checkout`
-- **THEN** CLI returns `invalid_usage` and creates no package, claim or Run
+- **WHEN** пользователь передаёт несуществующий workspace mode
+- **THEN** CLI возвращает typed отказ без package, claim или Run
+
+#### Scenario: Managed launch имеет только файловый вход
+- **WHEN** `/3` launch получает declared input file и разрешённые executable bindings
+- **THEN** он возвращает Run без требования host, brief или Git
 
 ### Requirement: Assisted handoff сообщает versioned declared Workspace tree bindings
 
@@ -767,6 +784,21 @@ storage напрямую MUST NOT быть единственным способ
 - **WHEN** результат шага принят
 - **THEN** verdict читается из обычной сводки Run, без machine-readable флага
   и без чтения authority storage
+
+### Requirement: Анкета объясняет запуск до первого эффекта
+`project questionnaire` SHALL давать read-only представление selected profile,
+applicable preflight и runtime decisions, typed предответов и политики участия.
+Он MUST показывать причины потенциального ожидания до первого dispatch, не
+извлекать вопросы из текста skills и не объявлять все runtime decisions
+обязательными. CLI и host MUST использовать одну validation и проверку stale
+catalog. Изменение исходников или ответов MUST требовать пересчёта итогов до
+исполнения. Final launch result сохраняет ledger и known unanswered summary.
+
+#### Scenario: Пользователь собирается отойти
+- **WHEN** он готовит autonomous launch с applicable runtime-решением без
+  разрешённого automatic selection
+- **THEN** до запуска он видит вопрос, возможность предответа и причину
+  возможного ожидания; сама анкета не создаёт package, claim, Run или worker
 
 ### Requirement: CLI предоставляет явную резолюцию uncertain obligation
 

@@ -1,16 +1,14 @@
 ## MODIFIED Requirements
 
 ### Requirement: Project entry points select their host mechanically
-`prifly project init` SHALL записывать fixed repository-relative skills roots
-для `codex-cli`, `codex-app` и `claude-code` и создавать один `prifly-run`
-entry point внутри каждой соответствующей host directory. Каждый entry point
-SHALL вызывать Project compilation со своим host identity. Public compile
-command MUST требовать host identity и MUST NOT выводить его из существующих
-directory. Fresh init MUST отвергать unsafe root или existing runner, не
-перезаписывая runner или profile. Для valid tracked profile после clone init
-MUST проверить exact runners и создать только отсутствующий ignored `local.yaml`;
-он не переписывает shared profile или runner. Эти entry points поддерживают
-Codex CLI, Codex app и Claude Code, не делая ни один из них Core dependency.
+`project init` SHALL создавать нейтральный profile `/3` в обычной папке без
+обязательного Git и без AI skills. Host entry points SHALL добавляться только
+явно выбранным поддержанным hosts; каждый передаёт свой identity, не угадывает
+его по directory. Compile `/3` MUST требовать host лишь при чтении host-bound
+source; `/2` сохраняет explicit host. Fresh init MUST отвергать unsafe root или конфликт runner без
+перезаписи. Для valid existing profile после clone/copy init MUST создавать
+только отсутствующую local configuration, сохраняя shared YAML и exact runners.
+Чтение `/2` и распознавание опубликованных frozen runners MUST сохраняться.
 
 Для конечного developer decision entry point MUST использовать нативный
 question tool своего host, когда этот tool предоставлен runtime: Codex runner
@@ -26,9 +24,8 @@ MUST NOT начинать mutation. Existing tracked runner остаётся rev
 commit.
 
 #### Scenario: Claude Code запускает общий проект
-- **WHEN** developer вызывает `prifly-run` из `.claude/skills`
-- **THEN** он компилирует с host `claude-code` и никогда не читает Codex skills
-  root
+- **WHEN** developer вызывает установленный `.claude/skills/prifly-run`
+- **THEN** он передаёт `claude-code` и не читает Codex root
 
 #### Scenario: Codex показывает конечный выбор нативно
 - **WHEN** Codex runner получил несколько допустимых launch или Workspace
@@ -43,11 +40,13 @@ commit.
   или не меняет authority до ответа
 
 #### Scenario: Existing host runner останавливает init
-- **WHEN** любой из трёх путей runner уже существует
-- **THEN** fresh init возвращает safe diagnostic и не создаёт profile или другой runner
+- **WHEN** создание выбранного runner конфликтует с существующим файлом
+- **THEN** init возвращает diagnostic без частичной перезаписи profile/runners
 
 #### Scenario: Clone получает только local authority configuration
-- **WHEN** repository уже содержит valid tracked Project profile и exact runners,
-  но не содержит ignored `.prifly/local.yaml`
-- **THEN** init создаёт только эту local configuration и не меняет shared YAML
-  или host runners
+- **WHEN** shared profile и его runners уже есть, а local configuration отсутствует
+- **THEN** init создаёт только machine-local configuration
+
+#### Scenario: Пользователь не использует ИИ
+- **WHEN** init выполняется без host в папке без `.git`
+- **THEN** Project готов к managed workflow, AI directories и Git не создаются

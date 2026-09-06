@@ -79,7 +79,8 @@ MUST NOT сама менять YAML graph или давать полномочи
 #### Scenario: Два host используют один Project workflow
 - **WHEN** Codex и Claude компилируют одну folder в `/3` с разными context bytes
 - **THEN** авторские package identity и YAML graph сохраняются, а exact
-  сборки различаются и могут сосуществовать в одной authority
+  сборки различаются и могут сосуществовать в одной authority; одинаковые
+  bytes дают одинаковую сборку независимо от host label
 
 ### Requirement: Project launch является единственной исполнимой точкой входа
 Public Project launch MUST принимать exact ID объявленного workflow launch и
@@ -143,7 +144,7 @@ folder и origin. Результат MUST сообщать изменение up
 MUST NOT меняться. В `/3` новые source bytes при прежней авторской версии MUST
 давать новую exact сборку. `/2` сохраняет legacy identity conflict и явное
 сообщение о необходимости миграции для вариантов. Подмена bytes уже sealed
-identity MUST оставаться отказом в обоих путях.
+identity MUST оставаться отказом в обоих путях, а не тихой заменой.
 
 #### Scenario: Папка изменена локально
 - **WHEN** digest folder без `extend.yaml` отличается от origin
@@ -161,39 +162,46 @@ identity MUST оставаться отказом в обоих путях.
 ## ADDED Requirements
 
 ### Requirement: Сборки одного авторского package сосуществуют
-Compiler `/3` SHALL детерминированно различать авторскую identity и identity exact
-сборки для package и всего принадлежащего ему closure. Profile, effective
-settings/exclude/extensions, explicit values, source/context/supporting-file
-bytes, manifest metadata, decision catalog и external exact refs MUST участвовать
-в определении сборки. Все поля generated provenance MUST быть детерминированы
-этим входом. Внутренние refs MUST разрешаться
-в соответствующие compiled components, внешние refs MUST не переписываться.
-Повтор одинакового входа MUST давать одинаковые refs независимо от времени,
-абсолютного пути проекта и порядка установки. Результат MUST сохранять
-однозначное соответствие author root → compiled root и происхождение сборки
-в schema-validated inert file, объявленном manifest. Mapping MUST совпадать с
-фактическими exports до выбора root. `/2` сохраняет legacy compilation;
-external consumers новой сборки MUST использовать compiled exact ref.
-Доверие MUST относиться к exact manifest, не наследоваться от соседнего
-варианта; checks collision/revocation и pinned история MUST сохраняться.
+Compiler `/3` MUST сохранять авторские IDs, но назначать package и всем owned
+components детерминированные compiled versions алгоритма b1. Build key MUST
+покрывать effective profile/values/settings/exclude/extensions, normalized
+definition closure, exact external refs, context и supporting-file bytes,
+manifest metadata и decision catalog. Порядок файлов, время сборки, absolute
+source paths и порядок установки MUST NOT влиять на сборку: повтор одинакового
+входа MUST давать одинаковые refs. Version MUST использовать `0.0.0-b1.` и
+lower-case base32 полного SHA-256 без padding: package из build key, component
+из canonical tuple `[build key, kind, author ID, author version]`.
+
+Compile и start MUST использовать один resolver и один прочитанный набор
+исходников. Owned refs MUST перепривязываться; external refs, literal values,
+configuration defaults и instance data внутри schemas MUST NOT переписываться.
+`build-provenance.json` MUST быть inert manifest file закрытого формата
+`prifly-build-provenance/1`, проверяемого по
+[schema](../../../cmd/prifly/project_build.schema.json). Он MUST связывать
+author refs с compiled exports/root и не включать собственный package digest;
+все его generated поля MUST быть детерминированы тем же входом.
+Перед выбором root CLI MUST проверять schema, полную mapping, derivation
+versions и соответствие exports. Эти сведения MUST NOT заменять trust admission.
+External consumers MUST получать exact compiled refs, не author alias latest.
+`/2` MUST сохранять legacy compilation без provenance, а collision/revocation
+и pinned history MUST сохраняться в обоих путях.
 
 #### Scenario: Разные варианты запускаются в одной authority
-- **WHEN** пользователь последовательно компилирует, импортирует и запускает
-  варианты A, B, A одного package в одном project и authority
-- **THEN** A и B сосуществуют, повтор A переиспользует exact сборку, а старый
-  Run после restart сохраняет прежние definitions и context bytes
+- **WHEN** пользователь компилирует, импортирует и запускает A, B, A одного package
+- **THEN** A и B сосуществуют, повтор A воспроизводит refs, а старый активный
+  Run после restart сохраняет свои definitions и context bytes
 
 #### Scenario: Настройка меняет сборку
-- **WHEN** команда меняет только extend setting, exclude или вставку шага
-- **THEN** новая сборка устанавливается рядом без ручного переименования package
+- **WHEN** меняется только extend setting, exclude или вставка шага
+- **THEN** новая сборка устанавливается рядом без переименования авторского package
 
 #### Scenario: Bytes sealed identity подменены
-- **WHEN** тот же sealed id/version подан с другими bytes
-- **THEN** import отказывает; повторная compilation revoked сборки не снимает отзыв
+- **WHEN** та же sealed identity подана с другими bytes или revoked build импортирован повторно
+- **THEN** import отказывает; collision checks и отзыв не обходятся новой compilation
 
 #### Scenario: Изменился только вопрос или описание
 - **WHEN** author меняет только decision catalog либо manifest description
-- **THEN** новая `/3` сборка получает другую identity и импортируется рядом
+- **THEN** `/3` получает новую identity, не заменяя прежнюю сборку
 
 ### Requirement: Project объявляет локальные команды без нового исполнителя
 Project YAML SHALL описывать переносимую привязку объявленных steps/checks к

@@ -72,8 +72,8 @@ typed input, передайте его как соответствующий inp
 сохраняются вне проекта; scratch — не sandbox для недоверенных программ.
 
 Пошаговая инструкция с реальным результатом — в
-[csv-report/README.md](workflows/csv-report/README.md). Путь `/3` описывает текущие
-исходники; до выпуска соответствующего Release используйте сборку из checkout.
+[csv-report/README.md](workflows/csv-report/README.md). Путь `/3` доступен
+в public stable release начиная с 0.10.0; сборка из checkout ради него не нужна.
 
 Если workflow использует ИИ, подключите только нужные host runners:
 
@@ -100,11 +100,14 @@ prifly project workflows --repository . --json
 ```
 
 Product workflow не копируется при `project init`: владелец добавляет папку
-сознательно, например `prifly project workflows add`. У текущего host runner
-ещё сохраняется прежний обязательный диалог Git/brief; его нейтральная
-переработка относится к следующему срезу. Поэтому описанный выше no-Git путь
-запускается напрямую через CLI. Для AI/Git workflows host навык читает local
-authority path и exact local Pri-Fly executable из ignored `local.yaml`,
+сознательно, например `prifly project workflows add`. Текущий host runner уже
+нейтрален: brief и выбор `worktree`/`checkout` он спрашивает только когда этого
+требует Git-работа, и не выдумывает задачу или brief для file-only запуска.
+Прежний обязательный диалог Git/brief сохранён лишь в замороженных исторических
+шаблонах, по которым `prifly project runners update` распознаёт старые runner
+files. Поэтому описанный выше no-Git путь работает и напрямую через CLI, и
+через host runner. Для AI/Git workflows host навык читает local authority path
+и exact local Pri-Fly executable из ignored `local.yaml`,
 предлагает выбрать ID сценария, затем одним диалогом спрашивает `worktree` или
 `checkout`, package profile, применимые declared decisions и policy attended
 или autonomous. В Codex при доступном `request_user_input` и в Claude Code через

@@ -110,5 +110,8 @@ execution limits. Все поля с комментариями есть в
 в том же Run сохраняет `assisted-session/5` и прежний абсолютный час. Preflight
 records и legacy runtime-вопросы сохраняют `/1`. Сохранённые Runs, definitions
 и старые bundles не переписываются; изменение YAML создаёт новую revision, а
-не меняет лимиты уже запущенной работы. Полный нормативный перечень находится в
-[OpenSpec](../../openspec/specs/published-contracts/spec.md).
+не меняет лимиты уже запущенной работы. Нормативные правила публикации,
+совместимости и проверки этих контрактов — в
+[OpenSpec](../../openspec/specs/published-contracts/spec.md); он намеренно не
+дублирует их поля и bytes. Перечень контрактов этой сборки даёт `prifly schema`
+без аргумента, а сгенерированные bundles лежат в [`schemas/core/`](../core/).

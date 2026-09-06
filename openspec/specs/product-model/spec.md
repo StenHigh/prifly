@@ -105,20 +105,30 @@ check; не требовать модель для human process и не дав�
 выбранного класса работы
 
 ### Requirement: Предмет и границы закреплены до выполнения
-До значимой работы Run MUST иметь RunBrief с предметом, ожидаемым результатом,
-scope, criteria, разрешёнными ресурсами и основанием старта. `TaskInput/1`
-MUST сохранять исходный текст и provenance, а local preparation MUST выводить
-из него RunBrief и immutable SourceSnapshot без изменения scope. Существенная
-неоднозначность MUST потребовать конкретного уточнения или подтверждения.
-Подтверждённая project/resource identity MUST иметь приоритет над соседним
-контекстом разговора. Прямое указание owner-а exact task/workflow MAY быть
-основанием старта в рамках существующих полномочий; уже разрешённые безопасные
-действия MUST не требовать повторного подтверждения без новой причины.
+До значимой работы Run MUST закреплять предмет, ожидаемый результат, scope,
+criteria, разрешённые ресурсы и основание старта. Для task-driven запуска
+RunBrief SHALL сохранять эти сведения; `TaskInput/1` MUST сохранять исходный
+текст и provenance, а preparation выводить RunBrief и SourceSnapshot без
+изменения scope. Существенная неоднозначность MUST требовать уточнения.
+Confirmed project/resource identity имеет приоритет над соседним разговором.
+
+Новый versioned запуск без task intake SHALL закреплять основание через
+admitted Start владельца с exact WorkflowRevision, declared inputs,
+configuration и policy/resources. Workflow определяет expected outputs и
+criteria; отсутствие RunBrief MUST быть явно допустимым состоянием этого
+контракта, не фиктивным документом. Если workflow требует RunBrief как input,
+его отсутствие MUST отвергаться. Старые RunStart/state versions MUST сохранять
+обязательный brief и свой смысл. Прямой выбор exact workflow/task MAY быть
+основанием в существующих полномочиях; уже разрешённые безопасные действия
+MUST не требовать повторного подтверждения без новой причины.
 
 #### Scenario: Предложенный brief неверно понял предмет
 - **WHEN** owner отклоняет preview RunBrief
-- **THEN** массовая работа не начинается, пока предмет и границы не будут
-исправлены и подтверждены
+- **THEN** работа не начинается до исправления и подтверждения scope
+
+#### Scenario: Владелец запускает обработку файла
+- **WHEN** он явно выбирает workflow и inputs без предметной задачи
+- **THEN** новый Run закрепляет их и declared boundaries, не сочиняя RunBrief
 
 ### Requirement: Изменение намерения не продолжает прежний объём
 Новые сообщения owner-а MUST различаться как clarification, scope change,
