@@ -49,7 +49,7 @@
       против выпущенного `prifly 0.10.0` прогнаны независимо на этой машине:
       `test_versions`, `test_folders`, `verify.py`, `compatibility.py` — все
       зелёные. Наблюдение прогона остаётся за живым pilot задачи 4.3)
-- [ ] 4.3 Выполнить один ограниченный живой AIF pilot на согласованной небольшой задаче; записать binary/package/host versions, решения и итоговый artifact/commit. Проверка: наблюдался реальный путь, а не только compile; task 6.3 decision-catalog связывается с этим evidence лишь при совпадении её критериев.
+- [x] 4.3 Выполнить один ограниченный живой AIF pilot на согласованной небольшой задаче; записать binary/package/host versions, решения и итоговый artifact/commit. Проверка: наблюдался реальный путь, а не только compile; task 6.3 decision-catalog связывается с этим evidence лишь при совпадении её критериев.
 - [x] 4.4 На собранном candidate один раз выполнить `make check` и `make e2e`, а внешние проверки — в AIF repo; записать точные итоги и scope. Не считать scripted host живым UI, не повторять одинаковые дорогие gates после docs-only правки; новый release/version согласовывается отдельно. (сделано 2026-09-06: локальная половина — `make check` PASS 986.72 с и `make e2e` в [записи выпуска](release-0.10.0.md), включая честно записанный отказ первого прогона `make e2e` на устаревшей фикстуре каталога и его исправление; внешняя — четыре ворот `prifly-aif-workflows` против опубликованного `prifly 0.10.0`, зафиксированы в их `e263720` с зелёным CI. Scripted host живым UI не считается; версия 0.10.0 согласована владельцем отдельно)
 - [x] 4.5 Синхронизировать delta, glossary, published contracts, editor references, README и текущую очередь; проверка: `openspec validate --all --strict --no-interactive`, `TestGlossaryBindings` при изменении карты, `git diff --check`. `git diff --name-only 5b5c4ca -- openspec/changes/archive` должен быть пустым: historical evidence не меняется. Формальные P1/P2 gates и deferred backlog остаются незакрытыми. (сделано 2026-09-06 в `9238d8f`, подробности — в записи среза 4: мерж двусторонний, все 26 блоков дельты совпадают с main, песочная архивация даёт нулевые added/modified/removed. `openspec validate --all --strict --no-interactive` 20 passed 0 failed; `TestGlossaryBindings` PASS; `make schemas-check` 46/46; `git diff --check` чист; `git diff --name-only 5b5c4ca -- openspec/changes/archive` пуст; branch `verify` 34033376071 success. Формальные P1/P2 gates и deferred backlog не закрывались)
 
@@ -354,3 +354,48 @@ deferred backlog, живые UI observations (3.5) и живой AIF pilot (4.3)
 `make schemas-check` 46/46; `git diff --check` чист; `gofmt -l` пуст.
 Изменение затрагивает выпущенный контракт, поэтому пилот и пакет получат его
 только со следующим релизом; версия релиза согласовывается отдельно.
+
+## Задача 4.3 — живой AIF pilot, evidence принято 2026-09-07
+
+Заход выполнен сессией «Pri-Fly pilot» 2026-09-06; данные получены из
+`run status --json` их authority, не по памяти. Наблюдался реальный путь, а не
+compile.
+
+**Версии.** Двоичный файл 0.11.0 (`core_build: 0.11.0`), go1.27.0,
+darwin/arm64; профиль `foundation-sequence/1`, у прогона `core-workflow/1`.
+Пакет `aif:workflow/classic` 1.15.1,
+`sha256:b61c2cf188fa0bed0b1d420bf8cedc53c6e0c00704fb6cc962b22f20dab7be60`,
+происхождение `github.com/StenHigh/prifly-aif-workflows`, путь `aif-classic`,
+ref `v1.15.0` плюс два их шага (`tests`, `merge-request`) через `extend.yaml`.
+Lock `lock:b614de19ac101f97b8d57f6ca8b606ea0c0ffa0a6fc8267640871d9bb911be16`.
+Host `claude-code`; authority `authority-2edc1191aca9dae1e32dd3ac9edf2aa1`,
+project `project:35b39bc65a9a260047908a1233d50d01`.
+
+**Прогон.**
+`run:fe4875fab47f36672a3fd880bae84f68923be170fc0e89dbf110d043687efb58`,
+`completed`/`partial`, `run_version: 88`, `execution_mode: managed`,
+`interaction_mode: with_human`, `trust_profile: core-local/cooperative`,
+`capacity_profile: foundation:one-slot`. 18:22:24.354581Z → 21:17:43.805701Z =
+2 ч 55 мин 19 с.
+
+**Решения.** `decision_policy: autonomous`, `package_profile: fast`
+(`profile_source: actor`), каталог
+`sha256:ed71519b82e352a16dcaec51bc1f6300d18cea3bdc6c77e78cbaf764383df792`. Пять
+записей, все `answered` с источником `actor`, `autonomy_unanswered` пуст:
+`plan_profile=fast`, `plan_tests=true`, `plan_constraints` (грант владельца
+покрывает оговорку A-097), `improve_apply=all`, `gate_warnings=stop`.
+
+**Итоговый артефакт.** Единственный выход `gate`:
+`artifact:66ccabbc182375b14e9170316056c2a4152f61f0e4231b323aef4e3d8a45a762`
+rev 1, `sha256:53d5d1f6e82a6c43ec391d1e3be10f86382afc4c2a2a9a679f3ffe41b5610943`
+— вердикт verify третьего круга (`warnings`, `blocking: true`, 9 находок).
+
+**Коммиты.** HEAD ветки `prifly/v060` по завершении —
+`fcd0ffa5a97d2cee34f791a3c2cd9f51e8e3f320`; три коммита, все от шагов `fix`:
+`afe13b75b` (круг 1), `cc649e035` (круг 2), `fcd0ffa5a` (круг 3). Исход
+`partial` по исчерпании `verify_round_limit: 3` (`on_limit: exhausted`); MR не
+производился сознательно.
+
+**Гейт в цикле не смягчился:** круги дали 28 / 24 / 9 находок, `blocking: true`
+на всех трёх. Три находки остались открытыми именно потому, что починка
+ослабила бы измеритель; круг 2 нашёл дефект, порождённый коммитом круга 1.
