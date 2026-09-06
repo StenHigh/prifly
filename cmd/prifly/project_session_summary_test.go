@@ -42,7 +42,7 @@ func TestCLIProjectSessionLimitsPrepareShowsPinnedPolicies(t *testing.T) {
 	}
 	reviewed := prepare()
 	before, _ := json.Marshal(reviewed)
-	if reviewed.SchemaVersion != "project-launch-summary/2" || len(reviewed.SessionLimits) != 2 {
+	if reviewed.SchemaVersion != "project-launch-summary/3" || len(reviewed.SessionLimits) != 2 {
 		t.Fatalf("summary omitted selected time policies or included an unused definition: %+v", reviewed.SessionLimits)
 	}
 	for _, item := range reviewed.SessionLimits {

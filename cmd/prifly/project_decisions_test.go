@@ -170,7 +170,7 @@ when: {profiles: [full]}
 		t.Fatalf("questionnaire %d: %s", code, errout.String())
 	}
 	var result projectQuestionnaire
-	if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.SchemaVersion != "project-questionnaire/3" || result.Package.ID != "test:package/sample" || len(result.Profiles) != 2 || len(result.Preflight) != 1 || result.Preflight[0].When == nil || result.CatalogDigest == "" {
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.SchemaVersion != "project-questionnaire/4" || result.Package.ID != "test:package/sample" || len(result.Profiles) != 2 || len(result.Preflight) != 1 || result.Preflight[0].When == nil || result.CatalogDigest == "" {
 		t.Fatalf("questionnaire result: %v %#v", err, result)
 	}
 	if _, err := os.Stat(authority); !os.IsNotExist(err) {

@@ -55,9 +55,9 @@ func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
 // projectKnownRunnerSkills leaves every installed runner unreplaceable.
 func TestProjectRunnerTextIsPinned(t *testing.T) {
 	pinned := map[string]string{
-		"codex-cli":   "sha256:99ae7e0369d3d94289e80a5ee09305f8b8957438b1e8426291765161211a67f0",
-		"codex-app":   "sha256:f6ec008de627079177f33788e01f5b5ac6cf7ef7166f73fca6d077d043bb8beb",
-		"claude-code": "sha256:622879f5c7eb6778b28adf4351e981c53103268c31b4bf9f255f97a7b83c2a9a",
+		"codex-cli":   "sha256:3ee9e67e7d84eaaf0a7c0a93b5a8c72ee895be146865463f7c17493c2be685c7",
+		"codex-app":   "sha256:6c2ff8e6c7e5cd6f68e63124cc40e11bc50cff8db074a96f46b7b4ee7236e74c",
+		"claude-code": "sha256:9f821f7f18c7120cf92776583c839515cc6e07302ba9d88f75809f455d7b4500",
 	}
 	for _, host := range projectHosts {
 		sum := sha256.Sum256([]byte(projectRunnerSkill(host)))
@@ -69,7 +69,8 @@ func TestProjectRunnerTextIsPinned(t *testing.T) {
 }
 
 func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
-	// Keep the five pre-neutral forms and the pre-timing runner byte-identical.
+	// Keep the five pre-neutral forms, the pre-timing runner and the
+	// pre-state-id runner byte-identical.
 	pinned := map[string][]string{
 		"codex-cli": {
 			"sha256:ad7b4782ffa2d341350a2ef6890da52ff19d70bb3da05f08f0e4ee52a2ae74dc",
@@ -78,6 +79,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:5a111db67776578d799fc288752a9c2ee1fdb6ca1d9e5f1bf964f19104187765",
 			"sha256:20604265f5d5ad0f4f75d0131b0e8064aa698c6649eadc98c76e8e81957e74b2",
 			"sha256:89bbc29743b3f7cf76949561a7ebde59e8a11ff5925b0ba87680f78bfb9fa3e0",
+			"sha256:99ae7e0369d3d94289e80a5ee09305f8b8957438b1e8426291765161211a67f0",
 		},
 		"codex-app": {
 			"sha256:0fecbf3f6b3b67b2347896025b6f0e28f64d7cf6002b5151790bcb8352623376",
@@ -86,6 +88,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:2f8a6075ebb11414d06863af864fd45f035e15fe45dc38678d2ab662b39567e2",
 			"sha256:8c4e2ed9eb6f3b461316cb32c63476bfa1987eeb62bc33243d682434f43b971f",
 			"sha256:623f100a194d00bca69181fd59af5fa776d88bd9115c57b8d65b133923fc4ef1",
+			"sha256:f6ec008de627079177f33788e01f5b5ac6cf7ef7166f73fca6d077d043bb8beb",
 		},
 		"claude-code": {
 			"sha256:416af8429794e5adef4b7180427c3b74b517404b44f36be226f752aa0f61196d",
@@ -94,6 +97,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:abed5e09e3a3cae2946798cfb3399a4c3b63d883ab81a690f4850aa918cc5af3",
 			"sha256:2817611582ef5058c919a8061f3761a737cba66b45f91ac47943cb4605d8dc3d",
 			"sha256:49504df04d59ad25fe877095892dac4b7bed707b7e57447637358d0b82b87884",
+			"sha256:622879f5c7eb6778b28adf4351e981c53103268c31b4bf9f255f97a7b83c2a9a",
 		},
 	}
 	for _, host := range projectHosts {
@@ -140,7 +144,7 @@ func TestProjectCurrentRunnerIsWorkflowNeutral(t *testing.T) {
 				}
 			}
 			prepare := strings.Index(skill, "project questionnaire --repository \"$PWD\" --launch ID --prepare")
-			show := strings.Index(skill, "show the returned project-launch-summary/2 before starting")
+			show := strings.Index(skill, "show the returned project-launch-summary/3 before starting")
 			start := strings.Index(skill, "project start --repository")
 			if prepare < 0 || show <= prepare || start <= show {
 				t.Fatal("start can precede preparation and presentation of the summary")

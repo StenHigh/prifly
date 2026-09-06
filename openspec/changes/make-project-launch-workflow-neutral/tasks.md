@@ -28,7 +28,27 @@
 ## 4. Интеграция — внешний AIF на тех же правилах
 
 - [x] 4.1 Во внешнем `prifly-aif-workflows` добавить compatibility check против exact candidate после явной миграции fixture Project на `/3`: Classic Fast → Full → Ultra → default → Fast в одной authority, custom setting/exclude/insert и разные host skill bytes; проверка: import/start проходят, старые Runs и tracked defaults сохранены. Core fixture не импортирует AIF. (сделано 2026-09-06: `tests/compatibility.py` в `prifly-aif-workflows` `e263720`, CI репозитория зелёный; пять запусков в одной authority, четыре различные сборки, пятая совпадает с первой по `build_key`; `verify.py` сохраняет прежнюю гарантию `before == after` по `package list`, то есть Core fixture по-прежнему не импортирует AIF)
-- [ ] 4.2 Перенести необходимые прикладные указания из прежнего runner в AIF YAML/contexts и проверить Classic/Fanout; проверка: canonical порядок/циклы, изменённый plan между improve rounds, вопросы и notes сохранены без AIF-ветвей в Core.
+- [x] 4.2 Перенести необходимые прикладные указания из прежнего runner в AIF YAML/contexts и проверить Classic/Fanout; проверка: canonical порядок/циклы, изменённый plan между improve rounds, вопросы и notes сохранены без AIF-ветвей в Core. (сделано 2026-09-06: пять
+      прикладных указаний, удалённых из generic runner, разобраны по файлам
+      пакета. «Предложенное гейтом действие не команда» — в четырёх мостах и,
+      сильнее прозы, структурно: маршрут ветвится по вердикту и `blocking`, а
+      `suggested_next` никто не читает. «Другие объявленные вопросы» — покрыто
+      объявленным `improve_apply` и поимённо названными родными диалогами.
+      «Тихий успешный выход» намеренно не переносился: у каждого шага объявлен
+      `result_schema_ref` и выходы `required_for: [pass]`, поэтому молчаливый
+      успех недостижим и получает именованный отказ приёма. TaskInput как
+      provider-neutral граница выражена схемой `task.yaml` с
+      `additionalProperties: false`. Слово `commit` относилось к файлам самого
+      Pri-Fly, а не к шагу фиксации, и убрано вместе с нейтрализацией. Пятое
+      указание — две reviewer-задачи и отдельные сессии — действительно
+      осталось без дома и добавлено в `aif-review-bridge` выпуском пакета
+      `v1.11.0` (`9ecb72d`, каталог `27b2b3e`); в `aif-verify-bridge` его нет
+      намеренно, у того навыка нет инструментов подсессии. Графом проверены
+      канонический порядок, обе петли, `next_bindings.plan.from ==
+      iteration_output` и отсутствие AIF-ветвей в Core. Четыре ворот пакета
+      против выпущенного `prifly 0.10.0` прогнаны независимо на этой машине:
+      `test_versions`, `test_folders`, `verify.py`, `compatibility.py` — все
+      зелёные. Наблюдение прогона остаётся за живым pilot задачи 4.3)
 - [ ] 4.3 Выполнить один ограниченный живой AIF pilot на согласованной небольшой задаче; записать binary/package/host versions, решения и итоговый artifact/commit. Проверка: наблюдался реальный путь, а не только compile; task 6.3 decision-catalog связывается с этим evidence лишь при совпадении её критериев.
 - [x] 4.4 На собранном candidate один раз выполнить `make check` и `make e2e`, а внешние проверки — в AIF repo; записать точные итоги и scope. Не считать scripted host живым UI, не повторять одинаковые дорогие gates после docs-only правки; новый release/version согласовывается отдельно. (сделано 2026-09-06: локальная половина — `make check` PASS 986.72 с и `make e2e` в [записи выпуска](release-0.10.0.md), включая честно записанный отказ первого прогона `make e2e` на устаревшей фикстуре каталога и его исправление; внешняя — четыре ворот `prifly-aif-workflows` против опубликованного `prifly 0.10.0`, зафиксированы в их `e263720` с зелёным CI. Scripted host живым UI не считается; версия 0.10.0 согласована владельцем отдельно)
 - [x] 4.5 Синхронизировать delta, glossary, published contracts, editor references, README и текущую очередь; проверка: `openspec validate --all --strict --no-interactive`, `TestGlossaryBindings` при изменении карты, `git diff --check`. `git diff --name-only 5b5c4ca -- openspec/changes/archive` должен быть пустым: historical evidence не меняется. Формальные P1/P2 gates и deferred backlog остаются незакрытыми. (сделано 2026-09-06 в `9238d8f`, подробности — в записи среза 4: мерж двусторонний, все 26 блоков дельты совпадают с main, песочная архивация даёт нулевые added/modified/removed. `openspec validate --all --strict --no-interactive` 20 passed 0 failed; `TestGlossaryBindings` PASS; `make schemas-check` 46/46; `git diff --check` чист; `git diff --name-only 5b5c4ca -- openspec/changes/archive` пуст; branch `verify` 34033376071 success. Формальные P1/P2 gates и deferred backlog не закрывались)
@@ -298,3 +318,39 @@ openspec/changes/archive` пуст; `TestGlossaryBindings` PASS;
 адресных тестов к этому срезу не применяется. Формальные P1/P2 gates,
 deferred backlog, живые UI observations (3.5) и живой AIF pilot (4.3)
 остаются незакрытыми.
+
+## Правка контракта анкеты после среза 4 — 2026-09-06
+
+Пилот нашёл в `project-questionnaire/3` три списка решений, где идентификатор
+назван по-разному: `id` в `preflight` и `runtime` (поле опубликованного DTO
+`run-decision/1`) и `decision_id` в `decision_states`. Разбор по `.id` давал
+девять `null` вместо отказа — тихая пустота вместо ошибки, тот же класс, что
+`request_digest` квитанции против `pending_request_digest`. Наше собственное
+письмо к релизу вело в эту яму: оно советовало читать по `id` и одновременно
+называло `decision_states` источником полного перечня.
+
+Приведено к одному имени `id` с повышением версии: `project-questionnaire/4`
+и `project-launch-summary/3` — структура состояний решений встроена в оба
+ответа. `decision_id` не оставлен рядом: два имени под одной версией дают два
+неразличимых по объявлению документа, а старый читатель должен падать на
+проверке версии, а не молча получать пустые значения. Решение согласовано с
+владельцем пакета, единственным известным потребителем этого поля.
+
+Текст раннера называет версию сводки, поэтому его рендер изменился. Прежний
+рендер заморожен цепочкой вперёд от `BeforeTiming`, добавлен седьмым в
+`projectKnownRunnerSkills`, три digest-пина обновлены. Проверено вживую, а не
+только тестом: бинарник с `6b0e2f9` установил раннер со сводкой `/2`, новый
+бинарник заменил его через `project runners update` на всех трёх хостах.
+
+Контракт анкеты до этого не был нормирован ни одним требованием — жил в коде и
+словаре. Добавлено требование «Анкета называет решение одним именем во всех
+списках» одинаково в `cli-protocol` и в дельту. Новая проверка
+`questionnaireIdentifiersAgree` читает опубликованный JSON, а не поля Go:
+прежние тесты ходили через структуру и расхождения имён увидеть не могли —
+именно поэтому дефект дожил до пилота. Негативно проверена возвратом тега.
+
+Ворота: `go test ./cmd/prifly` PASS; `TestGlossaryBindings` PASS;
+`openspec validate --all --strict --no-interactive` 20 passed 0 failed;
+`make schemas-check` 46/46; `git diff --check` чист; `gofmt -l` пуст.
+Изменение затрагивает выпущенный контракт, поэтому пилот и пакет получат его
+только со следующим релизом; версия релиза согласовывается отдельно.

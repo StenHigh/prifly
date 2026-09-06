@@ -30,9 +30,10 @@ const projectLocalExample = `# Copy this file to local.yaml for machine-only ove
 # prifly_executable: /absolute/path/to/prifly
 `
 
-// Current instructions are derived from the frozen previous template, never
-// the reverse: updating current behavior must not change recognized old bytes.
-var projectRunnerSkillTemplate = strings.NewReplacer(
+// projectRunnerSkillTemplateBeforeStateID is the exact template v0.10.0
+// emitted, kept only so `project runners update` still recognizes runners that
+// release installed.
+var projectRunnerSkillTemplateBeforeStateID = strings.NewReplacer(
 	"project-launch-summary/1", "project-launch-summary/2",
 	"chosen answers and their sources, and reasons the Run might still wait.", `chosen answers and their sources, and reasons the Run might still wait.
    Show session_limits for each exact step: limits.active_timeout_ms is its
@@ -60,6 +61,12 @@ var projectRunnerSkillTemplate = strings.NewReplacer(
    authorizes; never renew/release a claim, change checkout or create a new Run
    to bypass it. No active host means no automatic wakeup.`,
 ).Replace(projectRunnerSkillTemplateBeforeTiming)
+
+// Current instructions are derived from the frozen previous template, never
+// the reverse: updating current behavior must not change recognized old bytes.
+var projectRunnerSkillTemplate = strings.NewReplacer(
+	"project-launch-summary/2", "project-launch-summary/3",
+).Replace(projectRunnerSkillTemplateBeforeStateID)
 
 const projectRunnerSkillTemplateBeforeTiming = `---
 name: prifly-run
@@ -820,7 +827,7 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	if *expectedCatalog != "" && *expectedCatalog != selection.Sheet.CatalogDigest {
 		return usageError("project_start_stale_decision_catalog: questionnaire differs from the current project catalog")
 	}
-	result := projectQuestionnaire{SchemaVersion: "project-questionnaire/3", Repository: root, Package: flow.Ref{ID: source.ID, Version: source.Version}, Profiles: profiles, Preflight: []prifly.DecisionDefinition{}, Runtime: []prifly.DecisionDefinition{}, CatalogDigest: selection.Sheet.CatalogDigest, DecisionSheet: selection.Sheet, DecisionStates: projectDecisionStates(selection), KnownQuestionsOnly: true}
+	result := projectQuestionnaire{SchemaVersion: "project-questionnaire/4", Repository: root, Package: flow.Ref{ID: source.ID, Version: source.Version}, Profiles: profiles, Preflight: []prifly.DecisionDefinition{}, Runtime: []prifly.DecisionDefinition{}, CatalogDigest: selection.Sheet.CatalogDigest, DecisionSheet: selection.Sheet, DecisionStates: projectDecisionStates(selection), KnownQuestionsOnly: true}
 	result.ProjectProfileVersion = profile.SchemaVersion
 	for index, state := range result.DecisionStates {
 		if state.Applicability == "inactive" {
@@ -1755,6 +1762,15 @@ func projectRunnerSkill(host projectHost) string {
 	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
 }
 
+func projectRunnerSkillBeforeStateID(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeStateID, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
+}
+
 func projectRunnerSkillBeforeTiming(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -1813,7 +1829,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

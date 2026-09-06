@@ -888,7 +888,7 @@ stages:
 			t.Fatalf("project questionnaire %d: %s", code, questionnaireErr.String())
 		}
 		var questionnaire projectQuestionnaire
-		if err := json.Unmarshal(questionnaireOut.Bytes(), &questionnaire); err != nil || questionnaire.SchemaVersion != "project-questionnaire/3" || questionnaire.CatalogDigest == "" {
+		if err := json.Unmarshal(questionnaireOut.Bytes(), &questionnaire); err != nil || questionnaire.SchemaVersion != "project-questionnaire/4" || questionnaire.CatalogDigest == "" {
 			t.Fatalf("project questionnaire did not return a stable catalog: %v %#v", err, questionnaire)
 		}
 		if workspace == "" {

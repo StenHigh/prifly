@@ -84,10 +84,50 @@ when: {answers: {profile: full}}
 	return root, authority
 }
 
+// The identifier of a decision must be named `id` in all three lists of one
+// response. Decoded Go values would agree even while the emitted JSON called
+// it `decision_id` in `decision_states`, so this reads the published bytes:
+// a reader splitting on `.id` got nine nulls instead of a refusal.
+func questionnaireIdentifiersAgree(t *testing.T, out string) {
+	t.Helper()
+	type published struct {
+		ID            string `json:"id"`
+		Applicability string `json:"applicability"`
+	}
+	var response struct {
+		Preflight []published `json:"preflight"`
+		Runtime   []published `json:"runtime"`
+		States    []published `json:"decision_states"`
+	}
+	if err := json.Unmarshal([]byte(out), &response); err != nil {
+		t.Fatal(err)
+	}
+	applicable := map[string]bool{}
+	for _, state := range response.States {
+		if state.ID == "" {
+			t.Fatalf("a decision_states entry has no `id`; preflight and runtime name it differently: %s", out)
+		}
+		if state.Applicability != "inactive" {
+			applicable[state.ID] = true
+		}
+	}
+	for _, list := range [][]published{response.Preflight, response.Runtime} {
+		for _, listed := range list {
+			if !applicable[listed.ID] {
+				t.Fatalf("listed decision %q is not an applicable decision_states entry", listed.ID)
+			}
+			delete(applicable, listed.ID)
+		}
+	}
+	if len(applicable) != 0 {
+		t.Fatalf("applicable decisions missing from preflight and runtime: %v", applicable)
+	}
+}
+
 func questionnaireDecisionState(t *testing.T, result projectQuestionnaire, id, applicability, wait string, answered bool) {
 	t.Helper()
 	for _, state := range result.DecisionStates {
-		if state.DecisionID == id {
+		if state.ID == id {
 			if state.Applicability != applicability || state.WaitReason != wait || state.Answered != answered {
 				t.Fatalf("decision %s: %+v", id, state)
 			}
@@ -155,12 +195,13 @@ func TestCLIProjectQuestionnaireTypedSelections(t *testing.T) {
 			args := append([]string{"--project", authority, "project", "questionnaire", "--repository", root, "--launch", "questions"}, test.args...)
 			code, out, stderr := runCLI(t, args...)
 			var result projectQuestionnaire
-			if code != 0 || json.Unmarshal([]byte(out), &result) != nil || result.SchemaVersion != "project-questionnaire/3" || !result.KnownQuestionsOnly || result.CatalogDigest == "" {
+			if code != 0 || json.Unmarshal([]byte(out), &result) != nil || result.SchemaVersion != "project-questionnaire/4" || !result.KnownQuestionsOnly || result.CatalogDigest == "" {
 				t.Fatalf("questionnaire selection: %d %s %s", code, out, stderr)
 			}
 			if len(result.DecisionStates) != 7 {
 				t.Fatalf("state inventory lost inactive definitions: %+v", result.DecisionStates)
 			}
+			questionnaireIdentifiersAgree(t, out)
 			profile, err := readProjectProfile(root)
 			if err != nil {
 				t.Fatal(err)

@@ -12,7 +12,7 @@ import (
 )
 
 type projectDecisionState struct {
-	DecisionID    string `json:"decision_id"`
+	ID            string `json:"id"`
 	Phase         string `json:"phase"`
 	Applicability string `json:"applicability"`
 	Answered      bool   `json:"answered"`
@@ -38,7 +38,7 @@ func projectDecisionStates(selection projectPreflight) []projectDecisionState {
 	}
 	states := make([]projectDecisionState, 0, len(catalog.Decisions))
 	for _, definition := range selection.Catalog.Decisions {
-		state := projectDecisionState{DecisionID: definition.ID, Phase: definition.Phase, Applicability: "applicable"}
+		state := projectDecisionState{ID: definition.ID, Phase: definition.Phase, Applicability: "applicable"}
 		_, state.Answered = answers[definition.ID]
 		if !projectDecisionApplies(definition, selection.PackageProfile, answers) {
 			state.Applicability = "inactive"

@@ -190,7 +190,7 @@ preflight и optional runtime предответы, условия, итог pol
 при устаревших sources/ответах пересчитывается до эффектов. JSON-клиент может
 получить preview и передать explicit answers без чата или LLM.
 
-Конкретный CLI среза 3: `project-questionnaire/3` принимает те же typed
+Конкретный CLI среза 3: `project-questionnaire/4` принимает те же typed
 profile/policy/preflight/runtime selections и catalog digest, что Start.
 Незавершённая форма показывает missing required answers и conditional
 применимость; полного набора ответов до просмотра не требует. Разрешённый
@@ -210,7 +210,7 @@ launch_input явно требует `/3`. Конвертация типов/ф�
 `project questionnaire --prepare` использует тот же код подготовки, что
 `project start`, но останавливается после read-only validation. Temporary
 compiled files удаляются; import, claim, Run и worker не создаются. Выдаётся
-`project-launch-summary/1`: exact package/root, требования effects/host/Git,
+`project-launch-summary/3`: exact package/root, требования effects/host/Git,
 digest входов и configuration, resolved executables/argv/supporting digests,
 Decision Sheet и known wait reasons. `review_digest` включает эти данные,
 не время или command ID. `start --expected-launch-digest` отказывает

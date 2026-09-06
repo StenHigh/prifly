@@ -299,22 +299,25 @@ Approval, Grant, ActionIntent либо DecisionArtifact. Точные прави
 <a id="project-questionnaire"></a>
 ### Project questionnaire / Launch summary — Анкета запуска и проверенный обзор
 
-**Анкета** (`project-questionnaire/3`) — read-only представление объявленных
-решений выбранного сценария до первого эффекта: она читает profile и catalog,
-но не импортирует package, не заявляет Workspace и не создаёт Run. `preflight`
-и `runtime` перечисляют только применимые к выбранному package profile
-решения, а полный список с применимостью, фактом ответа и причиной ожидания
-даёт `decision_states`: неизвестная применимость остаётся условной, а не
-false. `known_questions_only` говорит лишь, что перечислены объявленные
-вопросы, и не обещает, что Run больше нигде не остановится.
+**Анкета** (`project-questionnaire/4`, исторически `/3` и раньше) —
+read-only представление объявленных решений выбранного сценария до первого
+эффекта: она читает profile и catalog, но не импортирует package, не заявляет
+Workspace и не создаёт Run. `preflight` и `runtime` перечисляют только
+применимые к выбранному package profile решения, а полный список с
+применимостью, фактом ответа и причиной ожидания даёт `decision_states`:
+неизвестная применимость остаётся условной, а не false. Решение во всех трёх
+списках названо одним полем `id`; версии до `/4` называли его в
+`decision_states` `decision_id`. `known_questions_only` говорит лишь, что
+перечислены объявленные вопросы, и не обещает, что Run больше нигде
+не остановится.
 `project_profile_version` называет версию shared `project.yaml` (`/3` против
 legacy `/2`); версию самого ответа для этого не используют. Анкета не является
 DecisionSheet: до Start её условия и ответы пересчитываются.
 
-**Launch summary** (`project-launch-summary/2`, исторически `/1`) — отдельное
-представление той же границы: `project questionnaire --prepare` с аргументами
-будущего start возвращает exact package, входы, требования, программы и
-объявленные SessionLimits, ничего не исполняя и не импортируя. Его
+**Launch summary** (`project-launch-summary/3`, исторически `/2` и `/1`) —
+отдельное представление той же границы: `project questionnaire --prepare`
+с аргументами будущего start возвращает exact package, входы, требования,
+программы и объявленные SessionLimits, ничего не исполняя и не импортируя. Его
 `review_digest` передаётся в `project start --expected-launch-digest`, где
 расхождение отклоняет запуск до создания Run. Это optimistic проверка
 совпадения, не Approval, не permission и не доказательство, что ответ дал
