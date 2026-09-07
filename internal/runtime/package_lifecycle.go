@@ -81,9 +81,13 @@ func (e *Engine) PackageComponent(ctx context.Context, id, fromPackage string) (
 	if err != nil {
 		return Definition{}, nil, err
 	}
-	var found *Definition
-	var foundIn string
-	var foundBytes []byte
+	type candidate struct {
+		definition Definition
+		declaredBy string
+		data       []byte
+	}
+	var candidates []candidate
+	installed := false
 	for _, pkg := range record.Packages {
 		if pkg.Status != "" && pkg.Status != PackageTrusted {
 			continue
@@ -91,6 +95,7 @@ func (e *Engine) PackageComponent(ctx context.Context, id, fromPackage string) (
 		if fromPackage != "" && pkg.Ref.ID+"@"+pkg.Ref.Version != fromPackage {
 			continue
 		}
+		installed = true
 		manifestBytes, err := readLocal(e.Root, pkg.Root+"/"+PackageManifestFile, MaxDefinitionBytes)
 		if err != nil {
 			return Definition{}, nil, err
@@ -106,14 +111,6 @@ func (e *Engine) PackageComponent(ctx context.Context, id, fromPackage string) (
 			if component.Ref.ID != id {
 				continue
 			}
-			// Several trusted packages can declare the same component id under
-			// different versions — three imports of one package is the ordinary
-			// case after two upgrades. Answering with whichever comes first
-			// handed a reader the wrong edition of their own step's
-			// instructions, and they found out only by comparing digests.
-			if found != nil && found.Ref != component.Ref {
-				return Definition{}, nil, &flow.Problem{Code: "package_component_ambiguous", Message: id + " is declared by more than one trusted package, including " + foundIn + " and " + pkg.Ref.String() + "; name the one you mean with package inspect --package ID@VERSION --component " + id}
-			}
 			data, err := readLocal(e.Root, pkg.Root+"/"+component.Path, MaxDefinitionBytes)
 			if err != nil {
 				return Definition{}, nil, err
@@ -121,12 +118,41 @@ func (e *Engine) PackageComponent(ctx context.Context, id, fromPackage string) (
 			if rawDigest(data) != component.Ref.Digest {
 				return Definition{}, nil, local.ErrIntegrity
 			}
-			definition := Definition{Ref: component.Ref, Kind: component.Kind, Path: component.Path}
-			found, foundIn, foundBytes = &definition, pkg.Ref.String(), data
+			candidates = append(candidates, candidate{Definition{Ref: component.Ref, Kind: component.Kind, Path: component.Path}, pkg.Ref.String(), data})
 		}
 	}
-	if found != nil {
-		return *found, foundBytes, nil
+	// Several trusted packages can declare the same component id — three
+	// imports of one package is the ordinary case after two upgrades — and
+	// answering with whichever came first handed a reader the wrong edition of
+	// their own step's instructions.
+	//
+	// Ambiguity is a difference in content, never in naming. Under a package
+	// profile that derives component versions from the package build key, two
+	// builds that left one file untouched produce one digest under two
+	// versions: refusing there would demand a choice where every answer is the
+	// same bytes.
+	if len(candidates) > 0 {
+		differing := []string{candidates[0].declaredBy}
+		for _, other := range candidates[1:] {
+			if other.definition.Ref.Digest != candidates[0].definition.Ref.Digest {
+				differing = append(differing, other.declaredBy)
+			}
+		}
+		if len(differing) > 1 {
+			// "more than one, including A and B" reads as "exactly two" when
+			// there are seven: the count is what tells the reader the list is
+			// cut short, so it is named rather than implied.
+			return Definition{}, nil, &flow.Problem{Code: "package_component_ambiguous", Message: fmt.Sprintf("%s is declared with differing content by %d trusted packages, including %s and %s; name the one you mean with package inspect --package ID@VERSION --component %s", id, len(differing), differing[0], differing[1], id)}
+		}
+		return candidates[0].definition, candidates[0].data, nil
+	}
+	// Naming a package that is not installed under that version is a different
+	// miss from naming a component nobody declares, and saying the second when
+	// the first happened sends the reader to look for the component. A package
+	// profile that derives versions from the build key makes this the ordinary
+	// mistake: the version an author wrote in the manifest addresses nothing.
+	if fromPackage != "" && !installed {
+		return Definition{}, nil, &flow.Problem{Code: "package_not_installed", Message: "no trusted package is installed as " + fromPackage + "; the version an installed package carries may be a build key rather than the version its manifest was authored with, and package list names the ones that are installed"}
 	}
 	// A built-in contract is not a package component and never will be, so
 	// "no package declares it" is true and useless: the reader asked where the

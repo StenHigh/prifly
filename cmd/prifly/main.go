@@ -2281,6 +2281,7 @@ Global: --project DIR  --json  --format text|json|csv
                                    Set machine-only local.yaml paths; the authority and shared workflow stay unchanged
   project extend --workflow FILE --workflow-id ID --extensions FILE --output FILE [--step-ref NAME=JSON] [--step-source NAME=FILE]
                                    Insert declared steps into one exact compiled workflow; nothing is sealed, imported or run
+                                   --step-ref and --step-source are one pair per step: the ref is written into the workflow, the source is the file it is checked against
   project compile --repository DIR --package NAME [--host codex-cli|codex-app|claude-code] --output DIR [--value NAME=JSON]
                                    Seal one declared YAML package; import remains a separate owner decision
   project start --repository DIR --launch ID [--host codex-cli|codex-app|claude-code] [--brief FILE] [--input PORT=FILE] [--input-ref PORT=REF.json] [--workspace worktree|checkout]

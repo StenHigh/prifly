@@ -3074,3 +3074,57 @@ func TestEveryMutatingCommandOpensForWriting(t *testing.T) {
 		}
 	}
 }
+
+// --step-ref and --step-source are one pair per step, and the known list is
+// built from the refs alone. A reader who passed only the source therefore got
+// an empty list, read it as "the engine knows no steps", and went looking for a
+// typo in an extension file that was correct. Two sessions lost time to it.
+func TestSourceWithoutRefNamesTheMissingFlag(t *testing.T) {
+	dir := t.TempDir()
+	workflowPath := filepath.Join(dir, "workflow.yaml")
+	workflow := `schema_version: "3"
+id: test:workflow/cycle
+version: 1.0.0
+definition:
+  entry: build
+  stages:
+    build: {kind: repeat, on_complete: {succeeded: commit}}
+    commit: {kind: finish, outcome: succeeded}
+`
+	if err := os.WriteFile(workflowPath, []byte(workflow), 0600); err != nil {
+		t.Fatal(err)
+	}
+	extensionsPath := filepath.Join(dir, "extensions.yaml")
+	extensions := `extensions:
+  - id: qa-after-build
+    workflow: cycle
+    between: {from: build, to: commit}
+    step: qa
+    on: {pass: commit}
+`
+	if err := os.WriteFile(extensionsPath, []byte(extensions), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stepPath := filepath.Join(dir, "qa.yaml")
+	if err := os.WriteFile(stepPath, []byte("inputs: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errout bytes.Buffer
+	args := []string{"project", "extend", "--workflow", workflowPath, "--workflow-id", "test:workflow/cycle", "--extensions", extensionsPath,
+		"--output", filepath.Join(dir, "compiled.json"), "--step-source", "qa=" + stepPath}
+	if code := execute(context.Background(), args, &out, &errout); code == 0 {
+		t.Fatal("a source without its ref was accepted")
+	}
+	refusal := errout.String()
+	if !strings.Contains(refusal, "project_extension_missing_step_ref") {
+		t.Fatalf("the refusal did not name the missing flag: %s", refusal)
+	}
+	for _, named := range []string{"--step-ref", "--step-source"} {
+		if !strings.Contains(refusal, named) {
+			t.Fatalf("the refusal named neither half of the pair: %s", refusal)
+		}
+	}
+	if strings.Contains(refusal, "known: )") {
+		t.Fatalf("the empty known list is still presented as the answer: %s", refusal)
+	}
+}

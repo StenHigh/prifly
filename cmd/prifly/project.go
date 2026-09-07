@@ -1027,6 +1027,14 @@ func (c *cli) projectExtend(_ context.Context, args []string) error {
 			return usageError("project_extension_unknown_workflow: " + extension.Workflow + " (known: " + workflowName + ")")
 		}
 		if _, exists := refs[extension.Step]; !exists {
+			// An empty known list means no --step-ref reached the command at
+			// all, and naming the step sends the reader to look for a typo in
+			// the extension list they wrote correctly. The two flags are one
+			// pair: the ref is written into the workflow, the source is the
+			// file that ref is checked against.
+			if len(refs) == 0 {
+				return usageError("project_extension_missing_step_ref: no --step-ref was supplied; every inserted step needs both --step-ref NAME=JSON, the sealed reference written into the workflow, and --step-source NAME=FILE, the file it is checked against")
+			}
 			return usageError("project_extension_unknown_step: " + extension.Step + " (known: " + strings.Join(known, ", ") + ")")
 		}
 		if source, exists := sources[extension.Step]; !exists {

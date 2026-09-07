@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -474,5 +475,77 @@ func TestPackageComponentIsReadableByItsDeclaredID(t *testing.T) {
 	}
 	if _, _, err := e.PackageComponent(ctx, "test:schema/absent", ""); refusalCode(err) != "package_component_not_found" {
 		t.Fatalf("an unknown component was not refused by name: %v", err)
+	}
+}
+
+// A package profile that derives component versions from the package build key
+// gives every rebuild a new version for a file it never touched. Comparing the
+// whole reference then reads "two versions" as "two answers" and demands a
+// choice where the bytes are identical — thirteen components of one pilot
+// package became unreadable without naming an edition, and every edition held
+// the same content. Identity is the digest.
+func TestIdenticalComponentBytesUnderTwoVersionsStayReadable(t *testing.T) {
+	e, ctx, pkg, _ := importedPilotPackage(t)
+	component := pkg.Components[0].Ref
+	body := "---\nname: aif-plan\n---\n\n# Plan\n"
+	if rawDigest([]byte(body)) != component.Digest {
+		t.Fatalf("the fixture body is not the sealed component: %s", component.Digest)
+	}
+	// A rebuild that changed nothing in this file: same bytes, own version.
+	files := map[string]string{"skills/aif-plan/SKILL.md": body, "skills/aif-plan/references/TASK-FORMAT.md": "# Task format\n"}
+	components := []map[string]any{{"kind": "context", "ref": map[string]any{"id": component.ID, "version": "1.1.0", "digest": component.Digest}, "path": "skills/aif-plan/SKILL.md"}}
+	rebuilt := packageSource(t, files, components, func(manifest map[string]any) { manifest["version"] = "1.1.0" })
+	if _, err := e.ImportPackage(ctx, PackageImportRequest{CommandID: "command:rebuild", Directory: rebuilt, Reason: "same file, new build"}); err != nil {
+		t.Fatal(err)
+	}
+	definition, data, err := e.PackageComponent(ctx, component.ID, "")
+	if err != nil {
+		t.Fatalf("byte-identical editions were refused as ambiguous: %v", err)
+	}
+	if definition.Ref.Digest != component.Digest || string(data) != body {
+		t.Fatalf("the answer is not the sealed content: %+v %s", definition, data)
+	}
+}
+
+// "more than one, including A and B" reads as "exactly two" when seven trusted
+// packages declare the id. The count is what says the list is cut short.
+func TestAmbiguityRefusalNamesHowManyDeclareIt(t *testing.T) {
+	e, ctx, pkg, _ := importedPilotPackage(t)
+	component := pkg.Components[0].Ref
+	for index, edition := range []string{"1.1.0", "1.2.0"} {
+		body := fmt.Sprintf("---\nname: aif-plan\n---\n\n# Plan, edition %d\n", index)
+		files := map[string]string{"skills/aif-plan/SKILL.md": body, "skills/aif-plan/references/TASK-FORMAT.md": "# Task format\n"}
+		components := []map[string]any{{"kind": "context", "ref": map[string]any{"id": component.ID, "version": edition, "digest": rawDigest([]byte(body))}, "path": "skills/aif-plan/SKILL.md"}}
+		source := packageSource(t, files, components, func(manifest map[string]any) { manifest["version"] = edition })
+		if _, err := e.ImportPackage(ctx, PackageImportRequest{CommandID: "command:edition" + edition, Directory: source, Reason: "another edition"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _, err := e.PackageComponent(ctx, component.ID, "")
+	if err == nil || !strings.Contains(err.Error(), "package_component_ambiguous") {
+		t.Fatalf("three differing editions were answered anyway: %v", err)
+	}
+	if !strings.Contains(err.Error(), "by 3 trusted packages") {
+		t.Fatalf("the refusal does not say how many declare it: %v", err)
+	}
+}
+
+// Under a profile that derives versions from the build key, the version an
+// author wrote in the manifest addresses no installed package. Answering that
+// with "no package declares this component" sent the reader to look for the
+// component, which is installed twice over.
+func TestNamingAnUninstalledEditionSaysSo(t *testing.T) {
+	e, ctx, pkg, _ := importedPilotPackage(t)
+	component := pkg.Components[0].Ref
+	_, _, err := e.PackageComponent(ctx, component.ID, pkg.Ref.ID+"@9.9.9")
+	if err == nil || !strings.Contains(err.Error(), "package_not_installed") {
+		t.Fatalf("an uninstalled edition was reported as a missing component: %v", err)
+	}
+	if !strings.Contains(err.Error(), "build key") || !strings.Contains(err.Error(), "package list") {
+		t.Fatalf("the refusal does not say why the version missed or where to look: %v", err)
+	}
+	// The component itself is still readable without naming an edition.
+	if _, _, err := e.PackageComponent(ctx, component.ID, ""); err != nil {
+		t.Fatalf("the component stopped being readable: %v", err)
 	}
 }
