@@ -2445,6 +2445,61 @@ func TestCoreBuildNoteFiresOnlyOnAChange(t *testing.T) {
 	}
 }
 
+// A step's own contract lives in the package that declares it, and the refusal
+// pointed at the command that reads it only when the caller already wrote the
+// full id — which is what they do not know yet. An assisted executor refused by
+// a package schema went hunting through the authority's files for it.
+func TestUnknownContractPointsAtThePackageCommandForEitherSpelling(t *testing.T) {
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"init", authority}, &out, &errout); code != 0 {
+		t.Fatalf("init: %d %s", code, errout.String())
+	}
+	for _, name := range []string{"warmup-handoff", "aif:schema/warmup-handoff"} {
+		out.Reset()
+		errout.Reset()
+		if code := execute(context.Background(), []string{"--json", "--project", authority, "schema", name}, &out, &errout); code == 0 {
+			t.Fatalf("%s was answered as a built-in contract", name)
+		}
+		var problem prifly.Problem
+		if err := json.Unmarshal(errout.Bytes(), &problem); err != nil {
+			t.Fatalf("%v: %s", err, errout.String())
+		}
+		if problem.Code != "unsupported_contract" || !strings.Contains(problem.Message, "package inspect --component") {
+			t.Fatalf("%s: the refusal does not name the command that reads it: %s %s", name, problem.Code, problem.Message)
+		}
+	}
+}
+
+// package inspect wrapped every component's bytes in a RawMessage, so asking
+// for a context — the instructions of one's own step, and prose, not JSON —
+// made the response unmarshalable and returned a bare "json" refusal with no
+// pointer; the executor read the file out of the authority by hand instead.
+// This covers the rule; the wiring was checked against a real imported package,
+// where a schema came back as JSON and a context as text.
+func TestPackageComponentViewKeepsTextAsText(t *testing.T) {
+	definition := prifly.Definition{Kind: "context"}
+	view := packageComponentView(definition, []byte("# Bridge\n\nProse, not JSON.\n"))
+	if _, wrapped := view["component"]; wrapped {
+		t.Fatalf("text was wrapped as JSON: %+v", view)
+	}
+	text, ok := view["component_text"].(string)
+	if !ok || !strings.Contains(text, "Prose, not JSON") {
+		t.Fatalf("the text did not survive: %+v", view)
+	}
+	if _, err := json.Marshal(view); err != nil {
+		t.Fatalf("the response is still unmarshalable: %v", err)
+	}
+	definition.Kind = "schema"
+	view = packageComponentView(definition, []byte(`{"type":"object"}`))
+	if _, wrapped := view["component"]; !wrapped {
+		t.Fatalf("JSON was not returned as JSON: %+v", view)
+	}
+	if _, text := view["component_text"]; text {
+		t.Fatalf("JSON was also returned as text: %+v", view)
+	}
+}
+
 // A caller that must name an exact contract has to be able to read the set of
 // names, and to use the reference form its own task already carries.
 func TestSchemaListsContractsAndAcceptsDeclaredReferences(t *testing.T) {

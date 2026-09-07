@@ -466,11 +466,15 @@ func contractSchema(name string) ([]byte, error) {
 		}
 	}
 	// A name this binary does not carry may still be declared by a package the
-	// authority installed, and that is a different command.
+	// authority installed, and that is a different command. The pointer used to
+	// depend on the name being written in full, which is exactly what a reader
+	// does not know yet: the executor of an assisted step, refused by a package
+	// schema, went looking through the authority's files for it.
+	pointer := "; a schema declared by an installed package is read with package inspect --component ID, using the id the package declares"
 	if strings.Contains(name, ":") {
-		return nil, &flow.Problem{Code: "unsupported_contract", Message: "no built-in contract is named " + name + "; a schema declared by an installed package is read with package inspect --component " + name}
+		pointer = "; a schema declared by an installed package is read with package inspect --component " + name
 	}
-	return nil, err
+	return nil, &flow.Problem{Code: "unsupported_contract", Message: "no built-in contract is named " + name + pointer}
 }
 
 // outsideAuthority reports whether a named file cannot be inside the selected
@@ -1564,7 +1568,7 @@ func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) err
 			if err != nil {
 				return err
 			}
-			return c.emit(map[string]any{"schema_version": "foundation-package-component/1", "ref": definition.Ref, "kind": definition.Kind, "component": json.RawMessage(body)})
+			return c.emit(packageComponentView(definition, body))
 		}
 		if *refFile == "" {
 			return usageError("package inspect requires --ref FILE with an ImmutableRef, or --component ID")
@@ -1765,6 +1769,21 @@ func coreBuildNote(build string) string {
 		return ""
 	}
 	return "note: this Run was started by core build " + build + " and is being driven by " + prifly.Version + "; its recorded state version still decides its semantics"
+}
+
+// packageComponentView returns a component's bytes in the shape they are in. A
+// context is prose, not JSON, and wrapping it in a RawMessage made the whole
+// response unmarshalable: the reader asking for the instructions of their own
+// step got a bare "json" refusal with no pointer and read the file out of the
+// authority by hand.
+func packageComponentView(definition prifly.Definition, body []byte) map[string]any {
+	view := map[string]any{"schema_version": "foundation-package-component/1", "ref": definition.Ref, "kind": definition.Kind}
+	if json.Valid(body) {
+		view["component"] = json.RawMessage(body)
+		return view
+	}
+	view["component_text"] = string(body)
+	return view
 }
 
 func (c *cli) commandResult(result local.ApplyResult) error {
@@ -2327,6 +2346,7 @@ Global: --project DIR  --json  --format text|json|csv
   package list                      Trusted packages, their origin and recorded trust decision
   package inspect --ref REF.json | --component ID
                                    Read one exact sealed package, or the bytes of one component it declares, by the ID the package gave it
+                                   A JSON component comes back in component; a context is prose and comes back in component_text
   package import --archive FILE.tar [--signature FILE.sig] --reason TEXT
   package trust-root --id ID --public-key HEX --reason TEXT | --id ID --remove --reason TEXT
                                    A key inside a package never appoints itself trusted
