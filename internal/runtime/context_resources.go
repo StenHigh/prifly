@@ -122,9 +122,16 @@ func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []Pinn
 	}
 	resources := []PinnedResource{}
 	var sourceBytes, pinnedBytes int
-	entries := append(append([]Definition{}, file.Entries...), e.packageEntries()...)
+	packaged := e.packageEntries()
+	entries := append(append([]Definition{}, file.Entries...), packaged...)
 	if len(entries) > maxLocalRegistryEntries {
-		return nil, nil, nil, fault("dependency_limit", "local and package definitions exceed 512 entries")
+		// A project that follows every package release reaches this by being
+		// diligent: each import contributes its components and the editions it
+		// replaced keep theirs, so a package of 55 components fills the budget
+		// on its tenth edition. Naming the limit without naming the release is
+		// a dead end — the way out is one command, and only a trusted edition
+		// occupies the budget at all.
+		return nil, nil, nil, fault("dependency_limit", fmt.Sprintf("local and package definitions exceed %d entries: %d in total, %d of them from trusted packages%s; removing an edition you no longer run releases its entries with package remove --id ID --version VERSION --reason TEXT, and package list shows which editions are still trusted", maxLocalRegistryEntries, len(entries), len(packaged), heaviestPackage(e.packages)))
 	}
 	identities := make(map[string]bool, len(entries))
 	for _, entry := range entries {
@@ -302,4 +309,30 @@ func (e *Engine) pinResources(pins []PinnedResource) error {
 		}
 	}
 	return nil
+}
+
+// heaviestPackage names the identity holding the most trusted editions, which
+// under a profile that derives versions from the build key is almost always one
+// package upgraded many times rather than many different packages.
+func heaviestPackage(packages []PackageEntry) string {
+	editions := map[string]int{}
+	components := map[string]int{}
+	resolvable := resolvablePackages(PackageRecord{Packages: packages})
+	for _, pkg := range packages {
+		if !resolvable[pkg.Ref] {
+			continue
+		}
+		editions[pkg.Ref.ID]++
+		components[pkg.Ref.ID] += len(pkg.Components)
+	}
+	heaviest, count := "", 0
+	for id, held := range editions {
+		if held > count || (held == count && id < heaviest) {
+			heaviest, count = id, held
+		}
+	}
+	if count < 2 {
+		return ""
+	}
+	return fmt.Sprintf(", where %s alone is trusted in %d editions holding %d of them", heaviest, count, components[heaviest])
 }

@@ -549,3 +549,40 @@ func TestNamingAnUninstalledEditionSaysSo(t *testing.T) {
 		t.Fatalf("the component stopped being readable: %v", err)
 	}
 }
+
+// A project that follows every package release fills the 512-entry budget by
+// being diligent: each import contributes its components and the editions it
+// replaced keep theirs. The pilot reached it in one evening over seven package
+// releases, and the refusal named the limit without naming the release.
+func TestDependencyLimitNamesTheEditionsThatFillIt(t *testing.T) {
+	packages := []PackageEntry{}
+	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0"} {
+		packages = append(packages, PackageEntry{
+			Ref:        flow.Ref{ID: "aif:package/classic", Version: version, Digest: rawDigest([]byte(version))},
+			Status:     PackageTrusted,
+			Components: []Definition{{Ref: flow.Ref{ID: "aif:step/tests", Version: version}}, {Ref: flow.Ref{ID: "aif:step/plan", Version: version}}},
+		})
+	}
+	packages = append(packages, PackageEntry{
+		Ref:        flow.Ref{ID: "other:package/tool", Version: "1.0.0", Digest: rawDigest([]byte("tool"))},
+		Status:     PackageTrusted,
+		Components: []Definition{{Ref: flow.Ref{ID: "other:step/one", Version: "1.0.0"}}},
+	})
+	note := heaviestPackage(packages)
+	for _, expected := range []string{"aif:package/classic", "3 editions", "6 of them"} {
+		if !strings.Contains(note, expected) {
+			t.Fatalf("the note does not name %q: %q", expected, note)
+		}
+	}
+	// A withdrawn edition supplies no definitions, so it must not be counted as
+	// occupying the budget the operator is being asked to free.
+	packages[0].Status = PackageRemoved
+	if note := heaviestPackage(packages); !strings.Contains(note, "2 editions") {
+		t.Fatalf("a removed edition still counts against the budget: %q", note)
+	}
+	// One edition of one package is not the diagnosis, so nothing is claimed.
+	single := []PackageEntry{{Ref: flow.Ref{ID: "aif:package/classic", Version: "1.0.0"}, Status: PackageTrusted}}
+	if note := heaviestPackage(single); note != "" {
+		t.Fatalf("a single edition was blamed for the budget: %q", note)
+	}
+}

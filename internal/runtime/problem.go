@@ -190,6 +190,9 @@ func ProblemFor(err error) (Problem, int) {
 		// Nothing is wrong with the state when the call itself was mistyped, so
 		// a state diagnostic only leads away from the form that has to be fixed.
 		"invalid_usage": {"help"},
+		// A budget filled by superseded package editions is released by removing
+		// one, and no state diagnostic reports on the registry that holds them.
+		"dependency_limit": {"package.list", "package.remove"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
 	}
