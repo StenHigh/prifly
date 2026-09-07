@@ -83,10 +83,10 @@
 
 | Ворота | Где | Результат |
 |---|---|---|
-| `make check` | локально | ожидается |
-| `make e2e` | локально | ожидается |
-| `verify` | GitHub Actions | ожидается |
-| `race` | GitHub Actions | ожидается |
+| `make check` | локально | зелёный; 48 бандлов схем совпали побайтно |
+| `make e2e` | локально | зелёный; установщик, примеры, authoring, CLI, Core, контекст |
+| `verify` | GitHub Actions 34117428367 | success |
+| `race` | GitHub Actions 34117428878 | success |
 | Внешние | `prifly-aif-workflows` | `survives_remove.py` и воспроизведение `definition_drift` под `/2` — после выпуска |
 
 ## Что этот выпуск не закрывает
