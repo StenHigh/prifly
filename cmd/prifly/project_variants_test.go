@@ -303,7 +303,10 @@ stages:
 	finish(start("b", b))
 	againA, repeatedDirectory := compile("a")
 	assertSameBuild(a, againA)
-	importPackage(repeatedDirectory, "package_present")
+	// The same inputs produce the same build, and importing it again asks for a
+	// state that already holds: that is the ordinary thing to do before a repeat
+	// run, so it succeeds and changes nothing rather than being refused.
+	importPackage(repeatedDirectory, "")
 	finish(start("a", againA))
 	if got, err := os.ReadFile(filepath.Join(repository, folder, "extend.yaml")); err != nil || string(got) != initialExtend {
 		t.Fatalf("per-Run selection changed the tracked default: %v %q", err, got)

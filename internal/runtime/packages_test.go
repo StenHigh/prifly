@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -259,12 +260,23 @@ func TestPackageIdentityConflictAndRepeatedImport(t *testing.T) {
 	if _, err := e.ImportPackage(ctx, PackageImportRequest{CommandID: "command:first", Directory: source, Reason: "first"}); err != nil {
 		t.Fatal(err)
 	}
+	// Importing the same trusted revision again asks for a state that already
+	// holds. Refusing it made the ordinary thing to do before a repeat run —
+	// rebuild and import — look like a failure, and once a rejected command
+	// stopped exiting zero, that failure became visible to every script.
 	repeat, err := e.ImportPackage(ctx, PackageImportRequest{CommandID: "command:second", Directory: source, Reason: "second"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if repeat.Receipt.Rejection == nil || repeat.Receipt.Rejection.Code != "package_present" {
-		t.Fatalf("the same sealed revision was trusted twice: %+v", repeat.Receipt)
+	if repeat.Receipt.Rejection != nil {
+		t.Fatalf("re-importing an unchanged trusted revision was refused: %+v", repeat.Receipt.Rejection)
+	}
+	if !strings.Contains(string(repeat.Receipt.Result), "already_trusted") {
+		t.Fatalf("the receipt does not say the revision was already there: %s", repeat.Receipt.Result)
+	}
+	packages, _, err := e.readPackages(ctx)
+	if err != nil || len(packages.Packages) != 1 {
+		t.Fatalf("the repeat import changed the record: %v %+v", err, packages.Packages)
 	}
 	// Same id and version, different bytes: a conflict, never a silent update.
 	other, _, _ := skillPackage(t, "# Plan changed\n")

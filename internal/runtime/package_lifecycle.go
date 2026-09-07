@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
@@ -446,18 +448,48 @@ func (e *Engine) packageAdmissionGate(ctx context.Context, refs []flow.Ref, requ
 	}
 	resolvable := resolvablePackages(record)
 	tracked := false
+	// A component needs one package that can supply it, not every package that
+	// ever did: after an orderly remove and a fresh import the old record still
+	// names the same component, and refusing on it made the documented way to
+	// replace a package impossible to complete.
+	supplied := map[flow.Ref]bool{}
+	lost := map[flow.Ref]string{}
 	for _, pkg := range record.Packages {
 		for _, component := range pkg.Components {
 			if !wanted[component.Ref] {
 				continue
 			}
 			tracked = true
-			if requireResolvable && !resolvable[pkg.Ref] {
-				return &local.ControlPin{Key: AuthorityPackagesKey, Version: version}, local.Reject("package_not_resolvable", "a package no longer trusted supplied "+component.Ref.ID+" from "+pkg.Ref.ID), nil
-			}
-			if !requireResolvable && pkg.Status == PackageRevoked {
+			// Revocation is a security withdrawal, not a question of who else
+			// supplies the component: it stops the work either way, and it keeps
+			// the code each caller already matches on — an existing Run is
+			// interrupted as package_revoked, a new one is refused as before.
+			if pkg.Status == PackageRevoked {
+				if requireResolvable {
+					return &local.ControlPin{Key: AuthorityPackagesKey, Version: version}, local.Reject("package_not_resolvable", "a package no longer trusted supplied "+component.Ref.ID+" from "+pkg.Ref.ID), nil
+				}
 				return &local.ControlPin{Key: AuthorityPackagesKey, Version: version}, local.Reject("package_revoked", "a revoked package supplied "+component.Ref.ID+" from "+pkg.Ref.ID), nil
 			}
+			if resolvable[pkg.Ref] {
+				supplied[component.Ref] = true
+				continue
+			}
+			lost[component.Ref] = pkg.Ref.ID
+		}
+	}
+	if requireResolvable {
+		unsatisfied := []flow.Ref{}
+		for ref := range lost {
+			if !supplied[ref] {
+				unsatisfied = append(unsatisfied, ref)
+			}
+		}
+		// One deterministic subject: the same authority state always names the
+		// same component back.
+		slices.SortFunc(unsatisfied, func(a, b flow.Ref) int { return strings.Compare(a.String(), b.String()) })
+		if len(unsatisfied) != 0 {
+			ref := unsatisfied[0]
+			return &local.ControlPin{Key: AuthorityPackagesKey, Version: version}, local.Reject("package_not_resolvable", "no trusted package supplies "+ref.ID+"; "+lost[ref]+" declared it and is no longer trusted"), nil
 		}
 	}
 	if !tracked {

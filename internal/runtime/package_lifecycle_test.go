@@ -149,6 +149,34 @@ func TestRemovingAPackageReleasesTheIdentitiesItPinned(t *testing.T) {
 	}
 }
 
+// Replacing a package is remove then import, and the gate refused on the record
+// that was just removed: it demanded every package that ever declared a
+// component still be resolvable, instead of one that is. The documented way to
+// replace a package could not be completed.
+func TestAComponentNeedsOneResolvableSupplierNotEveryPast(t *testing.T) {
+	e, ctx, pkg, _ := importedPilotPackage(t)
+	refs := []flow.Ref{pkg.Components[0].Ref}
+	if _, refusal, err := e.packageAdmissionGate(ctx, refs, true); err != nil || refusal != nil {
+		t.Fatalf("a trusted package was refused: %v %v", err, refusal)
+	}
+	removed, err := e.SetPackageStatus(ctx, PackageLifecycleRequest{CommandID: "command:remove", ID: pkg.Ref.ID, Version: pkg.Ref.Version, Status: PackageRemoved, Reason: "replaced by a newer build"})
+	if err != nil || removed.Receipt.Rejection != nil {
+		t.Fatalf("removal was refused: %v %+v", err, removed.Receipt.Rejection)
+	}
+	// Nothing supplies it now, so the refusal is correct and says so plainly.
+	_, refusal, err := e.packageAdmissionGate(ctx, refs, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejection, ok := refusal.(*local.Rejection)
+	if !ok || rejection.Code != "package_not_resolvable" {
+		t.Fatalf("a component with no supplier was admitted: %v", refusal)
+	}
+	if !strings.Contains(rejection.Message, "no trusted package supplies") {
+		t.Fatalf("the refusal does not say what is missing: %s", rejection.Message)
+	}
+}
+
 func TestRevocationIsTerminalAndNotUndoneByReimport(t *testing.T) {
 	e, ctx, pkg, source := importedPilotPackage(t)
 	if _, err := e.SetPackageStatus(ctx, PackageLifecycleRequest{CommandID: "command:revoke", ID: pkg.Ref.ID, Version: pkg.Ref.Version, Status: PackageRevoked, Reason: "withdrawn after an incident"}); err != nil {

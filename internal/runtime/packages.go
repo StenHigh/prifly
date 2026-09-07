@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -280,7 +281,18 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 					return local.AuthorityChange{}, local.Reject("package_revoked", "this package revision was revoked and is not re-trusted by importing it again")
 				}
 				if existing.ManifestDigest == manifestDigest {
-					return local.AuthorityChange{}, local.Reject("package_present", "this exact package revision is already trusted")
+					// The same bytes under the same identity, already trusted: the
+					// state the command asks for is the state that holds. Refusing
+					// it made re-importing an unchanged build — the ordinary thing
+					// to do before a repeat run — look like a failure.
+					if existing.Status == "" || existing.Status == PackageTrusted {
+						data, err := canonicalState(record)
+						if err != nil {
+							return local.AuthorityChange{}, err
+						}
+						return local.AuthorityChange{Data: data, Result: json.RawMessage(`{"already_trusted":true}`)}, nil
+					}
+					return local.AuthorityChange{}, local.Reject("package_present", "this exact package revision is recorded with status "+existing.Status+"; importing it again does not restore it")
 				}
 				return local.AuthorityChange{}, local.Reject("package_identity_conflict", "the same package id and version is already trusted with other bytes")
 			}
