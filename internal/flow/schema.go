@@ -14,6 +14,7 @@ import (
 
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 )
 
 //go:embed protocol.schema.json
@@ -612,7 +613,51 @@ func validationProblem(err error, path string) error {
 		return strings.Compare(location(a)+a.SchemaURL, location(b)+b.SchemaURL)
 	})
 	leaf := leaves[0]
-	return problem("schema_invalid", location(leaf), "value does not satisfy the declared contract")
+	return problem("schema_invalid", location(leaf), "value does not satisfy the declared contract"+declaredExpectation(leaf))
+}
+
+// declaredExpectation names what the contract asks for at the failing pointer.
+// Only the schema's own side is rendered — never the value that was supplied,
+// which is the caller's input and stays out of diagnostics. Saying that a value
+// does not satisfy a contract without saying what the contract wants sends the
+// reader to prifly schema and back for every field: an enum of four names cost
+// the pilot three attempts to discover.
+func declaredExpectation(e *jsonschema.ValidationError) string {
+	render := func(value any) string {
+		data, err := json.Marshal(value)
+		if err != nil || len(data) > 120 {
+			return ""
+		}
+		return string(data)
+	}
+	switch want := e.ErrorKind.(type) {
+	case *kind.Enum:
+		names := []string{}
+		for _, value := range want.Want {
+			text := render(value)
+			if text == "" {
+				return ""
+			}
+			names = append(names, text)
+		}
+		if len(names) == 0 {
+			return ""
+		}
+		return "; the declared values are " + strings.Join(names, ", ")
+	case *kind.Const:
+		if text := render(want.Want); text != "" {
+			return "; the declared value is " + text
+		}
+	case *kind.Type:
+		if len(want.Want) != 0 {
+			return "; the declared type is " + strings.Join(want.Want, " or ")
+		}
+	case *kind.Required:
+		if len(want.Missing) != 0 {
+			return "; the contract requires " + strings.Join(want.Missing, ", ")
+		}
+	}
+	return ""
 }
 
 func decodeValue(value any, target any) error {

@@ -11,8 +11,54 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"go.yaml.in/yaml/v3"
 )
+
+// "value does not satisfy the declared contract" named the pointer and nothing
+// else, so a reader had to fetch the contract and read it themselves: a four
+// name enum cost the pilot three attempts to discover. The schema's own side is
+// safe to state — it is the contract, not the caller's input, which stays out.
+func TestSchemaRefusalNamesWhatTheContractDeclares(t *testing.T) {
+	for _, test := range []struct {
+		name, schema, value, want string
+	}{
+		{"enum", `{"enum":["one","two","three"]}`, `"four"`, `the declared values are "one", "two", "three"`},
+		{"type", `{"type":"array"}`, `"text"`, "the declared type is array"},
+		{"const", `{"const":"exact"}`, `"other"`, `the declared value is "exact"`},
+		{"required", `{"type":"object","required":["owner"]}`, `{}`, "the contract requires owner"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			compiler := jsonschema.NewCompiler()
+			doc, err := jsonschema.UnmarshalJSON(strings.NewReader(test.schema))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := compiler.AddResource("test.json", doc); err != nil {
+				t.Fatal(err)
+			}
+			schema, err := compiler.Compile("test.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			value, err := jsonschema.UnmarshalJSON(strings.NewReader(test.value))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = validationProblem(schema.Validate(value), "/brief")
+			if err == nil {
+				t.Fatal("the value was accepted")
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("the refusal does not state the contract: %v", err)
+			}
+			// The supplied value is the caller's input and never appears.
+			if strings.Contains(err.Error(), "four") || strings.Contains(err.Error(), "other") {
+				t.Fatalf("the refusal echoed the supplied value: %v", err)
+			}
+		})
+	}
+}
 
 func TestMain(m *testing.M) {
 	if handled, code := SchemaWorker(os.Args[1:], os.Stdin, os.Stdout); handled {
