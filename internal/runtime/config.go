@@ -26,14 +26,16 @@ import (
 var EventTypes = []string{"run.created", "stage.activated", "attempt.admitted", "attempt.dispatching", "attempt.started", "attempt.result_candidate", "attempt.cost_reported", "attempt.observed", "attempt.settled", "attempt.resolved", "check.resolved", "run.finished", "run.restricted", "stop.released", "run.resumed", "run.recovered", "step.publication", "artifact.publication_prepared", "artifact.publication_checked", "artifact.publication_checks_failed", "action.intent_proposed", "action.admitted", "state.changed", "diagnostic.recorded", "stage.failed", "stage.error_handled", "stage.choice_decided", "invocation.created", "invocation.finished", "stage.call_returned", "stage.repeat_entered", "stage.repeat_decided", "stage.parallel_entered", "stage.join_decided", "stage.map_entered", "stage.map_empty", "stage.wait_entered", "stage.wait_resolved", "wait.event_received", "wait.reserved", "guard.observed", "guard.processed", "run.context_pinned", "check.admitted", "check.dispatching", "check.started", "check.observed", "check.settled", "check.recovered", "acceptance.prepared", "acceptance.passed", "acceptance.failed", "attempt.accepted", "decision.requested", "decision.defaulted", "decision.answered"}
 
 type Engine struct {
-	Root         string
-	Config       ProjectConfig
-	Installation Installation
-	Store        *local.Store
-	Blobs        *local.BlobStore
-	ReadOnly     bool
-	clock        clock
-	owner        string
+	// AfterRunCreated runs after a successful creation transaction, before any Drive.
+	AfterRunCreated func()
+	Root            string
+	Config          ProjectConfig
+	Installation    Installation
+	Store           *local.Store
+	Blobs           *local.BlobStore
+	ReadOnly        bool
+	clock           clock
+	owner           string
 	// Trusted packages are read once when the engine opens. A package trusted
 	// by another process becomes resolvable to the next command, never inside a
 	// command that already computed its dependency closure.

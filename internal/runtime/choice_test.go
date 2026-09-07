@@ -257,6 +257,10 @@ func TestChoiceDurableSelection(t *testing.T) {
 			if err := validatePublic(t, "ChoiceDecision", decision); err != nil {
 				t.Fatal("committed selection violates its public schema", err)
 			}
+			monitor, err := e.MonitorView(context.Background(), runID)
+			if err != nil || len(monitor.Choices) != 1 || monitor.Choices[0].ID != decision.ID {
+				t.Fatal("monitor lost recorded choice", err)
+			}
 			if decision.Selection != tc.selection || decision.Route != tc.route || len(decision.Evaluations) != len(tc.results) {
 				t.Fatalf("wrong recorded choice rule/result: %+v", decision)
 			}

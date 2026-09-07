@@ -34,6 +34,11 @@ func TestMain(m *testing.M) {
 	if handled, code := flow.SchemaWorker(os.Args[1:], os.Stdin, os.Stdout); handled {
 		os.Exit(code)
 	}
+	if base := os.Getenv("PRIFLY_MONITOR_TEST_CONFIG"); base != "" {
+		monitorUserConfigDir = func() (string, error) { return base, nil }
+		os.Exit(execute(context.Background(), os.Args[1:], os.Stdout, os.Stderr))
+	}
+	ensureRunMonitor = func(string) error { return nil }
 	os.Exit(m.Run())
 }
 

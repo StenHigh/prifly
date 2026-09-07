@@ -51,3 +51,13 @@ func TestMonitorAnswersOnlyForItsOwnAddress(t *testing.T) {
 		}
 	}
 }
+
+func TestMonitorAnswersAlternateLoopbackAddress(t *testing.T) {
+	handler := monitorHost("127.0.0.5:7777")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest("GET", "http://127.0.0.5:7777/", nil)
+	handler.ServeHTTP(response, request)
+	if response.Code != 200 {
+		t.Fatal(response.Code)
+	}
+}

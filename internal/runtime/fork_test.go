@@ -61,7 +61,12 @@ func TestForkCreatesSeparateCoreRunWithProvenance(t *testing.T) {
 		t.Fatalf("source did not complete: %+v %v", source, err)
 	}
 	command := ForkCommand{SchemaVersion: "1", CommandID: "command:fork", RunID: sourceID, ExpectedRunVersion: view.Snapshot.Version, Payload: ForkPayload{WorkflowRef: source.WorkflowRef, BriefRef: source.Brief, Inputs: map[string]ArtifactRef{}, ReuseRefs: []ArtifactRef{}, Reason: "owner changed the work scope"}}
+	createdCallback := false
+	e.AfterRunCreated = func() { createdCallback = true }
 	result, err := e.Fork(context.Background(), command)
+	if !createdCallback {
+		t.Fatal("fork did not notify creation")
+	}
 	if err != nil || result.Receipt.Rejection != nil {
 		t.Fatalf("fork: %+v %v", result, err)
 	}
