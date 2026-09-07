@@ -110,7 +110,10 @@ func (e *Engine) PackageComponent(ctx context.Context, id string) (Definition, [
 			return Definition{Ref: component.Ref, Kind: component.Kind, Path: component.Path}, data, nil
 		}
 	}
-	return Definition{}, nil, &flow.Problem{Code: "package_component_not_found", Message: "no installed trusted package declares " + id + "; read package list for what is installed"}
+	// A built-in contract is not a package component and never will be, so
+	// "no package declares it" is true and useless: the reader asked where the
+	// contract is, and it is one command away.
+	return Definition{}, nil, &flow.Problem{Code: "package_component_not_found", Message: "no installed trusted package declares " + id + "; read package list for what is installed, and prifly schema NAME for a contract this build carries itself"}
 }
 
 func (e *Engine) InspectPackage(ctx context.Context, ref flow.Ref) (PackageInspection, error) {

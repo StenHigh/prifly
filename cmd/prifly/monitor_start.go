@@ -23,7 +23,10 @@ func (c *cli) openWithMonitor(root string, readOnly bool) (*prifly.Engine, error
 	if err == nil && !readOnly {
 		e.AfterRunCreated = func() {
 			if err := ensureRunMonitor(e.Root); err != nil {
-				fmt.Fprintf(c.errout, "monitor: %v; Run continues. Start manually with prifly monitor.\n", err)
+				// The monitor is a convenience, and a project that never wanted
+				// one still saw this on every start, worded like a fault. Say
+				// what it is: optional, and nothing about the Run depends on it.
+				fmt.Fprintf(c.errout, "monitor: the optional local Run monitor is not running (%v); the Run is unaffected, and prifly monitor starts it if you want it\n", err)
 			}
 		}
 	}

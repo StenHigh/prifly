@@ -198,7 +198,10 @@ func TestMonitorStartupWarningLeavesRunCreated(t *testing.T) {
 	}
 	var out, errout bytes.Buffer
 	code := execute(context.Background(), []string{"--project", root, "run", "start", "--workflow", "workflows/monitor.json", "--brief", "brief.json", "--command-id", "command:monitor-warning", "--json"}, &out, &errout)
-	if code != 0 || calls != 1 || !strings.Contains(errout.String(), "Run continues") || !json.Valid(out.Bytes()) {
+	// The line says the monitor is optional and the Run is unaffected: a project
+	// that never wanted one saw the old wording on every start and read it as a
+	// fault.
+	if code != 0 || calls != 1 || !strings.Contains(errout.String(), "the Run is unaffected") || !json.Valid(out.Bytes()) {
 		t.Fatalf("code %d calls %d stdout %s stderr %s", code, calls, out.String(), errout.String())
 	}
 }

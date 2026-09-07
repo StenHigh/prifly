@@ -515,7 +515,7 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 	for id, value := range answers {
 		definition, exists := definitions[id]
 		if !exists || definition.Phase != "preflight" {
-			return projectPreflight{}, usageError("project_start_unknown_decision: " + id)
+			return projectPreflight{}, unknownDecision(definition, exists, id, "--preflight-answer")
 		}
 		if definition.Destination.Kind == "package_profile" {
 			return projectPreflight{}, usageError("project_start_profile_is_selected_with_package_profile: " + id)
@@ -564,14 +564,14 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 	// above. Validating raw runtime preanswers earlier rejects a legitimate
 	// dependent answer merely because its predecessor was selected by policy.
 	for id := range answers {
-		if !projectDecisionApplies(definitions[id], selected, answers) {
-			return projectPreflight{}, usageError("project_start_unknown_decision: " + id)
+		if definition, exists := definitions[id]; !projectDecisionApplies(definition, selected, answers) {
+			return projectPreflight{}, unknownDecision(definition, exists, id, "--preflight-answer")
 		}
 	}
 	for id, value := range runtime {
 		definition, exists := definitions[id]
 		if !exists || definition.Phase != "runtime" || !projectDecisionApplies(definition, selected, answers) {
-			return projectPreflight{}, usageError("project_start_unknown_decision: " + id)
+			return projectPreflight{}, unknownDecision(definition, exists, id, "--runtime-answer")
 		}
 		if err := projectValidateDecisionValue(definition, value); err != nil {
 			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + ": " + err.Error())
@@ -686,6 +686,20 @@ func projectDecisionApplies(definition prifly.DecisionDefinition, profile string
 		}
 	}
 	return true
+}
+
+// unknownDecision says why a declared decision was refused on this flag. A
+// decision that exists in the catalog but belongs to the other phase is the
+// common case, and naming only the id sent the reader to the questionnaire to
+// find out which of the two flags carries it.
+func unknownDecision(definition prifly.DecisionDefinition, exists bool, id, flag string) error {
+	if !exists {
+		return usageError("project_start_unknown_decision: " + id + " is not declared by this package; project questionnaire lists the decisions it declares")
+	}
+	if other := "--" + definition.Phase + "-answer"; definition.Phase != "" && other != flag {
+		return usageError("project_start_unknown_decision: " + id + " is a " + definition.Phase + " decision; pass it with " + other + ", not " + flag)
+	}
+	return usageError("project_start_unknown_decision: " + id + " does not apply to this launch; project questionnaire reports its applicability for these arguments")
 }
 
 func projectValidateDecisionValue(definition prifly.DecisionDefinition, value json.RawMessage) error {
