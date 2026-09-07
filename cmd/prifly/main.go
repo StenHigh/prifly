@@ -581,7 +581,7 @@ func (c *cli) run(ctx context.Context, args []string) error {
 		return c.projectCommand(ctx, args[1:])
 	}
 	readOnly := !mutates(args)
-	e, err := prifly.Open(c.project, readOnly)
+	e, err := c.openWithMonitor(c.project, readOnly)
 	if err != nil {
 		return err
 	}
@@ -2382,7 +2382,8 @@ Global: --project DIR  --json  --format text|json|csv
   grant issue --subject ID --capability OP [--resource RESOURCE.json] --max-operations N --lifetime-ms MS --reason TEXT
   grant revoke --id GRANT --reason TEXT | grant list
                                    Bounded delegation; issuing it is gated exactly like what it delegates
-  monitor [--addr 127.0.0.1:7777]   Read-only view of recorded runs in a browser; loopback only, offers no command
+  monitor [--addr 127.0.0.1:7777] [--scan-root DIRS]
+                                   All local user Runs, read-only; DIRS is an OS path-list. Auto-starts on Run creation, without opening a browser.
   capacity show | capacity set --capacity N --reason TEXT
                                    How many attempts run at once here; a workflow declares its own and the smaller governs
   command receipt --id COMMAND_ID   Inspect a lost response without re-running

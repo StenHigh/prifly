@@ -91,6 +91,40 @@ func (s *Store) Revision(ctx context.Context, runID string) (int64, int64, error
 	return version, sequence, err
 }
 
+// RevisionPage enumerates metadata without the full-snapshot telemetry ceiling.
+// Callers load changed snapshots through Read, retaining its integrity checks.
+func (s *Store) RevisionPage(ctx context.Context, after string, limit int) ([]Snapshot, string, error) {
+	if after != "" && !validIdentity(after) {
+		return nil, "", errors.New("invalid revision cursor")
+	}
+	limit, err := readLimit(limit)
+	if err != nil {
+		return nil, "", err
+	}
+	conn, err := s.begin(ctx, false)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rollbackClose(conn)
+	rows, err := conn.QueryContext(ctx, "SELECT run_id,version,event_seq FROM runs WHERE run_id>? ORDER BY run_id LIMIT ?", after, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+	page := []Snapshot{}
+	for rows.Next() {
+		var row Snapshot
+		if err := rows.Scan(&row.RunID, &row.Version, &row.EventSeq); err != nil {
+			return nil, "", err
+		}
+		if len(page) == limit {
+			return page, page[len(page)-1].RunID, rows.Err()
+		}
+		page = append(page, row)
+	}
+	return page, "", rows.Err()
+}
+
 func (s *Store) ReadEventsOfType(ctx context.Context, runID, eventType string, after int64, limit int) ([]Event, bool, error) {
 	limit, err := readLimit(limit)
 	if err != nil {

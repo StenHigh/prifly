@@ -24,6 +24,7 @@
 | Каталог и жизненный цикл решений Run | `openspec/specs/run-decisions/spec.md` | Перенесено | `run-decisions` |
 | Runtime, ресурсы и хранение | `openspec/specs/runtime-resources/spec.md` | Перенесено | `runtime-resources` |
 | Управление, безопасность и интерфейс | `openspec/specs/control-security-ux/spec.md` | Перенесено | `control-security-ux` |
+| Локальный монитор Run | `openspec/specs/local-run-monitor/spec.md` | Новая capability; source set установлен в `add-local-run-monitor` | `local-run-monitor` |
 | CLI и публичный протокол | `openspec/specs/cli-protocol/spec.md` | Перенесено | `cli-protocol` |
 | Качество и приёмка | `openspec/specs/quality-and-acceptance/` | Перенесено | `quality-and-acceptance` |
 | Архитектурные решения | `openspec/specs/architecture-decisions/` | Перенесено | `architecture-decisions` |

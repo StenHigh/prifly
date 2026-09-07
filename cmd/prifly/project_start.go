@@ -274,7 +274,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 	}
 
-	engine, err := prifly.Open(c.project, false)
+	engine, err := c.openWithMonitor(c.project, false)
 	if err != nil {
 		return err
 	}

@@ -34,6 +34,14 @@ type ForkPayload struct {
 // alters the source Run, and its transaction checks the source version again
 // after all files and artifacts have been prepared.
 func (e *Engine) Fork(ctx context.Context, command ForkCommand) (local.ApplyResult, error) {
+	result, err := e.fork(ctx, command)
+	if err == nil && result.Receipt.Rejection == nil && result.Receipt.RunID != "" && e.AfterRunCreated != nil {
+		e.AfterRunCreated()
+	}
+	return result, err
+}
+
+func (e *Engine) fork(ctx context.Context, command ForkCommand) (local.ApplyResult, error) {
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}

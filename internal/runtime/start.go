@@ -584,6 +584,14 @@ func (e *Engine) pinDefinitions(defs []PinnedDefinition) error {
 }
 
 func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyResult, error) {
+	result, err := e.start(ctx, options)
+	if err == nil && result.Receipt.Rejection == nil && result.Receipt.RunID != "" && e.AfterRunCreated != nil {
+		e.AfterRunCreated()
+	}
+	return result, err
+}
+
+func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyResult, error) {
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
