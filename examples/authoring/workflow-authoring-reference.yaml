@@ -94,7 +94,7 @@ stages:
     # round whose step never ran routes to no_work rather than to an outcome
     # declared as carrying a gate result (which would mean inventing an empty
     # one — lying in the artifact to satisfy the graph):
-    # https://github.com/StenHigh/prifly-aif-workflows/blob/98fd856/README.md
+    # https://github.com/StenHigh/prifly-aif-workflows/blob/6e9664d105210137a51568aeadb1ce35b4969e61/README.md
     # That link is pinned to a commit on purpose, so it cannot change under
     # this file — which also means it shows that package as it stood then, not
     # as it stands now. Read it for the reasoning, not as the package's current
