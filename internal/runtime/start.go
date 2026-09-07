@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -684,8 +685,14 @@ func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyRe
 		if err := decode(briefBytes, &brief); err != nil {
 			return local.ApplyResult{}, err
 		}
+		// The other states of this field are things a brief can honestly record
+		// about the world; none of them is something a brief may claim on the
+		// owner's behalf, because then the caller would be granting itself the
+		// exemption. Saying only "requires explicit" left a reader who wrote a
+		// true standing_grant to conclude the value was wrong and to write a
+		// stronger claim than they had.
 		if brief.Confirmation != "explicit" {
-			return local.ApplyResult{}, errors.New("brief requires explicit owner confirmation")
+			return local.ApplyResult{}, fault("start_confirmation_required", "this brief records confirmation as "+strconv.Quote(brief.Confirmation)+"; a Run starts only on explicit confirmation of this launch, and a brief cannot grant itself an exemption — a standing arrangement is not confirmation of this Run")
 		}
 	}
 	workflowRef := flow.Ref{ID: plan.Workflow.ID, Version: plan.Workflow.Version, Digest: plan.Digest}

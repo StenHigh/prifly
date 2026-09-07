@@ -388,8 +388,15 @@ func TestRejectedBriefNeedsExplicitCorrectionAndConfirmation(t *testing.T) {
 	for _, state := range []string{"unconfirmed", "not_required_by_policy", "standing_grant"} {
 		brief.Confirmation = state
 		writeRuntimeJSON(t, filepath.Join(e.Root, options.BriefFile), brief)
-		if _, err := e.Start(ctx, options); err == nil {
+		_, err := e.Start(ctx, options)
+		if err == nil {
 			t.Fatalf("unconfirmed correction admitted via %s", state)
+		}
+		// The refusal has to explain why a value the contract accepts is not
+		// accepted here, or the reader concludes the value was wrong and writes
+		// a stronger claim than they hold.
+		if !strings.Contains(err.Error(), "cannot grant itself an exemption") || !strings.Contains(err.Error(), state) {
+			t.Fatalf("the refusal for %s does not say why it is refused: %v", state, err)
 		}
 	}
 	runs, _, err := e.Store.ReadAll(ctx, 100)
