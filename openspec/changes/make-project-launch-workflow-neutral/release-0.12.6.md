@@ -65,8 +65,8 @@
 |---|---|---|
 | `make check` | локально | зелёный; 48 бандлов схем |
 | `make e2e` | локально | зелёный; 10 кейсов, 75 команд |
-| `verify` | GitHub Actions | |
-| `race` | GitHub Actions | |
+| `verify` | GitHub Actions 34161567980 | success (гоняет и `ci-check`, и `e2e`) |
+| `race` | GitHub Actions 34161568494 | success |
 
 ## Чего этот выпуск не закрывает
 
