@@ -177,6 +177,40 @@ func TestAComponentNeedsOneResolvableSupplierNotEveryPast(t *testing.T) {
 	}
 }
 
+// Two upgrades leave three trusted imports of one package in an authority, all
+// declaring the same component ids. Answering with whichever came first handed a
+// reader the wrong edition of their own step's instructions, and they found out
+// only by comparing digests against their envelope.
+func TestPackageComponentRefusesWhenTwoPackagesDeclareIt(t *testing.T) {
+	e, ctx, pkg, _ := importedPilotPackage(t)
+	component := pkg.Components[0].Ref
+	// One trusted package: the component reads back as itself.
+	definition, _, err := e.PackageComponent(ctx, component.ID, "")
+	if err != nil || definition.Ref != component {
+		t.Fatalf("a single declaring package did not answer: %v %+v", err, definition)
+	}
+	// A second edition: same component id under a later component and package
+	// version, which is what an upgrade produces and what the identity guard
+	// deliberately admits.
+	body := "---\nname: aif-plan\n---\n\n# Plan, second edition\n"
+	files := map[string]string{"skills/aif-plan/SKILL.md": body, "skills/aif-plan/references/TASK-FORMAT.md": "# Task format\n"}
+	components := []map[string]any{{"kind": "context", "ref": map[string]any{"id": component.ID, "version": "1.1.0", "digest": rawDigest([]byte(body))}, "path": "skills/aif-plan/SKILL.md"}}
+	upgraded := packageSource(t, files, components, func(manifest map[string]any) { manifest["version"] = "1.1.0" })
+	if _, err := e.ImportPackage(ctx, PackageImportRequest{CommandID: "command:upgrade", Directory: upgraded, Reason: "second edition"}); err != nil {
+		t.Fatal(err)
+	}
+	second := pkg.Ref.ID + "@1.1.0"
+	if _, _, err := e.PackageComponent(ctx, component.ID, ""); err == nil || !strings.Contains(err.Error(), "package_component_ambiguous") {
+		t.Fatalf("an ambiguous component was answered anyway: %v", err)
+	}
+	// Naming the edition answers again, and names which one it read.
+	for _, from := range []string{pkg.Ref.ID + "@" + pkg.Ref.Version, second} {
+		if _, _, err := e.PackageComponent(ctx, component.ID, from); err != nil {
+			t.Fatalf("%s did not answer for its own component: %v", from, err)
+		}
+	}
+}
+
 func TestRevocationIsTerminalAndNotUndoneByReimport(t *testing.T) {
 	e, ctx, pkg, source := importedPilotPackage(t)
 	if _, err := e.SetPackageStatus(ctx, PackageLifecycleRequest{CommandID: "command:revoke", ID: pkg.Ref.ID, Version: pkg.Ref.Version, Status: PackageRevoked, Reason: "withdrawn after an incident"}); err != nil {
@@ -431,14 +465,14 @@ func TestPackageComponentIsReadableByItsDeclaredID(t *testing.T) {
 		t.Fatalf("the installed package declares no component: %v", err)
 	}
 	component := declared.Components[0]
-	definition, body, err := e.PackageComponent(ctx, component.Ref.ID)
+	definition, body, err := e.PackageComponent(ctx, component.Ref.ID, "")
 	if err != nil {
 		t.Fatalf("a declared component was not readable by its ID: %v", err)
 	}
 	if definition.Ref != component.Ref || rawDigest(body) != component.Ref.Digest {
 		t.Fatalf("the component read back differs: %+v", definition)
 	}
-	if _, _, err := e.PackageComponent(ctx, "test:schema/absent"); refusalCode(err) != "package_component_not_found" {
+	if _, _, err := e.PackageComponent(ctx, "test:schema/absent", ""); refusalCode(err) != "package_component_not_found" {
 		t.Fatalf("an unknown component was not refused by name: %v", err)
 	}
 }

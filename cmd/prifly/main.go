@@ -1554,6 +1554,7 @@ func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) err
 	case "inspect":
 		refFile := f.String("ref", "", "exact package ImmutableRef JSON file")
 		component := f.String("component", "", "declared ID of one component an installed package carries")
+		fromPackage := f.String("package", "", "ID@VERSION of the installed package to read the component from")
 		if err := parse(f, args[1:]); err != nil {
 			return err
 		}
@@ -1564,7 +1565,7 @@ func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) err
 			// The shape of a declared output slot lives in the package that
 			// declared it. Without this the operator reads it as a file inside
 			// the authority, which is storage, not a contract.
-			definition, body, err := e.PackageComponent(ctx, *component)
+			definition, body, err := e.PackageComponent(ctx, *component, *fromPackage)
 			if err != nil {
 				return err
 			}
@@ -1777,7 +1778,7 @@ func coreBuildNote(build string) string {
 // step got a bare "json" refusal with no pointer and read the file out of the
 // authority by hand.
 func packageComponentView(definition prifly.Definition, body []byte) map[string]any {
-	view := map[string]any{"schema_version": "foundation-package-component/1", "ref": definition.Ref, "kind": definition.Kind}
+	view := map[string]any{"schema_version": "foundation-package-component/1", "ref": definition.Ref, "kind": definition.Kind, "path": definition.Path}
 	if json.Valid(body) {
 		view["component"] = json.RawMessage(body)
 		return view
@@ -2344,9 +2345,10 @@ Global: --project DIR  --json  --format text|json|csv
   package import --dir DIR --reason TEXT [--command-id ID]
                                    Seal, verify and trust a local package; nothing in it is executed
   package list                      Trusted packages, their origin and recorded trust decision
-  package inspect --ref REF.json | --component ID
+  package inspect --ref REF.json | --component ID [--package ID@VERSION]
                                    Read one exact sealed package, or the bytes of one component it declares, by the ID the package gave it
                                    A JSON component comes back in component; a context is prose and comes back in component_text
+                                   Several trusted packages can declare one component; --package names which edition to read
   package import --archive FILE.tar [--signature FILE.sig] --reason TEXT
   package trust-root --id ID --public-key HEX --reason TEXT | --id ID --remove --reason TEXT
                                    A key inside a package never appoints itself trusted

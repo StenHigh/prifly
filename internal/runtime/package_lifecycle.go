@@ -76,13 +76,19 @@ type PackageManifestMetadata struct {
 // filling a declared output slot by hand needs the shape of that slot, and the
 // component that carries it is otherwise reachable only as a file inside the
 // authority.
-func (e *Engine) PackageComponent(ctx context.Context, id string) (Definition, []byte, error) {
+func (e *Engine) PackageComponent(ctx context.Context, id, fromPackage string) (Definition, []byte, error) {
 	record, _, err := e.readPackages(ctx)
 	if err != nil {
 		return Definition{}, nil, err
 	}
+	var found *Definition
+	var foundIn string
+	var foundBytes []byte
 	for _, pkg := range record.Packages {
 		if pkg.Status != "" && pkg.Status != PackageTrusted {
+			continue
+		}
+		if fromPackage != "" && pkg.Ref.ID+"@"+pkg.Ref.Version != fromPackage {
 			continue
 		}
 		manifestBytes, err := readLocal(e.Root, pkg.Root+"/"+PackageManifestFile, MaxDefinitionBytes)
@@ -100,6 +106,14 @@ func (e *Engine) PackageComponent(ctx context.Context, id string) (Definition, [
 			if component.Ref.ID != id {
 				continue
 			}
+			// Several trusted packages can declare the same component id under
+			// different versions — three imports of one package is the ordinary
+			// case after two upgrades. Answering with whichever comes first
+			// handed a reader the wrong edition of their own step's
+			// instructions, and they found out only by comparing digests.
+			if found != nil && found.Ref != component.Ref {
+				return Definition{}, nil, &flow.Problem{Code: "package_component_ambiguous", Message: id + " is declared by more than one trusted package, including " + foundIn + " and " + pkg.Ref.String() + "; name the one you mean with package inspect --package ID@VERSION --component " + id}
+			}
 			data, err := readLocal(e.Root, pkg.Root+"/"+component.Path, MaxDefinitionBytes)
 			if err != nil {
 				return Definition{}, nil, err
@@ -107,8 +121,12 @@ func (e *Engine) PackageComponent(ctx context.Context, id string) (Definition, [
 			if rawDigest(data) != component.Ref.Digest {
 				return Definition{}, nil, local.ErrIntegrity
 			}
-			return Definition{Ref: component.Ref, Kind: component.Kind, Path: component.Path}, data, nil
+			definition := Definition{Ref: component.Ref, Kind: component.Kind, Path: component.Path}
+			found, foundIn, foundBytes = &definition, pkg.Ref.String(), data
 		}
+	}
+	if found != nil {
+		return *found, foundBytes, nil
 	}
 	// A built-in contract is not a package component and never will be, so
 	// "no package declares it" is true and useless: the reader asked where the
