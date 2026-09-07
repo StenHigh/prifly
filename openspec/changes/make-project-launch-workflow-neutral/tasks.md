@@ -383,16 +383,17 @@ project `project:35b39bc65a9a260047908a1233d50d01`.
 `sha256:ed71519b82e352a16dcaec51bc1f6300d18cea3bdc6c77e78cbaf764383df792`. Пять
 записей, все `answered` с источником `actor`, `autonomy_unanswered` пуст:
 `plan_profile=fast`, `plan_tests=true`, `plan_constraints` (грант владельца
-покрывает оговорку A-097), `improve_apply=all`, `gate_warnings=stop`.
+покрывает одну названную оговорку), `improve_apply=all`, `gate_warnings=stop`.
 
 **Итоговый артефакт.** Единственный выход `gate`:
 `artifact:66ccabbc182375b14e9170316056c2a4152f61f0e4231b323aef4e3d8a45a762`
 rev 1, `sha256:53d5d1f6e82a6c43ec391d1e3be10f86382afc4c2a2a9a679f3ffe41b5610943`
 — вердикт verify третьего круга (`warnings`, `blocking: true`, 9 находок).
 
-**Коммиты.** HEAD ветки `prifly/v060` по завершении —
-`fcd0ffa5a97d2cee34f791a3c2cd9f51e8e3f320`; три коммита, все от шагов `fix`:
-`afe13b75b` (круг 1), `cc649e035` (круг 2), `fcd0ffa5a` (круг 3). Исход
+**Коммиты.** Три коммита в рабочей ветке пилотного проекта, все от шагов `fix`,
+по одному на круг; кода и защищённых путей не касались. Идентификаторы ветки и
+коммитов принадлежат закрытому проекту пилота и здесь не приводятся —
+доказательством служат счётчики кругов ниже и артефакт гейта выше. Исход
 `partial` по исчерпании `verify_round_limit: 3` (`on_limit: exhausted`); MR не
 производился сознательно.
 
