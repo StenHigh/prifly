@@ -2354,6 +2354,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    Re-read every sealed byte; a mismatch is reported, never repaired
   package remove|quarantine|revoke|restore --id ID --version X.Y.Z --reason TEXT
                                    Remove refuses while a run holds it; revoke also blocks old pins
+                                   Remove is the only status that releases this package's inventory pins, and revoke is terminal:
+                                   a revoked revision is neither removed nor restored afterwards, so revoking forfeits that release
   claim create --repository DIR --owner ID [--base REF]
   claim create-set --repository DIR --repository DIR --owner ID
                                    One decision for the whole set: all resources or none

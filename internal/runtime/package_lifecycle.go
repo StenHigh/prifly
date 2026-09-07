@@ -258,7 +258,10 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 				continue
 			}
 			if pkg.Status == PackageRevoked && c.Status != PackageRevoked {
-				return local.AuthorityChange{}, local.Reject("package_revoked", "a revoked package is not restored by a status change")
+				// Revocation is terminal, and since removal is what releases this
+				// package's inventory pins, revoking gave that up: say so here,
+				// because the reader is standing where the loss already happened.
+				return local.AuthorityChange{}, local.Reject("package_revoked", "a revoked package is not restored by a status change; removal is what releases its inventory pins, and revocation gave that up")
 			}
 			obs := e.clock.now()
 			pkg.Status, pkg.StatusReason, pkg.StatusChanged = c.Status, c.Reason, &obs
