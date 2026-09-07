@@ -949,6 +949,15 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		if err != nil {
 			return err
 		}
+		// A managed install can be replaced between two steps of a Run that
+		// takes hours, and nothing said so: core_build is written when the Run
+		// is created and never compared. The change is allowed — a Run executes
+		// the semantics of its own recorded state version, not of the binary —
+		// but it was invisible, and this is where a driver already looks. On
+		// stderr, so a JSON reader's result is untouched.
+		if note := coreBuildNote(view.Run.CoreBuild); note != "" {
+			fmt.Fprintln(c.errout, note)
+		}
 		if args[0] == "timing" {
 			if c.format == "text" {
 				return renderTiming(c.out, view.Timing, view.Cut)
@@ -1745,6 +1754,19 @@ func recordedRejection(rejection *local.Rejection, receiptID string) error {
 	return local.Reject(rejection.Code, rejection.Message+"; recorded as command "+strconv.Quote(receiptID))
 }
 
+// coreBuildNote reports that a Run was started by a different build than the
+// one reading it now. Nothing refuses the change: a Run executes the semantics
+// of its own recorded state version, not of the binary, and continuing an
+// unfinished Run with a repaired build is the ordinary reason to upgrade. It
+// was simply invisible — core_build is written at creation and compared
+// nowhere.
+func coreBuildNote(build string) string {
+	if build == "" || build == prifly.Version {
+		return ""
+	}
+	return "note: this Run was started by core build " + build + " and is being driven by " + prifly.Version + "; its recorded state version still decides its semantics"
+}
+
 func (c *cli) commandResult(result local.ApplyResult) error {
 	if result.Receipt.Rejection != nil {
 		return recordedRejection(result.Receipt.Rejection, result.Receipt.ID)
@@ -2246,6 +2268,7 @@ Global: --project DIR  --json  --format text|json|csv
                 [--runtime-answer ID=JSON] [--allow-execution] [--expected-launch-digest DIGEST]
                                    A runtime answer is sealed before the Run starts: the step that raises that decision gets this value and does not wait
                                    Show a pre-dispatch summary on stderr, then seal and drive; stdout keeps one final result
+                                   On a refusal that summary stays in front of the Problem envelope: read the last document of stderr
                                    Profile /3 needs host/Git/brief only when declared; Git writes require explicit workspace. Legacy /2 retains its defaults
                                    Answer the declared questions up front with repeated --preflight-answer; project questionnaire lists them and returns the digest
                                    Profile /3: get --expected-launch-digest from project questionnaire --prepare with the same start arguments
@@ -2263,8 +2286,10 @@ Global: --project DIR  --json  --format text|json|csv
      a bound that was not met in time
    6 the authority needs attention before more work: recovery, integrity, storage version, persistence
    7 interrupted: the client was stopped; inspect the recorded run before any retry
-   Every nonzero status is a refusal and prints one Problem envelope on stderr whose code names the
-   exact reason; no nonzero status means a healthy wait. 5 in particular is a refusal, not a handoff
+   Every nonzero status is a refusal and ends stderr with one Problem envelope whose code names the
+   exact reason; a command that already wrote a pre-dispatch document to stderr leaves it in front,
+   so read the last document of stderr, not the whole stream. No nonzero status means a healthy
+   wait; 5 in particular is a refusal, not a handoff
   version | doctor | inventory     Versions, integrity, exact local definitions
   ref FILE --id ID --version X.Y.Z [--raw-text]
                                    Canonical JSON/YAML; --raw-text hashes exact UTF-8 resource bytes

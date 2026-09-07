@@ -558,7 +558,11 @@ func (e *Engine) pinDefinitions(defs []PinnedDefinition) error {
 		previous, err := readLocal(e.Root, filepath.Join(".prifly/inventory", name), MaxDefinitionBytes)
 		if err == nil {
 			if !bytes.Equal(previous, record) {
-				return faultf("definition_drift", "%s@%s bytes changed; assign a new version", d.Ref.ID, d.Ref.Version)
+				// "Assign a new version" is advice for the author, and the
+				// reader is usually not the author. What they need is why it
+				// cannot be cleared: the identity is the id and version, and
+				// the record lives in this authority, not in the package.
+				return faultf("definition_drift", "%s@%s already names different bytes in this authority; a definition is immutable by id and version, so either its author assigns a new version, or package remove releases the identity here — removal refuses while any Run still holds the package, and revoke and quarantine do not release it. The record is one file under .prifly/inventory in this authority, named for the identity it holds", d.Ref.ID, d.Ref.Version)
 			}
 			continue
 		}

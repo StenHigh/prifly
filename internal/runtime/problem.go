@@ -45,7 +45,10 @@ func persistenceFailure(err error) bool { return local.IsPersistenceFailure(err)
 // and only allows inspection.
 func exitForCode(code string) int {
 	switch {
-	case strings.HasPrefix(code, "unsupported"):
+	// An exhausted allowance is the same refusal whether the engine wrote it as
+	// a fault or the store rejected it: budget_exhausted exited 2 through here
+	// and 5 through the rejection branch, so one code named two classes.
+	case strings.HasPrefix(code, "unsupported") || strings.Contains(code, "exhausted") || strings.Contains(code, "busy"):
 		return 5
 	case strings.Contains(code, "conflict") || strings.Contains(code, "drift"):
 		return 3

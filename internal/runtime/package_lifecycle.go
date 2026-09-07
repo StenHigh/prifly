@@ -2,8 +2,11 @@ package runtime
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"path/filepath"
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
@@ -218,9 +221,13 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
 	}
+	removedComponents := []flow.Ref{}
 	for _, pkg := range record.Packages {
 		if pkg.Ref.ID != c.ID || pkg.Ref.Version != c.Version {
 			continue
+		}
+		for _, component := range pkg.Components {
+			removedComponents = append(removedComponents, component.Ref)
 		}
 		// Removal is orderly and refuses to break a dependent. Revocation is
 		// not: an incident reaches the dependents through the closure instead.
@@ -234,7 +241,7 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
 	}
-	return e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: c.CommandID, Actor: e.owner, Key: AuthorityPackagesKey, Payload: command}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
+	result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: c.CommandID, Actor: e.owner, Key: AuthorityPackagesKey, Payload: command}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		var record PackageRecord
 		if err := decode(s.Data, &record); err != nil {
 			return local.AuthorityChange{}, err
@@ -264,6 +271,22 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 		}
 		return local.AuthorityChange{Data: data, Result: json.RawMessage(`{"status":"` + c.Status + `"}`)}, nil
 	})
+	if err != nil || result.Receipt.Rejection != nil || c.Status != PackageRemoved {
+		return result, err
+	}
+	// Removal is the answer to "this identity must be free again", and until now
+	// it was not: the inventory kept a pin naming these bytes under this id and
+	// version, so a later package that names them differently was refused with
+	// definition_drift and no command released it. Nothing that already ran is
+	// affected — a Run carries its own sealed definitions — and removal already
+	// refuses while any Run still holds the package.
+	for _, ref := range removedComponents {
+		name := fmt.Sprintf("%x.json", sha256.Sum256([]byte(ref.ID+"@"+ref.Version)))
+		if err := removeLocal(e.Root, filepath.Join(".prifly/inventory", name)); err != nil {
+			return result, err
+		}
+	}
+	return result, nil
 }
 
 // packageHolders names the non-terminal runs whose pinned closure contains a

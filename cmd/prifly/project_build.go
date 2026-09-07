@@ -149,7 +149,13 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 			return projectCompileResult{}, err
 		}
 	}
-	if err := projectValidatePackageWorkflows(components, registry); err != nil {
+	raisedByInsertion := false
+	for _, extension := range options.Extensions {
+		if len(extension.ImpossibleVerdicts) != 0 {
+			raisedByInsertion = true
+		}
+	}
+	if err := projectValidatePackageWorkflows(components, registry, raisedByInsertion); err != nil {
 		return projectCompileResult{}, err
 	}
 	if variant {

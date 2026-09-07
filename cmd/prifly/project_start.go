@@ -369,6 +369,14 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	started, err := engine.Start(ctx, startOptions)
 	if err != nil {
+		// Under profile /2 a component keeps its authoring version, so two
+		// package releases collide under one identity and the refusal reads as
+		// the author's fault. The reader's own way out is the profile, and only
+		// this layer knows which one the project is on.
+		var drift *prifly.Fault
+		if errors.As(err, &drift) && drift.Code == "definition_drift" && !neutral {
+			err = &prifly.Fault{Code: drift.Code, Message: drift.Message + ". This project is on " + profile.SchemaVersion + ", where a component keeps its authoring version, so every package release meets the previous one under the same identity; " + projectVariantProfileVersion + " names each build by its own key and cannot collide", Cause: drift}
+		}
 		if importedPackage {
 			_, _ = engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: *command + ":rollback-package", ID: compiled.Package.ID, Version: compiled.Package.Version, Status: prifly.PackageRemoved, Reason: "project start did not create a Run"})
 		}

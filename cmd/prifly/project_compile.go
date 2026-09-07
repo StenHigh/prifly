@@ -1489,7 +1489,7 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 	return err
 }
 
-func projectValidatePackageWorkflows(components []projectCompileComponent, base flow.Registry) error {
+func projectValidatePackageWorkflows(components []projectCompileComponent, base flow.Registry, raisedByInsertion bool) error {
 	registry := make(flow.Registry, len(base)+len(components))
 	for ref, data := range base {
 		registry[ref] = data
@@ -1505,6 +1505,14 @@ func projectValidatePackageWorkflows(components []projectCompileComponent, base 
 	for _, component := range components {
 		if component.Kind == "workflow" {
 			if _, err := flow.CompileCore(component.Bytes, "json", registry, resources); err != nil {
+				// An insertion that declares impossible verdicts raises the whole
+				// graph to the revision that requires every stage to answer for
+				// every verdict — including stages of the package, which the
+				// project owner did not write. Refused without that, the reader
+				// looks for their own mistake on someone else's node.
+				if raisedByInsertion && strings.Contains(err.Error(), "missing_handler") {
+					return usageError("project_compile_invalid_workflow: " + err.Error() + ". An extension in extend.yaml declares impossible_verdicts, which raises this workflow to WorkflowRevision " + flow.WorkflowRevisionVerdictVersion + ", where every stage must answer for every verdict; the stage named above belongs to the package, so either drop that declaration or ask the package author for a revision " + flow.WorkflowRevisionVerdictVersion + " release")
+				}
 				return usageError("project_compile_invalid_workflow: " + err.Error())
 			}
 		}

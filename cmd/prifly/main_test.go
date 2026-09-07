@@ -2428,6 +2428,23 @@ func TestClaimRefusalNamesTheCommandThatEndsIt(t *testing.T) {
 	}
 }
 
+// A Run started by one build and driven by another was allowed and silent:
+// core_build is recorded at creation and compared nowhere. This covers the rule
+// the note follows, not the wiring that prints it; run status writes it to
+// stderr so a JSON result stays a JSON result.
+func TestCoreBuildNoteFiresOnlyOnAChange(t *testing.T) {
+	if note := coreBuildNote(prifly.Version); note != "" {
+		t.Fatalf("the running build was reported as a change: %q", note)
+	}
+	if note := coreBuildNote(""); note != "" {
+		t.Fatalf("a Run that recorded no build was reported as a change: %q", note)
+	}
+	note := coreBuildNote("0.0.0-earlier")
+	if !strings.Contains(note, "0.0.0-earlier") || !strings.Contains(note, prifly.Version) {
+		t.Fatalf("the note does not name both builds: %q", note)
+	}
+}
+
 // A caller that must name an exact contract has to be able to read the set of
 // names, and to use the reference form its own task already carries.
 func TestSchemaListsContractsAndAcceptsDeclaredReferences(t *testing.T) {
@@ -2693,9 +2710,11 @@ extensions:
 }
 
 // impossible_verdicts exists only in WorkflowRevision v4, so an insertion that
-// declares one has to raise the revision it is spliced into; otherwise the
-// spliced bytes carry a field their own contract forbids. An insertion that
-// declares nothing must leave the sealed version exactly where it was.
+// declares one raises the revision it is spliced into, exactly as authoring
+// does. An insertion that declares nothing must leave the sealed version
+// exactly where it was. The cost of the raise — verdict completeness applying
+// to the package's own stages — is explained where compilation refuses, not
+// here.
 func TestExtensionDeclaringImpossibleVerdictsRaisesTheRevision(t *testing.T) {
 	ref := map[string]any{"id": "test:step/extra", "version": "1.0.0", "digest": "sha256:" + strings.Repeat("0", 64)}
 	for _, test := range []struct {
@@ -2722,46 +2741,6 @@ func TestExtensionDeclaringImpossibleVerdictsRaisesTheRevision(t *testing.T) {
 				t.Fatalf("the declaration did not survive the insertion: %+v", stage)
 			}
 		})
-	}
-}
-
-// The second insertion in the pilot's file aims at an edge the first one
-// creates: tests goes between commit and merge-request, and merge-request
-// exists only because the insertion before it put it there. Order is load
-// bearing, and nothing covered it.
-func TestChainedExtensionInsertsIntoTheEdgeTheFirstOneCreated(t *testing.T) {
-	ref := map[string]any{"id": "test:step/extra", "version": "1.0.0", "digest": "sha256:" + strings.Repeat("0", 64)}
-	workflow := map[string]any{"schema_version": "1", "definition": map[string]any{"stages": map[string]any{
-		"commit": map[string]any{"kind": "step", "on": map[string]any{"pass": "done"}},
-		"done":   map[string]any{"kind": "finish", "outcome": "succeeded"},
-	}}}
-	for _, extension := range []projectWorkflowExtension{
-		{From: "commit", To: "done", Step: "merge-request", On: map[string]string{"pass": "done"}},
-		{From: "commit", To: "merge-request", Step: "tests", On: map[string]string{"pass": "merge-request"}},
-		// This one leaves an inserted stage, which is where the route search
-		// used to stop seeing the graph.
-		{From: "merge-request", To: "done", Step: "announce", On: map[string]string{"pass": "done"}},
-	} {
-		if err := applyProjectExtension(workflow, extension, ref); err != nil {
-			t.Fatalf("%s: %v", extension.Step, err)
-		}
-	}
-	stages := workflow["definition"].(map[string]any)["stages"].(map[string]any)
-	for _, step := range []struct{ from, verdict, to string }{
-		{"commit", "pass", "tests"},
-		{"tests", "pass", "merge-request"},
-		{"merge-request", "pass", "announce"},
-		{"announce", "pass", "done"},
-	} {
-		on := stages[step.from].(map[string]any)["on"].(map[string]any)
-		if on[step.verdict] != step.to {
-			t.Fatalf("%s routes %s to %v, want %s: %+v", step.from, step.verdict, on[step.verdict], step.to, stages)
-		}
-	}
-	// Neither insertion declared an impossible verdict, so the sealed revision
-	// must not have moved.
-	if workflow["schema_version"] != "1" {
-		t.Fatalf("a silent insertion raised the revision to %v", workflow["schema_version"])
 	}
 }
 

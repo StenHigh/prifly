@@ -245,6 +245,27 @@ func timingWireFields(fields map[string]json.RawMessage, r Run) error {
 func safeRelative(path string) bool {
 	return path != "" && path != "." && filepath.IsLocal(path) && filepath.Clean(path) == path && !strings.Contains(path, "\\") && !strings.ContainsRune(path, 0)
 }
+
+// removeLocal deletes one file under the authority root, through the same root
+// handle readLocal uses, so a symlinked path cannot reach outside it. A file
+// that is already gone is not an error: the caller is releasing a pin, and
+// releasing one twice is the same state.
+func removeLocal(rootDir, path string) error {
+	purity.Guard("write.local")
+	if !safeRelative(path) {
+		return local.ErrUnsafePath
+	}
+	r, err := os.OpenRoot(rootDir)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	if err := r.Remove(filepath.FromSlash(path)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
 func readLocal(rootDir, path string, limit int64) ([]byte, error) {
 	purity.Guard("read.local")
 	if !safeRelative(path) {

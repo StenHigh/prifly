@@ -120,6 +120,35 @@ func TestRemoveRefusesWhileARunHoldsThePackageAndStopsResolutionAfter(t *testing
 	}
 }
 
+// An identity the authority pinned could never be released: definition_drift
+// refused the next package that named the same id and version, and no command
+// cleared the pin — the pilot tried remove, revoke and quarantine in turn and
+// had to abandon the authority with its whole run history. Removal is the
+// answer to "this identity must be free again", and it already refuses while a
+// Run still holds the package, so it is the one place the release belongs.
+func TestRemovingAPackageReleasesTheIdentitiesItPinned(t *testing.T) {
+	e, ctx, pkg, _ := importedPilotPackage(t)
+	ref := pkg.Components[0].Ref
+	original := []byte(`{"first":true}`)
+	changed := []byte(`{"second":true}`)
+	pin := func(bytes []byte) error {
+		return e.pinDefinitions([]PinnedDefinition{{Ref: ref, Kind: pkg.Components[0].Kind, RawDigest: rawDigest(bytes), Bytes: bytes}})
+	}
+	if err := pin(original); err != nil {
+		t.Fatal(err)
+	}
+	if err := pin(changed); err == nil || !strings.Contains(err.Error(), "definition_drift") {
+		t.Fatalf("the identity accepted different bytes while the package held it: %v", err)
+	}
+	removed, err := e.SetPackageStatus(ctx, PackageLifecycleRequest{CommandID: "command:remove", ID: pkg.Ref.ID, Version: pkg.Ref.Version, Status: PackageRemoved, Reason: "release the identity"})
+	if err != nil || removed.Receipt.Rejection != nil {
+		t.Fatalf("removal was refused: %v %+v", err, removed.Receipt.Rejection)
+	}
+	if err := pin(changed); err != nil {
+		t.Fatalf("removal did not release the identity: %v", err)
+	}
+}
+
 func TestRevocationIsTerminalAndNotUndoneByReimport(t *testing.T) {
 	e, ctx, pkg, source := importedPilotPackage(t)
 	if _, err := e.SetPackageStatus(ctx, PackageLifecycleRequest{CommandID: "command:revoke", ID: pkg.Ref.ID, Version: pkg.Ref.Version, Status: PackageRevoked, Reason: "withdrawn after an incident"}); err != nil {
