@@ -583,13 +583,18 @@ func (e *Engine) sealWorkspaceTreeOutput(r Run, a *Attempt, step flow.StepDefini
 		return Artifact{}, fault("workspace_tree_manifest_invalid", "")
 	}
 	inputProvenance := []ArtifactRef{}
-	for _, handoff := range a.Session.WorkspaceTrees {
-		if handoff.OutputPort == port && handoff.InputManifest != nil {
+	var captureHandoff *WorkspaceTreeHandoff
+	for index, handoff := range a.Session.WorkspaceTrees {
+		if handoff.OutputPort != port {
+			continue
+		}
+		captureHandoff = &a.Session.WorkspaceTrees[index]
+		if handoff.InputManifest != nil {
 			inputProvenance = append(inputProvenance, *handoff.InputManifest)
 		}
 	}
 	activation := r.Activations[a.ActivationID]
-	if activation == nil {
+	if activation == nil || captureHandoff == nil {
 		return Artifact{}, local.ErrIntegrity
 	}
 	producer := map[string]any{"kind": "step", "run_id": r.ID, "workflow_invocation_id": activation.InvocationID, "stage_activation_id": a.ActivationID, "step_instance_id": a.StepID, "attempt_id": a.ID, "port": port}
@@ -616,5 +621,60 @@ func (e *Engine) sealWorkspaceTreeOutput(r Run, a *Attempt, step flow.StepDefini
 		}
 		return Artifact{}, local.ErrIntegrity
 	}
+	if err := e.freeSealedExactFile(a, *captureHandoff, manifest); err != nil {
+		return Artifact{}, err
+	}
 	return artifact, nil
+}
+
+// freeSealedExactFile gives back the one path the runtime demanded be empty.
+// An exact-file policy names a single fixed path and preparation refuses to
+// start while anything occupies it, so the runtime that leaves its own sealed
+// capture there makes the step unrepeatable in the workspace it was handed: the
+// operator deleted the file by hand before every next Run. The bytes are in the
+// artifact store and named by this step's manifest output, so nothing is lost
+// by taking them out of the tree. The other two policies capture a name the
+// host chose beside files the runtime never required absent, and ExistingChildren
+// already carries them forward, so they stay.
+func (e *Engine) freeSealedExactFile(a *Attempt, handoff WorkspaceTreeHandoff, manifest WorkspaceTreeManifest) error {
+	if handoff.Capture.Kind != "exact_file" || len(manifest.Files) != 1 {
+		return nil
+	}
+	claim, err := e.claim(context.Background(), a.Session.ClaimID)
+	if err != nil {
+		return err
+	}
+	workspace, err := e.claimWorkspacePath(claim)
+	if err != nil {
+		return err
+	}
+	path := filepath.ToSlash(handoff.Capture.Path)
+	current, err := readLocal(workspace, path, MaxArtifactBytes)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// Only the exact sealed bytes are this capture. Anything else is somebody's
+	// later edit, and removing it would destroy work no artifact holds.
+	if rawDigest(current) != manifest.Files[0].Ref.Digest {
+		return nil
+	}
+	// A tracked file is the repository's own document, not this capture's
+	// staging path: the runtime adds to a borrowed checkout, it never deletes
+	// from its history.
+	tracked, err := e.git(context.Background(), workspace, "ls-files", "--", ":(literal)"+path)
+	if err != nil {
+		return err
+	}
+	if tracked != "" {
+		return nil
+	}
+	root, err := os.OpenRoot(workspace)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return root.Remove(path)
 }

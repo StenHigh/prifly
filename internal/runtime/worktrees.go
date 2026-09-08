@@ -188,6 +188,11 @@ func (e *Engine) ClaimWorktrees(ctx context.Context, commandID string, requests 
 	if stop := control.blockingStop(e.Installation.ID, e.Config.ID); stop != nil {
 		return nil, local.Reject("control_stop_active", "an active "+stop.Scope+" stop forbids new claims")
 	}
+	for _, claim := range prepared {
+		if err := e.releaseSettledClaim(ctx, claim.Repository.CommonDir); err != nil {
+			return nil, err
+		}
+	}
 	payload, err := canonical(map[string]any{"operation": "worktree.claim_set", "command_id": commandID, "claims": prepared})
 	if err != nil {
 		return nil, err
@@ -216,7 +221,7 @@ func (e *Engine) ClaimWorktrees(ctx context.Context, commandID string, requests 
 					if claimPresence(existing, obs) == "suspected" {
 						return local.AuthorityChange{}, local.Reject("claim_owner_unproven", "an existing claim's lease expired without proof its owner stopped; claim list names it and claim release --id CLAIM --generation N ends it")
 					}
-					return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim; a settled Run does not release it, so claim list names the holder and claim release --id CLAIM --generation N ends it")
+					return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim whose Run is still unfinished; a settled Run's claim is released for you, so claim list names the holder and either run drive finishes it, run cancel ends it, or claim release --id CLAIM --generation N drops it")
 				}
 				if existing.Path == claim.Path && existing.Generation > generation {
 					generation = existing.Generation
@@ -308,6 +313,9 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 	if stop := control.blockingStop(e.Installation.ID, e.Config.ID); stop != nil {
 		return WorktreeClaim{}, local.Reject("control_stop_active", "an active "+stop.Scope+" stop forbids new claims")
 	}
+	if err := e.releaseSettledClaim(ctx, identity.CommonDir); err != nil {
+		return WorktreeClaim{}, err
+	}
 	claimID := derivedID("claim", e.Installation.ID, request.CommandID)
 	if !claimIDPattern.MatchString(claimID) {
 		return WorktreeClaim{}, local.ErrIntegrity
@@ -346,7 +354,7 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 					// than creating a second owner of one resource.
 					return local.AuthorityChange{}, local.Reject("claim_owner_unproven", "the existing claim's lease expired without proof its owner stopped; claim list names it and claim release --id CLAIM --generation N ends it")
 				}
-				return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim; a settled Run does not release it, so claim list names the holder and claim release --id CLAIM --generation N ends it")
+				return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim whose Run is still unfinished; a settled Run's claim is released for you, so claim list names the holder and either run drive finishes it, run cancel ends it, or claim release --id CLAIM --generation N drops it")
 			}
 			if existing.Path == path && existing.Generation > generation {
 				generation = existing.Generation

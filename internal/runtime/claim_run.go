@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -155,6 +156,38 @@ func (e *Engine) checkLegacyClaimHolders(ctx context.Context, claimID string, re
 
 func claimRunFinished(run Run) bool {
 	return run.terminal() && len(run.Active) == 0 && run.ActiveCheckID == "" && run.PendingAcceptance == nil && run.PendingDecision == nil && !run.HasUnresolvedEffects
+}
+
+// releaseSettledClaim frees a repository still held by a Run that is over. That
+// holder was never the operator's mistake, so the two commands the refusal used
+// to demand before every launch happen here instead, on exactly the predicate
+// claimReleaseAllowed already uses: bound to a Run that is terminal with nothing
+// outstanding. Exclusivity is not traded for convenience -- an unfinished Run
+// still refuses, and a claim no Run is bound to is left alone because nothing
+// proves its owner stopped. The claiming transaction re-checks the conflict
+// afterwards, so a racing holder is still refused rather than overwritten.
+func (e *Engine) releaseSettledClaim(ctx context.Context, commonDir string) error {
+	record, _, err := e.readClaims(ctx)
+	if err != nil {
+		return err
+	}
+	for _, claim := range record.Claims {
+		if claim.Repository.CommonDir != commonDir || !claim.active() || claim.RunID == "" {
+			continue
+		}
+		run, _, err := e.load(ctx, claim.RunID)
+		if err != nil {
+			return err
+		}
+		if !claimRunFinished(run) {
+			continue
+		}
+		command := derivedID("command", claim.ID, "settled-release", strconv.FormatInt(claim.Generation, 10))
+		if _, err := e.ReleaseWorktree(ctx, ClaimReleaseRequest{CommandID: command, ClaimID: claim.ID, Generation: claim.Generation}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (e *Engine) claimReleaseAllowed(ctx context.Context, claim WorktreeClaim) error {

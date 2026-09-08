@@ -95,19 +95,19 @@ func treeDecisionInputs(t *testing.T) (*DecisionCatalog, *DecisionSheet) {
 
 func treeSessionFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy) (*Engine, string) {
 	t.Helper()
-	return treeFixture(t, policy, nil, nil)
+	return treeFixture(t, policy, nil, nil, "worktree")
 }
 
 func treeDecisionSessionFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy) (*Engine, string) {
 	t.Helper()
 	catalog, sheet := treeDecisionInputs(t)
-	return treeFixture(t, policy, catalog, sheet)
+	return treeFixture(t, policy, catalog, sheet, "worktree")
 }
 
-func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *DecisionCatalog, sheet *DecisionSheet) (*Engine, string) {
+func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *DecisionCatalog, sheet *DecisionSheet, mode string) (*Engine, string) {
 	t.Helper()
 	e := contextRegistryRuntime(t)
-	claim, err := e.ClaimWorktree(context.Background(), ClaimRequest{CommandID: "command:tree-claim", Repository: gitRepository(t), OwnerID: "session:pilot", WorkspaceMode: "worktree"})
+	claim, err := e.ClaimWorktree(context.Background(), ClaimRequest{CommandID: "command:tree-claim", Repository: gitRepository(t), OwnerID: "session:pilot", WorkspaceMode: mode})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *
 	e.Config.AdapterBindings["local_process"], e.Config.DefaultPolicyRef = builtinVersionRef(definitions, "core:adapter/local-process", "2.0.0"), builtinVersionRef(definitions, "core:policy/local", "2.0.0")
 	writeRuntimeJSON(t, filepath.Join(e.Root, "prifly.json"), e.Config)
 	writeRuntimeJSON(t, filepath.Join(e.Root, "brief.json"), Brief{"1", "test:brief/tree", "tree", "native plan", []string{"Native plan"}, []string{}, []string{"Seal and improve the native plan"}, []ArtifactRef{}, []string{}, "explicit"})
-	started, err := e.Start(context.Background(), StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/tree.json", BriefFile: "brief.json", Inputs: map[string]string{}, DecisionCatalog: catalog, DecisionSheet: sheet, WorkspaceMode: "worktree"})
+	started, err := e.Start(context.Background(), StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/tree.json", BriefFile: "brief.json", Inputs: map[string]string{}, DecisionCatalog: catalog, DecisionSheet: sheet, WorkspaceMode: mode})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,5 +430,101 @@ func TestExistingOutputFileIsRefusedByName(t *testing.T) {
 	actual, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(policy.Path)))
 	if err != nil || string(actual) != "# Left by an earlier run\n" {
 		t.Fatalf("preparation touched the existing file: %q %v", actual, err)
+	}
+}
+
+func treeWorkspace(t *testing.T, e *Engine) string {
+	t.Helper()
+	claims, err := e.Claims(context.Background())
+	if err != nil || len(claims.Claims) != 1 {
+		t.Fatalf("no single claimed workspace: %+v %v", claims, err)
+	}
+	workspace, err := e.claimWorkspacePath(claims.Claims[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return workspace
+}
+
+// An exact-file policy names one fixed path and preparation refuses to start
+// while anything occupies it, so a sealed capture left there makes the step
+// unrepeatable in the workspace it was handed: the pilot deleted the same file
+// by hand before every launch and warned a later commit step not to sweep it
+// into history. Checkout mode is where that bites -- a worktree claim is a fresh
+// directory, while a borrowed checkout carries the leftover into the next Run.
+func TestSealedExactFileCaptureLeavesItsPathFreeForTheNextRun(t *testing.T) {
+	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
+	e, runID := treeFixture(t, policy, nil, nil, "checkout")
+	ctx := context.Background()
+	workspace := treeWorkspace(t, e)
+	last := ""
+	for _, summary := range []string{"plan", "improve", "implement"} {
+		task := handOver(t, e, runID)
+		last = task.AttemptID
+		writeWorkspaceTreeFile(t, workspace, policy.Path, "# "+summary+"\n")
+		if _, err := e.SubmitSession(ctx, treeSubmission(t, task, summary, nil)); err != nil {
+			t.Fatalf("%s report was refused: %v", summary, err)
+		}
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	completed := driverRun(t, e, runID)
+	if completed.Status != "completed" {
+		t.Fatalf("the tree run did not settle: %s %+v", completed.Status, completed.Diagnostics)
+	}
+	if _, err := os.Lstat(filepath.Join(workspace, filepath.FromSlash(policy.Path))); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the sealed capture still occupies its declared path: %v", err)
+	}
+	// Removing the file loses nothing: the manifest this step reported still
+	// resolves to the exact bytes the host wrote.
+	var manifest WorkspaceTreeManifest
+	_, data, err := e.Artifact(completed.Attempts[last].Accepted.Outputs["final"])
+	if err != nil || decode(data, &manifest) != nil || len(manifest.Files) != 1 {
+		t.Fatalf("the final manifest was not sealed: %+v %v", manifest, err)
+	}
+	if _, sealed, err := e.Artifact(manifest.Files[0].Ref); err != nil || string(sealed) != "# implement\n" {
+		t.Fatalf("the captured bytes did not survive the cleanup: %q %v", sealed, err)
+	}
+	// The whole point: the next launch over the same checkout runs unattended.
+	claim, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: newID("command"), Repository: workspace, OwnerID: "session:pilot", WorkspaceMode: "checkout"})
+	if err != nil {
+		t.Fatalf("the settled Run left the checkout unclaimable: %v", err)
+	}
+	if claim.Status != "active" {
+		t.Fatalf("the next claim is not active: %+v", claim)
+	}
+	started, err := e.Start(ctx, StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/tree.json", BriefFile: "brief.json", Inputs: map[string]string{}, WorkspaceMode: "checkout"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := handOver(t, e, started.Receipt.RunID)
+	if len(first.WorkspaceTrees) != 1 || first.WorkspaceTrees[0].InputManifest != nil {
+		t.Fatalf("the next Run did not reach its output-only tree step: %+v", first)
+	}
+}
+
+// A tracked file at the declared path is the repository's own document. The
+// runtime seals its bytes and leaves it exactly where git has it: cleaning up
+// after a capture must never turn into deleting from a borrowed checkout.
+func TestSealedExactFileCaptureKeepsATrackedDocument(t *testing.T) {
+	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
+	e, runID := treeSessionFixture(t, policy)
+	ctx := context.Background()
+	workspace := treeWorkspace(t, e)
+	task := handOver(t, e, runID)
+	writeWorkspaceTreeFile(t, workspace, policy.Path, "# Tracked\n")
+	if _, err := e.git(ctx, workspace, "add", "--", ":(literal)"+policy.Path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.SubmitSession(ctx, treeSubmission(t, task, "plan", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(policy.Path)))
+	if err != nil || string(actual) != "# Tracked\n" {
+		t.Fatalf("the runtime removed a tracked document: %q %v", actual, err)
 	}
 }
