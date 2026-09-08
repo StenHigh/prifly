@@ -19,6 +19,11 @@ const StepAuthoringVersion = "prifly-step/1"
 // StepSessionAuthoringVersion opts into pause-aware assisted session limits.
 const StepSessionAuthoringVersion = "prifly-step/2"
 
+// sessionAuthoringFields are declared only by the session authoring version, so
+// finding one under the older marker names the contract to move to rather than
+// the line to delete.
+var sessionAuthoringFields = []string{"session_limits"}
+
 // WorkflowJSONBytes returns the machine WorkflowRevision represented by JSON,
 // long-form YAML or the concise YAML authoring form.
 func WorkflowJSONBytes(data []byte, format string) ([]byte, error) {
@@ -154,12 +159,21 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	allowed := []string{"authoring", "schema_version", "id", "version", "title", "refs", "kind", "inputs", "outputs", "executor", "instructions_ref", "context_refs", "required_capabilities", "effects", "result_check_refs", "result_schema_ref", "hooks", "telemetry", "workspace_trees"}
 	if timed {
 		marker = StepSessionAuthoringVersion
-		allowed = append(allowed, "session_limits")
+		allowed = append(allowed, sessionAuthoringFields...)
 	}
 	for key := range source {
-		if !slices.Contains(allowed, key) {
-			return nil, problem("schema_invalid", "/"+escapePointer(key), "field is not part of "+marker)
+		if slices.Contains(allowed, key) {
+			continue
 		}
+		// A field the other authoring version does declare is not a typo, it is
+		// a step written against the wrong contract. Saying only "not part of
+		// this one" sends the author to delete the line they meant, and an
+		// inserted step that quietly loses its limits inherits the default
+		// hour without anyone choosing it.
+		if !timed && slices.Contains(sessionAuthoringFields, key) {
+			return nil, problem("schema_invalid", "/"+escapePointer(key), key+" belongs to "+StepSessionAuthoringVersion+"; declare authoring: "+StepSessionAuthoringVersion+" to set it, or leave it out and take the default work deadline")
+		}
+		return nil, problem("schema_invalid", "/"+escapePointer(key), "field is not part of "+marker)
 	}
 	if version, exists := source["schema_version"]; exists {
 		if timed && version != "6" && version != "7" {

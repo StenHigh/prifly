@@ -276,3 +276,40 @@ func TestSessionLimitsEditorSchemaMatchesAuthoring(t *testing.T) {
 		}
 	}
 }
+
+// A step written against prifly-step/1 that declares session limits is not a
+// typo: it is a step written against the wrong contract, and the author meant
+// the limits. Answering "field is not part of prifly-step/1" sends them to
+// delete the line they meant to keep, and an inserted step that quietly loses
+// its limits inherits the default hour without anyone choosing it.
+func TestLimitsUnderTheOlderAuthoringNameTheContractThatCarriesThem(t *testing.T) {
+	source := map[string]any{
+		"authoring": StepAuthoringVersion,
+		"id":        "test:step/tests",
+		"version":   "1.0.0",
+		"kind":      "worker",
+		"inputs":    map[string]any{},
+		"outputs":   map[string]any{},
+		// The value is irrelevant: the field itself is the thing this contract
+		// does not carry.
+		"session_limits": map[string]any{"active_timeout_ms": nil},
+	}
+	_, err := lowerStepAuthoring(source)
+	if err == nil {
+		t.Fatal("the older authoring accepted a field it does not declare")
+	}
+	message := err.Error()
+	for _, expected := range []string{"session_limits", StepSessionAuthoringVersion} {
+		if !strings.Contains(message, expected) {
+			t.Fatalf("the refusal does not name %q, so the author cannot tell a wrong contract from a wrong line: %s", expected, message)
+		}
+	}
+	// A genuinely unknown field keeps the plain refusal: naming a contract that
+	// does not carry it either would be a second wrong answer.
+	source["session_limits"] = nil
+	delete(source, "session_limits")
+	source["not_a_field"] = true
+	if _, err := lowerStepAuthoring(source); err == nil || strings.Contains(err.Error(), StepSessionAuthoringVersion) {
+		t.Fatalf("an unknown field was blamed on the session contract: %v", err)
+	}
+}

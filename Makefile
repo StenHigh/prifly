@@ -26,15 +26,25 @@ fmt:
 	$(GO) fmt ./...
 # Formatting drifted unnoticed because nothing checked it. A gate that does not
 # look is how eleven files ended up unformatted without anyone deciding that.
+# A gate that finds nothing and a gate that looked at nothing report the same
+# green. Both say how many files they read, so the second cannot hide as the
+# first when a path is renamed out from under them.
 fmt-check:
-	@unformatted=$$($(GOFMT) -l ./cmd ./internal); \
-	if [ -n "$$unformatted" ]; then echo "not gofmt-clean:"; echo "$$unformatted"; exit 1; fi
+	@files=$$(rg --files ./cmd ./internal --glob '*.go' | wc -l | tr -d ' '); \
+	if [ "$$files" -lt 1 ]; then echo "fmt-check read no Go files under ./cmd ./internal"; exit 1; fi; \
+	unformatted=$$($(GOFMT) -l ./cmd ./internal); \
+	if [ -n "$$unformatted" ]; then echo "not gofmt-clean:"; echo "$$unformatted"; exit 1; fi; \
+	echo "fmt-check: $$files files read, all gofmt-clean"
 # A refusal carries its code in a typed Fault, not inside the text of an error
 # that every reader has to split apart again. Tests still build text-shaped
 # errors on purpose, to prove such an error is still read correctly.
 refusal-check:
-	@sites=$$(rg -n 'errors\.New\("[a-z_]+:|fmt\.Errorf\("[a-z_]+:' internal cmd --glob '!*_test.go' || true); \
-	if [ -n "$$sites" ]; then echo "refusal code inside error text:"; echo "$$sites"; exit 1; fi
+	@files=$$(rg --files internal cmd --glob '*.go' --glob '!*_test.go' | wc -l | tr -d ' '); \
+	if [ "$$files" -lt 1 ]; then echo "refusal-check read no Go files under internal cmd"; exit 1; fi; \
+	sites=$$(rg -n 'errors\.New\("[a-z_]+:|fmt\.Errorf\("[a-z_]+:' internal cmd --glob '!*_test.go'); status=$$?; \
+	if [ $$status -ge 2 ]; then echo "refusal-check could not search: rg exited $$status"; exit 1; fi; \
+	if [ -n "$$sites" ]; then echo "refusal code inside error text:"; echo "$$sites"; exit 1; fi; \
+	echo "refusal-check: $$files files read, no refusal code inside error text"
 schemas:
 	python3 scripts/check-schema.py --go "$(GO)" --write
 schemas-check:
