@@ -89,10 +89,10 @@
 
 | Ворота | Где | Результат |
 |---|---|---|
-| `make check` | локально | |
-| `make e2e` | локально | |
-| `verify` | GitHub Actions | |
-| `race` | GitHub Actions | |
+| `make check` | локально на `ff04104` | зелёный; 49 бандлов, сторожа прочитали 282 и 155 файлов |
+| `make e2e` | локально на `ff04104` | зелёный |
+| `verify` | GitHub Actions 34249423586 | success (гоняет и `ci-check`, и `e2e`) |
+| `race` | GitHub Actions 34249423394 | success |
 
 ## Чего этот выпуск не закрывает
 
