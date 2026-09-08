@@ -19,7 +19,7 @@ func TestCancelledTimedSessionSettlesSavedReport(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	ctx := context.Background()
-	e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds()}, "workspace_write")
+	e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "workspace_write")
 	task := handOver(t, e, runID)
 	report := hostResult(t, e, task, "report persisted before cancellation")
 	_, view, err := e.load(ctx, runID)
@@ -61,7 +61,7 @@ func TestMixedTimedRunKeepsLegacyDecisionVisible(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	ctx := context.Background()
-	e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds()}, "none")
+	e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 	data, err := os.ReadFile(filepath.Join(e.Root, "steps/plan.json"))
 	var legacy flow.StepDefinition
 	if err != nil || json.Unmarshal(data, &legacy) != nil {
@@ -146,7 +146,7 @@ func TestResolveParkedTimedSessionDoesNotReleaseSlotTwice(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
 		wait := time.Minute.Milliseconds()
-		e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds(), DecisionWaitTimeoutMS: &wait}, "workspace_write")
+		e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds()), DecisionWaitTimeoutMS: &wait}, "workspace_write")
 		task := handOver(t, e, runID)
 		parkTimed(t, e, task)
 		time.Sleep(time.Minute)

@@ -943,9 +943,16 @@
       "additionalProperties": false,
       "properties": {
         "active_timeout_ms": {
-          "maximum": 9223372036854,
-          "minimum": 1,
-          "type": "integer"
+          "anyOf": [
+            {
+              "maximum": 9223372036854,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "decision_wait_timeout_ms": {
           "anyOf": [

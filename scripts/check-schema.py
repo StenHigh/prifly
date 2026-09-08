@@ -61,6 +61,7 @@ def main():
         ("step-definition-v4", ["--step-definition-v4"], ("schemas/core/step-definition-v4.schema.json",)),
 		("step-definition-v5", ["--step-definition-v5"], ("schemas/core/step-definition-v5.schema.json",)),
 		("step-definition-v6", ["--step-definition-v6"], ("schemas/core/step-definition-v6.schema.json",)),
+		("step-definition-v7", ["--step-definition-v7"], ("schemas/core/step-definition-v7.schema.json",)),
         ("workflow-revision-v3", ["--workflow-revision-v3"], ("schemas/core/workflow-revision-v3.schema.json",)),
         ("workflow-revision-v4", ["--workflow-revision-v4"], ("schemas/core/workflow-revision-v4.schema.json",)),
         ("publication-source", ["--publication-source"], ("schemas/core/publication-source-v1.schema.json",)),

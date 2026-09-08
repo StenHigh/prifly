@@ -51,6 +51,10 @@ func TestNeutralAuthoringReferencesMatchServedSchemas(t *testing.T) {
 		{"check", "check-v1"},
 		{"execution-bindings", "project-workflow-folder-v1"},
 		{"project-profile", "project-profile-v3"},
+		// The step reference is where an author reads how to say "no work
+		// deadline". Nothing checked that the editor a package author installs
+		// accepts the file we publish to teach it.
+		{"step", "step-v2"},
 	} {
 		t.Run(example.name, func(t *testing.T) {
 			data := authoringReferenceJSON(t, example.name)

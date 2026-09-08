@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=../../schemas/authoring/step-v2.schema.json
 # Complete reference for one prifly-step/2 assisted source. Copy only the fields that
 # describe this step; the compiler inserts the documented safe defaults before
-# it seals StepDefinition v6. This file is intentionally verbose, not a ready
+# it seals StepDefinition v6 or v7. This file is intentionally verbose, not a ready
 # executable package: replace the illustrative exact refs with real definitions.
 # Managed steps keep prifly-step/1 and their executor configuration limits.
 authoring: prifly-step/2 # Required marker; explicitly opts into separate work/wait time.
-schema_version: "6" # Optional: prifly-step/2 always lowers to v6, even without limits.
+schema_version: "7" # Optional: v6 by default, v7 only for active_timeout_ms: null.
 id: example:step/full-reference # Required stable identity.
 version: 1.0.0 # Required; increase when sealed bytes change.
 title: Full step authoring reference # Optional: defaults to id.
@@ -65,11 +65,15 @@ executor:
 # Each step pins its own values. Editing YAML creates a new revision, not new time
 # for an existing Run. These limits do not bound the whole workflow's lifetime.
 session_limits:
-  # Конечное время разрешённой работы host, в миллисекундах; default 3600000 = 1 час.
+  # Конечное время разрешённой работы host, в миллисекундах.
   # Только принятый объявленный runtime-вопрос приостанавливает расход остатка.
   # Ответ и restart не дают новый полный час. Это не измерение CPU чужого процесса.
   # Допустимо целое 1..9223372036854; 7200000 задаёт два часа активной работы.
-  active_timeout_ms: 3600000
+  # Отсутствие поля запечатывает default 3600000 = 1 час и остаётся v6: молчание
+  # автора никогда не означает «без ограничения». Ограничение снимается только
+  # явным null, и такой шаг запечатывается как StepDefinition v7. Придумывать
+  # большое число (30 суток) вместо null больше не нужно.
+  active_timeout_ms: null
   # Срок одного ожидания ответа, в миллисекундах. Default null = без ограничения
   # времени; например, 86400000 = сутки. Допустимо null либо целое 1..9223372036854.
   # 0 не означает бесконечность и отвергается. Обычный вопрос в чате, не переданный

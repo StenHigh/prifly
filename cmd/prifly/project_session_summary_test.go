@@ -51,7 +51,7 @@ func TestCLIProjectSessionLimitsPrepareShowsPinnedPolicies(t *testing.T) {
 		}
 		switch item.DefinitionRef.ID {
 		case "test:step/inspect":
-			if item.Limits == nil || item.Limits.ActiveTimeoutMS != 3600000 || item.Limits.DecisionWaitTimeoutMS != nil || item.LegacyAbsoluteTimeoutMS != 0 {
+			if item.Limits == nil || item.Limits.ActiveAllowanceMS() != 3600000 || item.Limits.DecisionWaitTimeoutMS != nil || item.LegacyAbsoluteTimeoutMS != 0 {
 				t.Fatalf("timed defaults were not distinguished from an absolute deadline: %+v", item)
 			}
 		case "test:step/legacy":
@@ -70,7 +70,7 @@ func TestCLIProjectSessionLimitsPrepareShowsPinnedPolicies(t *testing.T) {
 	found := false
 	for _, item := range changed.SessionLimits {
 		if item.DefinitionRef.ID == "test:step/inspect" {
-			found = item.Limits != nil && item.Limits.ActiveTimeoutMS == 7200000 && item.Limits.DecisionWaitTimeoutMS != nil && *item.Limits.DecisionWaitTimeoutMS == 86400000
+			found = item.Limits != nil && item.Limits.ActiveAllowanceMS() == 7200000 && item.Limits.DecisionWaitTimeoutMS != nil && *item.Limits.DecisionWaitTimeoutMS == 86400000
 		}
 	}
 	if !found {

@@ -319,10 +319,26 @@ type StepDefinition struct {
 }
 
 // SessionLimits separates an assisted delivery's finite work allowance from
-// one declared decision wait. A nil wait limit means no calendar deadline.
+// one declared decision wait. A nil wait limit means no calendar deadline, and
+// from StepDefinition v7 a nil active limit means no work deadline either. A v6
+// definition cannot spell that, so its active limit is always materialized.
 type SessionLimits struct {
-	ActiveTimeoutMS       int64  `json:"active_timeout_ms"`
+	ActiveTimeoutMS       *int64 `json:"active_timeout_ms"`
 	DecisionWaitTimeoutMS *int64 `json:"decision_wait_timeout_ms"`
+}
+
+// ActiveAllowanceMS is the working window the runtime enforces. Declaring no
+// deadline still leaves the engine needing a number: every deadline it keeps is
+// an instant derived from a millisecond count, so "no deadline" is served by the
+// largest count its clock arithmetic can represent.
+//
+// ponytail: MaxSessionTimeoutMS is a 292-year ceiling, not literal infinity;
+// branch the timing checks on a nil limit if a Run ever needs to outlive it.
+func (l SessionLimits) ActiveAllowanceMS() int64 {
+	if l.ActiveTimeoutMS == nil {
+		return MaxSessionTimeoutMS
+	}
+	return *l.ActiveTimeoutMS
 }
 
 const (

@@ -63,6 +63,11 @@ func Capabilities() CapabilityManifest {
 	profile.ReadVersions = append(profile.ReadVersions, CoreRoutedReadVersion)
 	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionVerdictVersion)
 	profile.Capabilities = append(profile.Capabilities, "routed_session_verdicts", "declared_impossible_verdicts")
+	// v7 is a step contract, not a state one: it adds only the spelling for an
+	// assisted step that declares no work deadline. A build that does not name
+	// it here would refuse the definitions it can in fact seal and run.
+	profile.StepVersions = append(profile.StepVersions, "7")
+	profile.Capabilities = append(profile.Capabilities, "assisted_session_unbounded_work")
 	return manifest
 }
 
