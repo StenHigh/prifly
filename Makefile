@@ -30,7 +30,7 @@ fmt:
 # green. Both say how many files they read, so the second cannot hide as the
 # first when a path is renamed out from under them.
 fmt-check:
-	@files=$$(rg --files ./cmd ./internal --glob '*.go' | wc -l | tr -d ' '); \
+	@files=$$(find ./cmd ./internal -name '*.go' -type f | wc -l | tr -d ' '); \
 	if [ "$$files" -lt 1 ]; then echo "fmt-check read no Go files under ./cmd ./internal"; exit 1; fi; \
 	unformatted=$$($(GOFMT) -l ./cmd ./internal); \
 	if [ -n "$$unformatted" ]; then echo "not gofmt-clean:"; echo "$$unformatted"; exit 1; fi; \
@@ -39,10 +39,10 @@ fmt-check:
 # that every reader has to split apart again. Tests still build text-shaped
 # errors on purpose, to prove such an error is still read correctly.
 refusal-check:
-	@files=$$(rg --files internal cmd --glob '*.go' --glob '!*_test.go' | wc -l | tr -d ' '); \
+	@files=$$(find internal cmd -name '*.go' -type f ! -name '*_test.go' | wc -l | tr -d ' '); \
 	if [ "$$files" -lt 1 ]; then echo "refusal-check read no Go files under internal cmd"; exit 1; fi; \
-	sites=$$(rg -n 'errors\.New\("[a-z_]+:|fmt\.Errorf\("[a-z_]+:' internal cmd --glob '!*_test.go'); status=$$?; \
-	if [ $$status -ge 2 ]; then echo "refusal-check could not search: rg exited $$status"; exit 1; fi; \
+	sites=$$(grep -rEn --include='*.go' --exclude='*_test.go' 'errors\.New\("[a-z_]+:|fmt\.Errorf\("[a-z_]+:' internal cmd); status=$$?; \
+	if [ $$status -ge 2 ]; then echo "refusal-check could not search: grep exited $$status"; exit 1; fi; \
 	if [ -n "$$sites" ]; then echo "refusal code inside error text:"; echo "$$sites"; exit 1; fi; \
 	echo "refusal-check: $$files files read, no refusal code inside error text"
 schemas:
