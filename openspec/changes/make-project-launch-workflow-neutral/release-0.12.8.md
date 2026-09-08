@@ -87,10 +87,10 @@
 
 | Ворота | Где | Результат |
 |---|---|---|
-| `make check` | локально | |
-| `make e2e` | локально | |
-| `verify` | GitHub Actions | |
-| `race` | GitHub Actions | |
+| `make check` | локально на `8673642` | зелёный; 49 бандлов схем |
+| `make e2e` | локально на `8673642` | зелёный |
+| `verify` | GitHub Actions 34180257514 | success (гоняет и `ci-check`, и `e2e`) |
+| `race` | GitHub Actions 34180257428 | success |
 
 ## Что этот выпуск не закрывает
 
