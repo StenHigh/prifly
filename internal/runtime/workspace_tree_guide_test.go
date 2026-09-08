@@ -37,8 +37,8 @@ func TestGuideCopiesTheDeclaredPolicyWhole(t *testing.T) {
 		if shown.InputPort != shown.OutputPort+"_in" {
 			t.Fatalf("port %s lost the input it is bound to: %+v", shown.OutputPort, shown)
 		}
-		if shown.IgnoreSlotPath != "outputs/"+shown.OutputPort {
-			t.Fatalf("port %s does not name the address the manifest prints: %q", shown.OutputPort, shown.IgnoreSlotPath)
+		if shown.EngineSlotPath != "outputs/"+shown.OutputPort {
+			t.Fatalf("port %s does not name the address the manifest prints: %q", shown.OutputPort, shown.EngineSlotPath)
 		}
 	}
 	// The entrypoint is the field an executor cannot infer, and the one a
@@ -48,14 +48,15 @@ func TestGuideCopiesTheDeclaredPolicyWhole(t *testing.T) {
 	}
 }
 
-// The guide answers the question the manifest answers wrongly, so it has to say
-// the manifest is wrong. A reader who found an answer stops reading, and a
-// correct answer placed beside an incorrect one is not a correction.
-func TestGuideNamesTheSlotPathAsNotAnAddress(t *testing.T) {
+// context.json shows a captured port an output slot like any other, and that
+// slot is real: capture requires it and the engine writes the sealed manifest
+// there. So the guide cannot say the slot does not exist — it has to say whose
+// it is, and name both refusals an executor earns by treating it as its own.
+func TestGuideSaysWhoTheSlotBelongsTo(t *testing.T) {
 	step := flow.StepDefinition{WorkspaceTrees: []flow.WorkspaceTreeBinding{{OutputPort: "plan", Capture: flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}}}}
 	manifest := ContextManifest{Outputs: map[string]OutputSlot{"plan": {Path: "outputs/plan"}}}
 	guide, _ := workspaceTreeGuide(step, manifest)
-	for _, expected := range []string{"not a place to write", "workspace_tree_output_host_supplied", "workspace_tree_capture_conflict"} {
+	for _, expected := range []string{"belongs to the engine", "not yours to fill", "workspace_tree_output_host_supplied", "workspace_tree_capture_conflict"} {
 		if !strings.Contains(guide.Note, expected) {
 			t.Fatalf("the guide does not name %q, so a reader still earns the refusal by following the manifest: %q", expected, guide.Note)
 		}

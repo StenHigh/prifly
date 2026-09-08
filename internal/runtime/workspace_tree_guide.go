@@ -22,7 +22,7 @@ const WorkspaceTreeGuideVersion = "workspace-tree-guide/1"
 // does not cover: the manifest already answers "where do I write this port",
 // and for a captured port it answers wrongly. A reader who found an answer
 // stops reading, so the wrong answer has to be named, not merely supplemented.
-const workspaceTreeGuideNote = "The engine captures these ports from the workspace itself. For a port listed here, the path under outputs in context.json is not a place to write: filling it earns workspace_tree_output_host_supplied, and writing the capture path while also declaring the slot earns workspace_tree_capture_conflict. Produce the result at the capture path, in the declared shape, and do not declare the port in your submission."
+const workspaceTreeGuideNote = "The engine captures these ports from the workspace itself. context.json still shows each of them an output slot, and that slot is real — but it belongs to the engine, which writes the sealed manifest into it after capturing. It is not yours to fill: writing there earns workspace_tree_output_host_supplied, and writing the capture path while also declaring the slot earns workspace_tree_capture_conflict. Produce the result at the capture path, in the declared shape, and do not declare the port in your submission."
 
 // WorkspaceTreeGuide shows an executor the shape of the result it must produce,
 // before it produces it. Until this existed the contract was reachable only by
@@ -42,10 +42,13 @@ type WorkspaceTreeGuidePort struct {
 	OutputPort string                          `json:"output_port"`
 	InputPort  string                          `json:"input_port,omitempty"`
 	Capture    flow.WorkspaceTreeCapturePolicy `json:"capture"`
-	// IgnoreSlotPath repeats the address the manifest prints for this port, so
+	// EngineSlotPath repeats the address the manifest prints for this port, so
 	// the reader can match the two documents by sight instead of inferring
-	// which of the two answers is the live one.
-	IgnoreSlotPath string `json:"ignore_slot_path,omitempty"`
+	// which of the two answers is the live one. The slot cannot be dropped from
+	// the manifest: capture requires it and writes the sealed manifest there,
+	// so what separates the engine's slot from the executor's is stated here
+	// rather than shown by absence.
+	EngineSlotPath string `json:"engine_slot_path,omitempty"`
 }
 
 // workspaceTreeGuide builds the guide for one step, or reports that the step
@@ -60,7 +63,7 @@ func workspaceTreeGuide(step flow.StepDefinition, manifest ContextManifest) (Wor
 			OutputPort:     binding.OutputPort,
 			InputPort:      binding.InputPort,
 			Capture:        binding.Capture,
-			IgnoreSlotPath: manifest.Outputs[binding.OutputPort].Path,
+			EngineSlotPath: manifest.Outputs[binding.OutputPort].Path,
 		})
 	}
 	return guide, true
