@@ -1470,8 +1470,11 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 			return usageError("project_extension_unknown_step: " + extension.Step + " (known: " + strings.Join(known, ", ") + ")")
 		}
 		var definition flow.StepDefinition
-		if err := json.Unmarshal(step.Bytes, &definition); err != nil || len(definition.Inputs) != 0 {
-			return usageError("project_extension_requires_full_yaml: an extension inserts a step without inputs; a step that needs inputs belongs in a workflow graph you write yourself, not in extend.yaml")
+		if err := json.Unmarshal(step.Bytes, &definition); err != nil {
+			return usageError("project_extension_invalid_step_source: " + extension.Step + " is not a StepDefinition")
+		}
+		if err := projectExtensionInputs(definition, extension.Input); err != nil {
+			return err
 		}
 		if err := applyProjectExtension(workflow, extension, projectRefValue(step.Ref)); err != nil {
 			return err
