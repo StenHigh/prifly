@@ -3128,3 +3128,57 @@ definition:
 		t.Fatalf("the empty known list is still presented as the answer: %s", refusal)
 	}
 }
+
+// session task opens the authority for reading, which is the whole point of it:
+// a host fetches its work while another process holds the write lock. That is
+// also the only path the operator uses, so it is the path that has to leave the
+// handoff behind — and the report's shape has to be reachable from the same
+// place, without prose.
+func TestSessionTaskLeavesTheHandoffAndItsReportShapeInReach(t *testing.T) {
+	root, authority := t.TempDir(), filepath.Join(t.TempDir(), "authority")
+	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", authority, "--host", "codex-cli"); code != 0 {
+		t.Fatalf("init: %d %s", code, stderr)
+	}
+	writeProjectLaunchRequirementsFixture(t, root, "3", "none")
+	code, out, stderr := runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "inspect", "--host", "codex-cli")
+	var started projectStartResult
+	if code != 0 || json.Unmarshal([]byte(out), &started) != nil || started.Run.Run.ID == "" {
+		t.Fatalf("launch: %d %s %s", code, out, stderr)
+	}
+	code, out, stderr = runCLI(t, "--project", authority, "session", "task", "--run", started.Run.Run.ID)
+	var task prifly.SessionTask
+	if code != 0 || json.Unmarshal([]byte(out), &task) != nil || task.AttemptID == "" {
+		t.Fatalf("session task: %d %s %s", code, out, stderr)
+	}
+	data, err := os.ReadFile(filepath.Join(task.Workspace, prifly.SessionTaskFile))
+	if err != nil {
+		t.Fatalf("the fetched handoff was not left in the workspace it names: %v", err)
+	}
+	var written prifly.SessionTask
+	if json.Unmarshal(data, &written) != nil || written.AttemptID != task.AttemptID || written.EnvelopeDigest != task.EnvelopeDigest {
+		t.Fatalf("the document in the workspace is not the handoff that was answered: %s", data)
+	}
+	code, out, stderr = runCLI(t, "--project", authority, "session", "submit", "--template", "--run", started.Run.Run.ID, "--attempt", task.AttemptID)
+	var skeleton prifly.SessionSubmission
+	if code != 0 || json.Unmarshal([]byte(out), &skeleton) != nil {
+		t.Fatalf("session submit --template: %d %s %s", code, out, stderr)
+	}
+	if skeleton.SchemaVersion != task.SchemaVersion || skeleton.RunID != task.RunID || skeleton.AttemptID != task.AttemptID || skeleton.EnvelopeDigest != task.EnvelopeDigest {
+		t.Fatalf("the skeleton does not name the handoff it came from: %s", out)
+	}
+	var result map[string]any
+	if json.Unmarshal(skeleton.Result, &result) != nil || len(result) != 10 {
+		t.Fatalf("the nested result is not the ten-field report: %s", skeleton.Result)
+	}
+	if result["verdict"] != "" || result["summary"] != "" || result["step_instance_id"] != task.StepInstanceID {
+		t.Fatalf("the skeleton answered the host's half or dropped an identity: %s", skeleton.Result)
+	}
+	// A skeleton is printed, never read from a file, and the refusal for a
+	// report with neither says where the shape comes from.
+	if code, _, stderr := runCLI(t, "--project", authority, "session", "submit", "--template", "--run", started.Run.Run.ID, "--file", "/nonexistent.json"); code == 0 || !strings.Contains(stderr, "--template") {
+		t.Fatalf("--template accepted a submission file: %d %s", code, stderr)
+	}
+	if code, _, stderr := runCLI(t, "--project", authority, "session", "submit"); code == 0 || !strings.Contains(stderr, "--template") {
+		t.Fatalf("the refusal does not name where the shape comes from: %d %s", code, stderr)
+	}
+}

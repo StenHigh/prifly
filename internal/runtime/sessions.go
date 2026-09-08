@@ -14,6 +14,7 @@ import (
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/purity"
 )
 
 // An assisted host is a session that already exists: this authority does not
@@ -311,6 +312,17 @@ type SessionTask struct {
 	PermittedEffects []string `json:"permitted_effects"`
 }
 
+// SessionTaskFile is the handoff itself, written into the attempt workspace
+// beside context.json. Neither the manifest nor the envelope could carry it:
+// their version strings are embedded in every generation of the Run read
+// contracts, those are frozen, and a live Run must stay readable by them. A
+// sibling document moves no contract and reaches the same reader, who holds the
+// workspace by construction. Until this existed the operator copied the answer
+// of `session task` into a file by hand and handed the path over separately; a
+// forgotten copy left the host with no envelope digest, no attempt identity and
+// no decision context.
+const SessionTaskFile = "task.json"
+
 // SessionSubmission is the host's terminal report. It names the attempt and the
 // envelope digest it was handed, so a report about other work is refused rather
 // than accepted under the wrong identity.
@@ -323,6 +335,38 @@ type SessionSubmission struct {
 	ReportedCosts   []ReportedCost          `json:"reported_costs,omitempty"`
 	WorkspaceTrees  []WorkspaceTreeLocation `json:"workspace_trees,omitempty"`
 	DecisionRequest *DecisionRequest        `json:"decision_request,omitempty"`
+}
+
+// SubmissionTemplate is the shape of a report, carrying everything the
+// authority already knows and nothing it does not. A host had to assemble five
+// fields around a nested result of ten from prose, and a whole class of its
+// refusals was about that form rather than about the work.
+//
+// The identities are filled because a report that names them differently is
+// refused, not corrected. The declared output slots are filled because their
+// artifact identity is the admitted slot's and may not be invented. What is
+// left blank is exactly what only the host can answer: the verdict, the summary
+// and the digest of each artifact it produced.
+func (t SessionTask) SubmissionTemplate() (SessionSubmission, error) {
+	result := Result{
+		SchemaVersion: "1", RunID: t.RunID, StepInstanceID: t.StepInstanceID, AttemptID: t.AttemptID,
+		EnvelopeDigest: t.EnvelopeDigest, Outputs: map[string]ArtifactRef{},
+		EvidenceRefs: []any{}, EffectReceiptRefs: []any{},
+	}
+	for port, slot := range t.Context.Outputs {
+		// A port the engine captures from the workspace is not a blank to fill:
+		// declaring it earns workspace_tree_output_host_supplied. The guide
+		// beside this document says where its result is produced instead.
+		if slices.ContainsFunc(t.WorkspaceTrees, func(tree WorkspaceTreeHandoff) bool { return tree.OutputPort == port }) {
+			continue
+		}
+		result.Outputs[port] = ArtifactRef{ArtifactID: slot.ArtifactID, Revision: slot.Revision}
+	}
+	body, err := canonical(result)
+	if err != nil {
+		return SessionSubmission{}, err
+	}
+	return SessionSubmission{SchemaVersion: t.SchemaVersion, RunID: t.RunID, AttemptID: t.AttemptID, EnvelopeDigest: t.EnvelopeDigest, Result: body}, nil
 }
 
 // routedVerdicts is the node's own declared set, read in the fixed StepResult
@@ -425,11 +469,55 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 				task.WorkspaceMode, task.RepositoryWorkspace = a.Session.WorkspaceMode, workspace
 			}
 		}
+		if err := e.writeSessionTask(task); err != nil {
+			return SessionTask{}, err
+		}
 		return task, nil
 	}
 	// A Run that holds no handoff is not a Run that does not exist: reporting
 	// both as not_found sends the reader looking for the wrong thing.
 	return SessionTask{}, &flow.Problem{Code: "no_active_handoff", Message: "this run holds no handoff awaiting a host; read its next action or drive it"}
+}
+
+// writeSessionTask materializes the handoff where the host already is. It
+// replaces rather than refuses: writeExclusive belongs where the workspace is
+// fresh, which is why materializeSkills reads an existing file there as
+// corruption, and this document is written long after that moment. The same
+// handoff is fetched again after every park, resume and re-delivery, and it
+// differs each time — a stale copy of the one document a host is meant to trust
+// is worse than none.
+//
+// A read-only authority still writes it. ReadOnly governs the event store and
+// the blob store, and `session task` is deliberately a read so a host can fetch
+// its work while another process holds the write lock: gating on it would mean
+// the one path the operator actually uses is the one path that materializes
+// nothing. The attempt workspace is not authority state — it holds a copy of an
+// answer, at a path one attempt owns, rewritten by the next fetch.
+func (e *Engine) writeSessionTask(task SessionTask) error {
+	if task.Workspace == "" {
+		return nil
+	}
+	data, err := canonical(task)
+	if err != nil {
+		return err
+	}
+	purity.Guard("write.local")
+	root, err := os.OpenRoot(task.Workspace)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	// The staging name is unguessable, so a host writing inside its own
+	// workspace cannot pre-empt it, and the rename replaces whatever stands at
+	// the target without ever exposing a half-written handoff.
+	staging := ".pending-" + newID("file")
+	if err := root.WriteFile(staging, data, 0600); err != nil {
+		return err
+	}
+	if err := root.Rename(staging, SessionTaskFile); err != nil {
+		return errors.Join(err, root.Remove(staging))
+	}
+	return nil
 }
 
 // SessionTasks lists every outstanding handoff, so a caller can see that a Run

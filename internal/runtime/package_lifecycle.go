@@ -591,6 +591,92 @@ func (e *Engine) reuseTrustPin(ctx context.Context, source Run, refs []ArtifactR
 	return &local.ControlPin{Key: AuthorityPackagesKey, Version: version}, nil
 }
 
+// PackageAuthorEditionFile is the build provenance the compiler seals into the
+// package it produced. The engine does not write it and does not compile: it is
+// read here as one more sealed byte range the manifest already lists, because
+// the mapping from the version an author wrote to the build key an installation
+// carries exists nowhere else.
+const PackageAuthorEditionFile = "build-provenance.json"
+
+// PackageAuthorEdition is the authoring identity a built edition claims for
+// itself. It is a claim, exactly like the manifest's description and the
+// origin's location: sealing proves the bytes have not moved since import, not
+// that the author named in them wrote them.
+//
+// It is shown and never accepted as an address. Two builds of one authoring
+// version are both legitimate and both installable, so that version names more
+// than one installed edition; taking it as an address would restore the
+// ambiguity that answering package_not_installed removed.
+type PackageAuthorEdition struct {
+	ID       string `json:"id"`
+	Version  string `json:"version"`
+	BuildKey string `json:"build_key"`
+}
+
+// packageAuthorEditions reads the provenance of every installed package that
+// carries one. A package the compiler did not build declares no such file and
+// is absent from the result rather than present and blank. Bytes that no longer
+// match the digest the sealed manifest recorded are not read at all: an edition
+// is named by what was sealed, never by what is on disk now, and a package
+// whose bytes moved is what package verify exists to report.
+func (e *Engine) packageAuthorEditions(record PackageRecord) map[flow.Ref]PackageAuthorEdition {
+	editions := map[flow.Ref]PackageAuthorEdition{}
+	for _, pkg := range record.Packages {
+		for _, file := range pkg.Files {
+			if file.Path != PackageAuthorEditionFile {
+				continue
+			}
+			data, err := readLocal(e.Root, pkg.Root+"/"+file.Path, flow.MaxDocumentBytes)
+			if err != nil || rawDigest(data) != file.Digest {
+				break
+			}
+			// The compiler owns this document and will add fields to it. The
+			// engine reads the two it needs and is not a second reviewer of the
+			// rest, so an unknown field here is not a reason to say nothing.
+			var provenance struct {
+				AuthorPackage PackageAuthorEdition `json:"author_package"`
+				BuildKey      string               `json:"build_key"`
+			}
+			if json.Unmarshal(data, &provenance) != nil || provenance.AuthorPackage.ID == "" || provenance.AuthorPackage.Version == "" {
+				break
+			}
+			provenance.AuthorPackage.BuildKey = provenance.BuildKey
+			editions[pkg.Ref] = provenance.AuthorPackage
+			break
+		}
+	}
+	return editions
+}
+
+// PackageListing is what package list answers: the trusted package projection,
+// and for each installed edition the authoring package it was built from. Under
+// a package profile that derives versions from the build key, the version an
+// installation carries is that key; a reader holding the version its author
+// wrote could see that --package did not address it, and had nowhere to go from
+// there. The authoring version is reported here, and stays unaddressable.
+func (e *Engine) PackageListing(ctx context.Context) (map[string]any, error) {
+	record, _, err := e.readPackages(ctx)
+	if err != nil {
+		return nil, err
+	}
+	view := PackageView(record)
+	entries, ok := view["packages"].([]map[string]any)
+	if !ok {
+		return nil, local.ErrIntegrity
+	}
+	editions := e.packageAuthorEditions(record)
+	for _, entry := range entries {
+		ref, ok := entry["ref"].(flow.Ref)
+		if !ok {
+			return nil, local.ErrIntegrity
+		}
+		if edition, carried := editions[ref]; carried {
+			entry["author_package"] = edition
+		}
+	}
+	return view, nil
+}
+
 // PackageLifecycleView is the reference CLI projection of installed packages.
 func PackageLifecycleView(record PackageRecord) map[string]any {
 	resolvable := resolvablePackages(record)
