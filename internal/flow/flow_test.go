@@ -45,7 +45,7 @@ func TestSchemaRefusalNamesWhatTheContractDeclares(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = validationProblem(schema.Validate(value), "/brief")
+			err = validationProblem(schema.Validate(value), "/brief", "")
 			if err == nil {
 				t.Fatal("the value was accepted")
 			}

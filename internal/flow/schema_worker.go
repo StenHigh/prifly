@@ -115,7 +115,7 @@ func computeSchema(request schemaRequest) error {
 	if err != nil {
 		return err
 	}
-	return validationProblem(schema.Validate(value), "")
+	return validationProblem(schema.Validate(value), "", "")
 }
 
 // Only successful compilation is cached, by the complete exact schema bytes.
@@ -292,7 +292,7 @@ func checkSchemaInProcess(schema, value []byte) (error, bool) {
 	if err != nil {
 		return err, true
 	}
-	return validationProblem(entry.schema.Validate(parsed), ""), true
+	return validationProblem(entry.schema.Validate(parsed), "", ""), true
 }
 
 func checkSchema(schema, value []byte) error {

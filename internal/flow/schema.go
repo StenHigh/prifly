@@ -590,10 +590,10 @@ func validateProtocolValue(name string, value any, path string) error {
 	if err != nil {
 		return err
 	}
-	return validationProblem(schema.Validate(value), path)
+	return validationProblem(schema.Validate(value), path, name)
 }
 
-func validationProblem(err error, path string) error {
+func validationProblem(err error, path, contract string) error {
 	if err == nil {
 		return nil
 	}
@@ -626,7 +626,7 @@ func validationProblem(err error, path string) error {
 		return strings.Compare(location(a)+a.SchemaURL, location(b)+b.SchemaURL)
 	})
 	leaf := leaves[0]
-	return problem("schema_invalid", location(leaf), "value does not satisfy the declared contract"+declaredExpectation(leaf))
+	return problem("schema_invalid", location(leaf), "value does not satisfy the declared contract"+declaredExpectation(leaf, contract))
 }
 
 // declaredExpectation names what the contract asks for at the failing pointer.
@@ -635,7 +635,7 @@ func validationProblem(err error, path string) error {
 // does not satisfy a contract without saying what the contract wants sends the
 // reader to prifly schema and back for every field: an enum of four names cost
 // the pilot three attempts to discover.
-func declaredExpectation(e *jsonschema.ValidationError) string {
+func declaredExpectation(e *jsonschema.ValidationError, contract string) string {
 	render := func(value any) string {
 		data, err := json.Marshal(value)
 		if err != nil || len(data) > 120 {
@@ -663,7 +663,15 @@ func declaredExpectation(e *jsonschema.ValidationError) string {
 		}
 	case *kind.Type:
 		if len(want.Want) != 0 {
-			return "; the declared type is " + strings.Join(want.Want, " or ")
+			text := "; the declared type is " + strings.Join(want.Want, " or ")
+			// A scalar type is the whole answer. A shape is not: naming "object"
+			// tells a reader nothing about which fields it holds, and the one
+			// place that answer is written is the contract itself. An author
+			// who wrote prose where an object belongs had nowhere to look.
+			if contract != "" && (slices.Contains(want.Want, "object") || slices.Contains(want.Want, "array")) {
+				text += ", whose shape is printed by prifly schema " + contract
+			}
+			return text
 		}
 	case *kind.Required:
 		if len(want.Missing) != 0 {

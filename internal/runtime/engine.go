@@ -584,7 +584,12 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 	case "blocked_child":
 		actions = append(actions, "run.cancel")
 	case "uncertain":
-		actions = append(actions, "doctor")
+		// An unresolved execution keeps its slot and nothing retries it blindly,
+		// so the only move that advances the Run is the owner saying what
+		// happened. Offering a diagnostic alone reads as guidance and leads
+		// nowhere: run drive answers recovery_required, and the disconnect it
+		// names is refused for a timed delivery, so the reader walks a circle.
+		actions = append(actions, "run.resolve", "doctor")
 	}
 	// An attempt awaiting its host is work this driver cannot do, so the action
 	// stays what the driver sees. Reading the handoff is still the move, and

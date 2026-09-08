@@ -443,6 +443,18 @@ func TestCallKnownFailureAndGlobalUnknownBarrier(t *testing.T) {
 		if !r.HasUnresolvedEffects || r.Status != "uncertain" || len(r.Active) != 1 || len(r.Attempts) != 1 || len(r.Invocations) != 2 || activationFor(&r, "work_again") != nil {
 			t.Fatal("unknown child failed to block ordinary admissions for whole Run")
 		}
+		// Nothing retries an unresolved execution and nothing else moves the
+		// Run, so the owner stating the outcome is the only next action. An
+		// operator offered a diagnostic alone walked a circle: driving again
+		// answers recovery_required, and the command that refusal used to name
+		// is itself refused for a timed delivery.
+		next, err := e.Next(context.Background(), runID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if next.Action != "uncertain" || !slices.Contains(next.SafeNextActions, "run.resolve") {
+			t.Fatalf("an uncertain Run does not name the one action that ends it: %+v", next.SafeNextActions)
+		}
 	})
 }
 

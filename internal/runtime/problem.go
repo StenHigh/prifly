@@ -193,6 +193,9 @@ func ProblemFor(err error) (Problem, int) {
 		// A budget filled by superseded package editions is released by removing
 		// one, and no state diagnostic reports on the registry that holds them.
 		"dependency_limit": {"package.list", "package.remove"},
+		// An unresolved execution is ended by the owner stating its outcome.
+		// Nothing else moves it, and driving again returns this same refusal.
+		"recovery_required": {"run.resolve", "run.status"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
 	}
