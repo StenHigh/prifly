@@ -886,3 +886,88 @@ func TestRoutedTaskNamesTheVerdictsItsNodeRoutes(t *testing.T) {
 		t.Fatalf("the offered set does not match the declared routes: %v %v", task.RoutedVerdicts, stage.On)
 	}
 }
+
+// The operator used to copy the answer of session task into a file by hand and
+// hand the path over separately. Forgetting that step left the host holding a
+// workspace and no envelope digest, attempt identity or decision context.
+func TestSessionTaskIsMaterializedInTheWorkspaceItNames(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	task := handOver(t, e, runID)
+	written := func() SessionTask {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(task.Workspace, SessionTaskFile))
+		if err != nil {
+			t.Fatalf("the handoff was not written beside the context manifest: %v", err)
+		}
+		var document SessionTask
+		if err := json.Unmarshal(data, &document); err != nil {
+			t.Fatal(err)
+		}
+		return document
+	}
+	first := written()
+	if first.EnvelopeDigest != task.EnvelopeDigest || first.AttemptID != task.AttemptID || first.RunID != task.RunID || first.Workspace != task.Workspace {
+		t.Fatalf("the document in the workspace is not the handoff: %+v want %+v", first, task)
+	}
+	if !reflect.DeepEqual(first.Context.Outputs, task.Context.Outputs) || first.SchemaVersion != task.SchemaVersion {
+		t.Fatalf("the materialized handoff differs from the one that was answered: %+v", first)
+	}
+	// A fetch is not a claim on the workspace: the same handoff is fetched again
+	// after every park, resume and re-delivery, and each fetch must leave the
+	// current document there rather than refuse over its own earlier one.
+	if err := os.WriteFile(filepath.Join(task.Workspace, SessionTaskFile), []byte(`{"schema_version":"stale"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	again, err := e.SessionTask(context.Background(), runID, task.AttemptID)
+	if err != nil {
+		t.Fatalf("re-fetching the same handoff was refused: %v", err)
+	}
+	if second := written(); second.EnvelopeDigest != again.EnvelopeDigest || second.SchemaVersion == "stale" {
+		t.Fatalf("a re-fetch left a stale handoff in the workspace: %+v", second)
+	}
+}
+
+// A host had to assemble five fields around a nested result of ten from prose,
+// and a whole class of its refusals was about that form rather than the work.
+func TestSubmissionTemplateIsTheReportTheHostOnlyFillsIn(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	task := handOver(t, e, runID)
+	skeleton, err := task.SubmissionTemplate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if skeleton.SchemaVersion != task.SchemaVersion || skeleton.RunID != task.RunID || skeleton.AttemptID != task.AttemptID || skeleton.EnvelopeDigest != task.EnvelopeDigest {
+		t.Fatalf("the skeleton does not name the handoff it came from: %+v", skeleton)
+	}
+	var result Result
+	if err := json.Unmarshal(skeleton.Result, &result); err != nil {
+		t.Fatal(err)
+	}
+	slot := task.Context.Outputs["plan"]
+	if len(result.Outputs) != 1 || result.Outputs["plan"].ArtifactID != slot.ArtifactID || result.Outputs["plan"].Revision != slot.Revision {
+		t.Fatalf("the skeleton did not carry the admitted output slot: %+v", result)
+	}
+	if result.StepInstanceID != task.StepInstanceID || result.EnvelopeDigest != task.EnvelopeDigest || result.SchemaVersion != "1" {
+		t.Fatalf("the skeleton left an identity for the host to guess: %+v", result)
+	}
+	// What stays blank is exactly what only the host can answer, and filling
+	// those blanks is the whole of the report: nothing else is added here.
+	if result.Verdict != "" || result.Summary != "" || result.Outputs["plan"].Digest != "" {
+		t.Fatalf("the skeleton answered what only the host can: %+v", result)
+	}
+	body, err := canonical(map[string]any{"summary": "planned"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(task.Workspace, filepath.FromSlash(slot.Path)), body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	result.Verdict, result.Summary = "pass", "planned"
+	result.Outputs["plan"] = ArtifactRef{ArtifactID: slot.ArtifactID, Revision: slot.Revision, Digest: rawDigest(body)}
+	if skeleton.Result, err = canonical(result); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.SubmitSession(context.Background(), skeleton); err != nil {
+		t.Fatalf("the filled skeleton was not an acceptable report: %v", err)
+	}
+}

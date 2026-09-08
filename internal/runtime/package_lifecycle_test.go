@@ -586,3 +586,114 @@ func TestDependencyLimitNamesTheEditionsThatFillIt(t *testing.T) {
 		t.Fatalf("a single edition was blamed for the budget: %q", note)
 	}
 }
+
+// buildProvenancePackage seals a package whose installed version is a build key
+// and whose provenance names the version its author actually wrote.
+func buildProvenancePackage(t *testing.T, authorVersion, buildKey, installedVersion string) string {
+	t.Helper()
+	body := "---\nname: aif-plan\n---\n\n# Plan " + installedVersion + "\n"
+	provenance, err := canonical(map[string]any{
+		"schema_version": "prifly-build-provenance/1", "algorithm": "b1",
+		"author_package": map[string]any{"id": "aif:package/classic", "version": authorVersion},
+		"build_key":      buildKey, "package_profile": "3",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{"skills/aif-plan/SKILL.md": body, PackageAuthorEditionFile: string(provenance)}
+	components := []map[string]any{
+		{"kind": "context", "ref": map[string]any{"id": "aif:context/plan-skill", "version": installedVersion, "digest": rawDigest([]byte(body))}, "path": "skills/aif-plan/SKILL.md"},
+	}
+	return packageSource(t, files, components, func(manifest map[string]any) {
+		manifest["id"], manifest["version"] = "aif:package/classic", installedVersion
+	})
+}
+
+// package inspect --package aif:package/classic@1.27.1 looks right and
+// addresses nothing: under package profile 3 the installed version is a build
+// key. The mapping was sealed inside the package all along and nothing showed
+// it, so a reader holding the authoring version had nowhere to go.
+func TestPackageListNamesTheAuthoringEditionWithoutMakingItAnAddress(t *testing.T) {
+	e := contextRegistryRuntime(t)
+	ctx := context.Background()
+	const authorVersion = "1.27.1"
+	const built = "0.0.0-b1.gtioeldpilotbuildkeyaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	buildKey := "sha256:" + strings.Repeat("ab", 32)
+	if _, err := e.ImportPackage(ctx, PackageImportRequest{CommandID: "command:built", Directory: buildProvenancePackage(t, authorVersion, buildKey, built), Reason: "a compiled edition"}); err != nil {
+		t.Fatal(err)
+	}
+	// A package the compiler did not build carries no provenance, and an entry
+	// with a blank authoring version would read as one that has none.
+	plain, _, _ := skillPackage(t, "---\nname: aif-plan\n---\n\n# Handwritten\n")
+	if _, err := e.ImportPackage(ctx, PackageImportRequest{CommandID: "command:plain", Directory: plain, Reason: "a handwritten package"}); err != nil {
+		t.Fatal(err)
+	}
+	listing, err := e.PackageListing(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, ok := listing["packages"].([]map[string]any)
+	if !ok || len(entries) != 2 {
+		t.Fatalf("the listing does not hold both installed editions: %+v", listing)
+	}
+	claimed := 0
+	for _, entry := range entries {
+		ref := entry["ref"].(flow.Ref)
+		edition, carried := entry["author_package"]
+		if ref.Version != built {
+			if carried {
+				t.Fatalf("a package with no sealed provenance claimed an authoring version: %+v", entry)
+			}
+			continue
+		}
+		claimed++
+		if edition != (PackageAuthorEdition{ID: "aif:package/classic", Version: authorVersion, BuildKey: buildKey}) {
+			t.Fatalf("the built edition does not name the version its author wrote: %+v", edition)
+		}
+	}
+	if claimed != 1 {
+		t.Fatalf("the built edition was not named in the listing: %+v", entries)
+	}
+	// Shown, never accepted: two builds of one authoring version are both
+	// legitimate, so it addresses more than one edition and addresses none.
+	if _, _, err := e.PackageComponent(ctx, "aif:context/plan-skill", "aif:package/classic@"+authorVersion); err == nil || !strings.Contains(err.Error(), "package_not_installed") {
+		t.Fatalf("the authoring version became an address: %v", err)
+	}
+}
+
+// Sealing proves the bytes have not moved since import, and nothing more. Bytes
+// that no longer match the digest the manifest recorded are not a quieter kind
+// of provenance: they are what package verify exists to report.
+func TestChangedProvenanceBytesClaimNoAuthoringEdition(t *testing.T) {
+	e := contextRegistryRuntime(t)
+	ctx := context.Background()
+	const built = "0.0.0-b1.gtioeldpilotbuildkeyaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	source := buildProvenancePackage(t, "1.27.1", "sha256:"+strings.Repeat("ab", 32), built)
+	if _, err := e.ImportPackage(ctx, PackageImportRequest{CommandID: "command:built", Directory: source, Reason: "a compiled edition"}); err != nil {
+		t.Fatal(err)
+	}
+	record, err := e.Packages(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed := filepath.Join(e.Root, filepath.FromSlash(record.Packages[0].Root), PackageAuthorEditionFile)
+	if err := os.Chmod(sealed, 0600); err != nil {
+		t.Fatal(err)
+	}
+	forged, err := canonical(map[string]any{"schema_version": "prifly-build-provenance/1", "author_package": map[string]any{"id": "aif:package/classic", "version": "9.9.9"}, "build_key": "sha256:" + strings.Repeat("cd", 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sealed, forged, 0600); err != nil {
+		t.Fatal(err)
+	}
+	listing, err := e.PackageListing(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range listing["packages"].([]map[string]any) {
+		if edition, carried := entry["author_package"]; carried {
+			t.Fatalf("changed bytes were presented as the installed edition's provenance: %+v", edition)
+		}
+	}
+}

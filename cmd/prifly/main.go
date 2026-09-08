@@ -1406,11 +1406,40 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 		return c.commandResult(result)
 	case "submit":
 		file := f.String("file", "", "")
+		// The report's shape was reachable only through prose, so a host that
+		// had done the work still lost the attempt to the form of the answer.
+		// The skeleton is printed from the outstanding handoff itself, which is
+		// the only place the identities and the admitted output slots exist.
+		template := f.Bool("template", false, "print the submission skeleton for one outstanding handoff instead of reporting")
+		attempt := f.String("attempt", "", "the outstanding attempt the skeleton is for")
 		if err := parse(f, args[1:]); err != nil {
 			return err
 		}
+		if *template {
+			if *file != "" {
+				return usageError("session submit --template prints a skeleton and reads no --file")
+			}
+			if *run == "" {
+				return usageError("session submit --template requires --run RUN_ID")
+			}
+			task, err := e.SessionTask(ctx, *run, *attempt)
+			if err != nil {
+				return err
+			}
+			skeleton, err := task.SubmissionTemplate()
+			if err != nil {
+				return err
+			}
+			return c.emit(skeleton)
+		}
+		// A report names its attempt inside the file it carries. Accepting a
+		// second name here and ignoring it is how a host reports for the wrong
+		// attempt and is told nothing.
+		if *attempt != "" {
+			return usageError("session submit --attempt belongs to --template; a report names its attempt inside SUBMISSION.json")
+		}
 		if *file == "" {
-			return usageError("session submit requires --file SUBMISSION.json")
+			return usageError("session submit requires --file SUBMISSION.json, or --template --run RUN_ID for its shape")
 		}
 		var submission prifly.SessionSubmission
 		if _, err := readJSONBytes(*file, &submission); err != nil {
@@ -1546,11 +1575,11 @@ func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) err
 		if err := parse(f, args[1:]); err != nil {
 			return err
 		}
-		record, err := e.Packages(ctx)
+		listing, err := e.PackageListing(ctx)
 		if err != nil {
 			return err
 		}
-		return c.emit(prifly.PackageView(record))
+		return c.emit(listing)
 	case "inspect":
 		refFile := f.String("ref", "", "exact package ImmutableRef JSON file")
 		component := f.String("component", "", "declared ID of one component an installed package carries")
@@ -2350,6 +2379,7 @@ Global: --project DIR  --json  --format text|json|csv
   package import --dir DIR --reason TEXT [--command-id ID]
                                    Seal, verify and trust a local package; nothing in it is executed
   package list                      Trusted packages, their origin and recorded trust decision
+                                   author_package names the edition an author wrote; it is shown, never accepted by --package, since two builds of it are one version
   package inspect --ref REF.json | --component ID [--package ID@VERSION]
                                    Read one exact sealed package, or the bytes of one component it declares, by the ID the package gave it
                                    A JSON component comes back in component; a context is prose and comes back in component_text
@@ -2369,6 +2399,7 @@ Global: --project DIR  --json  --format text|json|csv
   claim list | claim heartbeat --id CLAIM --generation N | claim release --id CLAIM --generation N
                                    An expired lease blocks a conflicting claim; it never hands ownership over
   session task --run RUN_ID         The sealed handoff an assisted host currently holds
+                                   The same document is written to task.json in the attempt workspace, so the host needs only its directory
   session publish --file COMMAND.json
                                    Publish a sealed artifact before the assisted attempt settles
   action propose --file COMMAND.json
@@ -2379,6 +2410,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    Backward-compatible alias for action propose
   session submit --file SUBMISSION.json
                                    Report for exactly the attempt and envelope that were handed over
+  session submit --template --run RUN_ID [--attempt ATTEMPT_ID]
+                                   The skeleton of that report: identities and admitted output slots filled, verdict, summary and digests left blank
   session disconnect --run RUN_ID --attempt ATTEMPT_ID
                                    Record an expired handoff as unknown; it never becomes success
   approval policy --operation OP --quorum N --independence RULE --reason TEXT
