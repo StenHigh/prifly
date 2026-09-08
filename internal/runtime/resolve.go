@@ -103,7 +103,16 @@ func resolveAttempt(r *Run, commandID, attemptID string, resolution ObligationRe
 	if err := r.setInvocationStatus(activation.InvocationID, "failed", &obs); err != nil {
 		return local.Change{}, err
 	}
-	if err := diagnostic(r, commandID, attemptID, code, "resolution", "The owner attested this obligation's outcome; no execution was repeated", obs); err != nil {
+	// An owner who cancelled the Run and then attested an unknown outcome gets
+	// failed, not cancelled, and reasonably reads that as the cancellation not
+	// working. The two are different findings and must not be merged — an
+	// attested unknown hidden under a cancellation is the worse answer — so the
+	// difference is stated where the operator meets it.
+	detail := "The owner attested this obligation's outcome; no execution was repeated"
+	if r.CancelRequested && resolution.Outcome == ResolveOutcomeNotApplied {
+		detail += ". A cancellation is active, but an attested unknown outcome is not a cancellation: this Run settles failed rather than cancelled because nobody could say the work did not happen"
+	}
+	if err := diagnostic(r, commandID, attemptID, code, "resolution", detail, obs); err != nil {
 		return local.Change{}, err
 	}
 	r.HasUnresolvedEffects = unresolvedRemains(r)

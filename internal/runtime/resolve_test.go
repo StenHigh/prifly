@@ -141,3 +141,39 @@ func runEvents(t *testing.T, e *Engine, runID string) []string {
 	}
 	return types
 }
+
+// An owner who cancels a Run and then attests an unknown outcome is handed
+// failed, not cancelled, and reads that as the cancellation not working — a
+// dependent session spent a whole exchange on exactly that reading. The two
+// findings must not be merged: an attested unknown hidden under a cancellation
+// is the worse answer. So the difference is stated where the operator meets it.
+func TestAttestingAnUnknownUnderACancellationSaysWhyItIsNotCancelled(t *testing.T) {
+	e, runID, attemptID := uncertainAssistedRun(t)
+	ctx := context.Background()
+	if _, err := e.apply(ctx, e.owner, newID("command"), runID, "run.restricted", map[string]string{"fixture": "cancel"}, nil, local.CommandGuarded, func(r *Run, _ local.Snapshot, _ Observation) (local.Change, error) {
+		r.CancelRequested = true
+		return local.Change{}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := e.View(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.ResolveObligation(ctx, runID, newID("command"), attemptID, "", ResolveOutcomeNotApplied, "the host was stopped before it wrote anything", view.RunVersion); err != nil {
+		t.Fatal(err)
+	}
+	settled := driverRun(t, e, runID)
+	for _, d := range settled.Diagnostics {
+		if d.Code != "resolved_not_applied" || d.Phase != "resolution" {
+			continue
+		}
+		for _, expected := range []string{"cancellation is active", "not a cancellation", "settles failed rather than cancelled"} {
+			if !strings.Contains(d.Message, expected) {
+				t.Fatalf("the diagnostic does not say %q: %s", expected, d.Message)
+			}
+		}
+		return
+	}
+	t.Fatalf("no resolution diagnostic was recorded: %+v", settled.Diagnostics)
+}
