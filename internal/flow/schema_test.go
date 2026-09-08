@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-
 // An author who wrote prose where an object belongs was told only "the declared
 // type is object". The field's shape is written in exactly one place, and the
 // refusal did not say which — the pilot's reference brief had an empty list, so
