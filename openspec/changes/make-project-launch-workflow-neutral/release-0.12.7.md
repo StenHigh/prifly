@@ -133,10 +133,10 @@
 
 | Ворота | Где | Результат |
 |---|---|---|
-| `make check` | локально | |
-| `make e2e` | локально | |
-| `verify` | GitHub Actions | |
-| `race` | GitHub Actions | |
+| `make check` | локально на `4ee5a26` | зелёный; 48 бандлов схем |
+| `make e2e` | локально на `4ee5a26` | зелёный; 169 и 75 команд, 10 кейсов |
+| `verify` | GitHub Actions 34173844354 | success (гоняет и `ci-check`, и `e2e`) |
+| `race` | GitHub Actions 34173844475 | success |
 
 ## Чего этот выпуск не закрывает
 
