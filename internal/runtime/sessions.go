@@ -469,14 +469,28 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 				task.WorkspaceMode, task.RepositoryWorkspace = a.Session.WorkspaceMode, workspace
 			}
 		}
-		if err := e.writeSessionTask(task); err != nil {
-			return SessionTask{}, err
-		}
 		return task, nil
 	}
 	// A Run that holds no handoff is not a Run that does not exist: reporting
 	// both as not_found sends the reader looking for the wrong thing.
 	return SessionTask{}, &flow.Problem{Code: "no_active_handoff", Message: "this run holds no handoff awaiting a host; read its next action or drive it"}
+}
+
+// HandOverSessionTask is SessionTask plus the hand-over: it materializes the
+// envelope in the workspace so a host that knows the directory needs nothing
+// else. Reading is separate from handing over on purpose — the machine-wide Run
+// monitor lists outstanding handoffs across every authority on the machine, and
+// a monitor that wrote a file into each workspace it displayed would stop being
+// the read-only observer it is specified to be.
+func (e *Engine) HandOverSessionTask(ctx context.Context, runID, attemptID string) (SessionTask, error) {
+	task, err := e.SessionTask(ctx, runID, attemptID)
+	if err != nil {
+		return SessionTask{}, err
+	}
+	if err := e.writeSessionTask(task); err != nil {
+		return SessionTask{}, err
+	}
+	return task, nil
 }
 
 // writeSessionTask materializes the handoff where the host already is. It

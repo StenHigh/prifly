@@ -1357,7 +1357,7 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 			}
 			return c.emit(map[string]any{"schema_version": "1", "run_id": *run, "tasks": tasks})
 		}
-		task, err := e.SessionTask(ctx, *run, *attempt)
+		task, err := e.HandOverSessionTask(ctx, *run, *attempt)
 		if err != nil {
 			return err
 		}

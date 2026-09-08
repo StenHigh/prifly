@@ -151,7 +151,7 @@ func handOver(t *testing.T, e *Engine, runID string) SessionTask {
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatalf("drive to handoff: %v", err)
 	}
-	task, err := e.SessionTask(context.Background(), runID, "")
+	task, err := e.HandOverSessionTask(context.Background(), runID, "")
 	if err != nil {
 		t.Fatalf("no handoff was recorded: %v", err)
 	}
@@ -912,15 +912,17 @@ func TestSessionTaskIsMaterializedInTheWorkspaceItNames(t *testing.T) {
 	if !reflect.DeepEqual(first.Context.Outputs, task.Context.Outputs) || first.SchemaVersion != task.SchemaVersion {
 		t.Fatalf("the materialized handoff differs from the one that was answered: %+v", first)
 	}
-	// A fetch is not a claim on the workspace: the same handoff is fetched again
-	// after every park, resume and re-delivery, and each fetch must leave the
-	// current document there rather than refuse over its own earlier one.
+	// Handing over is not a claim on the workspace: the same handoff is handed
+	// over again after every park, resume and re-delivery, and each hand-over
+	// must leave the current document there rather than refuse over its own
+	// earlier one. A stale copy of the one document a host is meant to trust is
+	// worse than none.
 	if err := os.WriteFile(filepath.Join(task.Workspace, SessionTaskFile), []byte(`{"schema_version":"stale"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	again, err := e.SessionTask(context.Background(), runID, task.AttemptID)
+	again, err := e.HandOverSessionTask(context.Background(), runID, task.AttemptID)
 	if err != nil {
-		t.Fatalf("re-fetching the same handoff was refused: %v", err)
+		t.Fatalf("handing the same handoff over again was refused: %v", err)
 	}
 	if second := written(); second.EnvelopeDigest != again.EnvelopeDigest || second.SchemaVersion == "stale" {
 		t.Fatalf("a re-fetch left a stale handoff in the workspace: %+v", second)
@@ -969,5 +971,42 @@ func TestSubmissionTemplateIsTheReportTheHostOnlyFillsIn(t *testing.T) {
 	}
 	if _, err := e.SubmitSession(context.Background(), skeleton); err != nil {
 		t.Fatalf("the filled skeleton was not an acceptable report: %v", err)
+	}
+}
+
+// The machine-wide Run monitor lists outstanding handoffs across every
+// authority on the machine, and it is specified to report recorded facts
+// without touching execution. Materializing on every read would mean a browser
+// refresh writing a file into each workspace it displayed, so reading a handoff
+// and handing it over are separate operations.
+func TestReadingAHandoffLeavesTheWorkspaceUntouched(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	read, err := e.SessionTask(context.Background(), runID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.Workspace == "" {
+		t.Fatal("the handoff names no workspace, so this test proves nothing")
+	}
+	materialized := filepath.Join(read.Workspace, SessionTaskFile)
+	if _, err := os.Stat(materialized); !os.IsNotExist(err) {
+		t.Fatalf("reading a handoff wrote into the workspace: %v", err)
+	}
+	// Listing is the monitor's path, and it must stay just as quiet.
+	if _, err := e.SessionTasks(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(materialized); !os.IsNotExist(err) {
+		t.Fatalf("listing handoffs wrote into the workspace: %v", err)
+	}
+	// Handing over is the operator's own act, and it does materialize.
+	if _, err := e.HandOverSessionTask(context.Background(), runID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(materialized); err != nil {
+		t.Fatalf("handing over did not leave the envelope where the host stands: %v", err)
 	}
 }
