@@ -396,6 +396,7 @@ func (e *Engine) driverLiveFor(runID string) bool {
 	}
 	return false
 }
+
 // driverHolder reads the Run whose driver holds the lock. The holder writes its
 // id into the same file it locks, so a refused caller can name it without a
 // second source of truth; an unreadable or empty file simply leaves it unnamed.
