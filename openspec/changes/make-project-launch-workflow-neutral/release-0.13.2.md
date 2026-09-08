@@ -43,7 +43,7 @@ and capacity show names what is held
 
 | Ворота | Где | Результат |
 |---|---|---|
-| `make check` | локально | |
-| `make e2e` | локально | |
-| `verify` | GitHub Actions | |
-| `race` | GitHub Actions | |
+| `make check` | локально на `47e9a16` | зелёный; 49 бандлов, сторожа прочитали 282 и 155 файлов |
+| `make e2e` | локально на `47e9a16` | зелёный |
+| `verify` | GitHub Actions 34262038562 | success (гоняет и `ci-check`, и `e2e`) |
+| `race` | GitHub Actions 34262038434 | success |
