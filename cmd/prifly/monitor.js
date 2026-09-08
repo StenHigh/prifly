@@ -57,6 +57,7 @@ if(typeof module !== 'undefined') module.exports = {esc,duration,graphData,fileC
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='';
+let listScroll=0,maintenanceBusy=false,storageBusy=false;
 const artifactCache=new Map(),fileCache=new Map();
 const fileKey=a=>source+selected+nodeID+JSON.stringify(a?.accepted?.outputs || {});
 const form=$('filters');
@@ -119,6 +120,13 @@ function options(name,items,all) {
  if(old && !items.includes(old))items=[...items,old];
  const html=`<option value="">${all}</option>`+items.map(v=>`<option value="${esc(v)}">${esc(name==='status'?label(v):v)}</option>`).join('');
  if(el.innerHTML!==html){el.innerHTML=html;if(items.includes(old))el.value=old;}
+}
+const sizeText = n => {if(n==null)return 'Недоступно';const units=['Б','КиБ','МиБ','ГиБ','ТиБ'];let i=0;while(n>=1024 && i<units.length-1){n/=1024;i++;}return n.toLocaleString('ru-RU',{maximumFractionDigits:1})+' '+units[i];};
+async function refreshStorage(){
+ if(storageBusy)return;storageBusy=true;
+ try {const data=await get('/api/storage');$('storage-title').textContent=data.measured?'Учтено в найденных хранилищах: '+sizeText(data.bytes)+(data.sources.some(s=>s.errors.length)?' · подсчёт неполный':''):'Размер хранилищ: измерение…';
+ preserve($('storage-details'),`<p class="muted">Выделенное место по данным файловой системы. Общие inode учтены один раз; APFS clones и snapshots могут разделять блоки. Внешние рабочие репозитории не включены. ${data.scanning?'Измерение продолжается.':''} ${data.measured?'Измерено '+esc(date(data.measured)):''}</p>${(data.sources||[]).map(s=>`<div class="storage-source"><b>${esc(s.root)}</b><p>${s.errors.length?'Учтено (неполно)':'Занято'}: ${sizeText(s.measured?s.bytes:null)} · артефакты: ${sizeText(s.measured?s.artifacts:null)} · доступно на диске: ${sizeText(s.available)}</p>${s.errors.length?'':`<button type="button" data-clean-source="${esc(s.id)}">Очистить завершённые Run…</button>`}${s.errors.map(e=>`<p class="error">${esc(e)}</p>`).join('')}</div>`).join('')}`);
+ }catch(err){$('storage-title').textContent='Размер хранилищ недоступен: '+err.message;}finally{storageBusy=false;}
 }
 function renderList(data) {
  pages=data.pages;page=data.page;
@@ -195,7 +203,7 @@ async function loadFiles() {
 }
 function renderDetail() {
  const scrollX=window.scrollX,scrollY=window.scrollY;
- const run=state.run;$('detail-title').textContent=parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Прогон';
+ const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Прогон';
  $('detail-id').textContent=run.project_id+' · '+run.id;$('permalink').href=location.hash;
  const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host');
  preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div>${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
@@ -211,9 +219,11 @@ function renderDetail() {
 function navigateNode(id,inv=invocation) {const h=new URLSearchParams({source,run:selected});if(id)h.set('node',id);if(inv)h.set('invocation',inv);location.hash=h;}
 function useRoute() {
  const h=route(),next=h.get('run')||'',nextSource=h.get('source')||'';
+ const changed=next!==selected || nextSource!==source;if(changed && !selected)listScroll=window.scrollY;
  if(next!==selected || nextSource!==source) {selected=next;source=nextSource;generation++;stamp='';state=null;eventsCursor=0;artifactCache.clear();fileCache.clear();$('events').innerHTML='';$('overview').textContent='Загрузка прогона…';$('tree').innerHTML='';$('node').innerHTML='';$('graph').innerHTML='';$('facts').innerHTML='';for(const name of ['overview','tree','node','graph','facts'])lastMarkup.delete($(name));$('detail-title').textContent='Загрузка прогона…';$('detail-id').textContent=selected;$('detail-error').hidden=true;}
  nodeID=h.get('node')||'';invocation=h.get('invocation')||'';definition='';
- $('detail').hidden=!selected;$('empty-detail').hidden=!!selected;
+ $('run-list').hidden=!!selected;$('detail').hidden=!selected;$('empty-detail').hidden=!!selected;
+ if(changed){window.scrollTo(0,selected?0:listScroll);if(selected)$('back-to-runs').focus({preventScroll:true});}
  if(state){renderDetail();const target=[...$('tree').querySelectorAll('[data-node]')].find(n=>n.dataset.node===(nodeID || invocation));for(let parent=target?.parentElement;parent && parent!==$('tree');parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;}schedule();
 }
 async function refreshEvents(g) {
@@ -243,6 +253,24 @@ $('previous').onclick=()=>{page--;generation++;schedule();};$('next').onclick=()
 $('invocation').onchange=e=>{if(e.target.value.startsWith('def:')){definition=e.target.value.slice(4);invocation='';nodeID='';renderDetail();}else navigateNode('',e.target.value);};
 $('detail').addEventListener('click',e=>{const target=e.target.closest('[data-node]');if(target){const obj=nodeObject(state.run,target.dataset.node);navigateNode(target.dataset.node,(state.run.invocations?.[obj?.id] ? obj.id : obj?.workflow_invocation_id || state.run.activations?.[obj?.stage_activation_id]?.workflow_invocation_id || invocation));}if(e.target.closest('#load-files'))loadFiles();});
 for(const button of document.querySelectorAll('[data-tab]'))button.onclick=()=>{tab=button.dataset.tab;for(const other of document.querySelectorAll('[data-tab]')){const active=other===button;other.setAttribute('aria-pressed',active);$(other.dataset.tab).hidden=!active;}schedule();};
+async function cleanStorage(targetSource,run='') {
+ if(maintenanceBusy)return;maintenanceBusy=true;$('delete-run').disabled=true;
+ const status=$('maintenance-status');status.textContent='Подготовка очистки: проверяем Run и ссылки на артефакты…';
+ try {
+  const {token}=await get('/api/maintenance-token');
+  const request=async(action,digest='')=>{const response=await fetch('/api/maintenance',{method:'POST',headers:{'Content-Type':'application/json','X-PriFly-Maintenance':token},body:JSON.stringify({source:targetSource,run,action,digest}),signal:AbortSignal.timeout(120000)});const body=await response.json();if(!response.ok)throw new Error(({storage_busy:'Хранилище используется другим процессом. Дождитесь завершения операции и повторите.',run_not_deletable:'Run не завершён окончательно или защищён зависимостями.',cleanup_plan_changed:'Данные изменились после предпросмотра. Откройте очистку заново.'})[body.code]||body.message||body.detail||JSON.stringify(body));return body;};
+  const plan=await request('preview');const ids=Object.keys(plan.runs),protectedCount=Object.keys(plan.protected).length;
+  if(!ids.length && !plan.files){status.textContent='Удалять нечего. Защищённых Run: '+protectedCount;return;}
+  const dialog=$('cleanup-dialog');$('cleanup-preview').innerHTML=`<p class="prose">${esc(plan.root)}</p><p>Будет удалено Run: <b>${ids.length}</b>. Файлов и каталогов: <b>${plan.files}</b> (${sizeText(plan.bytes)} содержимого, без оценки освобождения SQLite).</p><details open><summary>Удаляемые Run</summary><ul>${ids.map(id=>`<li>${esc(id)}</li>`).join('')}</ul></details>${protectedCount?`<details><summary>Защищённые Run: ${protectedCount}</summary><ul>${Object.entries(plan.protected).map(([id,reason])=>`<li>${esc(id)} — ${esc(reason)}</li>`).join('')}</ul></details>`:''}<p>Настройки, пакеты, импортированные и общие артефакты, audit/receipts и внешние рабочие папки сохранятся. Удаляются только служебные рабочие каталоги выбранных Run. Уплотнение базы может потребовать дополнительного свободного места.</p>`;
+  dialog.returnValue='';const confirmation=new Promise(resolve=>dialog.addEventListener('close',()=>resolve(dialog.returnValue==='delete'),{once:true}));dialog.showModal();
+  if(!await confirmation){status.textContent='Очистка отменена.';return;}
+  status.textContent='Очистка выполняется…';const result=await request('delete',plan.digest);
+  status.textContent=`Удалено Run: ${result.deleted_runs}; файлов и каталогов: ${result.deleted_files}, содержимого: ${sizeText(result.deleted_bytes)}. ${result.warnings.join(' ')} Размеры обновятся после следующего фонового измерения (интервал 30 секунд).`;
+  if(run && source===targetSource && selected===run)location.hash='';schedule();refreshStorage();
+ }catch(err){status.textContent='Очистка не завершена: '+err.message;}finally{maintenanceBusy=false;if(state)renderDetail();}
+}
+$('delete-run').onclick=()=>cleanStorage(source,selected);
+$('storage-details').addEventListener('click',event=>{const target=event.target.closest('[data-clean-source]');if(target)cleanStorage(target.dataset.cleanSource);});
 $('more-events').onclick=()=>schedule();
-window.addEventListener('hashchange',useRoute);useRoute();setInterval(schedule,1500);
+window.addEventListener('hashchange',useRoute);useRoute();setInterval(schedule,1500);refreshStorage();setInterval(refreshStorage,5000);
 }

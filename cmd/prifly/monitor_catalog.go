@@ -48,6 +48,7 @@ type monitorDiscovery struct {
 	Completed   string   `json:"completed,omitempty"`
 }
 type monitorCatalog struct {
+	storage   monitorStorage
 	mu        sync.RWMutex
 	sources   map[string]monitorSource
 	runs      map[string]map[string]monitorRun
@@ -290,6 +291,16 @@ func (m *monitorCatalog) start(ctx context.Context) {
 	m.registered()
 	go func() {
 		for {
+			m.measureStorage(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(30 * time.Second):
+			}
+		}
+	}()
+	go func() {
+		for {
 			m.scan(ctx)
 			select {
 			case <-ctx.Done():
@@ -344,6 +355,9 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 		engine, err := prifly.Open(s.Root, true)
 		if err == nil {
 			s.Project = engine.Config.ID
+			if info, statErr := os.Stat(engine.Root); statErr == nil {
+				s.physical = monitorPhysical(info)
+			}
 			if s.Authority != engine.Installation.ID {
 				m.mu.Lock()
 				m.runs[s.ID] = map[string]monitorRun{}

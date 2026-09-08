@@ -26,6 +26,8 @@ import (
 var EventTypes = []string{"run.created", "stage.activated", "attempt.admitted", "attempt.dispatching", "attempt.started", "attempt.result_candidate", "attempt.cost_reported", "attempt.observed", "attempt.settled", "attempt.resolved", "check.resolved", "run.finished", "run.restricted", "stop.released", "run.resumed", "run.recovered", "step.publication", "artifact.publication_prepared", "artifact.publication_checked", "artifact.publication_checks_failed", "action.intent_proposed", "action.admitted", "state.changed", "diagnostic.recorded", "stage.failed", "stage.error_handled", "stage.choice_decided", "invocation.created", "invocation.finished", "stage.call_returned", "stage.repeat_entered", "stage.repeat_decided", "stage.parallel_entered", "stage.join_decided", "stage.map_entered", "stage.map_empty", "stage.wait_entered", "stage.wait_resolved", "wait.event_received", "wait.reserved", "guard.observed", "guard.processed", "run.context_pinned", "check.admitted", "check.dispatching", "check.started", "check.observed", "check.settled", "check.recovered", "acceptance.prepared", "acceptance.passed", "acceptance.failed", "attempt.accepted", "decision.requested", "decision.defaulted", "decision.answered"}
 
 type Engine struct {
+	maintenanceLock *os.File
+	maintenance     bool
 	// AfterRunCreated runs after a successful creation transaction, before any Drive.
 	AfterRunCreated func()
 	Root            string
@@ -629,7 +631,9 @@ func authorityNotFound(path string) error {
 	return &flow.Problem{Code: "authority_not_found", Message: "no Pri-Fly authority at " + path + "; select one with --project DIR or create it with prifly init"}
 }
 
-func Open(root string, readOnly bool) (*Engine, error) {
+func Open(root string, readOnly bool) (*Engine, error) { return openEngine(root, readOnly, false) }
+
+func openEngine(root string, readOnly, maintenance bool) (_ *Engine, openErr error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -726,6 +730,27 @@ func Open(root string, readOnly bool) (*Engine, error) {
 	if installation.ProjectRoot != root && !readOnly {
 		return nil, local.ErrRecoveryRequired
 	}
+	// Lock the immutable installation inode for the lifetime of every engine.
+	// Maintenance never races a blob publication and its later SQL reference.
+	// ponytail: lifetime locks refuse cleanup during a long-lived driver; use
+	// command leases if maintenance must overlap a running driver.
+	lock, err := os.OpenFile(filepath.Join(root, ".prifly/installation.json"), os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	mode := syscall.LOCK_SH
+	if maintenance {
+		mode = syscall.LOCK_EX
+	}
+	if err = syscall.Flock(int(lock.Fd()), mode|syscall.LOCK_NB); err != nil {
+		lock.Close()
+		return nil, wrapFault("storage_busy", "authority is open in another process; retry after it closes", err)
+	}
+	defer func() {
+		if openErr != nil {
+			lock.Close()
+		}
+	}()
 	store, err := local.OpenStore(filepath.Join(root, config.Configuration.StateRoot), local.StoreOptions{EventTypes: EventTypes, ReadOnly: readOnly})
 	if err != nil {
 		return nil, err
@@ -744,14 +769,22 @@ func Open(root string, readOnly bool) (*Engine, error) {
 		store.Close()
 		return nil, err
 	}
-	engine := &Engine{Root: root, Config: config, Installation: installation, Store: store, Blobs: blobs, ReadOnly: readOnly, clock: newClock(), owner: fmt.Sprintf("local:uid:%d", os.Geteuid())}
+	engine := &Engine{maintenanceLock: lock, maintenance: maintenance, Root: root, Config: config, Installation: installation, Store: store, Blobs: blobs, ReadOnly: readOnly, clock: newClock(), owner: fmt.Sprintf("local:uid:%d", os.Geteuid())}
 	if err := engine.loadPackages(); err != nil {
 		_ = engine.Close()
 		return nil, err
 	}
 	return engine, nil
 }
-func (e *Engine) Close() error { a := e.Blobs.Close(); b := e.Store.Close(); return errors.Join(a, b) }
+func (e *Engine) Close() error {
+	a := e.Blobs.Close()
+	b := e.Store.Close()
+	var c error
+	if e.maintenanceLock != nil {
+		c = e.maintenanceLock.Close()
+	}
+	return errors.Join(a, b, c)
+}
 
 func (e *Engine) Inventory() ([]PinnedDefinition, flow.Registry, error) {
 	defs, reg, _, err := e.inventoryResources()
