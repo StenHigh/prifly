@@ -157,6 +157,14 @@ func TestProcessCancellationEscalatesWholeGroup(t *testing.T) {
 	for _, mode := range []string{"term", "ignore-term-tree"} {
 		t.Run(mode, func(t *testing.T) {
 			spec := processTestSpec(t, mode)
+			if mode == "term" {
+				// The graceful case asks whether the driver escalates a process
+				// that is already leaving, not whether a loaded machine can
+				// deliver a signal and reap a child inside 100ms. A driver that
+				// kills without waiting still trips this; a busy CI runner no
+				// longer does.
+				spec.GracePeriod = 5 * time.Second
+			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var events []string
@@ -365,6 +373,11 @@ func TestProcessHelper(t *testing.T) {
 		signal.Notify(signals, syscall.SIGTERM)
 		writeResult()
 		<-signals
+		// Leave deliberately rather than instantly: an exit that wins the race
+		// with the driver's next scan makes "no escalation" true whatever the
+		// driver decided, which is how this case passed even with the grace
+		// period removed from the driver entirely.
+		time.Sleep(300 * time.Millisecond)
 	case "runtime":
 		time.Sleep(10 * time.Second)
 	case "stdout", "stderr":
