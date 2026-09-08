@@ -714,7 +714,11 @@ func (e *Engine) failPreparation(ctx context.Context, loaded Run, view local.Rea
 }
 
 func (e *Engine) prepareWorkspace(r Run, ref flow.Ref, step flow.StepDefinition, name string, manifest ContextManifest, manifestBytes []byte) (string, error) {
-	return e.prepareExecutorWorkspace(r.Executors[executorKey(r, ref, step.ID)], name, manifest, manifestBytes, nil)
+	workspace, err := e.prepareExecutorWorkspace(r.Executors[executorKey(r, ref, step.ID)], name, manifest, manifestBytes, nil)
+	if err != nil {
+		return workspace, err
+	}
+	return workspace, e.writeWorkspaceTreeGuide(workspace, step, manifest)
 }
 
 func (e *Engine) prepareExecutorWorkspace(executor PinnedExecutor, name string, manifest ContextManifest, manifestBytes []byte, prepared map[ArtifactRef]Artifact) (string, error) {
