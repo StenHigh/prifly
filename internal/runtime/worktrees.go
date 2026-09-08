@@ -48,6 +48,13 @@ type ClaimRecord struct {
 	Claims        []WorktreeClaim `json:"claims"`
 }
 
+// claimConflictMessage names the relation, not just the obstacle. A reader in a
+// linked worktree sees a different path, a different branch and a different
+// working tree, so "this repository" reads as "not mine" to exactly the person
+// being refused. The relation is the shared git directory, and one command
+// settles whether two trees share it.
+const claimConflictMessage = "this repository already has an active worktree claim whose Run is still unfinished; claims conflict on the shared git directory, so a linked worktree of the same repository is the same resource here even with its own path and branch — compare git rev-parse --git-common-dir in both trees. A settled Run's claim is released for you, so claim list names the holder and either run drive finishes it, run cancel ends it, or claim release --id CLAIM --generation N drops it"
+
 // Repository identity is the resolved common directory and top level, not the
 // path the caller typed: a moved or symlinked source is the same repository.
 type RepositoryIdentity struct {
@@ -221,7 +228,7 @@ func (e *Engine) ClaimWorktrees(ctx context.Context, commandID string, requests 
 					if claimPresence(existing, obs) == "suspected" {
 						return local.AuthorityChange{}, local.Reject("claim_owner_unproven", "an existing claim's lease expired without proof its owner stopped; claim list names it and claim release --id CLAIM --generation N ends it")
 					}
-					return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim whose Run is still unfinished; a settled Run's claim is released for you, so claim list names the holder and either run drive finishes it, run cancel ends it, or claim release --id CLAIM --generation N drops it")
+					return local.AuthorityChange{}, local.Reject("claim_conflict", claimConflictMessage)
 				}
 				if existing.Path == claim.Path && existing.Generation > generation {
 					generation = existing.Generation
@@ -354,7 +361,7 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 					// than creating a second owner of one resource.
 					return local.AuthorityChange{}, local.Reject("claim_owner_unproven", "the existing claim's lease expired without proof its owner stopped; claim list names it and claim release --id CLAIM --generation N ends it")
 				}
-				return local.AuthorityChange{}, local.Reject("claim_conflict", "this repository already has an active worktree claim whose Run is still unfinished; a settled Run's claim is released for you, so claim list names the holder and either run drive finishes it, run cancel ends it, or claim release --id CLAIM --generation N drops it")
+				return local.AuthorityChange{}, local.Reject("claim_conflict", claimConflictMessage)
 			}
 			if existing.Path == path && existing.Generation > generation {
 				generation = existing.Generation

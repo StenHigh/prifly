@@ -392,3 +392,16 @@ func TestConcurrentClaimsProduceOneOwner(t *testing.T) {
 		t.Fatalf("the record holds %d active owners of one resource", active)
 	}
 }
+
+// The refusal is read by someone standing in a linked worktree: their path,
+// their branch and their working tree all differ from the holder's, so a
+// refusal that says only "this repository" tells them it is about someone else.
+// The relation is the shared git directory, and the refusal has to name it and
+// the command that settles it.
+func TestClaimConflictNamesTheRelationNotJustTheObstacle(t *testing.T) {
+	for _, expected := range []string{"shared git directory", "linked worktree", "git rev-parse --git-common-dir", "claim list", "claim release"} {
+		if !strings.Contains(claimConflictMessage, expected) {
+			t.Fatalf("the conflict refusal does not name %q: %s", expected, claimConflictMessage)
+		}
+	}
+}
