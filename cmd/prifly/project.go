@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -957,7 +958,17 @@ type projectWorkflowExtension struct {
 	// impossible verdict seals exactly the bytes it sealed before the field
 	// existed, while declaring one is a different input and a different key.
 	ImpossibleVerdicts []string `json:",omitempty"`
+	// One binding, not a binding model: the inserted step reads the artifact a
+	// preceding step already sealed instead of having it retyped into every
+	// prompt. Absent stays absent in the build key for the same reason.
+	Input      string `json:",omitempty"`
+	InputStage string `json:",omitempty"`
+	InputPort  string `json:",omitempty"`
 }
+
+// The same expression a workflow stage writes, so the one form an author
+// already knows is the one an insertion accepts.
+const projectExtensionStageSource = "$stages."
 
 type projectWorkflowOptions struct {
 	Extensions []projectWorkflowExtension
@@ -975,7 +986,7 @@ func (c *cli) projectExtend(_ context.Context, args []string) error {
 	stepRefs := stringsFlag{}
 	stepSources := stringsFlag{}
 	f.Var(&stepRefs, "step-ref", "exact step reference NAME=JSON")
-	f.Var(&stepSources, "step-source", "compiled no-input step YAML NAME=FILE")
+	f.Var(&stepSources, "step-source", "compiled step YAML NAME=FILE, read for the ports the insertion binds")
 	if err := parse(f, args); err != nil {
 		return err
 	}
@@ -1039,7 +1050,7 @@ func (c *cli) projectExtend(_ context.Context, args []string) error {
 		}
 		if source, exists := sources[extension.Step]; !exists {
 			return usageError("project_extension_missing_step_source: " + extension.Step)
-		} else if err := projectExtensionNoInputStep(source); err != nil {
+		} else if err := projectExtensionStepInputs(source, extension.Input); err != nil {
 			return err
 		}
 		if err := applyProjectExtension(workflow, extension, refs[extension.Step]); err != nil {
@@ -1142,7 +1153,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		}
 		for key := range object {
 			switch key {
-			case "id", "workflow", "between", "step", "on", "impossible_verdicts":
+			case "id", "workflow", "between", "step", "on", "impossible_verdicts", "input_bindings":
 			default:
 				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d has unknown field %s", index, key))
 			}
@@ -1199,6 +1210,26 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 			}
 			extension.ImpossibleVerdicts = append(extension.ImpossibleVerdicts, name)
 		}
+		// The inserted step reads one output of a stage that has already run,
+		// written exactly as a workflow stage writes it. Compilation checks the
+		// binding like any authored one — that the producer ran on this path,
+		// that it has that output, that the schemas agree — so nothing here
+		// repeats it; this only reads the expression.
+		if raw, declared := object["input_bindings"]; declared {
+			bindings, ok := raw.(map[string]any)
+			if !ok || len(bindings) != 1 {
+				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d input_bindings must declare exactly one input of the inserted step", index))
+			}
+			for port, rawSource := range bindings {
+				source, isText := rawSource.(string)
+				expression := strings.TrimPrefix(source, projectExtensionStageSource)
+				separator := strings.LastIndex(expression, ".")
+				if !isText || !strings.HasPrefix(source, projectExtensionStageSource) || separator <= 0 || separator == len(expression)-1 {
+					return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d input_bindings %s must read a stage output written as %sSTAGE.PORT", index, port, projectExtensionStageSource))
+				}
+				extension.Input, extension.InputStage, extension.InputPort = port, expression[:separator], expression[separator+1:]
+			}
+		}
 		extensions = append(extensions, extension)
 	}
 	result.Extensions = extensions
@@ -1237,7 +1268,7 @@ func parseProjectExtensionSources(values []string) (map[string]string, error) {
 	return sources, nil
 }
 
-func projectExtensionNoInputStep(path string) error {
+func projectExtensionStepInputs(path, bound string) error {
 	data, err := readFile(path, prifly.MaxDefinitionBytes)
 	if err != nil {
 		return err
@@ -1255,8 +1286,24 @@ func projectExtensionNoInputStep(path string) error {
 	if err := json.Unmarshal(machine, &step); err != nil {
 		return usageError("project_extension_invalid_step_source: step is not a StepDefinition")
 	}
-	if len(step.Inputs) != 0 {
-		return usageError("project_extension_requires_full_yaml: a simple extension step cannot declare inputs")
+	return projectExtensionInputs(step, bound)
+}
+
+// Compilation already refuses a binding that names an undeclared port and a
+// required input that no binding covers. `project extend` never compiles — it
+// holds one step source, not the registry the whole graph resolves against —
+// so the same two refusals are read here off that source instead. Declaring
+// inputs is no longer the fault; leaving one required and unbindable is.
+func projectExtensionInputs(step flow.StepDefinition, bound string) error {
+	if bound != "" {
+		if _, declared := step.Inputs[bound]; !declared {
+			return usageError("project_extension_unknown_input: " + bound + " is not an input of the inserted step")
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(step.Inputs)) {
+		if name != bound && step.Inputs[name].Required {
+			return usageError("project_extension_requires_full_yaml: the inserted step requires input " + name + " and an extension binds at most one; a step that needs more belongs in a workflow graph you write yourself, not in extend.yaml")
+		}
 	}
 	return nil
 }
@@ -1317,6 +1364,15 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 			return usageError("project_extension_unknown_stage: " + target)
 		}
 	}
+	// Every other stage name an extension writes is checked against the graph
+	// before anything moves; the producer it binds to is one of them.
+	bindings := map[string]any{}
+	if extension.Input != "" {
+		if _, exists := stages[extension.InputStage]; !exists {
+			return usageError("project_extension_unknown_stage: " + extension.InputStage)
+		}
+		bindings[extension.Input] = map[string]any{"from": "stage_output", "stage_id": extension.InputStage, "port": extension.InputPort}
+	}
 	selected := routes[0]
 	if selected.verdict == "" {
 		from[selected.group] = extension.Step
@@ -1331,7 +1387,7 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 	for verdict, target := range extension.On {
 		on[verdict] = target
 	}
-	stages[extension.Step] = map[string]any{"kind": "step", "step_ref": ref, "input_bindings": map[string]any{}, "on": on}
+	stages[extension.Step] = map[string]any{"kind": "step", "step_ref": ref, "input_bindings": bindings, "on": on}
 	if len(extension.ImpossibleVerdicts) != 0 {
 		stages[extension.Step].(map[string]any)["impossible_verdicts"] = extension.ImpossibleVerdicts
 		// Only v4 admits the declaration, so an insertion that carries one

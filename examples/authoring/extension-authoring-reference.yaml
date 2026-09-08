@@ -22,13 +22,20 @@ exclude: [improve, verify, review]
 # `id:` written inside those files. The insertion names the route it replaces
 # rather than a point after a stage, so the tail of the graph cannot be silently
 # detached: `from` keeps its route to the new step and the new step routes on to
-# `to`. The inserted step declares no inputs; a step that needs them belongs in
-# a workflow graph you write yourself.
+# `to`. The inserted step may bind one input; a step that requires more than one
+# belongs in a workflow graph you write yourself.
 extensions:
   - id: lint-after-build
     workflow: build
     between: {from: build, to: commit}
     step: lint
+    # Hand the inserted step one artifact a stage that already ran on this path
+    # produced, instead of retyping it into the prompt. Written exactly as a
+    # workflow stage writes it, `$stages.STAGE.PORT`, and checked exactly as an
+    # authored binding is: compilation refuses a producer that has not run, an
+    # output that stage does not have, and a schema the input cannot accept.
+    # Every other input the step declares must be optional.
+    input_bindings: {sources: $stages.build.artifact}
     on: {pass: commit}
     # Every verdict the inserted step can return is routed above or named here.
     # Sealing refuses an insertion that stays silent about one of them.
