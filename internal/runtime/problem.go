@@ -199,6 +199,10 @@ func ProblemFor(err error) (Problem, int) {
 		// A stop outlives the command that hit it and is lifted only by name,
 		// so a state diagnostic never shows the way past one.
 		"active_stop": {"run.status", "run.release"},
+		// An authority admits one attempt at a time until someone says
+		// otherwise, so the Run that wants a second slot is not in a bad state
+		// and no state diagnostic reports on the number that refused it.
+		"capacity_conflict": {"capacity.show", "capacity.set"},
 		// The expected version and the control epoch are read from run status,
 		// and they sit at different levels of it: run_version at the top, the
 		// epoch inside the run. A reader who takes both from one place fails

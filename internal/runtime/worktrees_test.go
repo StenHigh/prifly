@@ -496,3 +496,20 @@ func TestAClaimSurvivesTheVolumeBeingRenumbered(t *testing.T) {
 		t.Fatalf("the refusal does not name itself or the way out: %v", err)
 	}
 }
+
+// 0.13.0 opened parallel Runs and an authority still admits one attempt at a
+// time by default, so the upgrade that enables the work refuses it until the
+// number is raised. The refusal used to say only that no slot was free, and
+// offered doctor and run.status — neither reaches capacity set. A reader could
+// not tell "not supported" from "not configured".
+func TestCapacityRefusalPointsAtTheNumberThatRefused(t *testing.T) {
+	problem, _ := ProblemFor(local.Reject("capacity_conflict", "x"))
+	for _, expected := range []string{"capacity.show", "capacity.set"} {
+		if !slices.Contains(problem.SafeNextActions, expected) {
+			t.Fatalf("a capacity refusal does not offer %s: %+v", expected, problem.SafeNextActions)
+		}
+	}
+	if slices.Contains(problem.SafeNextActions, "doctor") {
+		t.Fatalf("a capacity refusal was sent to a state diagnostic: %+v", problem.SafeNextActions)
+	}
+}

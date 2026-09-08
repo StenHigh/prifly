@@ -721,7 +721,8 @@ ALTER TABLE events ADD COLUMN state_packed INTEGER NOT NULL DEFAULT 0;`); err !=
 // row, so a place in the queue is held by asking again: a waiter that has not
 // asked within SlotWaiterPatience cuts stops counting and is removed. Returning
 // nil means the caller may acquire; anything else is the refusal to record.
-func (s *Store) admissionTurn(ctx context.Context, conn *sql.Conn, runID string, full bool) (*Rejection, error) {
+func (s *Store) admissionTurn(ctx context.Context, conn *sql.Conn, runID string, held, capacity int64) (*Rejection, error) {
+	full := held >= capacity
 	var seq int64
 	if err := conn.QueryRowContext(ctx, "SELECT admission_seq FROM authority WHERE singleton=1").Scan(&seq); err != nil {
 		return nil, err
@@ -759,7 +760,12 @@ func (s *Store) admissionTurn(ctx context.Context, conn *sql.Conn, runID string,
 			}
 			return nil, err
 		}
-		return &Rejection{Code: "capacity_conflict", Message: "the authority has no free admission slot"}, nil
+		// Saying only that no slot is free leaves a reader unable to tell "not
+		// supported" from "not configured". Runs work side by side in separate
+		// worktrees since 0.13.0, but an authority still admits one attempt at
+		// a time by default, so the very upgrade that opens parallel work
+		// refuses it until this number is raised.
+		return &Rejection{Code: "capacity_conflict", Message: fmt.Sprintf("this authority admits %d attempt(s) at a time and %d are already admitted; raise it with capacity set --capacity N --reason TEXT, and capacity show names what is held", capacity, held)}, nil
 	}
 	var aheadRun string
 	var aheadSince int64
@@ -919,7 +925,7 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 				if err := conn.QueryRowContext(ctx, "SELECT count(*) FROM slots WHERE slot_id<>?", release).Scan(&held); err != nil {
 					return out, err
 				}
-				decision, err := s.admissionTurn(ctx, conn, cmd.RunID, held >= capacity)
+				decision, err := s.admissionTurn(ctx, conn, cmd.RunID, held, capacity)
 				if err != nil {
 					return out, err
 				}
