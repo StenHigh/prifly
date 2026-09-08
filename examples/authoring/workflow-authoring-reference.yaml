@@ -119,9 +119,12 @@ stages:
     on_error: rejected
 
   # Choice selects a declared route; it never calls a model or infers a branch.
+  # Overlapping branches are what first_match is for: it stops at the first
+  # non-false branch. exclusive instead evaluates every branch and refuses two
+  # true ones with ambiguous_branch, so branches written for it must not overlap.
   choose:
     kind: choice
-    selection: first_match # Other option: exclusive, which rejects two true branches.
+    selection: first_match # Required; the only other value is exclusive.
     branches:
       - id: ready
         predicate:

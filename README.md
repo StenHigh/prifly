@@ -277,6 +277,7 @@ config-каталоге. Срез добавлен в исходники; это
 | Решения Run и Decision Bridge | [Run decisions](openspec/specs/run-decisions/spec.md) |
 | Публичные JSON contracts | [Published contracts](openspec/specs/published-contracts/spec.md) |
 | Примеры и справочники YAML | [examples/](examples/README.md) |
+| Виден отказ или странное поведение прогона | [Указатель по симптомам](examples/troubleshooting.md) |
 | Сообщить о проблеме безопасности | [Security policy](SECURITY.md) |
 
 ## Как развивать спецификацию
