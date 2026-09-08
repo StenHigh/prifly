@@ -721,6 +721,25 @@ ALTER TABLE events ADD COLUMN state_packed INTEGER NOT NULL DEFAULT 0;`); err !=
 // row, so a place in the queue is held by asking again: a waiter that has not
 // asked within SlotWaiterPatience cuts stops counting and is removed. Returning
 // nil means the caller may acquire; anything else is the refusal to record.
+// capacityConflictMessage says what refused and what changes it. Naming only
+// that no slot was free left a reader unable to tell "not supported" from "not
+// configured" — the difference the release that opened parallel Runs is about.
+// It names attempts rather than Runs on purpose: the two coincide only while
+// nothing runs a parallel stage, so an owner who raised the limit to two for
+// "two tasks" would meet it again with nothing left to read.
+func capacityConflictMessage(capacity, held int64) string {
+	plural := func(n int64, one, many string) string {
+		if n == 1 {
+			return one
+		}
+		return many
+	}
+	return fmt.Sprintf(
+		"this authority admits %d %s at a time and %d %s already admitted; one attempt is not one Run, because a parallel stage takes a slot per branch; raise the limit with capacity set --capacity N --reason TEXT, and capacity show names what is held",
+		capacity, plural(capacity, "attempt", "attempts"),
+		held, plural(held, "is", "are"))
+}
+
 func (s *Store) admissionTurn(ctx context.Context, conn *sql.Conn, runID string, held, capacity int64) (*Rejection, error) {
 	full := held >= capacity
 	var seq int64
@@ -765,7 +784,7 @@ func (s *Store) admissionTurn(ctx context.Context, conn *sql.Conn, runID string,
 		// worktrees since 0.13.0, but an authority still admits one attempt at
 		// a time by default, so the very upgrade that opens parallel work
 		// refuses it until this number is raised.
-		return &Rejection{Code: "capacity_conflict", Message: fmt.Sprintf("this authority admits %d attempt(s) at a time and %d are already admitted; raise it with capacity set --capacity N --reason TEXT, and capacity show names what is held", capacity, held)}, nil
+		return &Rejection{Code: "capacity_conflict", Message: capacityConflictMessage(capacity, held)}, nil
 	}
 	var aheadRun string
 	var aheadSince int64

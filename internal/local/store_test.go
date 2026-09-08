@@ -1755,3 +1755,22 @@ func TestRecordedNamesHaveAGrammar(t *testing.T) {
 		}
 	}
 }
+
+// The limit counts attempts and the operator counts Runs; they coincide only
+// while nothing runs a parallel stage, so an owner who raised the limit to two
+// for "two tasks" would hit it again with nothing left to read. The refusal
+// says so, and says it in words rather than in "1 attempt(s)".
+func TestCapacityRefusalDistinguishesAttemptsFromRuns(t *testing.T) {
+	message := capacityConflictMessage(1, 1)
+	for _, expected := range []string{"admits 1 attempt at a time", "1 is already admitted", "one attempt is not one Run", "a slot per branch", "capacity set --capacity N", "capacity show"} {
+		if !strings.Contains(message, expected) {
+			t.Fatalf("the capacity refusal does not say %q: %s", expected, message)
+		}
+	}
+	many := capacityConflictMessage(3, 5)
+	for _, expected := range []string{"admits 3 attempts at a time", "5 are already admitted"} {
+		if !strings.Contains(many, expected) {
+			t.Fatalf("the refusal reads wrong above one: %s", many)
+		}
+	}
+}
