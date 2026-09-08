@@ -58,6 +58,7 @@ e2e: build
 	python3 -B test/e2e/verify-cli.py --binary bin/prifly
 	python3 -B test/e2e/verify-core.py --binary bin/prifly
 	python3 -B test/e2e/verify-context.py --binary bin/prifly
+	python3 -B test/e2e/verify-parallel-worktrees.py --binary bin/prifly
 examples: e2e
 release: build
 	python3 scripts/release.py --go "$(GO)" --binary bin/prifly
