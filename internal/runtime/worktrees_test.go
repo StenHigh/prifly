@@ -424,3 +424,52 @@ func TestClaimConflictNamesTheRelationNotJustTheObstacle(t *testing.T) {
 		}
 	}
 }
+
+// A volume is renumbered across boots on APFS, so a claim that outlives a
+// restart carried a device number nothing on the machine had any more. The
+// guard then condemned the directory it had itself created, the repository was
+// locked for good, and claim release — the documented way out — ran the same
+// check and was refused by it. The inode is what a replacement changes; the
+// device is what the operating system changes for its own reasons.
+func TestAClaimSurvivesTheVolumeBeingRenumbered(t *testing.T) {
+	e := contextRegistryRuntime(t)
+	ctx := context.Background()
+	repository := gitRepository(t)
+	claim, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:claim", Repository: repository, OwnerID: "run:pilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// What a reboot leaves behind: the same directory, the same inode, a device
+	// number that belongs to nothing.
+	record, _, err := e.readClaims(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := claim
+	for _, held := range record.Claims {
+		if held.ID == claim.ID {
+			stale = held
+		}
+	}
+	if stale.Device == 0 || stale.Inode == 0 {
+		t.Fatalf("the claim recorded no directory identity: %+v", stale)
+	}
+	stale.Device = stale.Device + 4
+	if err := e.removeWorktree(ctx, stale); err != nil {
+		t.Fatalf("a renumbered volume condemned the claim's own directory: %v", err)
+	}
+	// Replacement is what the guard is for, and it still catches it.
+	replaced, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:second", Repository: repository, OwnerID: "run:other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrong := replaced
+	wrong.Inode = wrong.Inode + 1
+	err = e.removeWorktree(ctx, wrong)
+	if err == nil {
+		t.Fatal("a directory this claim never created was removed")
+	}
+	if !strings.Contains(err.Error(), "claim_identity_conflict") || !strings.Contains(err.Error(), "claim release") {
+		t.Fatalf("the refusal does not name itself or the way out: %v", err)
+	}
+}

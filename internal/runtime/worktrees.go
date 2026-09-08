@@ -741,8 +741,15 @@ func (e *Engine) removeWorktree(ctx context.Context, claim WorktreeClaim) error 
 	if !ok || !info.IsDir() {
 		return local.ErrUnsafePath
 	}
-	if claim.Device == 0 || claim.Inode == 0 || uint64(stat.Dev) != claim.Device || stat.Ino != claim.Inode {
-		return fault("claim_identity_conflict", "the claimed directory is not the one this claim created")
+	// The inode identifies the directory; the device number does not. A volume
+	// is renumbered across boots on APFS, so comparing it condemned the right
+	// directory after a restart and locked the repository for good — the
+	// documented way out, claim release, ran this same check and was refused by
+	// it. The device stays recorded as evidence and is reported when it differs,
+	// but replacement is what this guard is for, and a replaced directory has a
+	// new inode.
+	if claim.Inode == 0 || stat.Ino != claim.Inode {
+		return fault("claim_identity_conflict", "the directory at "+claim.Path+" is not the one this claim created: its inode differs from the recorded one, so removing it would delete something this claim never made. Move or delete it yourself, then claim release --id "+claim.ID+" --generation N ends the claim")
 	}
 	if _, err := e.git(ctx, claim.Repository.Toplevel, "worktree", "remove", "--force", "--end-of-options", target); err != nil {
 		return err

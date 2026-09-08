@@ -63,8 +63,11 @@ func (e *Engine) prepareClaimRunBinding(ctx context.Context, runID, claimID stri
 		return nil, err
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || !info.IsDir() || selected.Device == 0 || selected.Inode == 0 || uint64(stat.Dev) != selected.Device || stat.Ino != selected.Inode {
-		return nil, fault("claim_identity_conflict", "the claimed directory identity changed before admission")
+	// The device number is not identity: a volume is renumbered across boots on
+	// APFS, and comparing it refused admission to the very directory the claim
+	// created. The inode is what a replacement changes.
+	if !ok || !info.IsDir() || selected.Inode == 0 || stat.Ino != selected.Inode {
+		return nil, fault("claim_identity_conflict", "the claimed directory identity changed before admission: the inode at "+selected.Path+" differs from the recorded one, so this is no longer the directory the claim created; claim list names it and claim release --id "+selected.ID+" --generation N ends the claim")
 	}
 	return &claimRunBinding{Claim: *selected, Pin: local.ControlPin{Key: AuthorityClaimsKey, Version: version}, runID: runID, actor: e.owner, authorityID: e.Installation.ID}, nil
 }
