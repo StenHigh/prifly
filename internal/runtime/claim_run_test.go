@@ -72,6 +72,44 @@ func TestClaimBindingCommitIsAtomic(t *testing.T) {
 	}
 }
 
+// Every launch used to begin with claim_conflict, and the operator answered it
+// with claim list and claim release for a workspace no Run was using any more.
+// A Run that is over releases what it held; an unfinished one still refuses.
+func TestSettledRunFreesItsWorkspaceForTheNextClaim(t *testing.T) {
+	e, runID, claim := assistedWorkspaceFixture(t, "worktree")
+	ctx := context.Background()
+	task := handOver(t, e, runID)
+	if bound, err := e.claim(ctx, claim.ID); err != nil || bound.RunID != runID {
+		t.Fatalf("the handoff did not bind the claim to its Run: %+v %v", bound, err)
+	}
+	next := func() (WorktreeClaim, error) {
+		return e.ClaimWorktree(ctx, ClaimRequest{CommandID: newID("command"), Repository: claim.Repository.Toplevel, OwnerID: "session:next"})
+	}
+	if _, err := next(); refusalCode(err) != "claim_conflict" {
+		t.Fatalf("an unfinished Run's workspace was handed to a second claim: %v", err)
+	}
+	if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "planned")); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	if settled := driverRun(t, e, runID); settled.Status != "completed" {
+		t.Fatalf("the fixture Run did not settle: %s %+v", settled.Status, settled.Diagnostics)
+	}
+	taken, err := next()
+	if err != nil {
+		t.Fatalf("a settled Run's claim still refused the next start: %v", err)
+	}
+	if taken.ID == claim.ID || taken.Status != "active" {
+		t.Fatalf("the next start did not get a new active claim: %+v", taken)
+	}
+	released, err := e.claim(ctx, claim.ID)
+	if err != nil || released.Status != "released" || released.Released == nil {
+		t.Fatalf("the settled Run's claim was not released: %+v %v", released, err)
+	}
+}
+
 // An expired lease is waived for exactly one triple: this claim, bound to this
 // Run, asked for by the actor recorded on it. Every other case still stands on it.
 func TestExpiredLeaseAdmitsOnlyTheReturningOwner(t *testing.T) {
