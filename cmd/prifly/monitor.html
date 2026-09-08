@@ -2,18 +2,21 @@
 <html lang="ru">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pri-Fly · Прогоны</title><link rel="stylesheet" href="/monitor.css"><script defer src="/monitor.js"></script></head>
 <body>
-<header><a class="brand" href="#">Pri-Fly <span>Локальные прогоны</span></a><span class="readonly">Только наблюдение</span><span id="connection" role="status">Подключение…</span></header>
+<header><a class="brand" href="#">Pri-Fly <span>Локальные прогоны</span></a><span class="readonly">Локальная панель</span><span id="connection" role="status">Подключение…</span></header>
 <main>
-<section aria-labelledby="runs-title"><div class="heading"><div><p class="eyebrow">РАБОЧАЯ МАШИНА · ТЕКУЩИЙ ПОЛЬЗОВАТЕЛЬ</p><h1 id="runs-title">Все прогоны</h1></div><div id="totals" class="totals">Читаем каталог…</div></div>
+<section id="run-list" aria-labelledby="runs-title"><div class="heading"><div><p class="eyebrow">РАБОЧАЯ МАШИНА · ТЕКУЩИЙ ПОЛЬЗОВАТЕЛЬ</p><h1 id="runs-title">Все прогоны</h1></div><div id="totals" class="totals">Читаем каталог…</div></div>
 <details id="coverage"><summary id="coverage-title">Обнаружение хранилищ…</summary><div id="sources"></div></details>
+<details id="storage"><summary id="storage-title">Размер хранилищ: измерение…</summary><div id="storage-details"></div></details>
 <form id="filters" class="filters"><label class="search">Поиск<input name="q" type="search" placeholder="Задача, Run, workflow или путь…"></label><label>Проект<select name="project"><option value="">Все проекты</option></select></label><label>Статус<select name="status"><option value="">Все статусы</option></select></label><label>Исполнитель<select name="executor"><option value="">Все исполнители</option></select></label><label>С даты<input name="from" type="date"></label><label>По дату<input name="to" type="date"></label><label>Порядок<select name="sort"><option value="">Последние изменения</option><option value="created">Сначала новые</option><option value="oldest">Сначала старые</option><option value="status">По статусу</option></select></label></form>
 <div class="table-wrap"><table class="run-table"><thead><tr><th>Задача / Run</th><th>Проект / workflow</th><th>Состояние</th><th>Шаги / попытки</th><th>Создан</th></tr></thead><tbody id="runs"><tr><td colspan="5">Загрузка прогонов…</td></tr></tbody></table></div>
 <nav class="pagination" aria-label="Страницы прогонов"><span id="matches"></span><button id="previous" type="button">← Назад</button><span id="page"></span><button id="next" type="button">Далее →</button></nav>
 </section>
-<section id="detail" hidden aria-labelledby="detail-title"><div class="heading"><div><p class="eyebrow" id="detail-id"></p><h2 id="detail-title">Прогон</h2></div><a id="permalink" href="#">Ссылка на прогон ↗</a></div><p id="detail-error" role="alert" hidden></p><div id="overview"></div>
+<section id="detail" hidden aria-labelledby="detail-title"><p><a href="#" id="back-to-runs">← Все прогоны</a></p><div class="heading"><div><p class="eyebrow" id="detail-id"></p><h2 id="detail-title">Прогон</h2></div><div><a id="permalink" href="#">Ссылка на прогон ↗</a> <button type="button" id="delete-run" disabled>Удалить Run…</button></div></div><p id="detail-error" role="alert" hidden></p><div id="overview"></div>
 <nav class="tabs" aria-label="Подробности прогона"><button data-tab="workflow" aria-pressed="true">Схема и шаги</button><button data-tab="facts" aria-pressed="false">Результаты и решения</button><button data-tab="journal" aria-pressed="false">Журнал Pri-Fly</button></nav>
 <div id="workflow"><div class="graph-toolbar"><label>Workflow / исполнение <select id="invocation"></select></label><p class="muted">Схема — закреплённый план. Дерево — фактические исполнения.</p></div><div id="graph" class="graph"></div><div class="inspector-layout"><section><h3>Дерево исполнения</h3><div id="tree"></div></section><section aria-labelledby="node-title"><h3 id="node-title">Выберите шаг или попытку</h3><div id="node"></div></section></div></div>
 <div id="facts" hidden></div><div id="journal" hidden><p class="muted">События самого Pri-Fly. Переписка агентов, вызовы их инструментов и shell-вывод пока не подключены.</p><div id="events"></div><button id="more-events" type="button" hidden>Загрузить следующие события</button></div>
 </section><p id="empty-detail" class="empty">Выберите прогон, чтобы увидеть план, исполнение и результаты.</p>
+<p id="maintenance-status" role="status"></p>
 </main><footer>Pri-Fly · Данные читаются из локальных хранилищ · Обновление каждые 1,5 секунды</footer>
+<dialog id="cleanup-dialog" aria-labelledby="cleanup-title"><h2 id="cleanup-title">Подтверждение очистки</h2><div id="cleanup-preview"></div><form method="dialog"><button value="cancel" autofocus>Отмена</button><button value="delete" class="danger">Удалить без возможности отмены</button></form></dialog>
 </body></html>
