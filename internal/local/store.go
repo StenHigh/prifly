@@ -120,8 +120,11 @@ type AuthorityCommand struct {
 }
 
 type AuthorityChange struct {
-	Data   json.RawMessage
-	Result json.RawMessage
+	// PruneRuns removes retained history only after runtime validates terminal state.
+	// Versions and held slots are rechecked in the same write transaction.
+	PruneRuns map[string]int64
+	Data      json.RawMessage
+	Result    json.RawMessage
 	// SetCapacity changes how many attempts this authority admits at once, in
 	// the same transaction that records the decision, so the recorded decision
 	// and the capacity it describes can never disagree.
@@ -1308,6 +1311,35 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 			rejection = &Rejection{Code: "invalid_capacity", Message: "an authority admits at least one attempt at a time"}
 		} else if *change.SetCapacity < held {
 			rejection = &Rejection{Code: "capacity_conflict", Message: "capacity is below the attempts already admitted"}
+		}
+	}
+	if rejection == nil && len(change.PruneRuns) > 0 {
+		for id, version := range change.PruneRuns {
+			snapshot, err := loadSnapshot(ctx, conn, id)
+			if err != nil {
+				return out, err
+			}
+			if snapshot.Version != version {
+				rejection = &Rejection{Code: "version_conflict", Message: "Run changed after cleanup preview"}
+				break
+			}
+			var held int
+			if err = conn.QueryRowContext(ctx, "SELECT count(*) FROM slots WHERE run_id=?", id).Scan(&held); err != nil {
+				return out, err
+			}
+			if held != 0 {
+				rejection = &Rejection{Code: "storage_busy", Message: "Run still holds admission slots"}
+				break
+			}
+		}
+		if rejection == nil {
+			for id := range change.PruneRuns {
+				for _, table := range []string{"events", "samples", "slot_waiters", "runs"} {
+					if _, err := conn.ExecContext(ctx, "DELETE FROM "+table+" WHERE run_id=?", id); err != nil {
+						return out, err
+					}
+				}
+			}
 		}
 	}
 	cut++

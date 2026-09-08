@@ -69,7 +69,7 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 		defer cancel()
 		_ = server.Shutdown(shutdown)
 	}()
-	fmt.Fprintf(c.errout, "monitor: http://%s (read-only)\n", listener.Addr())
+	fmt.Fprintf(c.errout, "monitor: http://%s (local monitor)\n", listener.Addr())
 	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
@@ -78,6 +78,7 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 
 func monitorMux(catalog *monitorCatalog) http.Handler {
 	mux := http.NewServeMux()
+	monitorMaintenance(mux, catalog)
 	write := func(w http.ResponseWriter, value any, err error) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -113,6 +114,7 @@ func monitorMux(catalog *monitorCatalog) http.Handler {
 		_, _ = w.Write(monitorJS)
 	})
 	mux.HandleFunc("/api/runs", catalog.listHTTP)
+	mux.HandleFunc("/api/storage", catalog.storageHTTP)
 	scoped := func(path string, handler func(http.ResponseWriter, *http.Request, *prifly.Engine)) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			engine, err := catalog.open(r.URL.Query().Get("source"))
@@ -282,7 +284,7 @@ func monitorHost(listen string) func(http.Handler) http.Handler {
 				_ = json.NewEncoder(w).Encode(map[string]string{"error": "this monitor answers only for the address it listens on"})
 				return
 			}
-			if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			if r.Method != http.MethodGet && r.Method != http.MethodHead && !(r.Method == http.MethodPost && r.URL.Path == "/api/maintenance") {
 				w.Header().Set("Allow", "GET, HEAD")
 				http.Error(w, "read-only monitor", http.StatusMethodNotAllowed)
 				return
