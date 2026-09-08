@@ -396,6 +396,31 @@ func (e *Engine) driverLiveFor(runID string) bool {
 	}
 	return false
 }
+// driverHolder reads the Run whose driver holds the lock. The holder writes its
+// id into the same file it locks, so a refused caller can name it without a
+// second source of truth; an unreadable or empty file simply leaves it unnamed.
+func driverHolder(f *os.File) string {
+	b := make([]byte, 256)
+	n, err := f.ReadAt(b, 0)
+	if err != nil && n == 0 {
+		return ""
+	}
+	return string(b[:n])
+}
+
+// driverBusyMessage says what actually blocks the caller. The refusal used to
+// carry no message at all, so the reader was sent to doctor and run status,
+// neither of which reports on a driver lock: one authority pumps one Run at a
+// time, and that is not the admission bound, so raising capacity does not lift
+// it.
+func driverBusyMessage(held string) string {
+	subject := "another Run"
+	if held != "" {
+		subject = held
+	}
+	return "a driver for " + subject + " is already pumping this authority, and one authority drives one Run at a time; this is not the admission bound, so capacity set does not lift it — let that Run reach a settled state, or end it with run cancel --id ID, and run status --id ID says where it is"
+}
+
 func (e *Engine) driverLock(runID string) (*os.File, error) {
 	path := filepath.Join(e.Root, e.Config.Configuration.StateRoot, "driver.lock")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
@@ -403,8 +428,9 @@ func (e *Engine) driverLock(runID string) (*os.File, error) {
 		return nil, err
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		held := driverHolder(f)
 		f.Close()
-		return nil, wrapFault("driver_already_active", "", err)
+		return nil, wrapFault("driver_already_active", driverBusyMessage(held), err)
 	}
 	if err := f.Truncate(0); err != nil {
 		f.Close()

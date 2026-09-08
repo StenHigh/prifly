@@ -108,6 +108,7 @@ func ProblemFor(err error) (Problem, int) {
 	}
 	var fp *flow.Problem
 	var rejected *local.Rejection
+	var authored *Fault
 	switch {
 	case errors.Is(err, context.Canceled):
 		p.Code, p.Message, exit = "interrupted", "The client was interrupted; inspect the recorded run before any retry.", 7
@@ -144,6 +145,17 @@ func ProblemFor(err error) (Problem, int) {
 		p.Code, p.Message, exit = "quota_exceeded", "A bounded local storage or payload allowance was exceeded.", 5
 	case persistenceFailure(err):
 		p.Code, p.Message, exit = "persistence_unavailable", "The authority could not persist or read mandatory evidence. Do not assume the operation committed.", 6
+	// A refusal this engine authored keeps its own words even when it also
+	// carries a cause. The detail used to be recovered by splitting the error
+	// text, which a wrapped cause disqualified — so every wrapFault refusal
+	// arrived as a bare code with the generic sentence, including "authority is
+	// open in another process" and the driver lock. Reading the Fault directly
+	// exposes engine-authored text only; the cause stays invisible either way.
+	case errors.As(err, &authored) && authored.Message != "":
+		p.Code = authored.Code
+		p.Message = "The selected operation was refused (" + authored.Code + "); violations names the exact subject and what to change."
+		p.Violations = []Violation{{"", authored.Message}}
+		exit = exitForCode(authored.Code)
 	default:
 		// A refusal carries its stable code whether or not it also carries a
 		// message: `code` alone and `code: detail` name the same refusal, and
@@ -199,6 +211,10 @@ func ProblemFor(err error) (Problem, int) {
 		// A stop outlives the command that hit it and is lifted only by name,
 		// so a state diagnostic never shows the way past one.
 		"active_stop": {"run.status", "run.release"},
+		// A driver lock is not the admission bound and no state diagnostic
+		// reports on it: the refusal names the Run that holds it, and reading
+		// that Run is the only thing that moves the caller forward.
+		"driver_already_active": {"run.status", "run.events"},
 		// An authority admits one attempt at a time until someone says
 		// otherwise, so the Run that wants a second slot is not in a bad state
 		// and no state diagnostic reports on the number that refused it.

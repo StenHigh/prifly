@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -37,6 +38,46 @@ func TestProblemForKeepsStableCodeAndEngineDetail(t *testing.T) {
 				t.Fatalf("%s: got violation %+v, want %+v", c.name, problem.Violations[i], violation)
 			}
 		}
+	}
+}
+
+// An engine-authored refusal that also carries a cause keeps its own words. The
+// detail used to be recovered by splitting the error text, which any wrapped
+// cause disqualified, so every wrapFault refusal reached the client as a bare
+// code with the generic sentence — including the one that says the authority is
+// open in another process. The cause's own text stays out either way.
+func TestProblemForKeepsAuthoredDetailThroughAWrappedCause(t *testing.T) {
+	cause := errors.New("flock /private/tmp/authority/.prifly/state/driver.lock: resource temporarily unavailable")
+	for _, c := range []struct {
+		name    string
+		err     error
+		code    string
+		exit    int
+		message string
+	}{
+		{"driver lock", wrapFault("driver_already_active", driverBusyMessage("run:abc"), cause), "driver_already_active", 2, driverBusyMessage("run:abc")},
+		{"storage busy", wrapFault("storage_busy", "authority is open in another process; retry after it closes", cause), "storage_busy", 5, "authority is open in another process; retry after it closes"},
+	} {
+		problem, exit := ProblemFor(c.err)
+		if problem.Code != c.code || exit != c.exit {
+			t.Fatalf("%s: got %s exit %d, want %s exit %d", c.name, problem.Code, exit, c.code, c.exit)
+		}
+		if len(problem.Violations) != 1 || problem.Violations[0].Reason != c.message {
+			t.Fatalf("%s: the authored detail did not reach the client: %+v", c.name, problem.Violations)
+		}
+		for _, foreign := range []string{"flock", "driver.lock", "resource temporarily unavailable"} {
+			if strings.Contains(problem.Message+problem.Violations[0].Reason, foreign) {
+				t.Fatalf("%s: the cause's own text leaked: %q", c.name, foreign)
+			}
+		}
+	}
+}
+
+// A refusal with no words of its own is still that refusal, not invalid_input.
+func TestProblemForKeepsTheCodeOfAWordlessWrappedFault(t *testing.T) {
+	problem, exit := ProblemFor(wrapFault("pinned_workflow_unreadable", "", errors.New("open /nowhere: no such file")))
+	if problem.Code != "pinned_workflow_unreadable" || exit != 2 || len(problem.Violations) != 0 {
+		t.Fatalf("a wordless refusal lost its subject: %+v exit %d", problem, exit)
 	}
 }
 
