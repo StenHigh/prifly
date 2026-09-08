@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -232,7 +233,10 @@ func TestWorktreeClaimIsRefusedUnderAControlStop(t *testing.T) {
 }
 
 // Stage acceptance: physical aliases are one resource. A path that reaches the
-// same repository through a symlink must not become a second owner.
+// same tree through a symlink must not become a second owner. The resource is
+// now the working tree rather than the repository, so the property is stated
+// where a tree is actually shared: two checkouts of one repository, named two
+// ways, are one checkout.
 func TestPhysicalAliasesAreOneResource(t *testing.T) {
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
@@ -241,23 +245,25 @@ func TestPhysicalAliasesAreOneResource(t *testing.T) {
 	if err := os.Symlink(repository, alias); err != nil {
 		t.Skipf("symlinks are unavailable: %v", err)
 	}
-	if _, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:claim", Repository: repository, OwnerID: "session:pilot"}); err != nil {
+	if _, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:claim", Repository: repository, OwnerID: "session:pilot", WorkspaceMode: "checkout"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:alias", Repository: alias, OwnerID: "session:other"})
+	_, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:alias", Repository: alias, OwnerID: "session:other", WorkspaceMode: "checkout"})
 	if err == nil {
-		t.Fatal("an alias of a claimed repository became a second owner")
+		t.Fatal("an alias of a claimed checkout became a second owner of it")
 	}
 	rejectionCode(t, err, "claim_conflict")
 }
 
 // An expired lease is not proof the old owner stopped. Until that is settled a
-// conflicting claim stays blocked rather than creating a second owner.
+// conflicting claim stays blocked rather than creating a second owner. Stated
+// on a checkout, because that is where two claims contend for one tree: two
+// worktree claims take two trees and never contend at all.
 func TestExpiredLeaseBlocksInsteadOfHandingOverOwnership(t *testing.T) {
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
-	claim, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:claim", Repository: repository, OwnerID: "session:pilot"})
+	claim, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:claim", Repository: repository, OwnerID: "session:pilot", WorkspaceMode: "checkout"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,14 +342,18 @@ func TestAtomicMultiClaimTakesAllOrNothing(t *testing.T) {
 		t.Fatalf("an atomic pair did not produce two distinct active claims: %+v", claims)
 	}
 
-	// One conflict refuses the whole set: nothing partial is recorded.
+	// One refusal refuses the whole set: nothing partial is recorded. A taken
+	// repository is no longer a refusal — the set would take its own trees — so
+	// the property is exercised on the check that does still refuse: one
+	// repository named twice inside one set.
 	third := gitRepository(t)
 	_, err = e.ClaimWorktrees(ctx, "command:overlap", []ClaimRequest{
 		{Repository: third, OwnerID: "session:other"},
 		{Repository: first, OwnerID: "session:other"},
+		{Repository: first, OwnerID: "session:other"},
 	})
 	if err == nil {
-		t.Fatal("a set containing a taken resource was granted")
+		t.Fatal("one repository was named twice inside one set")
 	}
 	rejectionCode(t, err, "claim_conflict")
 	record, err := e.Claims(ctx)
@@ -353,15 +363,17 @@ func TestAtomicMultiClaimTakesAllOrNothing(t *testing.T) {
 	if len(record.Claims) != 2 {
 		t.Fatalf("a refused set recorded part of itself: %+v", record.Claims)
 	}
-	// The same repository named twice in one set would be two owners of one
-	// resource, so the set is checked against itself first.
-	if _, err := e.ClaimWorktrees(ctx, "command:self", []ClaimRequest{
+	// A set naming only repositories nobody holds is granted, including one
+	// already worked in by another Run: those are separate trees.
+	beside, err := e.ClaimWorktrees(ctx, "command:beside", []ClaimRequest{
 		{Repository: third, OwnerID: "session:other"},
-		{Repository: third, OwnerID: "session:other"},
-	}); err == nil {
-		t.Fatal("one resource was claimed twice inside one set")
-	} else {
-		rejectionCode(t, err, "claim_conflict")
+		{Repository: first, OwnerID: "session:other"},
+	})
+	if err != nil {
+		t.Fatalf("a set naming a repository another Run works in was refused: %v", err)
+	}
+	if len(beside) != 2 || beside[0].Path == claims[0].Path || beside[1].Path == claims[0].Path {
+		t.Fatalf("an atomic set reused a tree another claim holds: %+v", beside)
 	}
 }
 
@@ -379,6 +391,10 @@ func TestConcurrentClaimsProduceOneOwner(t *testing.T) {
 		go func(i int) {
 			_, err := e.ClaimWorktree(context.Background(), ClaimRequest{
 				CommandID: "command:race-" + strconv.Itoa(i), Repository: repository, OwnerID: "session:racer",
+				// Racing for one resource means racing for one tree. Four
+				// worktree claims would take four trees and all four would win,
+				// which proves nothing about the transaction.
+				WorkspaceMode: "checkout",
 			})
 			results <- err
 		}(i)
@@ -422,6 +438,13 @@ func TestClaimConflictNamesTheRelationNotJustTheObstacle(t *testing.T) {
 		if !strings.Contains(claimConflictMessage, expected) {
 			t.Fatalf("the conflict refusal does not name %q: %s", expected, claimConflictMessage)
 		}
+	}
+	// A claim outlives the command that hit it and is ended explicitly, so a
+	// state diagnostic never shows the way past one. Asserted here because the
+	// CLI can no longer produce this refusal: claim create takes a fresh tree.
+	problem, _ := ProblemFor(local.Reject("claim_conflict", claimConflictMessage))
+	if !slices.Contains(problem.SafeNextActions, "claim.release") || slices.Contains(problem.SafeNextActions, "doctor") {
+		t.Fatalf("a claim refusal was sent to a state diagnostic: %+v", problem.SafeNextActions)
 	}
 }
 

@@ -85,8 +85,18 @@ func TestSettledRunFreesItsWorkspaceForTheNextClaim(t *testing.T) {
 	next := func() (WorktreeClaim, error) {
 		return e.ClaimWorktree(ctx, ClaimRequest{CommandID: newID("command"), Repository: claim.Repository.Toplevel, OwnerID: "session:next"})
 	}
-	if _, err := next(); refusalCode(err) != "claim_conflict" {
-		t.Fatalf("an unfinished Run's workspace was handed to a second claim: %v", err)
+	// A second start no longer waits on the first: it takes its own tree. What
+	// must not happen is the first Run losing the tree it is working in, so
+	// that is what is asserted instead of a refusal.
+	beside, err := next()
+	if err != nil {
+		t.Fatalf("a second worktree of the same repository was refused: %v", err)
+	}
+	if beside.Path == claim.Path {
+		t.Fatalf("the second start took the unfinished Run's own tree: %+v", beside)
+	}
+	if held, err := e.claim(ctx, claim.ID); err != nil || held.Status != "active" || held.RunID != runID {
+		t.Fatalf("the unfinished Run lost its claim to a neighbour: %+v %v", held, err)
 	}
 	if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "planned")); err != nil {
 		t.Fatal(err)
@@ -367,8 +377,12 @@ func TestClaimReleaseCleanupFailureStaysFencedAcrossRestart(t *testing.T) {
 	if _, err := e.prepareClaimRunBinding(ctx, "run:other", claim.ID, claim.Generation); refusalCode(err) != "claim_state_conflict" {
 		t.Fatalf("releasing claim admitted new work: %v", err)
 	}
-	if _, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: newID("command"), Repository: claim.Repository.Toplevel, OwnerID: "session:other"}); refusalCode(err) != "claim_conflict" {
-		t.Fatalf("failed cleanup admitted another physical owner: %v", err)
+	// The fence is on the claim and its tree, not on the repository: a
+	// neighbouring worktree is a different resource and is allowed. What must
+	// stay shut is this claim, and the checkout that would occupy the same tree
+	// the substituted directory belongs to.
+	if _, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: newID("command"), Repository: claim.Repository.Toplevel, OwnerID: "session:other", WorkspaceMode: "checkout"}); refusalCode(err) != "claim_conflict" {
+		t.Fatalf("failed cleanup admitted an owner of the repository's own tree: %v", err)
 	}
 	if err := os.Remove(target); err != nil { // only the empty test replacement
 		t.Fatal(err)

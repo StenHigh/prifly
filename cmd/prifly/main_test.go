@@ -2383,7 +2383,7 @@ func TestRecordedRejectionRefusesInsteadOfReportingSuccess(t *testing.T) {
 // refusal that asks for that has to name the command: "resolve it explicitly"
 // left the reader with claim status, which does not exist, and safe next
 // actions pointed at a state diagnostic that shows no claims at all.
-func TestClaimRefusalNamesTheCommandThatEndsIt(t *testing.T) {
+func TestASecondOwnerGetsItsOwnTreeRatherThanARefusal(t *testing.T) {
 	authority := t.TempDir()
 	repository := filepath.Join(t.TempDir(), "repository")
 	if err := os.MkdirAll(repository, 0755); err != nil {
@@ -2413,23 +2413,30 @@ func TestClaimRefusalNamesTheCommandThatEndsIt(t *testing.T) {
 	if code := execute(context.Background(), claim, &out, &errout); code != 0 {
 		t.Fatalf("claim: %d %s", code, errout.String())
 	}
+	decode := func(buffer *bytes.Buffer) prifly.WorktreeClaim {
+		t.Helper()
+		var envelope struct {
+			Claim prifly.WorktreeClaim `json:"claim"`
+		}
+		if err := json.Unmarshal(buffer.Bytes(), &envelope); err != nil {
+			t.Fatalf("%v: %s", err, buffer.String())
+		}
+		return envelope.Claim
+	}
+	first := decode(&out)
 	out.Reset()
 	errout.Reset()
-	if code := execute(context.Background(), append(append([]string{}, claim[:len(claim)-1]...), "second"), &out, &errout); code == 0 {
-		t.Fatal("a second owner claimed the same repository")
+	// One branch, many tasks: a second owner takes its own tree rather than
+	// waiting for the first. The refusal this test used to assert is no longer
+	// reachable from claim create at all — a conflict now needs two claims on
+	// one tree, and only a checkout puts two claims there. Its shape is
+	// asserted where it can still be produced, in the runtime tests.
+	if code := execute(context.Background(), append(append([]string{}, claim[:len(claim)-1]...), "second"), &out, &errout); code != 0 {
+		t.Fatalf("a second owner was refused its own worktree: %d %s", code, errout.String())
 	}
-	var problem prifly.Problem
-	if err := json.Unmarshal(errout.Bytes(), &problem); err != nil {
-		t.Fatalf("%v: %s", err, errout.String())
-	}
-	if problem.Code != "claim_conflict" {
-		t.Fatalf("got %s: %s", problem.Code, problem.Message)
-	}
-	if !strings.Contains(problem.Message, "claim release --id CLAIM --generation N") {
-		t.Fatalf("the refusal does not name the way out: %s", problem.Message)
-	}
-	if !slices.Contains(problem.SafeNextActions, "claim.release") || slices.Contains(problem.SafeNextActions, "doctor") {
-		t.Fatalf("a claim refusal was sent to a state diagnostic: %+v", problem.SafeNextActions)
+	second := decode(&out)
+	if first.ID == "" || second.ID == "" || second.ID == first.ID || second.Path == first.Path || second.Branch == first.Branch {
+		t.Fatalf("two owners were given one tree: %+v %+v", first, second)
 	}
 }
 
