@@ -63,9 +63,29 @@ func TestWorktreeClaimIsExclusiveAndConfined(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(worktree, "README.md")); err != nil {
 		t.Fatalf("the claimed worktree does not hold the base commit content: %v", err)
 	}
-	// A second claim on the same repository is refused; this slice admits one.
-	if _, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:second", Repository: repository, OwnerID: "run:other"}); err == nil {
-		t.Fatal("a second exclusive claim was granted for the same repository")
+	// One branch, many tasks, one Run each: a second worktree of the same
+	// repository is its own resource and is granted. This is the parallel work
+	// the product was built for, and the old rule refused it.
+	second, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:second", Repository: repository, OwnerID: "run:other"})
+	if err != nil {
+		t.Fatalf("a second worktree of the same repository was refused: %v", err)
+	}
+	if second.Path == claim.Path || second.Branch == claim.Branch {
+		t.Fatalf("two claims took the same tree or branch: %+v %+v", claim, second)
+	}
+	if _, err := os.Stat(filepath.Join(e.Root, filepath.FromSlash(second.Path), "README.md")); err != nil {
+		t.Fatalf("the second worktree does not hold the base commit content: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(worktree, "README.md")); err != nil {
+		t.Fatalf("the first worktree did not survive the second claim: %v", err)
+	}
+	// Exclusivity is not traded away, only narrowed to what it protects. A
+	// checkout works in the repository's own tree, where nothing bounds what it
+	// touches, so it is still refused while any worktree claim is active. Two
+	// worktree claims cannot collide on one tree at all: the path derives from
+	// the command id, so asking twice is the same command, not a second claim.
+	if _, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:checkout", Repository: repository, OwnerID: "run:third", WorkspaceMode: "checkout"}); err == nil {
+		t.Fatal("a checkout was granted while worktrees of that repository were held")
 	} else {
 		rejectionCode(t, err, "claim_conflict")
 	}
@@ -393,13 +413,12 @@ func TestConcurrentClaimsProduceOneOwner(t *testing.T) {
 	}
 }
 
-// The refusal is read by someone standing in a linked worktree: their path,
-// their branch and their working tree all differ from the holder's, so a
-// refusal that says only "this repository" tells them it is about someone else.
-// The relation is the shared git directory, and the refusal has to name it and
-// the command that settles it.
+// The refusal is read by someone standing in their own worktree, so a refusal
+// that says only "this repository" tells them it is about someone else. It now
+// names the relation — the tree a claim occupies — and, because the rule
+// changed under them, says explicitly what no longer conflicts.
 func TestClaimConflictNamesTheRelationNotJustTheObstacle(t *testing.T) {
-	for _, expected := range []string{"shared git directory", "linked worktree", "git rev-parse --git-common-dir", "claim list", "claim release"} {
+	for _, expected := range []string{"this working tree", "another worktree of the same repository does not conflict", "same checkout", "claim list", "claim release"} {
 		if !strings.Contains(claimConflictMessage, expected) {
 			t.Fatalf("the conflict refusal does not name %q: %s", expected, claimConflictMessage)
 		}

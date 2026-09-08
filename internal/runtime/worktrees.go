@@ -48,12 +48,33 @@ type ClaimRecord struct {
 	Claims        []WorktreeClaim `json:"claims"`
 }
 
-// claimConflictMessage names the relation, not just the obstacle. A reader in a
-// linked worktree sees a different path, a different branch and a different
-// working tree, so "this repository" reads as "not mine" to exactly the person
-// being refused. The relation is the shared git directory, and one command
-// settles whether two trees share it.
-const claimConflictMessage = "this repository already has an active worktree claim whose Run is still unfinished; claims conflict on the shared git directory, so a linked worktree of the same repository is the same resource here even with its own path and branch — compare git rev-parse --git-common-dir in both trees. A settled Run's claim is released for you, so claim list names the holder and either run drive finishes it, run cancel ends it, or claim release --id CLAIM --generation N drops it"
+// claimsConflict decides whether two claims take the same resource. The
+// resource is the working tree a claim occupies, and Path names it: a
+// disposable worktree has its own, a checkout has the repository's. Two Runs in
+// two worktrees of one repository share objects and refs, which git serializes
+// itself; they do not share a tree, and refusing them cost the product its
+// parallel work.
+//
+// A checkout claim keeps the older, wider exclusion: it works directly in the
+// repository's own tree, where the engine bounds nothing, so it excludes and is
+// excluded by every other claim on that repository. A missing mode in a
+// historical record is the old worktree behaviour.
+func claimsConflict(existing, taken WorktreeClaim) bool {
+	if existing.Path == taken.Path {
+		return true
+	}
+	if existing.Repository.CommonDir != taken.Repository.CommonDir {
+		return false
+	}
+	return existing.Mode == "checkout" || taken.Mode == "checkout"
+}
+
+// claimConflictMessage names the relation, not just the obstacle. It used to
+// say "this repository", which was both the old rule and unreadable to the
+// person being refused: someone in their own worktree sees a different path and
+// branch and concludes it is about somebody else. The relation is now the
+// working tree, so the refusal names that and says what does not conflict.
+const claimConflictMessage = "this working tree already has an active claim whose Run is still unfinished; claims conflict on the tree they occupy, so a Run in another worktree of the same repository does not conflict with this one, and two Runs on the same checkout do. A settled Run's claim is released for you, so claim list names the holder and either run drive finishes it, run cancel ends it, or claim release --id CLAIM --generation N drops it"
 
 // Repository identity is the resolved common directory and top level, not the
 // path the caller typed: a moved or symlinked source is the same repository.
@@ -221,7 +242,7 @@ func (e *Engine) ClaimWorktrees(ctx context.Context, commandID string, requests 
 			claim := &prepared[i]
 			var generation int64
 			for _, existing := range record.Claims {
-				if existing.Repository.CommonDir != claim.Repository.CommonDir {
+				if !claimsConflict(existing, *claim) {
 					continue
 				}
 				if existing.active() {
@@ -348,11 +369,9 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 		}
 		var generation int64
 		for _, existing := range record.Claims {
-			if existing.Repository.CommonDir != identity.CommonDir {
+			if !claimsConflict(existing, claim) {
 				continue
 			}
-			// The conflict relation is the physical repository, not the path a
-			// caller typed: two aliases of one repository are one resource.
 			if existing.active() {
 				state := claimPresence(existing, e.clock.now())
 				if state == "suspected" {
