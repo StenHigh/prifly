@@ -2282,6 +2282,8 @@ Global: --project DIR  --json  --format text|json|csv
   project extend --workflow FILE --workflow-id ID --extensions FILE --output FILE [--step-ref NAME=JSON] [--step-source NAME=FILE]
                                    Insert declared steps into one exact compiled workflow; nothing is sealed, imported or run
                                    --step-ref and --step-source are one pair per step: the ref is written into the workflow, the source is the file it is checked against
+                                   NAME is the short step: name from extend.yaml, not the id: inside the file; the known-step list is built from --step-ref alone
+                                   examples/troubleshooting.md of the Pri-Fly repository has the worked pair and the refusal each half produces alone
   project compile --repository DIR --package NAME [--host codex-cli|codex-app|claude-code] --output DIR [--value NAME=JSON]
                                    Seal one declared YAML package; import remains a separate owner decision
   project start --repository DIR --launch ID [--host codex-cli|codex-app|claude-code] [--brief FILE] [--input PORT=FILE] [--input-ref PORT=REF.json] [--workspace worktree|checkout]
@@ -2311,6 +2313,8 @@ Global: --project DIR  --json  --format text|json|csv
    exact reason; a command that already wrote a pre-dispatch document to stderr leaves it in front,
    so read the last document of stderr, not the whole stream. No nonzero status means a healthy
    wait; 5 in particular is a refusal, not a handoff
+   That code is greppable: examples/troubleshooting.md of the Pri-Fly repository indexes the ones
+     teams actually hit by symptom, and names the field or flag that answers each
   version | doctor | inventory     Versions, integrity, exact local definitions
   ref FILE --id ID --version X.Y.Z [--raw-text]
                                    Canonical JSON/YAML; --raw-text hashes exact UTF-8 resource bytes

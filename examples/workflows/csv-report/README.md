@@ -5,8 +5,12 @@ The graph, typed ports and portable execution bindings live in YAML. The small
 Node worker contains only the work performed by each step, not the workflow.
 Pri-Fly itself is the installed binary; neither Go nor Python is needed.
 
-This example currently requires the unreleased source build with Project
-profile `/3`; it is not compatible with the earlier released binary.
+This example uses Project profile `/3`, which the public stable release carries
+from 0.10.0 onward; a source build is not needed for it. Binaries older than
+that do not read the profile.
+
+When a refusal or the run itself surprises you, the
+[symptom index](../../troubleshooting.md) names the field or flag behind it.
 
 ## Try it
 
