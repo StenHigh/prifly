@@ -107,17 +107,27 @@ func TestCLIProjectSessionLimitsSealDistinctRevisions(t *testing.T) {
 	}
 	timedSource := strings.Replace(legacyStep, "prifly-step/1", "prifly-step/2", 1)
 	timed := compile(timedSource)
-	if timed.step.SchemaVersion != "6" || timed.step.SessionLimits == nil || timed.step.SessionLimits.ActiveTimeoutMS != 3600000 || timed.step.SessionLimits.DecisionWaitTimeoutMS != nil {
+	if timed.step.SchemaVersion != "6" || timed.step.SessionLimits == nil || timed.step.SessionLimits.ActiveAllowanceMS() != 3600000 || timed.step.SessionLimits.DecisionWaitTimeoutMS != nil {
 		t.Fatalf("new marker did not seal its defaults: %+v", timed.step)
 	}
 	assertSame(timed, compile(timedSource+"session_limits: {active_timeout_ms: 3600000, decision_wait_timeout_ms: null}\n"))
 	active := compile(timedSource + "session_limits: {active_timeout_ms: 7200000}\n")
 	wait := compile(timedSource + "session_limits: {decision_wait_timeout_ms: 1209600000}\n")
-	if active.step.SessionLimits.ActiveTimeoutMS != 7200000 || active.step.SessionLimits.DecisionWaitTimeoutMS != nil || wait.step.SessionLimits.ActiveTimeoutMS != 3600000 || wait.step.SessionLimits.DecisionWaitTimeoutMS == nil || *wait.step.SessionLimits.DecisionWaitTimeoutMS != 1209600000 {
+	if active.step.SessionLimits.ActiveAllowanceMS() != 7200000 || active.step.SessionLimits.DecisionWaitTimeoutMS != nil || wait.step.SessionLimits.ActiveAllowanceMS() != 3600000 || wait.step.SessionLimits.DecisionWaitTimeoutMS == nil || *wait.step.SessionLimits.DecisionWaitTimeoutMS != 1209600000 {
 		t.Fatal("independent active/wait edits did not reach the sealed definition")
 	}
+	// The CLI is the surface a package author actually uses to stop paying for a
+	// deadline. Sealing "no work deadline" must reach v7 through it, and must not
+	// disturb the wait the same source declares beside it.
+	unbounded := compile(timedSource + "session_limits: {active_timeout_ms: null, decision_wait_timeout_ms: 86400000}\n")
+	if unbounded.step.SchemaVersion != "7" || unbounded.step.SessionLimits.ActiveTimeoutMS != nil {
+		t.Fatalf("declared absence of a work deadline did not survive compilation: %+v", unbounded.step)
+	}
+	if declared := unbounded.step.SessionLimits.DecisionWaitTimeoutMS; declared == nil || *declared != 86400000 {
+		t.Fatalf("the neighbour wait limit changed: %+v", unbounded.step.SessionLimits)
+	}
 	seen := map[flow.Ref]bool{}
-	for _, variant := range []sealed{legacy, timed, active, wait} {
+	for _, variant := range []sealed{legacy, timed, active, wait, unbounded} {
 		for _, component := range variant.result.Components {
 			if seen[component.Ref] {
 				t.Fatalf("different effective limits reused an owned compiled ref: %+v", component.Ref)

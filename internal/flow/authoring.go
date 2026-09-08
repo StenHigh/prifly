@@ -162,8 +162,8 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 		}
 	}
 	if version, exists := source["schema_version"]; exists {
-		if timed && version != "6" {
-			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6")
+		if timed && version != "6" && version != "7" {
+			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6 or v7")
 		}
 		if !timed && version != "2" && version != "5" {
 			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2 or v5")
@@ -197,8 +197,28 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	if _, exists := source["workspace_trees"]; exists {
 		schemaVersion = "5"
 	}
+	var limits map[string]any
 	if timed {
+		limits = map[string]any{}
+		if value, exists := source["session_limits"]; exists {
+			limits = cloneObject(value)
+			if limits == nil {
+				return nil, problem("schema_invalid", "/session_limits", "session limits must be an object")
+			}
+		}
+		if _, exists := limits["active_timeout_ms"]; !exists {
+			limits["active_timeout_ms"] = json.Number(fmt.Sprint(DefaultSessionActiveTimeoutMS))
+		}
+		if _, exists := limits["decision_wait_timeout_ms"]; !exists {
+			limits["decision_wait_timeout_ms"] = nil
+		}
+		// Only a declared absence of a work deadline needs the contract that can
+		// carry it. Every other timed step keeps sealing the same v6 bytes it
+		// sealed before v7 existed, so no digest moves for saying nothing new.
 		schemaVersion = "6"
+		if limits["active_timeout_ms"] == nil {
+			schemaVersion = "7"
+		}
 	}
 	if value, exists := source["schema_version"]; exists {
 		schemaVersion = value.(string)
@@ -253,21 +273,11 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 		result["workspace_trees"] = value
 	}
 	if timed {
-		limits := map[string]any{}
-		if value, exists := source["session_limits"]; exists {
-			limits = cloneObject(value)
-			if limits == nil {
-				return nil, problem("schema_invalid", "/session_limits", "session limits must be an object")
-			}
-		}
-		if _, exists := limits["active_timeout_ms"]; !exists {
-			limits["active_timeout_ms"] = json.Number(fmt.Sprint(DefaultSessionActiveTimeoutMS))
-		}
-		if _, exists := limits["decision_wait_timeout_ms"]; !exists {
-			limits["decision_wait_timeout_ms"] = nil
-		}
 		result["session_limits"] = limits
-		if err := validateProtocolValue("StepDefinitionV6", result, ""); err != nil {
+		// An author who pins schema_version themselves is answered by that exact
+		// contract: naming v6 while declaring no work deadline is a refusal, not
+		// a silent upgrade.
+		if err := validateProtocolValue("StepDefinitionV"+schemaVersion, result, ""); err != nil {
 			return nil, err
 		}
 	}

@@ -35,7 +35,7 @@ func TestTimedDecisionRefusalsPreserveDelivery(t *testing.T) {
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
-		e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds()}, "none")
+		e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 		task := handOver(t, e, runID)
 		request := timedDecisionRequest(t, e, task)
 		before, err := canonical(driverRun(t, e, runID))
@@ -82,7 +82,7 @@ func TestTimedDecisionInvalidAnswerDoesNotResume(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	ctx := context.Background()
-	e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds()}, "none")
+	e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 	task := handOver(t, e, runID)
 	request := parkTimed(t, e, task)
 	answer := timedAnswer(t, e, request)
@@ -124,7 +124,7 @@ func TestTimedAutomaticDecisionPreservesBudgetAndHonorsStop(t *testing.T) {
 			t.Run(mode+"/"+stop, func(t *testing.T) {
 				synctest.Test(t, func(t *testing.T) {
 					ctx := context.Background()
-					e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds()}, "none")
+					e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 					catalog := *options.DecisionCatalog
 					catalog.Decisions = append([]DecisionDefinition(nil), catalog.Decisions...)
 					sheet := *options.DecisionSheet
@@ -213,7 +213,7 @@ func TestTimedDecisionAnswerDoesNotBypassCurrentControls(t *testing.T) {
 	for _, scope := range []string{"run", "project"} {
 		t.Run(scope, func(t *testing.T) {
 			ctx := context.Background()
-			e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds()}, "none")
+			e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 			task := handOver(t, e, runID)
 			request := parkTimed(t, e, task)
 			restrictTimedDecision(t, e, runID, scope, "pause")
@@ -247,7 +247,7 @@ func TestTimedDecisionCancelAnswerSerialization(t *testing.T) {
 	for _, order := range []string{"cancel first", "answer first", "concurrent"} {
 		t.Run(order, func(t *testing.T) {
 			ctx := context.Background()
-			e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds()}, "none")
+			e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 			task := handOver(t, e, runID)
 			request := parkTimed(t, e, task)
 			answer := timedAnswer(t, e, request)
@@ -391,7 +391,7 @@ func TestTimedDecisionResumeRechecksRevokedPackage(t *testing.T) {
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
-		e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds()}, "none")
+		e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 		body := "# Inspect\nAsk the declared continue question before finishing.\n"
 		// Use a distinct context identity: the base fixture's ordinary local
 		// instructions must not masquerade as this imported package component.

@@ -25,31 +25,49 @@ result_schema_ref: result
 }
 
 func TestSessionLimitsAuthoringDefaultsAndValues(t *testing.T) {
+	// A zero expectation means the field is absent: nothing declares a deadline
+	// of zero, and both fields spell "no deadline" the same way.
 	for _, test := range []struct {
-		name, limits string
-		active, wait int64
+		name, limits, version string
+		active, wait          int64
 	}{
-		{"omitted", "", DefaultSessionActiveTimeoutMS, 0},
-		{"empty", "session_limits: {}", DefaultSessionActiveTimeoutMS, 0},
-		{"active only", "session_limits: {active_timeout_ms: 7200000}", 7200000, 0},
-		{"wait only", "session_limits: {decision_wait_timeout_ms: 1209600000}", DefaultSessionActiveTimeoutMS, 1209600000},
-		{"explicit null wait", "session_limits: {active_timeout_ms: 1, decision_wait_timeout_ms: null}", 1, 0},
-		{"representation maximum", "session_limits: {active_timeout_ms: 9223372036854, decision_wait_timeout_ms: 9223372036854}", MaxSessionTimeoutMS, MaxSessionTimeoutMS},
+		{"omitted", "", "6", DefaultSessionActiveTimeoutMS, 0},
+		{"empty", "session_limits: {}", "6", DefaultSessionActiveTimeoutMS, 0},
+		{"active only", "session_limits: {active_timeout_ms: 7200000}", "6", 7200000, 0},
+		{"wait only", "session_limits: {decision_wait_timeout_ms: 1209600000}", "6", DefaultSessionActiveTimeoutMS, 1209600000},
+		{"explicit null wait", "session_limits: {active_timeout_ms: 1, decision_wait_timeout_ms: null}", "6", 1, 0},
+		{"representation maximum", "session_limits: {active_timeout_ms: 9223372036854, decision_wait_timeout_ms: 9223372036854}", "6", MaxSessionTimeoutMS, MaxSessionTimeoutMS},
+		{"explicit null active", "session_limits: {active_timeout_ms: null}", "7", 0, 0},
+		{"neither deadline", "session_limits: {active_timeout_ms: null, decision_wait_timeout_ms: null}", "7", 0, 0},
+		{"no work deadline with a declared wait", "session_limits: {active_timeout_ms: null, decision_wait_timeout_ms: 86400000}", "7", 0, 86400000},
+		{"pinned v7 may still name a number", "schema_version: '7'\nsession_limits: {active_timeout_ms: 7200000}", "7", 7200000, 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			data, err := StepJSONBytes(sessionLimitSource(StepSessionAuthoringVersion, test.limits), "yaml")
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := ValidateProtocol("StepDefinitionV6", data); err != nil {
+			if err := ValidateProtocol("StepDefinitionV"+test.version, data); err != nil {
 				t.Fatal(err)
 			}
 			var step StepDefinition
 			if err := json.Unmarshal(data, &step); err != nil {
 				t.Fatal(err)
 			}
-			if step.SchemaVersion != "6" || step.SessionLimits == nil || step.SessionLimits.ActiveTimeoutMS != test.active || len(step.WorkspaceTrees) != 0 {
+			if step.SchemaVersion != test.version || step.SessionLimits == nil || len(step.WorkspaceTrees) != 0 {
 				t.Fatalf("limits were not pinned independently of workspace trees: %+v", step)
+			}
+			active := step.SessionLimits.ActiveTimeoutMS
+			if (test.active == 0 && active != nil) || (test.active != 0 && (active == nil || *active != test.active)) {
+				t.Fatalf("wrong active work limit: %+v", step.SessionLimits)
+			}
+			// A declared absence must never reach the runtime as a window that
+			// has already elapsed: that would be worse than the hour it removes.
+			if allowance := step.SessionLimits.ActiveAllowanceMS(); allowance < 1 || allowance > MaxSessionTimeoutMS {
+				t.Fatalf("unusable working window for %+v: %d", step.SessionLimits, allowance)
+			}
+			if test.active == 0 && step.SessionLimits.ActiveAllowanceMS() != MaxSessionTimeoutMS {
+				t.Fatalf("no declared deadline did not reach the longest representable window: %+v", step.SessionLimits)
 			}
 			wait := step.SessionLimits.DecisionWaitTimeoutMS
 			if (test.wait == 0 && wait != nil) || (test.wait != 0 && (wait == nil || *wait != test.wait)) {
@@ -65,11 +83,17 @@ func TestSessionLimitsAuthoringDefaultsAndValues(t *testing.T) {
 	if !bytes.Equal(implicit, explicit) {
 		t.Fatal("spelling the defaults changed sealed definition bytes")
 	}
+	// v7 exists only to carry a declared absence. A step that names a number is
+	// still sealed as v6, so publishing the new contract moved no known digest.
+	pinned, _ := StepJSONBytes(sessionLimitSource(StepSessionAuthoringVersion, "schema_version: '6'\nsession_limits: {active_timeout_ms: 3600000, decision_wait_timeout_ms: null}"), "yaml")
+	if !bytes.Equal(implicit, pinned) || !bytes.Contains(implicit, []byte(`"schema_version":"6"`)) {
+		t.Fatal("a step that declares a work deadline stopped sealing v6 bytes")
+	}
 }
 
 func TestSessionLimitsAuthoringRefusesInvalidContracts(t *testing.T) {
 	for _, limits := range []string{
-		"null", "[]", "{active_timeout_ms: null}", "{active_timeout_ms: 0}",
+		"null", "[]", "{active_timeout_ms: 0}",
 		"{active_timeout_ms: -1}", "{active_timeout_ms: 1.5}", "{active_timeout_ms: '1000'}",
 		"{active_timeout_ms: 9223372036855}", "{active_timeout_ms: 9223372036854775808}",
 		"{decision_wait_timeout_ms: 0}", "{decision_wait_timeout_ms: -1}",
@@ -88,6 +112,7 @@ func TestSessionLimitsAuthoringRefusesInvalidContracts(t *testing.T) {
 		{"other operation", "operation: session", "operation: execute", "schema_invalid"},
 		{"unknown marker", "prifly-step/2", "prifly-step/3", "unsupported_authoring"},
 		{"wrong machine edition", "kind: worker", "schema_version: '5'\nkind: worker", "schema_invalid"},
+		{"unknown machine edition", "kind: worker", "schema_version: '8'\nkind: worker", "schema_invalid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := strings.Replace(string(sessionLimitSource(StepSessionAuthoringVersion, "")), test.before, test.after, 1)
@@ -95,7 +120,11 @@ func TestSessionLimitsAuthoringRefusesInvalidContracts(t *testing.T) {
 			expectProblem(t, err, test.code)
 		})
 	}
-	_, err := StepJSONBytes(sessionLimitSource(StepAuthoringVersion, "session_limits: {}"), "yaml")
+	// Pinning v6 while declaring no work deadline is answered by v6 itself: the
+	// author is refused, never quietly moved to the contract that would accept it.
+	_, err := StepJSONBytes(sessionLimitSource(StepSessionAuthoringVersion, "schema_version: '6'\nsession_limits: {active_timeout_ms: null}"), "yaml")
+	expectProblem(t, err, "schema_invalid")
+	_, err = StepJSONBytes(sessionLimitSource(StepAuthoringVersion, "session_limits: {}"), "yaml")
 	expectProblem(t, err, "schema_invalid")
 	_, err = StepJSONBytes(sessionLimitSource(StepAuthoringVersion, "schema_version: '6'"), "yaml")
 	expectProblem(t, err, "schema_invalid")
@@ -120,7 +149,8 @@ func TestSessionLimitsWireAndLegacyIsolation(t *testing.T) {
 			t.Fatal("new optional Go field altered the legacy wire shape")
 		}
 	}
-	step.SessionLimits = &SessionLimits{ActiveTimeoutMS: DefaultSessionActiveTimeoutMS}
+	hour := DefaultSessionActiveTimeoutMS
+	step.SessionLimits = &SessionLimits{ActiveTimeoutMS: &hour}
 	if err := ValidateProtocol("StepDefinitionV2", encoded(t, step)); err == nil {
 		t.Fatal("legacy machine contract accepted session limits")
 	}
@@ -134,8 +164,33 @@ func TestSessionLimitsWireAndLegacyIsolation(t *testing.T) {
 			t.Fatal(err)
 		}
 		delete(value["session_limits"].(map[string]any), field)
-		if err := ValidateProtocol("StepDefinitionV6", encoded(t, value)); err == nil {
-			t.Fatalf("machine definition did not require materialized %s", field)
+		for _, name := range []string{"StepDefinitionV6", "StepDefinitionV7"} {
+			if err := ValidateProtocol(name, encoded(t, value)); err == nil {
+				t.Fatalf("%s did not require materialized %s", name, field)
+			}
+		}
+	}
+	// The published v6 bytes still refuse the absence v7 was published to carry,
+	// and v7 changes nothing about the neighbour it copied.
+	step.SessionLimits.ActiveTimeoutMS = nil
+	if err := ValidateProtocol("StepDefinitionV6", encoded(t, step)); err == nil {
+		t.Fatal("frozen v6 contract accepted an absent work deadline")
+	}
+	step.SchemaVersion = "7"
+	if err := ValidateProtocol("StepDefinitionV7", encoded(t, step)); err != nil {
+		t.Fatal(err)
+	}
+	for _, wait := range []int64{0, -1, MaxSessionTimeoutMS + 1} {
+		step.SessionLimits.DecisionWaitTimeoutMS = &wait
+		if err := ValidateProtocol("StepDefinitionV7", encoded(t, step)); err == nil {
+			t.Fatalf("v7 widened the decision wait limit it inherited: %d", wait)
+		}
+	}
+	step.SessionLimits.DecisionWaitTimeoutMS = nil
+	for _, active := range []int64{0, -1, MaxSessionTimeoutMS + 1} {
+		step.SessionLimits.ActiveTimeoutMS = &active
+		if err := ValidateProtocol("StepDefinitionV7", encoded(t, step)); err == nil {
+			t.Fatalf("v7 accepted a work limit outside the representable range: %d", active)
 		}
 	}
 }
@@ -150,13 +205,14 @@ func TestSessionLimitsCompileAndWorkspaceTrees(t *testing.T) {
 		adapter["id"] = "core:adapter/assisted-session"
 		step.Executor.AdapterRef = checkComponent(t, registry, "core:adapter/assisted-session", step.Executor.AdapterRef.Version, adapter)
 		step.Executor.Operation, step.SchemaVersion = "session", "6"
-		step.SessionLimits = &SessionLimits{ActiveTimeoutMS: 7200000}
+		active := int64(7200000)
+		step.SessionLimits = &SessionLimits{ActiveTimeoutMS: &active}
 	})
 	plan, err := CompileCore(encoded(t, w), "json", registry, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if limits := plan.Steps["work"].SessionLimits; limits == nil || limits.ActiveTimeoutMS != 7200000 {
+	if limits := plan.Steps["work"].SessionLimits; limits == nil || limits.ActiveAllowanceMS() != 7200000 {
 		t.Fatalf("compiler lost step-specific limits: %+v", limits)
 	}
 	source, err := os.ReadFile("../../examples/authoring/step-authoring-reference.yaml")
@@ -202,6 +258,9 @@ func TestSessionLimitsEditorSchemaMatchesAuthoring(t *testing.T) {
 		{StepSessionAuthoringVersion, "", true},
 		{StepSessionAuthoringVersion, "session_limits: {active_timeout_ms: 7200000, decision_wait_timeout_ms: null}", true},
 		{StepSessionAuthoringVersion, "session_limits: {decision_wait_timeout_ms: 1209600000}", true},
+		{StepSessionAuthoringVersion, "session_limits: {active_timeout_ms: null}", true},
+		{StepSessionAuthoringVersion, "schema_version: '7'\nsession_limits: {active_timeout_ms: null}", true},
+		{StepSessionAuthoringVersion, "schema_version: '8'", false},
 		{StepAuthoringVersion, "session_limits: {}", false},
 		{StepSessionAuthoringVersion, "session_limits: {active_timeout_ms: 0}", false},
 		{StepSessionAuthoringVersion, "session_limits: {decision_wait_timeout_ms: -1}", false},

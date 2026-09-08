@@ -95,6 +95,10 @@ func PreviewSessionLimits(plan *flow.Plan) []SessionLimitPreview {
 				item.LegacyAbsoluteTimeoutMS = assistedAttemptTimeoutMS
 			} else {
 				limits := *step.SessionLimits
+				if limits.ActiveTimeoutMS != nil {
+					active := *limits.ActiveTimeoutMS
+					limits.ActiveTimeoutMS = &active
+				}
 				if limits.DecisionWaitTimeoutMS != nil {
 					wait := *limits.DecisionWaitTimeoutMS
 					limits.DecisionWaitTimeoutMS = &wait

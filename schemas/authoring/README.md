@@ -94,13 +94,16 @@ project input и сам описывает оба route через обычны�
 `prifly-step/2` выбирают только для assisted-session шага: compiler закрепляет
 `session_limits` в StepDefinition v6, даже если блок опущен. По умолчанию это
 `active_timeout_ms: 3600000` и `decision_wait_timeout_ms: null` — час работы и
-ожидание ответа без срока. Managed steps сохраняют `prifly-step/1` и свои
+ожидание ответа без срока. Явный `active_timeout_ms: null` означает работу без
+ограничения времени и запечатывает шаг как StepDefinition v7; отсутствие поля
+по-прежнему означает час, поэтому молчание автора не снимает ограничение. Managed steps сохраняют `prifly-step/1` и свои
 execution limits. Все поля с комментариями есть в
 [reference шага](../../examples/authoring/step-authoring-reference.yaml).
 
 | Поверхность | Контракт и файл схемы |
 |---|---|
 | Закреплённый assisted шаг с отдельными лимитами | `StepDefinitionV6`, `schema_version: "6"` — [step-definition-v6.schema.json](../core/step-definition-v6.schema.json) |
+| Тот же шаг, объявивший работу без ограничения времени | `StepDefinitionV7`, `schema_version: "7"` — [step-definition-v7.schema.json](../core/step-definition-v7.schema.json) |
 | Run, содержащий такой шаг, и его read/next/preview/step-read | `core-state/27`, `core-read/27`, `core-next/27`, `core-preview/27`, `core-step-read/27` — [timed-session.schema.json](../core/timed-session.schema.json) |
 | Handoff, task и submission такого шага | `assisted-session/6` — тот же bundle; task содержит текущую `delivery` |
 | Объявленный runtime-вопрос такого шага | `decision-request/2` с обязательным `yield_execution: true` — тот же bundle |

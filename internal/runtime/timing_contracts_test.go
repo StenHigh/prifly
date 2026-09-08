@@ -62,7 +62,7 @@ func TestTimedPublicContractsPreserveLegacyShapes(t *testing.T) {
 		t.Fatal(err)
 	}
 	observed := Observation{UTC: "2026-09-06T12:00:00Z", Session: "clock:test", Source: "test", UTCTrust: "local_wall_unqualified", SuspendBasis: "test"}
-	timing := SessionTiming{Limits: flow.SessionLimits{ActiveTimeoutMS: 3600000}, RemainingMS: 3000000, Observed: observed}
+	timing := SessionTiming{Limits: flow.SessionLimits{ActiveTimeoutMS: activeMS(3600000)}, RemainingMS: 3000000, Observed: observed}
 	handoff := SessionHandoff{SchemaVersion: AssistedSessionTimingVersion, PrincipalID: "principal:test", SkillRefs: []flow.Ref{}, Timing: &timing, HostState: SessionWaitingAdmission, DeadlineTrust: "local_wall_unqualified", Handed: observed}
 	if err := validatePublic(t, "SessionHandoffV6", handoff); err != nil {
 		t.Fatal(err)
@@ -122,7 +122,7 @@ func TestTimingStateLadderAndWireRoundTrip(t *testing.T) {
 		t.Run(version, func(t *testing.T) {
 			session := &SessionHandoff{SchemaVersion: version}
 			if version == AssistedSessionTimingVersion {
-				session.Timing = &SessionTiming{Limits: flow.SessionLimits{ActiveTimeoutMS: 3600000}, RemainingMS: 3000000}
+				session.Timing = &SessionTiming{Limits: flow.SessionLimits{ActiveTimeoutMS: activeMS(3600000)}, RemainingMS: 3000000}
 			}
 			run := Run{SchemaVersion: CoreTimingStateVersion, Attempts: map[string]*Attempt{"attempt:one": {Session: session}}}
 			data, err := canonicalState(run)

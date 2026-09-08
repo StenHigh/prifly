@@ -60,7 +60,7 @@ func timedSessionConstraints(g *generator) {
 	g.defs["runtime_SessionTask"].(map[string]any)["required"] = append(g.defs["runtime_SessionTask"].(map[string]any)["required"].([]string), "delivery")
 	g.property("runtime_Attempt", "session", nullable(map[string]any{"oneOf": []any{ref("runtime_LegacySessionHandoff"), ref("runtime_SessionHandoff")}}))
 	g.property("runtime_SessionTiming", "remaining_ms", map[string]any{"type": "integer", "minimum": 0, "maximum": flow.MaxSessionTimeoutMS})
-	g.property("flow_SessionLimits", "active_timeout_ms", map[string]any{"type": "integer", "minimum": 1, "maximum": flow.MaxSessionTimeoutMS})
+	g.property("flow_SessionLimits", "active_timeout_ms", nullable(map[string]any{"type": "integer", "minimum": 1, "maximum": flow.MaxSessionTimeoutMS}))
 	g.property("flow_SessionLimits", "decision_wait_timeout_ms", nullable(map[string]any{"type": "integer", "minimum": 1, "maximum": flow.MaxSessionTimeoutMS}))
 	g.property("runtime_SessionDelivery", "base_envelope_digest", ref("Digest"))
 	g.property("runtime_SessionDelivery", "generation", map[string]any{"type": "integer", "minimum": 1, "maximum": int64(9007199254740991)})

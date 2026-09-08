@@ -202,7 +202,8 @@ func sessionTimingInvariant(r Run) error {
 		if !reflect.DeepEqual(pinnedSessionLimits(r, a), &timing.Limits) {
 			return errors.New("session allowance differs from its pinned definition")
 		}
-		if timing.Limits.ActiveTimeoutMS < 1 || timing.Limits.ActiveTimeoutMS > flow.MaxSessionTimeoutMS || timing.RemainingMS < 1 || timing.RemainingMS > timing.Limits.ActiveTimeoutMS || s.DeliveryGeneration < 1 {
+		allowance := timing.Limits.ActiveAllowanceMS()
+		if allowance < 1 || allowance > flow.MaxSessionTimeoutMS || timing.RemainingMS < 1 || timing.RemainingMS > allowance || s.DeliveryGeneration < 1 {
 			return errors.New("invalid saved session allowance")
 		}
 		if wait := timing.Limits.DecisionWaitTimeoutMS; wait != nil && (*wait < 1 || *wait > flow.MaxSessionTimeoutMS) {

@@ -429,7 +429,7 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 	if assisted {
 		cfg.TimeoutMS, cfg.MaxOutputBytes = assistedAttemptTimeoutMS, MaxArtifactBytes
 		if step.SessionLimits != nil {
-			cfg.TimeoutMS = step.SessionLimits.ActiveTimeoutMS
+			cfg.TimeoutMS = step.SessionLimits.ActiveAllowanceMS()
 		}
 	}
 	attemptDeadline := now.Add(time.Duration(cfg.TimeoutMS) * time.Millisecond).Format(time.RFC3339Nano)
@@ -519,7 +519,7 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 			handoff.DeliveryGeneration = 1
 		}
 		if timedEdition(version) && step.SessionLimits != nil {
-			handoff.Timing = &SessionTiming{Limits: *step.SessionLimits, RemainingMS: step.SessionLimits.ActiveTimeoutMS}
+			handoff.Timing = &SessionTiming{Limits: *step.SessionLimits, RemainingMS: step.SessionLimits.ActiveAllowanceMS()}
 			handoff.DeliveryGeneration = 0
 		}
 		// A worktree is claimed for a step that declared it will write one. A

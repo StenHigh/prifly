@@ -14,6 +14,10 @@ import (
 	"github.com/stenhigh/prifly/internal/flow"
 )
 
+// activeMS names a declared work allowance. A nil field means the step declared
+// no work deadline, so every test that wants one has to say so.
+func activeMS(milliseconds int64) *int64 { return &milliseconds }
+
 // Change registry definitions before Start, never a pinned Run or deadline.
 func timedFixture(t *testing.T, limits flow.SessionLimits, effect string) (*Engine, string, StartOptions) {
 	t.Helper()
@@ -31,6 +35,9 @@ func timedFixture(t *testing.T, limits flow.SessionLimits, effect string) (*Engi
 		t.Fatal(err)
 	}
 	step.SchemaVersion, step.SessionLimits, step.Effects.Class = "6", &limits, effect
+	if limits.ActiveTimeoutMS == nil {
+		step.SchemaVersion = "7" // Only v7 can seal an absent work deadline.
+	}
 	step.Version = "2.0.0"
 	data = writeRegistryDocument(t, e, "steps/plan.json", step)
 	ref := flow.Ref{ID: step.ID, Version: step.Version, Digest: rawDigest(data)}
@@ -102,7 +109,7 @@ func TestTimedSessionWaitReopenAndCapacityKeepRemainingAllowance(t *testing.T) {
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
-		e, runID, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds()}, "none")
+		e, runID, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 		task := handOver(t, e, runID)
 		before := driverRun(t, e, runID)
 		envelope := bytes.Clone(before.Attempts[task.AttemptID].Envelope)
@@ -198,7 +205,7 @@ func TestTimedSessionTwoWeekHumanWaitPreservesExactOutputAndClaimBoundary(t *tes
 		t.Run(effect, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				ctx := context.Background()
-				e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: 3600000}, effect)
+				e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(3600000)}, effect)
 				task := handOver(t, e, runID)
 				original := driverRun(t, e, runID)
 				envelope := bytes.Clone(original.Attempts[task.AttemptID].Envelope)
@@ -279,7 +286,7 @@ func TestTimedSessionExpiryAndCancellation(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				ctx := context.Background()
 				wait := time.Minute.Milliseconds()
-				limits := flow.SessionLimits{ActiveTimeoutMS: time.Hour.Milliseconds(), DecisionWaitTimeoutMS: &wait}
+				limits := flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds()), DecisionWaitTimeoutMS: &wait}
 				effect := "none"
 				if name == "unknown workspace" {
 					effect = "workspace_write"
@@ -340,7 +347,7 @@ func TestTimedSessionExpiryAndCancellation(t *testing.T) {
 
 func TestSessionTimingRejectsClockRollbackWithoutRefill(t *testing.T) {
 	before := Observation{UTC: "2026-09-06T12:00:00Z"}
-	a := &Attempt{Admitted: before, Deadline: Observation{UTC: "2026-09-06T13:00:00Z"}, Session: &SessionHandoff{SchemaVersion: AssistedSessionTimingVersion, Timing: &SessionTiming{Limits: flow.SessionLimits{ActiveTimeoutMS: 3600000}, RemainingMS: 3000000, Observed: before}}}
+	a := &Attempt{Admitted: before, Deadline: Observation{UTC: "2026-09-06T13:00:00Z"}, Session: &SessionHandoff{SchemaVersion: AssistedSessionTimingVersion, Timing: &SessionTiming{Limits: flow.SessionLimits{ActiveTimeoutMS: activeMS(3600000)}, RemainingMS: 3000000, Observed: before}}}
 	r := Run{LastObserved: before}
 	if err := consumeSessionTime(r, a, Observation{UTC: "2026-09-06T11:59:00Z"}); refusalCode(err) != "deadline_clock_unqualified" {
 		t.Fatal(err)
@@ -357,7 +364,7 @@ func TestTimedQuestionDoesNotHideSiblingOrPrematurelyFinishJoin(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	ctx := context.Background()
-	e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: 3600000}, "none")
+	e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(3600000)}, "none")
 	data, err := os.ReadFile(filepath.Join(e.Root, options.WorkflowFile))
 	var child map[string]any
 	if err != nil || json.Unmarshal(data, &child) != nil {
@@ -426,4 +433,55 @@ func TestTimedQuestionDoesNotHideSiblingOrPrematurelyFinishJoin(t *testing.T) {
 	if final.Status != "completed" || len(final.Attempts) != 2 {
 		t.Fatalf("join failed: %s", final.Status)
 	}
+}
+
+// The measured complaint was eight hours of assisted work thrown away by an
+// hour-long window nobody could turn off. A step that declares no work deadline
+// must therefore outlive that hour, keep the wait limit it did declare, and
+// still be a session the engine can settle.
+func TestSessionWithoutDeclaredWorkDeadlineOutlivesTheInheritedHour(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	synctest.Test(t, func(t *testing.T) {
+		ctx := context.Background()
+		wait := (24 * time.Hour).Milliseconds()
+		e, runID, _ := timedFixture(t, flow.SessionLimits{DecisionWaitTimeoutMS: &wait}, "none")
+		task := handOver(t, e, runID)
+		timing := driverRun(t, e, runID).Attempts[task.AttemptID].Session.Timing
+		if timing.Limits.ActiveTimeoutMS != nil || timing.RemainingMS != flow.MaxSessionTimeoutMS {
+			t.Fatalf("declared absence did not reach the saved allowance: %+v", timing)
+		}
+		if declared := timing.Limits.DecisionWaitTimeoutMS; declared == nil || *declared != wait {
+			t.Fatalf("removing the work deadline disturbed the wait beside it: %+v", timing.Limits)
+		}
+		// A missing limit must not arrive as a window that has already elapsed.
+		deadline, err := time.Parse(time.RFC3339Nano, task.Deadline)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if remaining := deadline.Sub(time.Now()); remaining < 100*365*24*time.Hour {
+			t.Fatalf("a step that declared no deadline was handed one: %s (%s away)", task.Deadline, remaining)
+		}
+		time.Sleep(9 * time.Hour)
+		next, err := e.Next(ctx, runID)
+		if err != nil || next.Action == "session_expired" || next.ReasonCode != "" {
+			t.Fatalf("nine hours expired a session that declared no deadline: %+v %v", next, err)
+		}
+		if _, err := e.SessionTask(ctx, runID, task.AttemptID); err != nil {
+			t.Fatalf("the delivery stopped being executable: %v", err)
+		}
+		if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "nine hours of work")); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.Drive(ctx, runID); err != nil {
+			t.Fatal(err)
+		}
+		final := driverRun(t, e, runID)
+		if final.Status != "completed" {
+			t.Fatalf("final: %s", final.Status)
+		}
+		if err := validatePublic(t, "CoreRunStateV28", final); err != nil {
+			t.Fatal(err)
+		}
+	})
 }

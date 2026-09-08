@@ -29,8 +29,8 @@
       "type": "object", "additionalProperties": false,
       "properties": {
         "active_timeout_ms": {
-          "type": "integer", "minimum": 1, "maximum": 9223372036854, "default": 3600000,
-          "description": "Конечное время разрешённой работы, в миллисекундах. Объявленное ожидание ответа не расходует этот остаток. По умолчанию один час."
+          "type": ["integer", "null"], "minimum": 1, "maximum": 9223372036854, "default": 3600000,
+          "description": "Конечное время разрешённой работы, в миллисекундах. Объявленное ожидание ответа не расходует этот остаток. Отсутствие поля означает один час; null означает работу без ограничения времени и опускает шаг до StepDefinition v7."
         },
         "decision_wait_timeout_ms": {
           "type": ["integer", "null"], "minimum": 1, "maximum": 9223372036854, "default": null,
@@ -42,7 +42,7 @@
   "allOf": [{
     "if": {"properties": {"authoring": {"const": "prifly-step/2"}}},
     "then": {"properties": {
-      "schema_version": {"const": "6"},
+      "schema_version": {"enum": ["6", "7"]},
       "executor": {
         "additionalProperties": false,
         "required": ["adapter_ref", "operation"],
