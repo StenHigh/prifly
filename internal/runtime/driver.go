@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -385,7 +383,16 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		manifest.Inputs[port] = LocalPort{ref, "inputs/" + port}
 	}
 	for port := range step.Outputs {
-		manifest.Outputs[port] = OutputSlot{ArtifactID: fmt.Sprintf("artifact:%x", sha256.Sum256([]byte(attemptID+"/"+port))), Revision: 1, Path: "outputs/" + port}
+		// A port the engine captures from the workspace gets no slot. The slot
+		// was never the executor's: the engine wrote the sealed manifest into
+		// it and read it back, and advertising that channel as an output slot
+		// invited the one action that earns workspace_tree_output_host_supplied.
+		// context.json now agrees with the guide and with the submission
+		// template, both of which already left the port out.
+		if workspaceTreeBinding(step, port) != nil {
+			continue
+		}
+		manifest.Outputs[port] = OutputSlot{ArtifactID: outputArtifactID(attemptID, port), Revision: 1, Path: "outputs/" + port}
 	}
 	for _, d := range r.Definitions {
 		manifest.Dependencies = append(manifest.Dependencies, d.Ref)
@@ -718,7 +725,7 @@ func (e *Engine) prepareWorkspace(r Run, ref flow.Ref, step flow.StepDefinition,
 	if err != nil {
 		return workspace, err
 	}
-	return workspace, e.writeWorkspaceTreeGuide(workspace, step, manifest)
+	return workspace, e.writeWorkspaceTreeGuide(workspace, step)
 }
 
 func (e *Engine) prepareExecutorWorkspace(executor PinnedExecutor, name string, manifest ContextManifest, manifestBytes []byte, prepared map[ArtifactRef]Artifact) (string, error) {
@@ -1343,15 +1350,24 @@ func (e *Engine) readResultOutputs(r Run, a *Attempt, step flow.StepDefinition, 
 		if !ok {
 			return nil, outputProblem("output_port_undeclared", port, "this step declares no such output port")
 		}
-		slot := a.Context.Outputs[port]
-		if ref.ArtifactID != slot.ArtifactID || ref.Revision != slot.Revision {
-			return nil, outputProblem("output_identity_mismatch", port, "the reported artifact identity differs from the admitted output slot")
+		// A captured port has no slot to compare against or read from: the
+		// engine produced both its identity and its bytes, and they travel
+		// beside the captured files.
+		path := capturedManifestPath(port)
+		if workspaceTreeBinding(step, port) == nil {
+			slot := a.Context.Outputs[port]
+			if ref.ArtifactID != slot.ArtifactID || ref.Revision != slot.Revision {
+				return nil, outputProblem("output_identity_mismatch", port, "the reported artifact identity differs from the admitted output slot")
+			}
+			path = slot.Path
+		} else if ref.ArtifactID != outputArtifactID(a.ID, port) || ref.Revision != 1 {
+			return nil, outputProblem("output_identity_mismatch", port, "the reported artifact identity differs from the one the runtime sealed for this captured port")
 		}
 		limit := r.Executors[executorKey(r, p.Workflow.Definition.Stages[activation.StageID].StepRef, step.ID)].Config.MaxOutputBytes
 		if limit == 0 && a.Session != nil {
 			limit = MaxArtifactBytes
 		}
-		content, err := readLocal(a.Workspace, slot.Path, limit)
+		content, err := readLocal(a.Workspace, path, limit)
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, outputProblem("output_slot_empty", port, "the admitted output slot holds no file")
 		}

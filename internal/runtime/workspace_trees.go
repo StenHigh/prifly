@@ -475,6 +475,13 @@ func treeCapturePath(port, name string) string {
 	return filepath.ToSlash(filepath.Join("tmp", "workspace-trees", port, name))
 }
 
+// capturedManifestPath holds the sealed tree manifest for a captured port. It
+// sits beside that port's captured files and outside outputs/, which belongs to
+// ports the executor fills itself.
+func capturedManifestPath(port string) string {
+	return filepath.ToSlash(filepath.Join("tmp", "workspace-trees", port+".manifest.json"))
+}
+
 func writeCapturedTreeFile(workspace, path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Join(workspace, filepath.Dir(path)), 0700); err != nil {
 		return err
@@ -520,14 +527,15 @@ func (e *Engine) captureTreeOutput(a *Attempt, handoff WorkspaceTreeHandoff, loc
 	if err != nil {
 		return ArtifactRef{}, err
 	}
-	slot, exists := a.Context.Outputs[handoff.OutputPort]
-	if !exists {
-		return ArtifactRef{}, local.ErrIntegrity
-	}
-	if err := writeCapturedTreeFile(a.Workspace, slot.Path, data); err != nil {
+	// The sealed manifest is the engine's own handoff between capture and
+	// settlement, so it travels beside the captured files rather than through
+	// an output slot the executor was told is its own. The identity is derived
+	// the same way an ordinary slot derives it, so a re-issued attempt keeps
+	// the artifact ids the first delivery reported.
+	if err := writeCapturedTreeFile(a.Workspace, capturedManifestPath(handoff.OutputPort), data); err != nil {
 		return ArtifactRef{}, err
 	}
-	return ArtifactRef{ArtifactID: slot.ArtifactID, Revision: slot.Revision, Digest: rawDigest(data)}, nil
+	return ArtifactRef{ArtifactID: outputArtifactID(a.ID, handoff.OutputPort), Revision: 1, Digest: rawDigest(data)}, nil
 }
 
 func (e *Engine) captureWorkspaceTreeOutputs(a *Attempt, step flow.StepDefinition, result Result, locations []WorkspaceTreeLocation) (Result, error) {

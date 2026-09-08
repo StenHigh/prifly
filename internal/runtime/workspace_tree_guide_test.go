@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestGuideCopiesTheDeclaredPolicyWhole(t *testing.T) {
 		step.WorkspaceTrees = append(step.WorkspaceTrees, flow.WorkspaceTreeBinding{InputPort: port + "_in", OutputPort: port, Capture: policy})
 		manifest.Outputs[port] = OutputSlot{ArtifactID: "artifact:" + port, Revision: 1, Path: "outputs/" + port}
 	}
-	guide, declared := workspaceTreeGuide(step, manifest)
+	guide, declared := workspaceTreeGuide(step)
 	if !declared || len(guide.Ports) != len(policies) {
 		t.Fatalf("the guide did not describe every declared port: %+v", guide)
 	}
@@ -36,9 +37,6 @@ func TestGuideCopiesTheDeclaredPolicyWhole(t *testing.T) {
 		}
 		if shown.InputPort != shown.OutputPort+"_in" {
 			t.Fatalf("port %s lost the input it is bound to: %+v", shown.OutputPort, shown)
-		}
-		if shown.EngineSlotPath != "outputs/"+shown.OutputPort {
-			t.Fatalf("port %s does not name the address the manifest prints: %q", shown.OutputPort, shown.EngineSlotPath)
 		}
 	}
 	// The entrypoint is the field an executor cannot infer, and the one a
@@ -54,9 +52,8 @@ func TestGuideCopiesTheDeclaredPolicyWhole(t *testing.T) {
 // it is, and name both refusals an executor earns by treating it as its own.
 func TestGuideSaysWhoTheSlotBelongsTo(t *testing.T) {
 	step := flow.StepDefinition{WorkspaceTrees: []flow.WorkspaceTreeBinding{{OutputPort: "plan", Capture: flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}}}}
-	manifest := ContextManifest{Outputs: map[string]OutputSlot{"plan": {Path: "outputs/plan"}}}
-	guide, _ := workspaceTreeGuide(step, manifest)
-	for _, expected := range []string{"belongs to the engine", "not yours to fill", "workspace_tree_output_host_supplied", "workspace_tree_capture_conflict"} {
+	guide, _ := workspaceTreeGuide(step)
+	for _, expected := range []string{"lists no output slot", "workspace_tree_output_host_supplied", "workspace_tree_capture_conflict"} {
 		if !strings.Contains(guide.Note, expected) {
 			t.Fatalf("the guide does not name %q, so a reader still earns the refusal by following the manifest: %q", expected, guide.Note)
 		}
@@ -70,7 +67,7 @@ func TestGuideSaysWhoTheSlotBelongsTo(t *testing.T) {
 // A step that declares no capture gets no second document. An empty guide is
 // one more file to open that answers nothing.
 func TestStepWithoutCaptureGetsNoGuide(t *testing.T) {
-	if _, declared := workspaceTreeGuide(flow.StepDefinition{}, ContextManifest{}); declared {
+	if _, declared := workspaceTreeGuide(flow.StepDefinition{}); declared {
 		t.Fatal("a step with no declared capture was handed a guide anyway")
 	}
 }
@@ -102,5 +99,68 @@ func TestGuideSitsBesideTheManifestItCorrects(t *testing.T) {
 	}
 	if guide.Ports[0].Capture.Entrypoint != "index.md" {
 		t.Fatalf("the entrypoint an executor cannot infer was dropped: %+v", guide.Ports[0])
+	}
+}
+
+// Three documents describe one step's outputs, and until this they disagreed:
+// the guide and the submission template left a captured port out, while
+// context.json offered it a slot like any other. Slots are the natural place an
+// executor starts — they are what "where do I write the result" means — so
+// starting there earned workspace_tree_output_host_supplied for doing the
+// obvious. Reading order was the only thing that saved anyone.
+func TestCapturedPortGetsNoSlotWhileOrdinaryPortsKeepTheirs(t *testing.T) {
+	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
+	e, runID := treeSessionFixture(t, policy)
+	task := handOver(t, e, runID)
+	if _, offered := task.Context.Outputs["plan"]; offered {
+		t.Fatalf("the captured port is still offered a slot to write to: %+v", task.Context.Outputs)
+	}
+	// This step's only output is the captured one, so outputs is an empty map —
+	// not a missing key and not a refusal. That shape is legal in the model and
+	// nobody had it in production, so it is asserted here rather than guessed.
+	if task.Context.Outputs == nil || len(task.Context.Outputs) != 0 {
+		t.Fatalf("a step whose only output is captured did not produce an empty map: %+v", task.Context.Outputs)
+	}
+	// A step with no capture keeps every slot and every address: this is the
+	// change that could lose a Run's output rather than refuse it, so it is
+	// asserted on its own fixture.
+	plain, plainRun, _ := assistedFixture(t)
+	ordinary := handOver(t, plain, plainRun)
+	slot, kept := ordinary.Context.Outputs["plan"]
+	if !kept || slot.Path != "outputs/plan" {
+		t.Fatalf("an ordinary port lost its slot: %+v", ordinary.Context.Outputs)
+	}
+	if slot.ArtifactID != outputArtifactID(ordinary.AttemptID, "plan") || slot.Revision != 1 {
+		t.Fatalf("an ordinary port's identity moved: %+v", slot)
+	}
+	// The submission template already left the port out; the guide still names
+	// it. All three now say the same, so reading order stops mattering.
+	skeleton, err := task.SubmissionTemplate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reported Result
+	if err := json.Unmarshal(skeleton.Result, &reported); err != nil {
+		t.Fatal(err)
+	}
+	if _, offered := reported.Outputs["plan"]; offered {
+		t.Fatalf("the template offers a captured port: %+v", reported.Outputs)
+	}
+	guide, declared := workspaceTreeGuide(flow.StepDefinition{WorkspaceTrees: []flow.WorkspaceTreeBinding{{OutputPort: "plan", Capture: policy}}})
+	if !declared || len(guide.Ports) != 1 || guide.Ports[0].OutputPort != "plan" {
+		t.Fatalf("the guide stopped naming the port the other two omit: %+v", guide)
+	}
+}
+
+// A refusal that names an obstacle without naming what lifts it costs the
+// reader the same search every time. Both of these were found by a session that
+// spent three attempts taking the expected version from the wrong level of one
+// document, and one more discovering that a stop is released by name.
+func TestStopAndVersionRefusalsPointAtWhereTheAnswerIsRead(t *testing.T) {
+	for code, want := range map[string]string{"active_stop": "run.release", "version_conflict": "run.status", "recovery_required": "run.resolve"} {
+		problem, _ := ProblemFor(&flow.Problem{Code: code, Message: "x"})
+		if !slices.Contains(problem.SafeNextActions, want) {
+			t.Fatalf("%s does not offer %s: %+v", code, want, problem.SafeNextActions)
+		}
 	}
 }

@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"path/filepath"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -18,11 +20,12 @@ const WorkspaceTreeGuideFile = "workspace-trees.json"
 // carries it, so it moves without dragging the Run state behind it.
 const WorkspaceTreeGuideVersion = "workspace-tree-guide/1"
 
-// workspaceTreeGuideNote states the half of the defect that a missing field
-// does not cover: the manifest already answers "where do I write this port",
-// and for a captured port it answers wrongly. A reader who found an answer
-// stops reading, so the wrong answer has to be named, not merely supplemented.
-const workspaceTreeGuideNote = "The engine captures these ports from the workspace itself. context.json still shows each of them an output slot, and that slot is real — but it belongs to the engine, which writes the sealed manifest into it after capturing. It is not yours to fill: writing there earns workspace_tree_output_host_supplied, and writing the capture path while also declaring the slot earns workspace_tree_capture_conflict. Produce the result at the capture path, in the declared shape, and do not declare the port in your submission."
+// workspaceTreeGuideNote says where the result goes. It no longer has to argue
+// with context.json: the captured port is absent from outputs there, so all
+// three documents an executor reads now say the same thing. Reading order stops
+// mattering, and it never could be relied on — slots are the natural place to
+// start, and starting there used to earn a refusal for doing the obvious.
+const workspaceTreeGuideNote = "The engine captures these ports from the workspace itself, so context.json lists no output slot for them and the submission template leaves them out. Produce the result at the capture path below, in the declared shape, and do not declare the port in your submission: declaring it earns workspace_tree_output_host_supplied, and writing into a slot for it earns workspace_tree_capture_conflict."
 
 // WorkspaceTreeGuide shows an executor the shape of the result it must produce,
 // before it produces it. Until this existed the contract was reachable only by
@@ -42,29 +45,17 @@ type WorkspaceTreeGuidePort struct {
 	OutputPort string                          `json:"output_port"`
 	InputPort  string                          `json:"input_port,omitempty"`
 	Capture    flow.WorkspaceTreeCapturePolicy `json:"capture"`
-	// EngineSlotPath repeats the address the manifest prints for this port, so
-	// the reader can match the two documents by sight instead of inferring
-	// which of the two answers is the live one. The slot cannot be dropped from
-	// the manifest: capture requires it and writes the sealed manifest there,
-	// so what separates the engine's slot from the executor's is stated here
-	// rather than shown by absence.
-	EngineSlotPath string `json:"engine_slot_path,omitempty"`
 }
 
 // workspaceTreeGuide builds the guide for one step, or reports that the step
 // declares no capture and needs no second document.
-func workspaceTreeGuide(step flow.StepDefinition, manifest ContextManifest) (WorkspaceTreeGuide, bool) {
+func workspaceTreeGuide(step flow.StepDefinition) (WorkspaceTreeGuide, bool) {
 	if len(step.WorkspaceTrees) == 0 {
 		return WorkspaceTreeGuide{}, false
 	}
 	guide := WorkspaceTreeGuide{SchemaVersion: WorkspaceTreeGuideVersion, Note: workspaceTreeGuideNote, Ports: make([]WorkspaceTreeGuidePort, 0, len(step.WorkspaceTrees))}
 	for _, binding := range step.WorkspaceTrees {
-		guide.Ports = append(guide.Ports, WorkspaceTreeGuidePort{
-			OutputPort:     binding.OutputPort,
-			InputPort:      binding.InputPort,
-			Capture:        binding.Capture,
-			EngineSlotPath: manifest.Outputs[binding.OutputPort].Path,
-		})
+		guide.Ports = append(guide.Ports, WorkspaceTreeGuidePort{OutputPort: binding.OutputPort, InputPort: binding.InputPort, Capture: binding.Capture})
 	}
 	return guide, true
 }
@@ -72,8 +63,8 @@ func workspaceTreeGuide(step flow.StepDefinition, manifest ContextManifest) (Wor
 // writeWorkspaceTreeGuide places the guide beside the manifest. A step without
 // declared capture gets no file at all: an empty guide would be one more
 // document to read that answers nothing.
-func (e *Engine) writeWorkspaceTreeGuide(workspace string, step flow.StepDefinition, manifest ContextManifest) error {
-	guide, declared := workspaceTreeGuide(step, manifest)
+func (e *Engine) writeWorkspaceTreeGuide(workspace string, step flow.StepDefinition) error {
+	guide, declared := workspaceTreeGuide(step)
 	if !declared {
 		return nil
 	}
@@ -82,4 +73,11 @@ func (e *Engine) writeWorkspaceTreeGuide(workspace string, step flow.StepDefinit
 		return err
 	}
 	return writeExclusive(filepath.Join(workspace, WorkspaceTreeGuideFile), data)
+}
+
+// outputArtifactID is the identity a port's artifact carries. One rule serves
+// the ordinary slot and the captured port alike, so the two cannot drift apart
+// and a re-issued attempt reports the ids its first delivery did.
+func outputArtifactID(attemptID, port string) string {
+	return fmt.Sprintf("artifact:%x", sha256.Sum256([]byte(attemptID+"/"+port)))
 }

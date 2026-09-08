@@ -972,7 +972,10 @@ func (e *Engine) Resume(ctx context.Context, runID, commandID, reason string, ex
 			return local.Change{}, local.Reject("terminal_run", "resume cannot reopen cancellation or a terminal run")
 		}
 		if r.restricted() {
-			return local.Change{}, local.Reject("active_stop", "release exact stops separately before resume")
+			// Naming the obstacle without naming its shape cost a reader three
+			// attempts: a stop is released by its own id and generation, and
+			// run status prints both.
+			return local.Change{}, local.Reject("active_stop", "resume cannot lift a stop; release each one first with run release --stop ID:GENERATION --expected-epoch EPOCH, and read run status for the ids, their generations and the control epoch")
 		}
 		if r.HasUnresolvedEffects || r.Status == "uncertain" {
 			return local.Change{}, local.Reject("recovery_required", "unsettled attempt cannot be retried by resume")

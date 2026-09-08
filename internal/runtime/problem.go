@@ -196,6 +196,15 @@ func ProblemFor(err error) (Problem, int) {
 		// An unresolved execution is ended by the owner stating its outcome.
 		// Nothing else moves it, and driving again returns this same refusal.
 		"recovery_required": {"run.resolve", "run.status"},
+		// A stop outlives the command that hit it and is lifted only by name,
+		// so a state diagnostic never shows the way past one.
+		"active_stop": {"run.status", "run.release"},
+		// The expected version and the control epoch are read from run status,
+		// and they sit at different levels of it: run_version at the top, the
+		// epoch inside the run. A reader who takes both from one place fails
+		// twice for one misunderstanding.
+		"version_conflict":       {"run.status"},
+		"state_version_conflict": {"run.status"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
 	}
