@@ -215,6 +215,24 @@ def build(args):
         subprocess.run([str(binary), "--project", str(project), "--json", "run", "pause", run,
                         "--reason", "frozen stand: a Run held open with its stop unreleased"],
                        check=True, timeout=60, stdout=subprocess.PIPE)
+    # A probe aimed at the wrong refusal from birth passes every later guard in
+    # silence: it stays a refusal, keeps its code, and reports "same" forever.
+    # The package session reached their intended refusal on the third attempt --
+    # an unanswered questionnaire and a missing input came first, and either
+    # would have compared happily under the name of a capacity bound. Checking
+    # here catches it while whoever wrote the probe still remembers the intent.
+    for entry in READS:
+        name = entry[0]
+        if name not in EXPECTED_REFUSALS:
+            continue
+        if args.shape not in (entry[2] if len(entry) > 2 else ("settled", "paused")):
+            continue
+        got = leaves(read(binary, project, entry[1](run))).get("/code", "").strip("'")
+        if got != EXPECTED_REFUSALS[name]:
+            raise SystemExit(f"{name!r} reaches {got or 'no refusal at all'}, not {EXPECTED_REFUSALS[name]}: "
+                             "this probe is aimed at the wrong refusal and would compare it under the wrong "
+                             "name from its first run")
+
     (stand / "stand.json").write_text(json.dumps({
         "schema_version": "prifly-frozen-stand/1",
         "built_by": version_of(binary),
