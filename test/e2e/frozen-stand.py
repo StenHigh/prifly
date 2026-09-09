@@ -26,6 +26,38 @@ session's own stand and are kept here deliberately:
     broken and says so instead of reporting "same" everywhere.
   * and, because a stand outlives the binaries it was built for, it records the
     version that built it and refuses to be read by anything older.
+
+What this stand holds, measured rather than intended: one Run of
+`workflows/transform.json`, driven to completion, `completed / succeeded`, one
+step, one attempt whose start was observed and which settled, no session, no
+checks, no diagnostics. Node kinds present: run, workflow_invocation,
+stage_activation, step_instance, attempt.
+
+What it does not reach — and a change in any of these passes this comparison in
+silence, which is why the list is written down rather than remembered:
+
+  * an assisted attempt, in any state. The package session's stand holds a
+    settled assisted attempt, so their stand and this one are complements, not
+    duplicates.
+  * an attempt that settled without ever starting, and one still waiting to
+    start. Together with the assisted case these are three of the four
+    dispatch_latency branches; this stand covers the fourth.
+  * check executions — no `check_execution` node occurs here at all, so
+    everything that hangs off one is unmeasured.
+  * every refusal. The Run succeeded, so no refusal envelope, code, exit status
+    or safe_next_actions is compared.
+  * claims and worktrees: nothing is claimed, so the claim record, its identity
+    and its release are outside the reading.
+  * capacity and the driver lock, which need a second Run to collide with.
+  * context profiles, invocation trees, repeats, parallel stages and choices —
+    the fixture's graph is a single step.
+  * packages beyond the demo fixture, and any authority holding more than one
+    edition.
+  * the monitor, which reads over HTTP rather than through the CLI.
+  * history: one Run, so nothing about lists, paging or ordering.
+
+The fix for any of these is another stand with its own list, not a wider claim
+about this one.
 """
 
 import argparse
