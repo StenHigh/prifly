@@ -180,8 +180,8 @@ func ProblemFor(err error) (Problem, int) {
 			p.Code = code
 			p.Message = "The selected operation was refused (" + code + "). Inspect status/doctor and the documented capability limits."
 			// This branch is the only one whose detail did not come from the
-			// engine: refusal-check forbids `errors.New("code: …")` in
-			// non-test code, so a `code: detail` error reaching here carries
+			// engine: refusal-check forbids a refusal code inside error text
+			// in non-test code, so a coded error reaching here carries
 			// text from outside — an executor's own output, a traceback. That
 			// is evidence, not an explanation, and it stays out of `message`,
 			// which every other route now uses for the engine's own words.
