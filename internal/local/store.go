@@ -727,6 +727,14 @@ ALTER TABLE events ADD COLUMN state_packed INTEGER NOT NULL DEFAULT 0;`); err !=
 // It names attempts rather than Runs on purpose: the two coincide only while
 // nothing runs a parallel stage, so an owner who raised the limit to two for
 // "two tasks" would meet it again with nothing left to read.
+//
+// It also says that the Run exists. A refusal reads as "nothing happened", and
+// here something did: the Run was created and joined the queue, which is the
+// engine's own documented behaviour — a freed slot goes to the queue rather
+// than to whoever asks next. A dependent session found this by watching the
+// queue grow from ten to eleven while reading what looked like a plain refusal,
+// and an owner who raises the limit an hour later would otherwise start every
+// attempt they thought had failed.
 func capacityConflictMessage(capacity, held int64) string {
 	plural := func(n int64, one, many string) string {
 		if n == 1 {
@@ -735,7 +743,7 @@ func capacityConflictMessage(capacity, held int64) string {
 		return many
 	}
 	return fmt.Sprintf(
-		"this authority admits %d %s at a time and %d %s already admitted; one attempt is not one Run, because a parallel stage takes a slot per branch; raise the limit with capacity set --capacity N --reason TEXT, and capacity show names what is held",
+		"this authority admits %d %s at a time and %d %s already admitted; one attempt is not one Run, because a parallel stage takes a slot per branch; this Run was created and keeps its place in the admission queue, so raising the limit later starts everything already waiting rather than only the next command; raise it with capacity set --capacity N --reason TEXT, and capacity show names what is held and what waits",
 		capacity, plural(capacity, "attempt", "attempts"),
 		held, plural(held, "is", "are"))
 }

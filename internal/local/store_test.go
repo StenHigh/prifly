@@ -1762,7 +1762,11 @@ func TestRecordedNamesHaveAGrammar(t *testing.T) {
 // says so, and says it in words rather than in "1 attempt(s)".
 func TestCapacityRefusalDistinguishesAttemptsFromRuns(t *testing.T) {
 	message := capacityConflictMessage(1, 1)
-	for _, expected := range []string{"admits 1 attempt at a time", "1 is already admitted", "one attempt is not one Run", "a slot per branch", "capacity set --capacity N", "capacity show"} {
+	for _, expected := range []string{"admits 1 attempt at a time", "1 is already admitted", "one attempt is not one Run", "a slot per branch", "capacity set --capacity N", "capacity show",
+		// A refusal reads as "nothing happened" and here something did: the
+		// Run exists and holds a place, so raising the limit later starts
+		// everything queued rather than only the next command.
+		"was created and keeps its place in the admission queue", "rather than only the next command"} {
 		if !strings.Contains(message, expected) {
 			t.Fatalf("the capacity refusal does not say %q: %s", expected, message)
 		}
