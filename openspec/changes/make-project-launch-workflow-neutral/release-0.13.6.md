@@ -60,8 +60,8 @@ what is held and what waits
 |---|---|---|
 | `make check` | локально на `a1981fd` | зелёный |
 | `make e2e` | локально, то же дерево | зелёный |
-| `verify` | GitHub Actions | см. ниже |
-| `race` | GitHub Actions | см. ниже |
+| `verify` | GitHub Actions 34303901857 | success |
+| `race` | GitHub Actions 34303908525 | success |
 
 Чужой стенд: пакетная сессия — прогон четверых ворот на ассете и оба её стенда,
 осевший и живой. Отчёт по живому идёт с числами глушения рядом с результатом:
