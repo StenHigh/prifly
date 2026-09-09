@@ -1225,7 +1225,20 @@ func (c *cli) capacity(ctx context.Context, e *prifly.Engine, args []string) err
 		if err := parse(f, args[1:]); err != nil {
 			return err
 		}
-		if *capacity == 0 || *reason == "" {
+		// Whether the flag was given is asked of the parser, not guessed from
+		// its value: with zero as the default an explicit --capacity 0 was
+		// indistinguishable from an absent flag, so it was answered with the
+		// form of the command while the question was about the number. Any
+		// value now reaches the engine, which owns the range and names it
+		// ("qualified for 1 to N attempts at once"). A sentinel default would
+		// only have moved the confusion onto whichever number it took.
+		given := false
+		f.Visit(func(set *flag.Flag) {
+			if set.Name == "capacity" {
+				given = true
+			}
+		})
+		if !given || *reason == "" {
 			return usageError("capacity set requires --capacity N --reason TEXT")
 		}
 		if *command == "" {

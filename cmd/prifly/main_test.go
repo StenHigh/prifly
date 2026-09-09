@@ -3189,3 +3189,54 @@ func TestSessionTaskLeavesTheHandoffAndItsReportShapeInReach(t *testing.T) {
 		t.Fatalf("the refusal does not name where the shape comes from: %d %s", code, stderr)
 	}
 }
+
+// An explicit --capacity 0 was answered with the form of the command because
+// zero was also the flag's default, so "you did not pass it" and "you passed
+// zero" were the same state. The engine owns the admitted range and names it;
+// the pilot spent three runs discovering the minimum from a message that only
+// described the command's shape.
+func TestCapacitySetAnswersTheNumberNotTheForm(t *testing.T) {
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"init", authority}, &out, &errout); code != 0 {
+		t.Fatalf("init: %d %s", code, errout.String())
+	}
+	for _, c := range []struct{ name, value, code string }{
+		{"zero", "0", "unqualified_capacity"},
+		{"negative", "-1", "unqualified_capacity"},
+		{"above the qualified range", "5000", "unqualified_capacity"},
+	} {
+		out.Reset()
+		errout.Reset()
+		code := execute(context.Background(), []string{"--json", "--project", authority, "capacity", "set",
+			"--capacity", c.value, "--reason", "test"}, &out, &errout)
+		if code == 0 {
+			t.Fatalf("%s: capacity %s was accepted", c.name, c.value)
+		}
+		var problem struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(lastLine(errout.String())), &problem); err != nil {
+			t.Fatalf("%s: %v: %s", c.name, err, errout.String())
+		}
+		if problem.Code != c.code {
+			t.Fatalf("%s: got %s, want %s: %s", c.name, problem.Code, c.code, problem.Message)
+		}
+		if !strings.Contains(problem.Message, "qualified for") {
+			t.Fatalf("%s: the refusal does not name the range: %s", c.name, problem.Message)
+		}
+	}
+	// An absent flag is still a question about the command's form.
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"--json", "--project", authority, "capacity", "set",
+		"--reason", "test"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "invalid_usage") {
+		t.Fatalf("an absent --capacity was not answered as a usage error: %d %s", code, errout.String())
+	}
+}
+
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	return lines[len(lines)-1]
+}
