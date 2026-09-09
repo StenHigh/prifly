@@ -41,8 +41,8 @@
 |---|---|---|
 | `make check` | локально на `156ee33` | зелёный |
 | `make e2e` | локально, то же дерево | зелёный |
-| `verify` | GitHub Actions | см. ниже |
-| `race` | GitHub Actions | см. ниже |
+| `verify` | GitHub Actions 34305754898 | success |
+| `race` | GitHub Actions 34305754842 | success |
 
 Тест `TestCapacitySetAnswersTheNumberNotTheForm` пинит все четыре случая и
 проверен вырезанием: со старым условием краснеет на нуле.
