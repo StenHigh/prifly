@@ -129,7 +129,13 @@ func ProblemFor(err error) (Problem, int) {
 		p.Code, p.Message, exit = "deadline_exceeded", "The command did not complete within its bound. Inspect its receipt before retrying.", 5
 	case errors.As(err, &fp):
 		p.Code, p.Message = fp.Code, fp.Message
-		p.Violations = []Violation{{fp.Path, fp.Message}}
+		// A place, when there is one. Nine of the nineteen problems this
+		// engine raises carry no path, and duplicating their message into a
+		// place-less violation left exactly the shape the explanation was
+		// moved out of: a filled reason beside an empty pointer.
+		if fp.Path != "" {
+			p.Violations = []Violation{{fp.Path, fp.Message}}
+		}
 		if strings.HasPrefix(fp.Code, "unsupported") {
 			exit = 5
 		}

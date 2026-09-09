@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stenhigh/prifly/internal/flow"
 )
 
 // A refusal names its subject, and it names it in one place. The explanation is
@@ -140,5 +142,27 @@ func TestProblemForNoErrorDoesNotCrash(t *testing.T) {
 	problem, exit := ProblemFor(nil)
 	if problem.Code != "invalid_input" || exit != 2 || problem.CorrelationID == "" {
 		t.Fatalf("a missing error did not produce the default problem: %+v %d", problem, exit)
+	}
+}
+
+// A place, when there is one. Nine of the nineteen problems this engine raises
+// carry no path, and duplicating their message into a place-less violation left
+// exactly the shape the explanation was moved out of — a filled reason beside an
+// empty pointer. Both cases are pinned because the fix has two ways to be wrong:
+// leaving the duplicate, or dropping a real pointer with it.
+func TestFlowProblemFillsViolationsOnlyWhereThereIsAPlace(t *testing.T) {
+	placed, _ := ProblemFor(&flow.Problem{Code: "missing_stage", Path: "/definition", Message: "transition target does not exist"})
+	if len(placed.Violations) != 1 || placed.Violations[0] != (Violation{"/definition", "transition target does not exist"}) {
+		t.Fatalf("a refusal that names a place lost it: %+v", placed.Violations)
+	}
+	if placed.Message != "transition target does not exist" {
+		t.Fatalf("a refusal that names a place lost its explanation: %q", placed.Message)
+	}
+	placeless, _ := ProblemFor(&flow.Problem{Code: "schema_invalid", Message: "value does not satisfy the declared contract"})
+	if len(placeless.Violations) != 0 {
+		t.Fatalf("an explanation was duplicated into a place-less violation: %+v", placeless.Violations)
+	}
+	if placeless.Message != "value does not satisfy the declared contract" {
+		t.Fatalf("the explanation did not stay in the message: %q", placeless.Message)
 	}
 }
