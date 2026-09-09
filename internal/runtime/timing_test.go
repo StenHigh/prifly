@@ -328,3 +328,52 @@ func TestTimingRetainsPiecesAcrossCommandClockSessions(t *testing.T) {
 		t.Fatal("cross-domain state elapsed presented as a complete calendar interval")
 	}
 }
+
+// Every metric on an attempt says why it is empty — except dispatch_latency,
+// which used to hand back a span running to the report time and call itself
+// open. For a settled attempt that is not merely uninformative but wrong, and
+// for an assisted attempt it can never be anything else: the work is dispatched
+// by handing it over, and the driver returns at the handoff, so no process
+// start is ever observed. A pilot measured it empty on all nine steps of a live
+// run and could not tell "not applicable" from "we forgot".
+func TestDispatchLatencySaysWhyItIsEmpty(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		edit    func(*Attempt)
+		quality string
+		reason  string
+		value   int64
+	}{
+		{"observed start is measured", func(a *Attempt) {}, "measured", "", 0},
+		{"assisted work has no process start", func(a *Attempt) {
+			a.Started, a.Session = nil, &SessionHandoff{}
+		}, "not_applicable", "assisted_dispatch_has_no_process_start", 0},
+		{"settled without ever starting", func(a *Attempt) { a.Started = nil }, "unavailable", "executor_start_not_observed", 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := timingFixture()
+			c.edit(r.Attempts["attempt"])
+			report := Timing(r, *r.Settled, false)
+			got := timingFind(t, report.Root, "attempt").Metrics["dispatch_latency"]
+			if got.Quality != c.quality {
+				t.Fatalf("want quality %q, got %+v", c.quality, got)
+			}
+			if c.quality == "measured" {
+				timingMeasured(t, got, c.value, false)
+				return
+			}
+			if got.ValueMS != nil || got.IsOpen {
+				t.Fatalf("an empty metric must carry no value and must not read as open: %+v", got)
+			}
+			if len(got.Reasons) != 1 || got.Reasons[0] != c.reason {
+				t.Fatalf("want reason %q, got %v", c.reason, got.Reasons)
+			}
+			// The interval list must not claim a measurement the metric denies.
+			for _, interval := range timingFind(t, report.Root, "attempt").Intervals {
+				if interval.Metric == "dispatch_latency" {
+					t.Fatalf("an inapplicable metric still published an interval: %+v", interval)
+				}
+			}
+		})
+	}
+}

@@ -715,7 +715,22 @@ func (c timingCalculator) attempt(a *Attempt) TimingNode {
 	if started == nil {
 		started, startRef = &c.asOf, timingRef("report", c.r.ID, "as_of")
 	}
-	c.interval(&n, "dispatch_latency", timingSpan{&a.Admitted, started, timingRef("attempt", a.ID, "admitted"), startRef, a.Started == nil}, false, a.Started == nil)
+	// Every other metric on this node says why it is empty; this one used to
+	// hand back a span running to the report time and call itself open, which
+	// for a settled attempt is not merely uninformative but wrong. An assisted
+	// attempt is dispatched by handing the work over and the driver returns at
+	// the handoff, so a process start is never observed for it — at any moment,
+	// not just after settlement.
+	switch {
+	case a.Started != nil:
+		c.interval(&n, "dispatch_latency", timingSpan{&a.Admitted, started, timingRef("attempt", a.ID, "admitted"), startRef, false}, false, false)
+	case a.Session != nil:
+		n.Metrics["dispatch_latency"] = noDuration("not_applicable", "assisted_dispatch_has_no_process_start", false)
+	case a.Settled != nil:
+		n.Metrics["dispatch_latency"] = noDuration("unavailable", "executor_start_not_observed", false)
+	default:
+		c.interval(&n, "dispatch_latency", timingSpan{&a.Admitted, started, timingRef("attempt", a.ID, "admitted"), startRef, true}, false, true)
+	}
 	if a.Started == nil {
 		n.Metrics["executor_time"] = noDuration("unavailable", "executor_start_not_observed", a.Settled == nil)
 		if a.Settled != nil && a.ProcessOutcome != nil && !a.ProcessOutcome.Started {
