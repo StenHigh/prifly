@@ -62,7 +62,8 @@ A node's metrics carry only numbers; the boundaries they were measured between a
 |---|---|---|
 | `make check` | локально на `dfc5fe0` + справка | зелёный |
 | `make e2e` | локально, то же дерево | зелёный |
-| `verify` | GitHub Actions | см. ниже |
+| `verify` | GitHub Actions 34298350136 | success |
+| `race` | GitHub Actions 34298371227 | success |
 
 **Чужой стенд — и точная граница того, что им подтверждено.** Пилот собрал
 кандидат и **перечитал завершённый заход 18 двумя бинарями**, без нового
