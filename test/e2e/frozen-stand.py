@@ -312,7 +312,18 @@ def compare(args):
                          "a probe was added or changed without the count, and a set reads as wider coverage "
                          "than it has")
 
-    before = fingerprint(new, project, run)
+    # The fingerprint proves this reading did not change the stand. It cannot
+    # prove the stand is still what was built: a Run that vanished between
+    # sessions leaves every probe answering not_found under both binaries, and
+    # the comparison reports "same" for a stand that holds nothing. Measured
+    # here the hard way — a settled stand's Run was gone and eleven rows
+    # compared cleanly before a probe guard happened to notice.
+    alive = fingerprint(new, project, run)
+    if alive["status"] is None:
+        raise SystemExit(f"the stand no longer holds {run}: its authority answers not_found. This stand is "
+                         "spent, not unchanged — rebuild it before comparing anything")
+
+    before = alive
     rows, differing = [], 0
     for entry in READS:
         name, argv = entry[0], entry[1]
