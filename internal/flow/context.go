@@ -40,14 +40,27 @@ func CanonicalContextResource(ref Ref, resource ContextResource) (ContextResourc
 // CompileCore enables typed context dependencies for new Core executions.
 // Compile and CompileProfile retain their delivered JSON-only contract.
 func CompileCore(data []byte, format string, registry Registry, resources ContextResources) (*Plan, error) {
+	plan, _, err := CompileCoreExtended(data, format, registry, resources, false)
+	return plan, err
+}
+
+// CompileCoreExtended compiles a document a project assembled, saying whether
+// the verdict revision was reached by that project's insertion rather than by
+// the author of the graph. When it was, completeness is required only of the
+// stages that declare impossible verdicts — the ones the inserting project
+// wrote — and the package stages it stopped judging are returned by name so the
+// caller can say so rather than leave it silent.
+func CompileCoreExtended(data []byte, format string, registry Registry, resources ContextResources, raisedByInsertion bool) (*Plan, []string, error) {
 	shared := newCompilation()
+	shared.raisedByInsertion = raisedByInsertion
 	shared.availableResources = resources
 	shared.resources = make(ContextResources)
 	shared.expandedUses = make(map[referenceUse]bool)
 	// A returned plan owns only its selected copies, not the caller's complete
 	// mutable inventory (which may contain unrelated or oversized resources).
 	defer func() { shared.availableResources = nil }()
-	return compileWorkflow(data, format, registry, CoreProfile, shared)
+	plan, err := compileWorkflow(data, format, registry, CoreProfile, shared)
+	return plan, shared.unclosedPackageStages, err
 }
 
 func (p *Plan) isContextResource(ref Ref) bool {

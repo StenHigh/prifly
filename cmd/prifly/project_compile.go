@@ -1509,16 +1509,21 @@ func projectValidatePackageWorkflows(components []projectCompileComponent, base 
 	}
 	for _, component := range components {
 		if component.Kind == "workflow" {
-			if _, err := flow.CompileCore(component.Bytes, "json", registry, resources); err != nil {
-				// An insertion that declares impossible verdicts raises the whole
-				// graph to the revision that requires every stage to answer for
-				// every verdict — including stages of the package, which the
-				// project owner did not write. Refused without that, the reader
-				// looks for their own mistake on someone else's node.
-				if raisedByInsertion && strings.Contains(err.Error(), "missing_handler") {
-					return usageError("project_compile_invalid_workflow: " + err.Error() + ". An extension in extend.yaml declares impossible_verdicts, which raises this workflow to WorkflowRevision " + flow.WorkflowRevisionVerdictVersion + ", where every stage must answer for every verdict; the stage named above belongs to the package, so either drop that declaration or ask the package author for a revision " + flow.WorkflowRevisionVerdictVersion + " release")
-				}
+			// An insertion that declares impossible verdicts raises the whole
+			// graph to the revision that requires every stage to answer for
+			// every verdict — including stages of the package, which the project
+			// owner did not write and cannot get changed. Requiring it of them
+			// was a refusal with no exit; the rule now applies to the stages the
+			// insertion authored, and the rest are named here instead.
+			_, unclosed, err := flow.CompileCoreExtended(component.Bytes, "json", registry, resources, raisedByInsertion)
+			if err != nil {
 				return usageError("project_compile_invalid_workflow: " + err.Error())
+			}
+			if len(unclosed) != 0 {
+				sort.Strings(unclosed)
+				fmt.Fprintln(os.Stderr, "project_compile_package_verdicts_unclosed: the extension raised "+component.Ref.ID+
+					" to WorkflowRevision "+flow.WorkflowRevisionVerdictVersion+", where a stage answers for every verdict. These stages come from the package and do not: "+
+					strings.Join(unclosed, ", ")+". Only the package author can close them; until then such a verdict, if it occurs, stops the Run at routing rather than at sealing.")
 			}
 		}
 	}

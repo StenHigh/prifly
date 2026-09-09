@@ -90,12 +90,12 @@ func TestPublicationBindingOnlyFeedsCall(t *testing.T) {
 		"schema_version": "3", "definition": map[string]any{"stages": map[string]any{"consume": stage}},
 		"limits": map[string]any{"max_parallelism": json.Number("1"), "max_child_depth": json.Number("0")}, "allowed_outcomes": []any{"succeeded"},
 	}
-	p := expectProblem(t, supportedWorkflowProfile(workflow, CoreProfile), "unsupported")
+	p := expectProblem(t, supportedWorkflowProfile(workflow, CoreProfile, nil), "unsupported")
 	if p.Path != "/definition/stages/consume/input_bindings/document/from" {
 		t.Fatalf("publication refusal points elsewhere: %s", p.Path)
 	}
 	stage["kind"] = "call"
-	if err := supportedWorkflowProfile(workflow, CoreProfile); err != nil {
+	if err := supportedWorkflowProfile(workflow, CoreProfile, nil); err != nil {
 		t.Fatalf("call could not receive an assigned publication: %v", err)
 	}
 }

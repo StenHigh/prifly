@@ -8,6 +8,15 @@ type definitionIdentity struct{ id, version string }
 // It never expands one cached definition into all of its runtime invocations.
 type compilation struct {
 	pinned Registry
+	// raisedByInsertion says this document reached the verdict revision because
+	// a project inserted a stage declaring impossible verdicts, not because its
+	// author wrote it at that revision. The distinction decides who the
+	// completeness rule may be applied to: a project cannot answer for verdicts
+	// of a package's stages, and refusing it left no way out at all.
+	raisedByInsertion bool
+	// unclosedPackageStages names the stages the narrowed rule stopped judging,
+	// so the silence is reported rather than kept.
+	unclosedPackageStages []string
 	// Only CompileCore enables these typed context inventories. All nested
 	// plans share the selected closure and its dependency budgets.
 	availableResources ContextResources

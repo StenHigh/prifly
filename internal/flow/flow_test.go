@@ -1346,3 +1346,44 @@ func TestArtifactRevisionVersionReference(t *testing.T) {
 	artifact["schema_ref"] = ref
 	expectProblem(t, ValidateProtocol("ArtifactRevision", encoded(t, artifact)), "schema_invalid")
 }
+
+// A project that inserts a stage into someone else's package must declare
+// impossible verdicts on it, which the contract allows only at the verdict
+// revision, which then demanded that every stage answer for every verdict --
+// including the package's own, which the project did not write and cannot get
+// changed. The only exits were dropping the declaration or waiting for another
+// author's release. The declaration marks the stage its author owns, so the
+// rule applies there; the rest are named to the caller instead of refused.
+func TestVerdictCompletenessNarrowsToTheInsertedStage(t *testing.T) {
+	incomplete := func(t *testing.T) ([]byte, Registry) {
+		workflow, registry := verdictFixture(t)
+		// check_first is the package's stage now: it says nothing about a
+		// verdict its step can return, and this project cannot change it.
+		delete(stages(workflow)["check_first"].(map[string]any), "impossible_verdicts")
+		return encoded(t, workflow), registry
+	}
+
+	// Raised by an insertion: the package's stage is named, not refused.
+	data, registry := incomplete(t)
+	plan, unclosed, err := CompileCoreExtended(data, "json", registry, ContextResources{}, true)
+	if err != nil || plan == nil {
+		t.Fatalf("an extended package was refused for its own author's routing: %v", err)
+	}
+	if len(unclosed) != 1 || unclosed[0] != "check_first" {
+		t.Fatalf("the stages the rule stopped judging were not named: %v", unclosed)
+	}
+
+	// The same bytes without that flag are an author's own document, and the
+	// rule still applies to every stage: the narrowing must not spill over.
+	data, registry = incomplete(t)
+	if _, _, err := CompileCoreExtended(data, "json", registry, ContextResources{}, false); err == nil {
+		t.Fatal("an author's own revision-4 document kept an unrouted verdict")
+	}
+
+	// And the inserting project is not excused from its own stage.
+	workflow, registry := verdictFixture(t)
+	stages(workflow)["check_first"].(map[string]any)["impossible_verdicts"] = []any{"no_work"}
+	if _, _, err := CompileCoreExtended(encoded(t, workflow), "json", registry, ContextResources{}, true); err == nil {
+		t.Fatal("a declaring stage was excused from the verdicts it left unrouted")
+	}
+}

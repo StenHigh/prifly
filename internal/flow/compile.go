@@ -86,7 +86,7 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 	if err := validateProtocolValue(contract, value, ""); err != nil {
 		return nil, err
 	}
-	if err := supportedWorkflowProfile(value.(map[string]any), profile); err != nil {
+	if err := supportedWorkflowProfile(value.(map[string]any), profile, shared); err != nil {
 		return nil, err
 	}
 	plan := &Plan{Profile: profile, Steps: make(map[string]StepDefinition), Registry: make(Registry), schemas: make(map[Ref][]byte), schemaValues: make(map[Ref]any), conditionChecked: make(map[Ref]bool), publicationSources: make(map[Ref]PublicationSourceDefinition), compilation: shared}
@@ -231,7 +231,7 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 	return plan, nil
 }
 
-func supportedWorkflowProfile(workflow map[string]any, profile string) error {
+func supportedWorkflowProfile(workflow map[string]any, profile string, shared *compilation) error {
 	stages := workflow["definition"].(map[string]any)["stages"].(map[string]any)
 	workflowVersion, _ := workflow["schema_version"].(string)
 	for _, id := range keys(stages) {
@@ -280,7 +280,19 @@ func supportedWorkflowProfile(workflow map[string]any, profile string) error {
 		// every load, so applying the new rule to it would refuse to resume
 		// work that was already accepted.
 		if stage["kind"] == "step" && workflowVersion == WorkflowRevisionVerdictVersion {
-			if err := checkVerdictCoverage(stage, path); err != nil {
+			// A document raised to this revision by a project's insertion carries
+			// stages nobody in this project wrote. Requiring completeness of them
+			// asks the project to answer for a package author's routing, which it
+			// cannot do and cannot get done: the only exits were dropping the
+			// declaration or waiting for someone else's release. The declaration
+			// itself is the mark of a stage its author owns, so the rule applies
+			// there and the rest are named instead of refused.
+			_, declares := stage["impossible_verdicts"]
+			if shared != nil && shared.raisedByInsertion && !declares {
+				if err := checkVerdictCoverage(stage, path); err != nil {
+					shared.unclosedPackageStages = append(shared.unclosedPackageStages, id)
+				}
+			} else if err := checkVerdictCoverage(stage, path); err != nil {
 				return err
 			}
 		}
