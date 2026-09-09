@@ -45,6 +45,12 @@ two reads of one binary, on the paused stand 22 and 30. A Run that is still open
 derives more from the clock, so more is masked, so its "same" covers less. Read
 both, and trust the settled one further.
 
+The package session measured the same on their live stand across two runs — 56
+and 42 fields once, 44 and 53 the next — so the weakening is not a fixed
+discount but a varying one. Print the masked counts beside every verdict rather
+than only the verdict, and never read a live stand's "same" as the settled
+stand's.
+
 What the settled stand holds, measured rather than intended: one Run of
 `workflows/transform.json`, driven to completion, `completed / succeeded`, one
 step, one attempt whose start was observed and which settled, no session, no
