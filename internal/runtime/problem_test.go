@@ -8,35 +8,48 @@ import (
 	"testing"
 )
 
-// A refusal names its subject. These cases pin what a client may read: the
-// stable code with or without a message, the engine-authored detail of a leaf
-// refusal, and nothing at all from free text or a wrapped foreign cause.
+// A refusal names its subject, and it names it in one place. The explanation is
+// always `message`; `violations` names places in the document the caller
+// supplied and stays empty when there is no such place. Until 0.13.8 an
+// engine-authored detail went to `violations` with an empty pointer while a
+// rejection's went to `message`, so a reader could not know which to read.
 func TestProblemForKeepsStableCodeAndEngineDetail(t *testing.T) {
+	// `foreign` marks the one route whose detail did not come from the engine —
+	// a `code: detail` error, which refusal-check forbids in non-test code, so
+	// its text is a failing component's own output. That is evidence and stays
+	// in violations; every explanation is in `message`.
 	for _, c := range []struct {
-		name       string
-		err        error
-		code       string
-		exit       int
-		violations []Violation
+		name    string
+		err     error
+		code    string
+		exit    int
+		detail  string
+		foreign bool
 	}{
-		{"bare code", errors.New("workspace_tree_location_missing"), "workspace_tree_location_missing", 2, []Violation{}},
-		{"code with detail", errors.New("output_required_missing: plan"), "output_required_missing", 2, []Violation{{"", "plan"}}},
-		{"free text", errors.New("missing required output: plan"), "invalid_input", 2, []Violation{}},
-		{"wrapped cause", fmt.Errorf("unsafe_archive: %w", errors.New("/private/tmp/secret: bad header")), "unsafe_archive", 2, []Violation{}},
-		{"conflict exit", errors.New("workspace_tree_capture_conflict"), "workspace_tree_capture_conflict", 3, []Violation{}},
-		{"unsupported exit", errors.New("unsupported_evidence: local output checks"), "unsupported_evidence", 5, []Violation{{"", "local output checks"}}},
+		{"bare code", errors.New("workspace_tree_location_missing"), "workspace_tree_location_missing", 2, "", false},
+		{"foreign detail", errors.New("output_required_missing: plan"), "output_required_missing", 2, "plan", true},
+		{"free text", errors.New("missing required output: plan"), "invalid_input", 2, "", false},
+		{"wrapped cause", fmt.Errorf("unsafe_archive: %w", errors.New("/private/tmp/secret: bad header")), "unsafe_archive", 2, "", false},
+		{"conflict exit", errors.New("workspace_tree_capture_conflict"), "workspace_tree_capture_conflict", 3, "", false},
+		{"foreign detail, unsupported exit", errors.New("unsupported_evidence: local output checks"), "unsupported_evidence", 5, "local output checks", true},
 	} {
 		problem, exit := ProblemFor(c.err)
 		if problem.Code != c.code || exit != c.exit {
 			t.Fatalf("%s: got %s exit %d, want %s exit %d", c.name, problem.Code, exit, c.code, c.exit)
 		}
-		if len(problem.Violations) != len(c.violations) {
-			t.Fatalf("%s: got violations %+v, want %+v", c.name, problem.Violations, c.violations)
+		if !c.foreign && len(problem.Violations) != 0 {
+			t.Fatalf("%s: an explanation was put in violations, which names places: %+v", c.name, problem.Violations)
 		}
-		for i, violation := range c.violations {
-			if problem.Violations[i] != violation {
-				t.Fatalf("%s: got violation %+v, want %+v", c.name, problem.Violations[i], violation)
+		if c.foreign {
+			if len(problem.Violations) != 1 || problem.Violations[0] != (Violation{"", c.detail}) {
+				t.Fatalf("%s: foreign output did not stay in violations: %+v", c.name, problem.Violations)
 			}
+			if strings.Contains(problem.Message, c.detail) {
+				t.Fatalf("%s: a failing component's own output reached the message: %q", c.name, problem.Message)
+			}
+		}
+		if !strings.Contains(problem.Message, "refused") && !strings.Contains(problem.Message, "could not be applied") {
+			t.Fatalf("%s: a refusal with no words of its own lost its sentence: %q", c.name, problem.Message)
 		}
 	}
 }
@@ -62,11 +75,14 @@ func TestProblemForKeepsAuthoredDetailThroughAWrappedCause(t *testing.T) {
 		if problem.Code != c.code || exit != c.exit {
 			t.Fatalf("%s: got %s exit %d, want %s exit %d", c.name, problem.Code, exit, c.code, c.exit)
 		}
-		if len(problem.Violations) != 1 || problem.Violations[0].Reason != c.message {
-			t.Fatalf("%s: the authored detail did not reach the client: %+v", c.name, problem.Violations)
+		if problem.Message != c.message {
+			t.Fatalf("%s: the authored detail did not reach the client: %q", c.name, problem.Message)
+		}
+		if len(problem.Violations) != 0 {
+			t.Fatalf("%s: an explanation was put in violations, which names places: %+v", c.name, problem.Violations)
 		}
 		for _, foreign := range []string{"flock", "driver.lock", "resource temporarily unavailable"} {
-			if strings.Contains(problem.Message+problem.Violations[0].Reason, foreign) {
+			if strings.Contains(problem.Message, foreign) {
 				t.Fatalf("%s: the cause's own text leaked: %q", c.name, foreign)
 			}
 		}
@@ -92,8 +108,12 @@ func TestProblemForReadsThroughDiagnosticOccurrence(t *testing.T) {
 	if problem.CorrelationID != "diagnostic:abc" {
 		t.Fatalf("occurrence lost its correlation: %s", problem.CorrelationID)
 	}
+	// The occurrence's text is a failing component's, so it stays evidence.
 	if len(problem.Violations) != 1 || problem.Violations[0].Reason != "no process was launched" {
 		t.Fatalf("occurrence lost its detail: %+v", problem.Violations)
+	}
+	if strings.Contains(problem.Message, "no process was launched") {
+		t.Fatalf("foreign output reached the message: %q", problem.Message)
 	}
 }
 

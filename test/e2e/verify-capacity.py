@@ -86,9 +86,13 @@ printf '{{"schema_version":"1","run_id":"%s","step_instance_id":"%s","attempt_id
         assert refused["code"] == "driver_already_active", refused
         assert refused["safe_next_actions"] == ["run.status", "run.events"], refused["safe_next_actions"]
         # An engine-authored refusal keeps its own words even when it wraps a
-        # cause; the envelope carries them in violations, never the cause's.
-        assert len(refused["violations"]) == 1, refused
-        detail = refused["violations"][0]["reason"]
+        # cause, and it keeps them in `message`: violations names places in a
+        # document the caller supplied, and there is no such place here. Both
+        # fields carried explanations until 0.13.8, so a reader could not know
+        # which to read.
+        assert refused["violations"] == [], refused["violations"]
+        detail = refused["message"]
+        assert "violations" not in detail, f"the message points elsewhere instead of explaining: {detail}"
         assert "one authority drives one Run at a time" in detail, detail
         assert "capacity set does not lift it" in detail, detail
         assert "run:" in detail, f"the refusal does not name the Run holding the driver: {detail}"

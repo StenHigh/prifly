@@ -679,10 +679,12 @@ func TestUnqualifiedEffectClassRefusalNamesBothBoundaries(t *testing.T) {
 	if problem.Code != "unsupported_effect" {
 		t.Fatalf("an unqualified effect class was not refused by name: %+v %v", problem, err)
 	}
-	if len(problem.Violations) != 1 {
-		t.Fatalf("the refusal carries no detail: %+v", problem.Violations)
+	// The explanation is the message; violations names places in a supplied
+	// document, and there is no place here — the effect class is the subject.
+	if len(problem.Violations) != 0 {
+		t.Fatalf("an explanation was put in violations: %+v", problem.Violations)
 	}
-	detail := problem.Violations[0].Reason
+	detail := problem.Message
 	for _, boundary := range []string{"external_write", "workspace_write or none"} {
 		if !strings.Contains(detail, boundary) {
 			t.Fatalf("the refusal omits the %s boundary: %s", boundary, detail)

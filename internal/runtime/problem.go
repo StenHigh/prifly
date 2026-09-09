@@ -10,6 +10,19 @@ import (
 	"github.com/stenhigh/prifly/internal/local"
 )
 
+// Violation names a place in the document the caller supplied and what is wrong
+// there. It is not where a refusal's explanation lives: that is always
+// `message`. Both were true at once until 0.13.8 — an authored refusal put its
+// text here with an **empty** pointer while a rejection put the same kind of
+// text in `message`, so a reader could not know where to look, and a dependent
+// session's comparator silently lost the text of every rejection. The empty
+// pointer beside a filled reason was the only outward sign that the text was in
+// the wrong field.
+//
+// One case still fills it without a pointer, and it is not an explanation: text
+// printed by a failing component, which is evidence and must not enter
+// `message`. So an empty pointer now means "foreign bytes", and the reason for
+// the refusal is in `message` either way.
 type Violation struct {
 	Pointer string `json:"pointer"`
 	Reason  string `json:"reason"`
@@ -146,15 +159,10 @@ func ProblemFor(err error) (Problem, int) {
 	case persistenceFailure(err):
 		p.Code, p.Message, exit = "persistence_unavailable", "The authority could not persist or read mandatory evidence. Do not assume the operation committed.", 6
 	// A refusal this engine authored keeps its own words even when it also
-	// carries a cause. The detail used to be recovered by splitting the error
-	// text, which a wrapped cause disqualified — so every wrapFault refusal
-	// arrived as a bare code with the generic sentence, including "authority is
-	// open in another process" and the driver lock. Reading the Fault directly
-	// exposes engine-authored text only; the cause stays invisible either way.
+	// carries a cause. Reading the Fault directly exposes engine-authored text
+	// only; the cause stays invisible either way.
 	case errors.As(err, &authored) && authored.Message != "":
-		p.Code = authored.Code
-		p.Message = "The selected operation was refused (" + authored.Code + "); violations names the exact subject and what to change."
-		p.Violations = []Violation{{"", authored.Message}}
+		p.Code, p.Message = authored.Code, authored.Message
 		exit = exitForCode(authored.Code)
 	default:
 		// A refusal carries its stable code whether or not it also carries a
@@ -165,13 +173,17 @@ func ProblemFor(err error) (Problem, int) {
 		if validProblemCode(code) {
 			p.Code = code
 			p.Message = "The selected operation was refused (" + code + "). Inspect status/doctor and the documented capability limits."
-			// The detail stays out of the message: a code raised from an
-			// executor's own output carries that output with it, and this
-			// envelope never puts foreign bytes there. But sending the reader
-			// to a state diagnostic while the answer sits in violations is the
-			// wrong direction, so the message says where it is.
+			// This branch is the only one whose detail did not come from the
+			// engine: refusal-check forbids `errors.New("code: …")` in
+			// non-test code, so a `code: detail` error reaching here carries
+			// text from outside — an executor's own output, a traceback. That
+			// is evidence, not an explanation, and it stays out of `message`,
+			// which every other route now uses for the engine's own words.
+			// Violations carries it with no pointer because there is no place
+			// in a document to point at; a reader who finds one there is
+			// looking at foreign bytes, never at the reason.
 			if detail := refusalDetail(base); detail != "" {
-				p.Message = "The selected operation was refused (" + code + "); violations names the exact subject and what to change."
+				p.Message = "The selected operation was refused (" + code + "); violations carries what the failing component printed."
 				p.Violations = []Violation{{"", detail}}
 			}
 			exit = exitForCode(code)
