@@ -2358,6 +2358,8 @@ Global: --project DIR  --json  --format text|json|csv
 
   run fork --file REQUEST.json      Create a linked Run from exact sealed refs; old Run is unchanged
   run status|next|explain|events|timing RUN_ID
+                                   timing nodes are run, workflow_invocation, stage_activation, step_instance and attempt; there is no "step" node
+                                   A node's metrics carry only numbers; the boundaries they were measured between are the same-named entry of its intervals, as from_ref/to_ref
   run drive RUN_ID                  Foreground owner; interrupt requests cancel
   run decisions RUN_ID              Read the sealed decision ledger and pending question
   run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N [--yield-execution]
