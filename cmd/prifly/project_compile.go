@@ -81,14 +81,20 @@ type projectWorkflowFeature struct {
 }
 
 type projectCompileResult struct {
-	SchemaVersion     string                    `json:"schema_version"`
-	Repository        string                    `json:"repository"`
-	Package           flow.Ref                  `json:"package"`
-	Output            string                    `json:"output"`
-	Components        []projectCompileComponent `json:"components"`
-	AuthorPackage     *projectBuildIdentity     `json:"author_package,omitempty"`
-	BuildKey          string                    `json:"build_key,omitempty"`
-	ExecutionBindings *projectPackageExecution  `json:"-"`
+	SchemaVersion string                    `json:"schema_version"`
+	Repository    string                    `json:"repository"`
+	Package       flow.Ref                  `json:"package"`
+	Output        string                    `json:"output"`
+	Components    []projectCompileComponent `json:"components"`
+	AuthorPackage *projectBuildIdentity     `json:"author_package,omitempty"`
+	BuildKey      string                    `json:"build_key,omitempty"`
+	// PackageVerdictsUnclosed names the package stages the completeness rule
+	// stopped judging because this document reached the verdict revision by
+	// insertion rather than authorship. It rides in the result rather than on
+	// stderr: a --json caller reads the last document of stderr for a refusal,
+	// and a bare line there would look like one.
+	PackageVerdictsUnclosed []string                 `json:"package_verdicts_unclosed,omitempty"`
+	ExecutionBindings       *projectPackageExecution `json:"-"`
 }
 
 func (c *cli) projectCompile(ctx context.Context, args []string) error {
@@ -1494,7 +1500,7 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 	return err
 }
 
-func projectValidatePackageWorkflows(components []projectCompileComponent, base flow.Registry, raisedByInsertion bool) error {
+func projectValidatePackageWorkflows(components []projectCompileComponent, base flow.Registry, raisedByInsertion bool, reported *[]string) error {
 	registry := make(flow.Registry, len(base)+len(components))
 	for ref, data := range base {
 		registry[ref] = data
@@ -1521,9 +1527,9 @@ func projectValidatePackageWorkflows(components []projectCompileComponent, base 
 			}
 			if len(unclosed) != 0 {
 				sort.Strings(unclosed)
-				fmt.Fprintln(os.Stderr, "project_compile_package_verdicts_unclosed: the extension raised "+component.Ref.ID+
-					" to WorkflowRevision "+flow.WorkflowRevisionVerdictVersion+", where a stage answers for every verdict. These stages come from the package and do not: "+
-					strings.Join(unclosed, ", ")+". Only the package author can close them; until then such a verdict, if it occurs, stops the Run at routing rather than at sealing.")
+				for _, stage := range unclosed {
+					*reported = append(*reported, component.Ref.ID+"/"+stage)
+				}
 			}
 		}
 	}

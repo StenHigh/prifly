@@ -155,7 +155,8 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 			raisedByInsertion = true
 		}
 	}
-	if err := projectValidatePackageWorkflows(components, registry, raisedByInsertion); err != nil {
+	var unclosed []string
+	if err := projectValidatePackageWorkflows(components, registry, raisedByInsertion, &unclosed); err != nil {
 		return projectCompileResult{}, err
 	}
 	if variant {
@@ -169,7 +170,7 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	if err != nil {
 		return projectCompileResult{}, err
 	}
-	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings}
+	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings, PackageVerdictsUnclosed: unclosed}
 	if source.Build != nil {
 		result.SchemaVersion = "project-compile/2"
 		result.AuthorPackage = &source.Build.AuthorPackage
