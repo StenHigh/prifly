@@ -634,7 +634,18 @@ func (c *cli) run(ctx context.Context, args []string) error {
 		// named path is judged here: an unsafe path found inside a document is
 		// a different refusal and keeps its own code.
 		if outsideAuthority(*path) {
-			return usageError("unsafe_path: " + args[0] + " reads a compiled workflow inside the selected authority; check an authoring folder with project compile --repository DIR --package NAME --host HOST --output DIR, which seals it without creating a Run")
+			// The old hint sent the reader to project compile --output DIR,
+			// which refuses to write inside an authority, while this command
+			// refuses to read outside one: the two requirements never meet, so
+			// the advice was a dead end nobody could leave except by trial.
+			return usageError("unsafe_path: " + args[0] + " reads a workflow inside the selected authority, and --workflow is resolved from the authority root, not the working directory; absolute paths, traversal and symlinks are refused. Seal an authoring folder with project compile --repository DIR --package NAME --host HOST --output DIR, then copy the sealed workflow into the authority to read it here")
+		}
+		// The shared not_found says "run, definition, artifact or file", which
+		// lists what the subject might have been instead of naming it. Here the
+		// root the path was resolved from is the whole answer: a file that
+		// plainly exists beside the caller is absent from the authority.
+		if _, statErr := os.Stat(filepath.Join(c.project, filepath.FromSlash(*path))); errors.Is(statErr, os.ErrNotExist) {
+			return &prifly.Fault{Code: "not_found", Message: "no file at " + *path + " under the authority at " + c.project + "; --workflow is resolved from the authority root, not the working directory"}
 		}
 		result, err := e.Preview(prifly.PreviewOptions{WorkflowFile: *path, BriefFile: *brief, InputRefs: refs})
 		if err != nil {
@@ -2365,7 +2376,7 @@ Global: --project DIR  --json  --format text|json|csv
                                    --def returns one definition with the closure it references, instead of the whole bundle
                                    Authoring YAML has worked references in examples/authoring/ of the Pri-Fly repository;
                                    extension-authoring-reference.yaml shows a complete extend.yaml, extensions included
-  validate --workflow FILE          Shape, refs, graph and profile validation
+  validate --workflow FILE          Shape, refs, graph and profile validation; FILE is resolved from the authority root, not the working directory
   preview --workflow FILE [--brief FILE] [--input-ref PORT=REF.json]
   run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive]
 

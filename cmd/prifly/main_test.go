@@ -3240,3 +3240,55 @@ func lastLine(s string) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
 	return lines[len(lines)-1]
 }
+
+// The shared not_found lists what the subject might have been -- "run,
+// definition, artifact or file" -- instead of naming it, and validate resolves
+// --workflow from the authority root rather than the working directory. A file
+// that plainly exists beside the caller is therefore absent here, and the old
+// answer sent the pilot looking for a read failure that was really a different
+// root. The unsafe_path hint had the same shape: it advised project compile
+// --output DIR, which refuses to write inside an authority, while this command
+// refuses to read outside one -- a route with no crossing.
+func TestValidateSaysWhichRootItSearched(t *testing.T) {
+	authority := t.TempDir()
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"init", authority}, &out, &errout); code != 0 {
+		t.Fatalf("init: %d %s", code, errout.String())
+	}
+	elsewhere := filepath.Join(t.TempDir(), "workflow.json")
+	if err := os.WriteFile(elsewhere, []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, path, code string
+		says             []string
+	}{
+		{"missing file", "no-such.json", "not_found", []string{"under the authority at", "resolved from the authority root"}},
+		{"absolute path", elsewhere, "invalid_usage", []string{"resolved from the authority root", "copy the sealed workflow into the authority"}},
+	} {
+		out.Reset()
+		errout.Reset()
+		if code := execute(context.Background(), []string{"--json", "--project", authority, "validate", "--workflow", c.path}, &out, &errout); code == 0 {
+			t.Fatalf("%s: was accepted", c.name)
+		}
+		var problem struct {
+			Code       string     `json:"code"`
+			Message    string     `json:"message"`
+			Violations []struct{} `json:"violations"`
+		}
+		if err := json.Unmarshal([]byte(lastLine(errout.String())), &problem); err != nil {
+			t.Fatalf("%s: %v: %s", c.name, err, errout.String())
+		}
+		if problem.Code != c.code {
+			t.Fatalf("%s: got %s, want %s: %s", c.name, problem.Code, c.code, problem.Message)
+		}
+		if len(problem.Violations) != 0 {
+			t.Fatalf("%s: an explanation was put in violations: %+v", c.name, problem.Violations)
+		}
+		for _, says := range c.says {
+			if !strings.Contains(problem.Message, says) {
+				t.Fatalf("%s: the refusal never says %q: %s", c.name, says, problem.Message)
+			}
+		}
+	}
+}
