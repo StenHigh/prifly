@@ -56,8 +56,8 @@ kind inside from_ref/to_ref names what a boundary was read from and is a separat
 |---|---|---|
 | `make check` | локально на `7f1be0e` | зелёный |
 | `make e2e` | локально, то же дерево | зелёный |
-| `verify` | GitHub Actions | см. ниже |
-| `race` | GitHub Actions | см. ниже |
+| `verify` | GitHub Actions 34300340576 | success |
+| `race` | GitHub Actions 34300347711 | success |
 
 Чужой стенд: пилот перечитал справку своей выемкой и подтвердил все три
 утверждения нового текста; список видов узлов совпал с его замером до единицы.
