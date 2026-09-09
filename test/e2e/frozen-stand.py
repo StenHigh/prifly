@@ -20,7 +20,9 @@ session's own stand and are kept here deliberately:
   * the noise mask is observed, not listed. Every command is read twice by each
     binary and whatever moved between two reads of the same one is masked, so
     clocks and ids drop out unnamed and a field that starts moving next month
-    needs no edit here.
+    needs no edit here. Two reads do not catch a field that moves only
+    sometimes, so a divergence is re-read before it is reported: noise rarely
+    repeats and a change always does.
   * the comparison must prove it can see a difference. The two binaries must
     disagree on at least one observable discriminator — the reported version, or
     failing that the file digest; if neither moved, the comparison is broken and
@@ -334,6 +336,18 @@ def compare(args):
         stable = {side: {k: v for k, v in reading.items() if k not in moved} for side, reading in readings.items()}
         changed = sorted(k for k in stable["old"].keys() | stable["new"].keys()
                          if stable["old"].get(k) != stable["new"].get(k))
+        if changed:
+            # A field that only sometimes moves is not caught by two reads, and
+            # its accidental divergence is indistinguishable from a real change.
+            # Noise rarely repeats and a change always does, so a divergence is
+            # read once more before it is believed. The package session found
+            # this the honest way: their live stand reported DIFFERS, and three
+            # repetitions said same, same, same.
+            confirm = {side: leaves(read(binary, project, argv(run)))
+                       for side, binary in (("old", old), ("new", new))}
+            changed = [k for k in changed if confirm["old"].get(k) != confirm["new"].get(k)]
+            moved |= {k for k in stable["old"].keys() | stable["new"].keys()
+                      if k not in changed and stable["old"].get(k) != stable["new"].get(k)}
         differing += bool(changed)
         rows.append({"read": name, "verdict": "DIFFERS" if changed else "same",
                      "masked_fields": len(moved), "changed": changed[:20]})
