@@ -195,6 +195,26 @@ def build(args):
     print(f"stand built at {stand} by {version_of(binary)}, run {run}")
 
 
+def fingerprint(binary, project, run):
+    """What the stand must still be afterwards. Four of the refusal probes are
+    mutating commands refused only by the Run's current state; if a release ever
+    reorders those checks they would succeed and quietly rewrite the very thing
+    this stand exists to hold still.
+
+    The subject is the Run, not the authority. A refused command still records
+    its receipt — measured here: three reads leave `cut` at 70, one refused
+    `run pause` moves it to 71 while `run_version` stays put. That is the
+    authority being honest about a refusal, not the stand being damaged, so
+    `cut` stays out of this fingerprint; including it reported damage on every
+    single run."""
+    status = json.loads(read(binary, project, ["run", "status", run]))
+    body = status.get("run", {})
+    return {"run_version": status.get("run_version"), "status": body.get("status"),
+            "outcome": body.get("outcome"), "stops": len(body.get("stops", []) or []),
+            "attempts": len(body.get("attempts", {}) or {}),
+            "verdicts": sorted((a or {}).get("accepted", {}).get("verdict", "") for a in (body.get("attempts", {}) or {}).values())}
+
+
 def compare(args):
     stand = args.stand.resolve(strict=True)
     manifest = json.loads((stand / "stand.json").read_text())
@@ -226,6 +246,7 @@ def compare(args):
                          "this compares a binary with itself and can only say 'same'")
     discriminator = "version" if versions["old"] != versions["new"] else "digest"
 
+    before = fingerprint(new, project, run)
     rows, differing = [], 0
     for name, argv in READS:
         readings, moved = {}, set()
@@ -252,6 +273,11 @@ def compare(args):
         print(f"{marker}  {name:<14} ({len(moved)} fields move between reads)")
         for path in changed[:20]:
             print(f"            {path}: {stable['old'].get(path)} -> {stable['new'].get(path)}")
+
+    after = fingerprint(new, project, run)
+    if after != before:
+        raise SystemExit(f"reading the stand changed it: {before} became {after}. A probe that was refused "
+                         "only by the Run's state has started succeeding; rebuild the stand and drop that probe")
 
     if discriminator == "version" and (rows[0]["read"] != "version" or rows[0]["verdict"] != "DIFFERS"):
         raise SystemExit("the version read did not come back different although the two binaries report "
