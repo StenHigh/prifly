@@ -36,7 +36,16 @@ before they act, read from both binaries and diffed by code, message,
 violations and safe_next_actions. Three releases running were mostly refusal
 texts, each confirmed once by a person meeting it live and never again.
 
-What this stand holds, measured rather than intended: one Run of
+Two shapes, and the second is not a better version of the first. A `settled`
+stand holds a Run driven to completion; a `paused` one holds a Run still open
+with its stop unreleased, which is the only shape that can be refused
+`active_stop` — a text rewritten in 0.13.3 that nothing compared until now. The
+price is measured, not guessed: on the settled stand 6 and 2 fields move between
+two reads of one binary, on the paused stand 22 and 30. A Run that is still open
+derives more from the clock, so more is masked, so its "same" covers less. Read
+both, and trust the settled one further.
+
+What the settled stand holds, measured rather than intended: one Run of
 `workflows/transform.json`, driven to completion, `completed / succeeded`, one
 step, one attempt whose start was observed and which settled, no session, no
 checks, no diagnostics. Node kinds present: run, workflow_invocation,
@@ -101,7 +110,11 @@ READS = (
     ("refuse invalid_usage", lambda run: ["run", "cancel", run]),
     ("refuse schema_invalid", lambda run: ["validate", "--workflow", "prifly.json"]),
     ("refuse invalid_json", lambda run: ["artifact", "export", "--ref", "inputs/source.txt", "--output", "unwritten"]),
-    ("refuse terminal_run", lambda run: ["run", "pause", run, "--reason", "frozen stand probe"]),
+    ("refuse terminal_run", lambda run: ["run", "pause", run, "--reason", "frozen stand probe"], ("settled",)),
+    # Only a paused Run with a stop still held can be refused this way, and the
+    # text was rewritten in 0.13.3 -- until this stand existed nothing compared
+    # it between releases.
+    ("refuse active_stop", lambda run: ["run", "resume", run, "--expected-version", "2", "--reason", "frozen stand probe"], ("paused",)),
     ("refuse version_conflict", lambda run: ["run", "resume", run, "--expected-version", "1", "--reason", "frozen stand probe"]),
     ("refuse cancel_not_reversible", lambda run: ["run", "release", run, "--expected-epoch", "0", "--stop", "nope:1", "--reason", "frozen stand probe"]),
     ("refuse missing attempt", lambda run: ["run", "resolve", run, "--attempt", "attempt:none", "--outcome", "applied", "--reason", "frozen stand probe"]),
@@ -112,7 +125,7 @@ READS = (
 # so the count is pinned rather than inferred: three of the first eight probes
 # here were argument parsing, and it took a dependent session counting their own
 # to notice that "seven of seven passed" meant four distinct outcomes.
-DISTINCT_REFUSAL_CODES = 7
+DISTINCT_REFUSAL_CODES = {"settled": 7, "paused": 7}
 
 # A probe that stops being refused stops testing a refusal. The comparison
 # checks this on every run rather than trusting the names above.
@@ -122,6 +135,7 @@ EXPECTED_REFUSALS = {
     "refuse schema_invalid": "schema_invalid",
     "refuse invalid_json": "invalid_json",
     "refuse terminal_run": "terminal_run",
+    "refuse active_stop": "active_stop",
     "refuse version_conflict": "version_conflict",
     "refuse cancel_not_reversible": "cancel_not_reversible",
     "refuse missing attempt": "not_found",
@@ -189,17 +203,26 @@ def build(args):
                    check=True, timeout=180, stdout=subprocess.PIPE)
     started = subprocess.run([str(binary), "--project", str(project), "--json", "run", "start",
                               "--workflow", "workflows/transform.json", "--brief", "brief.json",
-                              "--command-id", "command:frozen-stand", "--drive",
+                              "--command-id", "command:frozen-stand",
+                              *(["--drive"] if args.shape == "settled" else []),
                               "--input", "source=inputs/source.txt"],
                              capture_output=True, text=True, timeout=180, check=True)
-    run = json.loads(started.stdout)["run"]["id"]
+    # A driven start answers with the Run; an undriven one answers with the
+    # receipt that created it.
+    answer = json.loads(started.stdout)
+    run = answer["run"]["id"] if "run" in answer else answer["receipt"]["run_id"]
+    if args.shape == "paused":
+        subprocess.run([str(binary), "--project", str(project), "--json", "run", "pause", run,
+                        "--reason", "frozen stand: a Run held open with its stop unreleased"],
+                       check=True, timeout=60, stdout=subprocess.PIPE)
     (stand / "stand.json").write_text(json.dumps({
         "schema_version": "prifly-frozen-stand/1",
         "built_by": version_of(binary),
         "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
         "run": run,
+        "shape": args.shape,
     }, ensure_ascii=False, indent=2) + "\n")
-    print(f"stand built at {stand} by {version_of(binary)}, run {run}")
+    print(f"{args.shape} stand built at {stand} by {version_of(binary)}, run {run}")
 
 
 def fingerprint(binary, project, run):
@@ -253,15 +276,23 @@ def compare(args):
                          "this compares a binary with itself and can only say 'same'")
     discriminator = "version" if versions["old"] != versions["new"] else "digest"
 
-    distinct = len(set(EXPECTED_REFUSALS.values()))
-    if distinct != DISTINCT_REFUSAL_CODES:
-        raise SystemExit(f"the refusal probes tell {distinct} outcomes apart, not {DISTINCT_REFUSAL_CODES}: "
+    shape = manifest.get("shape", "settled")
+    reachable = {name for entry in READS for name in [entry[0]]
+                 if shape in (entry[2] if len(entry) > 2 else ("settled", "paused"))}
+    distinct = len({code for name, code in EXPECTED_REFUSALS.items() if name in reachable})
+    if distinct != DISTINCT_REFUSAL_CODES[shape]:
+        raise SystemExit(f"the {shape} stand's refusal probes tell {distinct} outcomes apart, not "
+                         f"{DISTINCT_REFUSAL_CODES[shape]}: "
                          "a probe was added or changed without the count, and a set reads as wider coverage "
                          "than it has")
 
     before = fingerprint(new, project, run)
     rows, differing = [], 0
-    for name, argv in READS:
+    for entry in READS:
+        name, argv = entry[0], entry[1]
+        shapes = entry[2] if len(entry) > 2 else ("settled", "paused")
+        if shape not in shapes:
+            continue
         readings, moved = {}, set()
         for side, binary in (("old", old), ("new", new)):
             first, second = leaves(read(binary, project, argv(run))), leaves(read(binary, project, argv(run)))
@@ -308,6 +339,9 @@ def main():
     b = sub.add_parser("build")
     b.add_argument("--binary", required=True, type=Path)
     b.add_argument("--stand", type=Path, default=default)
+    b.add_argument("--shape", choices=("settled", "paused"), default="settled",
+                   help="settled: a Run driven to completion. paused: a Run held open with its stop unreleased, "
+                        "which is the only shape that can be refused active_stop")
     b.set_defaults(run=build)
     c = sub.add_parser("compare")
     c.add_argument("--old", required=True, type=Path)
