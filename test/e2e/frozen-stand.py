@@ -99,21 +99,28 @@ READS = (
     # otherwise go on being compared under a name it no longer earns.
     ("refuse not_found", lambda run: ["run", "status", "run:" + "0" * 64]),
     ("refuse invalid_usage", lambda run: ["run", "cancel", run]),
-    ("refuse invalid_usage capacity", lambda run: ["capacity", "set", "--capacity", "2"]),
-    ("refuse unknown operation", lambda run: ["run", "frobnicate", run]),
+    ("refuse schema_invalid", lambda run: ["validate", "--workflow", "prifly.json"]),
+    ("refuse invalid_json", lambda run: ["artifact", "export", "--ref", "inputs/source.txt", "--output", "unwritten"]),
     ("refuse terminal_run", lambda run: ["run", "pause", run, "--reason", "frozen stand probe"]),
     ("refuse version_conflict", lambda run: ["run", "resume", run, "--expected-version", "1", "--reason", "frozen stand probe"]),
     ("refuse cancel_not_reversible", lambda run: ["run", "release", run, "--expected-epoch", "0", "--stop", "nope:1", "--reason", "frozen stand probe"]),
     ("refuse missing attempt", lambda run: ["run", "resolve", run, "--attempt", "attempt:none", "--outcome", "applied", "--reason", "frozen stand probe"]),
 )
 
+# How many refusals this set actually tells apart. A set of eight probes that
+# all land on invalid_usage discriminates one outcome while reading like eight,
+# so the count is pinned rather than inferred: three of the first eight probes
+# here were argument parsing, and it took a dependent session counting their own
+# to notice that "seven of seven passed" meant four distinct outcomes.
+DISTINCT_REFUSAL_CODES = 7
+
 # A probe that stops being refused stops testing a refusal. The comparison
 # checks this on every run rather than trusting the names above.
 EXPECTED_REFUSALS = {
     "refuse not_found": "not_found",
     "refuse invalid_usage": "invalid_usage",
-    "refuse invalid_usage capacity": "invalid_usage",
-    "refuse unknown operation": "invalid_usage",
+    "refuse schema_invalid": "schema_invalid",
+    "refuse invalid_json": "invalid_json",
     "refuse terminal_run": "terminal_run",
     "refuse version_conflict": "version_conflict",
     "refuse cancel_not_reversible": "cancel_not_reversible",
@@ -245,6 +252,12 @@ def compare(args):
         raise SystemExit(f"both binaries report {versions['old']} and hash to {digests['old'][:16]}…: "
                          "this compares a binary with itself and can only say 'same'")
     discriminator = "version" if versions["old"] != versions["new"] else "digest"
+
+    distinct = len(set(EXPECTED_REFUSALS.values()))
+    if distinct != DISTINCT_REFUSAL_CODES:
+        raise SystemExit(f"the refusal probes tell {distinct} outcomes apart, not {DISTINCT_REFUSAL_CODES}: "
+                         "a probe was added or changed without the count, and a set reads as wider coverage "
+                         "than it has")
 
     before = fingerprint(new, project, run)
     rows, differing = [], 0
