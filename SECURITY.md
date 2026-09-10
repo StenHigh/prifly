@@ -62,13 +62,29 @@ key.verify(base64.b64decode(open("release-manifest.sig").read().strip()),
 jcs = json.dumps(json.loads(raw), sort_keys=True,
                  separators=(",", ":"), ensure_ascii=False).encode()
 key.verify(base64.b64decode(open("release-manifest.jcs.sig").read().strip()), jcs)
+
+# Подпись удостоверяет manifest, а не архив: сверьте каждый скачанный архив с
+# его записью. Путь именно такой — manifest["assets"], поля os, arch, archive,
+# binary, sha256.
+import hashlib
+for asset in json.loads(raw)["assets"]:
+    digest = hashlib.sha256(open(asset["archive"], "rb").read()).hexdigest()
+    assert digest == asset["sha256"], (asset["archive"], digest, asset["sha256"])
 ```
 
-Обе проверки должны пройти. `key.verify` бросает `InvalidSignature` при
-несовпадении и ничего не возвращает при успехе.
+Все проверки должны пройти. `key.verify` бросает `InvalidSignature` при
+несовпадении и ничего не возвращает при успехе; последний цикл сверяет только те
+архивы, которые вы скачали рядом с манифестом.
 
-После подписи сверьте SHA-256 архива с полем `sha256` соответствующего asset в
-manifest — подпись удостоверяет manifest, а не архив.
+**Граница формулы JCS в этом примере.** `json.dumps(sort_keys=True,
+separators=(",", ":"))` совпадает с RFC 8785 **пока документ не содержит чисел**:
+настоящая канонизация нормализует ещё числовую форму (экспоненты, `-0`, `1`
+против `1.0`) и часть escape-последовательностей. Сегодня манифест состоит из
+строк и одного `bool`, поэтому пример точен, и это удерживается тестом
+(`TestPublishedSignaturesMatchTheDocumentedVerification`): он падает, если в
+манифест попадёт число, и называет этот раздел. Если вы читаете его после такого
+изменения — берите настоящую реализацию RFC 8785, а не приближение, иначе
+получите «подпись неверна» на исправном выпуске.
 
 ## Ограничить проблемную сборку
 

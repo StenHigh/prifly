@@ -5,8 +5,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"net/http"
 	"net/http/httptest"
@@ -536,4 +539,54 @@ func TestPublishedSignaturesMatchTheDocumentedVerification(t *testing.T) {
 	if ed25519.Verify(public, document, decode("release-manifest.sig")) {
 		t.Fatal("the whole file now verifies; SECURITY.md's warning about the trailing newline is stale")
 	}
+	// The last step of the recipe names the exact path to each archive's digest.
+	// An outside reader guessed the array's name, hit a TypeError on their own
+	// guess, and had to open the manifest -- so the path is spelled out now and
+	// pinned here.
+	var published struct {
+		Assets []struct {
+			Archive string `json:"archive"`
+			SHA256  string `json:"sha256"`
+		} `json:"assets"`
+	}
+	if err := json.Unmarshal(document, &published); err != nil {
+		t.Fatal(err)
+	}
+	if len(published.Assets) == 0 {
+		t.Fatal("the manifest names no assets, so the documented digest check reads nothing")
+	}
+	for _, asset := range published.Assets {
+		if asset.Archive == "" || asset.SHA256 == "" {
+			t.Fatalf("an asset carries no archive name or digest, which SECURITY.md tells a reader to use: %+v", asset)
+		}
+		if fmt.Sprintf("%x", sha256.Sum256(read(asset.Archive))) != asset.SHA256 {
+			t.Fatalf("%s does not match its recorded digest", asset.Archive)
+		}
+	}
+	// The documented JCS line is json.dumps(sort_keys, separators) -- exact only
+	// while the document carries no numbers, because RFC 8785 also normalises
+	// numeric form. A dependent session named this limit; a caveat nobody
+	// enforces is prose, so the limit is held here: the day a size, a count or a
+	// duration enters the manifest, an outside verifier would get "signature
+	// invalid" on a sound release for the second time, in the same shape.
+	var shape any
+	if err := json.Unmarshal(document, &shape); err != nil {
+		t.Fatal(err)
+	}
+	var walk func(value any, path string)
+	walk = func(value any, path string) {
+		switch typed := value.(type) {
+		case map[string]any:
+			for key, next := range typed {
+				walk(next, path+"/"+key)
+			}
+		case []any:
+			for index, next := range typed {
+				walk(next, fmt.Sprintf("%s/%d", path, index))
+			}
+		case float64:
+			t.Fatalf("the manifest gained a number at %s; the JCS example in SECURITY.md is an approximation that no longer holds", path)
+		}
+	}
+	walk(shape, "")
 }
