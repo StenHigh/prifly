@@ -22,6 +22,54 @@ key локально и немедленно rotate его при подозре
 
 Полезные данные: version/binary SHA, OS/arch, semantics/trust profile, минимальный sanitized workflow, command/Run/Attempt IDs, ожидаемое и фактическое поведение. Raw evidence передавайте только по согласованному закрытому каналу. Hash или скриншот не заменяет воспроизводимый сценарий, если его можно безопасно подготовить.
 
+## Проверить подпись выпуска вручную
+
+`prifly update` проверяет подпись сам. Проверка со стороны — аудит, безопасник
+заказчика, кто угодно с публичным ключом — возможна, но **наивный способ даёт
+«подпись неверна» на исправном выпуске**, и это стоило зависимой сессии получаса
+и почти отправленного отчёта о несуществующем дефекте.
+
+Причина: подписаны не байты опубликованного файла. `release-manifest.json`
+записан как канонические байты **плюс концевой перевод строки**, а подписи
+покрывают их без него.
+
+Публикуются две подписи, над разными сообщениями:
+
+- `release-manifest.sig` — над каноническими байтами, то есть содержимым
+  `release-manifest.json` **без концевого `\n`**;
+- `release-manifest.jcs.sig` — над формой RFC 8785 (JCS) того же документа,
+  которую любой читатель вычисляет из файла сам. Это подпись, предназначенная
+  для внешней проверки: она не требует воспроизводить порядок полей чужой
+  реализации.
+
+Байты этих двух сообщений **не совпадают**, поэтому подпись и сообщение нельзя
+переставлять местами.
+
+Ключ — публичная переменная репозитория `PRIFLY_RELEASE_PUBLIC_KEY` (hex).
+
+```python
+import base64, json
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(PUBLIC_KEY_HEX))
+raw = open("release-manifest.json", "rb").read()
+
+# release-manifest.sig — канонические байты без концевого перевода строки
+key.verify(base64.b64decode(open("release-manifest.sig").read().strip()),
+           raw.rstrip(b"\n"))
+
+# release-manifest.jcs.sig — форма RFC 8785, вычисленная из файла
+jcs = json.dumps(json.loads(raw), sort_keys=True,
+                 separators=(",", ":"), ensure_ascii=False).encode()
+key.verify(base64.b64decode(open("release-manifest.jcs.sig").read().strip()), jcs)
+```
+
+Обе проверки должны пройти. `key.verify` бросает `InvalidSignature` при
+несовпадении и ничего не возвращает при успехе.
+
+После подписи сверьте SHA-256 архива с полем `sha256` соответствующего asset в
+manifest — подпись удостоверяет manifest, а не архив.
+
 ## Ограничить проблемную сборку
 
 1. Прекратите **новые** Start/Drive/admissions. Сохраните version, SHA и status/receipts. Не удаляйте историю.

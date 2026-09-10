@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"net/http"
@@ -473,5 +474,66 @@ func TestPrereleaseOrderingFollowsSemver(t *testing.T) {
 		if err != nil || got != c.want {
 			t.Fatalf("%s vs %s: %d (want %d) %v", c.left, c.right, got, c.want, err)
 		}
+	}
+}
+
+// SECURITY.md tells an outside reader how to verify a release by hand, and the
+// recipe is not derivable from the published file alone: release-manifest.json
+// is the canonical bytes plus a trailing newline, while both signatures cover
+// messages without it. A dependent session verified the naive way, got "invalid
+// signature" on a sound release, and nearly reported a defect that did not
+// exist. This pins every claim that document makes, so a change to signing
+// fails here and names the document to update.
+func TestPublishedSignaturesMatchTheDocumentedVerification(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(t.TempDir(), BinaryName)
+	if err := os.WriteFile(binary, []byte("binary"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "assets")
+	if _, err := Build(BuildOptions{Assets: buildAssets(binary), Output: output, Version: "1.0.0", PrivateKeyHex: hex.EncodeToString(private), PublicKeyHex: hex.EncodeToString(public)}); err != nil {
+		t.Fatal(err)
+	}
+	read := func(name string) []byte {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(output, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	decode := func(name string) []byte {
+		t.Helper()
+		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(read(name))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	document := read("release-manifest.json")
+	if !bytes.HasSuffix(document, []byte("\n")) {
+		t.Fatal("the published manifest no longer ends with a newline; SECURITY.md says it does")
+	}
+	canonical := bytes.TrimSuffix(document, []byte("\n"))
+	if !ed25519.Verify(public, canonical, decode("release-manifest.sig")) {
+		t.Fatal("release-manifest.sig does not cover the manifest without its trailing newline; update SECURITY.md")
+	}
+	jcs, err := jsoncanonicalizer.Transform(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ed25519.Verify(public, jcs, decode("release-manifest.jcs.sig")) {
+		t.Fatal("release-manifest.jcs.sig does not cover the RFC 8785 form a reader recomputes; update SECURITY.md")
+	}
+	// The document warns that the two messages differ and that the naive read of
+	// the whole file fails. Both warnings must stay true, or they become noise.
+	if bytes.Equal(canonical, jcs) {
+		t.Fatal("the two signed messages are now identical; SECURITY.md warns they are not")
+	}
+	if ed25519.Verify(public, document, decode("release-manifest.sig")) {
+		t.Fatal("the whole file now verifies; SECURITY.md's warning about the trailing newline is stale")
 	}
 }
