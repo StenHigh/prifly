@@ -772,6 +772,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		brief := f.String("brief", "", "")
 		id := f.String("command-id", "", "")
 		drive := f.Bool("drive", false, "")
+		grant := f.String("grant", "", "control grant that authorises a brief recording confirmation as standing_grant; starting spends one of its operations")
 		inputs := bindings{}
 		f.Var(inputs, "input", "")
 		refFiles := bindings{}
@@ -793,7 +794,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			}
 			refs[port] = ref
 		}
-		result, err := e.Start(ctx, prifly.StartOptions{CommandID: *id, WorkflowFile: *workflow, BriefFile: *brief, Inputs: inputs, InputRefs: refs})
+		result, err := e.Start(ctx, prifly.StartOptions{CommandID: *id, WorkflowFile: *workflow, BriefFile: *brief, Inputs: inputs, InputRefs: refs, GrantID: *grant})
 		if err != nil {
 			return err
 		}
@@ -2384,7 +2385,7 @@ Global: --project DIR  --json  --format text|json|csv
                                    extension-authoring-reference.yaml shows a complete extend.yaml, extensions included
   validate --workflow FILE          Shape, refs, graph and profile validation; FILE is resolved from the authority root, not the working directory
   preview --workflow FILE [--brief FILE] [--input-ref PORT=REF.json]
-  run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive]
+  run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive] [--grant ID]
 
   run fork --file REQUEST.json      Create a linked Run from exact sealed refs; old Run is unchanged
   run status|next|explain|events|timing RUN_ID

@@ -106,6 +106,14 @@ func (c AuthorityControl) grant(id string) *ControlGrant {
 	return nil
 }
 
+// ControlCapabilityRunStart is the delegated authority a RunBrief means when it
+// records confirmation as "standing_grant": the owner said in advance that this
+// caller may start Runs, bounded by the grant's operation count and lifetime.
+// The brief alone can never mean it -- a document that grants itself an
+// exemption is the caller granting itself one -- so the value is accepted only
+// against a live grant, and starting spends one of its operations.
+const ControlCapabilityRunStart = "run.start"
+
 type ControlGrantRequest struct {
 	CommandID      string
 	SubjectID      string
@@ -128,8 +136,8 @@ func (e *Engine) IssueControlGrant(ctx context.Context, c ControlGrantRequest) (
 		return local.AuthorityApplyResult{}, errors.New("a grant names 1..8 control operations")
 	}
 	for _, capability := range c.Capabilities {
-		if capability != "stop.release" && capability != "package.trust" && capability != "action.admit" {
-			return local.AuthorityApplyResult{}, fault("unsupported_operation", "this installation delegates stop.release, package.trust and action.admit")
+		if capability != "stop.release" && capability != "package.trust" && capability != "action.admit" && capability != ControlCapabilityRunStart {
+			return local.AuthorityApplyResult{}, fault("unsupported_operation", "this installation delegates stop.release, package.trust, action.admit and run.start")
 		}
 	}
 	if slices.Contains(c.Capabilities, "action.admit") {
@@ -165,7 +173,10 @@ func (e *Engine) IssueControlGrant(ctx context.Context, c ControlGrantRequest) (
 		operation := ControlOperationRelease
 		if capability == "package.trust" {
 			operation = ControlOperationTrust
-		} else if capability == "action.admit" {
+		} else if capability == "action.admit" || capability == ControlCapabilityRunStart {
+			// Starting a Run is admitting one, so the subject must already hold
+			// the operation that gates admission. A grant bounds when a decision
+			// is made, never who may hold the object.
 			operation = ControlOperationAdmit
 		}
 		if !control.allows(c.SubjectID, "project", e.Config.ID, operation) {

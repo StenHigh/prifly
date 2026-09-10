@@ -18,6 +18,17 @@ import (
 	"github.com/stenhigh/prifly/internal/local"
 )
 
+// startGrantRefs keeps grant_refs the empty array every explicitly confirmed Run
+// has always carried, and names exactly one grant when a standing arrangement
+// authorised this start. The contract has allowed 0..128 identifiers since it
+// was published, so recording the grant needs no new field anywhere.
+func startGrantRefs(grantID string) []any {
+	if grantID == "" {
+		return []any{}
+	}
+	return []any{grantID}
+}
+
 type StartOptions struct {
 	// Empty and "1" retain the mandatory RunBrief contract. Version 2 admits
 	// declared workflow inputs without manufacturing a separate task document.
@@ -44,6 +55,9 @@ type StartOptions struct {
 	// WorkspaceMode is set only by project start. An empty value retains the
 	// historical raw run-start contract.
 	WorkspaceMode string
+	// GrantID names the control grant that authorises a brief recording
+	// confirmation as "standing_grant". Starting spends one of its operations.
+	GrantID string
 }
 type PreviewOptions struct {
 	SchemaVersion     string
@@ -606,6 +620,9 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		return local.ApplyResult{}, fault("unsupported_start_version", "unsupported Start contract version")
 	}
 	neutral := options.SchemaVersion == "2"
+	// standingGrant names the control grant a non-explicit brief leans on, and it
+	// stays empty for every explicitly confirmed Run.
+	standingGrant := ""
 	if options.CommandID == "" || !neutral && options.BriefFile == "" && len(options.Brief) == 0 {
 		return local.ApplyResult{}, errors.New("explicit command_id and RunBrief are required")
 	}
@@ -704,7 +721,17 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		// true standing_grant to conclude the value was wrong and to write a
 		// stronger claim than they had.
 		if brief.Confirmation != "explicit" {
-			return local.ApplyResult{}, fault("start_confirmation_required", "this brief records confirmation as "+strconv.Quote(brief.Confirmation)+"; a Run starts only on explicit confirmation of this launch, and a brief cannot grant itself an exemption — a standing arrangement is not confirmation of this Run")
+			// A standing arrangement is still not something the brief may claim:
+			// it is accepted only against a grant the owner issued into this
+			// authority, and starting spends one of that grant's operations, so
+			// the bound the owner set is a bound and not a sentence.
+			if brief.Confirmation != "standing_grant" {
+				return local.ApplyResult{}, fault("start_confirmation_required", "this brief records confirmation as "+strconv.Quote(brief.Confirmation)+"; a Run starts only on explicit confirmation of this launch, and a brief cannot grant itself an exemption. The one standing arrangement this engine honours is standing_grant, and it is not claimed in a brief either: it is proven by a control grant of "+ControlCapabilityRunStart+" named with --grant")
+			}
+			if options.GrantID == "" {
+				return local.ApplyResult{}, fault("start_confirmation_required", "this brief records confirmation as \"standing_grant\", and a brief cannot grant itself an exemption: name the control grant that authorises it with --grant, or record explicit confirmation of this launch. Issue one with grant issue --capability "+ControlCapabilityRunStart+"; the owner sets how many starts it covers and for how long, and each start spends one")
+			}
+			standingGrant = options.GrantID
 		}
 	}
 	workflowRef := flow.Ref{ID: plan.Workflow.ID, Version: plan.Workflow.Version, Digest: plan.Digest}
@@ -876,7 +903,7 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		}
 		briefRef = briefArtifact.Ref()
 	}
-	startCommand := map[string]any{"schema_version": "1", "command_id": options.CommandID, "project_id": e.Config.ID, "workflow_ref": workflowRef, "package_lock_ref": lockRef, "inputs": inputs, "interaction_mode": "with_human", "execution_mode": "managed", "capacity_profile": "foundation:one-slot", "grant_refs": []any{}}
+	startCommand := map[string]any{"schema_version": "1", "command_id": options.CommandID, "project_id": e.Config.ID, "workflow_ref": workflowRef, "package_lock_ref": lockRef, "inputs": inputs, "interaction_mode": "with_human", "execution_mode": "managed", "capacity_profile": "foundation:one-slot", "grant_refs": startGrantRefs(standingGrant)}
 	contract := "RunStart"
 	if neutral {
 		startCommand["schema_version"], contract = "2", "RunStartV2"
@@ -925,7 +952,27 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if packagePin != nil {
 		pins = append(pins, *packagePin)
 	}
-	return e.applyControlledWithPins(ctx, pin, pins, e.owner, options.CommandID, runID, "run.created", startCommand, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	// The grant's counter moves in the same transaction as the Run it authorised.
+	// Checking a grant without spending one of its operations would publish a
+	// bound that does not bind: three starts issued, unlimited starts taken.
+	var controlMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error)
+	if standingGrant != "" {
+		admissionID := derivedID("start-admission", e.owner, options.CommandID)
+		controlMutation = func(snapshot local.AuthoritySnapshot, observation Observation) (json.RawMessage, error) {
+			control, err := decodeControl(snapshot.Data)
+			if err != nil {
+				return nil, err
+			}
+			if err := e.controlCompatible(control); err != nil {
+				return nil, err
+			}
+			if err := consumeGrant(&control, e.owner, ControlCapabilityRunStart, rawDigest(cb), admissionID, standingGrant, nil, observation); err != nil {
+				return nil, err
+			}
+			return canonicalState(control)
+		}
+	}
+	return e.applyControlledWithControlMutation(ctx, pin, pins, controlMutation, e.owner, options.CommandID, runID, "run.created", startCommand, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if blocked != nil {
 			return local.Change{}, blocked
 		}
