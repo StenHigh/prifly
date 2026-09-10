@@ -64,7 +64,13 @@ printf '{{"schema_version":"1","run_id":"%s","step_instance_id":"%s","attempt_id
         stream = command.stdout if expect == 0 else command.stderr
         return json.loads(stream.strip().splitlines()[-1]) if stream.strip() else {}
 
-    assert cli("capacity", "show") == {"schema_version": "1", "capacity": 1, "held": {}, "waiting": {}}, "a fresh authority does not admit exactly one attempt"
+    # The whole answer is pinned, so a new key cannot arrive unnoticed and an old
+    # one cannot leave. `would_refuse` is the reading that used to be obtainable
+    # only by attempting a start -- and that refusal creates and queues a Run, so
+    # asking the question changed its answer, which is why nothing compared this
+    # refusal between releases.
+    idle = cli("capacity", "show")
+    assert idle == {"schema_version": "1", "capacity": 1, "held": {}, "waiting": {}, "available": 1, "would_refuse": ""}, f"a fresh authority does not admit exactly one attempt: {idle}"
 
     holder = subprocess.Popen([str(binary), "--project", str(target), "--json", "run", "start", "--workflow", "workflows/shell.json",
                                "--brief", "brief.json", "--command-id", "command:capacity-holder", "--drive"],
@@ -77,6 +83,11 @@ printf '{{"schema_version":"1","run_id":"%s","step_instance_id":"%s","attempt_id
                 break
             time.sleep(0.2)
         assert len(held) == 1, f"a driven attempt never took the single slot: {held}"
+        # With the only slot taken, the read must name the refusal a start would
+        # meet -- while creating nothing, unlike the start that would prove it.
+        full = cli("capacity", "show")
+        assert full["available"] == 0 and full["would_refuse"] == "capacity_conflict", f"a full authority did not name the refusal: {full}"
+        assert full["waiting"] == {}, f"reading the capacity joined the admission queue: {full['waiting']}"
 
         # The refusal a reader meets first. It used to arrive with no message,
         # pointing at doctor and run status, neither of which reports a driver
@@ -100,7 +111,9 @@ printf '{{"schema_version":"1","run_id":"%s","step_instance_id":"%s","attempt_id
     finally:
         holder.wait(timeout=HOLD_SECONDS + 60)
     assert holder.returncode == 0, f"the holding Run failed: {holder.stderr.read()[:300]}"
-    assert cli("capacity", "show")["held"] == {}, "a settled attempt kept its slot"
+    freed = cli("capacity", "show")
+    assert freed["held"] == {}, "a settled attempt kept its slot"
+    assert freed["available"] == 1 and freed["would_refuse"] == "", f"a freed slot still reads as refused: {freed}"
 
     # The bound is authority state: it moves only with a stated reason, and a
     # refused change leaves it where it was.

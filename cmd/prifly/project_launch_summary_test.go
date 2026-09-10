@@ -124,6 +124,15 @@ launches:
 		if err != nil && !os.IsNotExist(err) || len(entries) != 0 {
 			t.Fatalf("review materialized worker workspaces: %v %v", entries, err)
 		}
+		// The dependent session that will use --prepare as a capacity probe set
+		// exactly this condition: the probe must leave the admission queue
+		// untouched. Attempting a start to learn the same thing does not -- the
+		// capacity_conflict refusal creates and queues a Run, which is why that
+		// refusal has never been compared between releases.
+		waiting, err := engine.AdmissionQueue(context.Background())
+		if err != nil || len(waiting) != 0 {
+			t.Fatalf("review joined the admission queue: %+v %v", waiting, err)
+		}
 	}
 	reviewed := prepare()
 	assertNoEffects(t)
@@ -132,6 +141,15 @@ launches:
 	}
 	if len(reviewed.DecisionSheet.Records) != 1 || string(reviewed.DecisionSheet.Records[0].Value) != "false" || !reviewed.DecisionStates[0].Answered {
 		t.Fatal("typed false preanswer is absent from review")
+	}
+	// Until 0.13.10 the only way to learn that a launch would be refused for
+	// capacity was to attempt it, and that refusal creates and queues a Run: the
+	// question could not be asked without changing the answer, so no stand
+	// compared that refusal between releases. The review answers it read-only --
+	// and must not fold the answer into the digest, because other Runs move it
+	// and the digest would go stale on its own.
+	if reviewed.Admission == nil || reviewed.Admission.Capacity <= 0 || reviewed.Admission.Available != reviewed.Admission.Capacity-reviewed.Admission.Held || reviewed.Admission.WouldRefuse != "" {
+		t.Fatalf("an idle authority did not report a free slot in the review: %+v", reviewed.Admission)
 	}
 	start := append(append([]string{"project", "start"}, args...), "--expected-launch-digest", reviewed.ReviewDigest, "--command-id", "reviewed-start")
 	for _, test := range []struct{ name, path, before, after string }{
@@ -212,6 +230,11 @@ launches:
 	if current := prepare(); !reflect.DeepEqual(reviewed, current) {
 		t.Fatal("restored request changed its review (including generated command identity)")
 	}
+	// Admission is a live reading beside the agreement, not part of it: other
+	// Runs move it, --prepare answers it and start does not, and folding it in
+	// would make a prepared launch go stale by itself.
+	agreed := reviewed
+	agreed.Admission = nil
 	var out, stderr bytes.Buffer
 	writes := 0
 	writer := projectSummaryWriter(func(data []byte) (int, error) {
@@ -220,7 +243,10 @@ launches:
 			assertNoEffects(t)
 			var actual projectLaunchSummary
 			decode(string(data), &actual)
-			if !reflect.DeepEqual(reviewed, actual) {
+			// Admission is a live reading beside the agreement, not part of it:
+			// other Runs move it, --prepare answers it and start does not, and
+			// folding it in would make a prepared launch go stale by itself.
+			if !reflect.DeepEqual(agreed, actual) {
 				t.Fatal("published summary differs from the reviewed request")
 			}
 		}
@@ -231,7 +257,7 @@ launches:
 	}
 	var started projectStartResult
 	decode(out.String(), &started)
-	if started.LaunchSummary == nil || !reflect.DeepEqual(reviewed, *started.LaunchSummary) || started.Workspace != nil {
+	if started.LaunchSummary == nil || !reflect.DeepEqual(agreed, *started.LaunchSummary) || started.Workspace != nil {
 		t.Fatal("start lost the exact summary or acquired a repository claim")
 	}
 	view := started.Run

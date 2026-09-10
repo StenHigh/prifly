@@ -254,3 +254,34 @@ func TestCLIProjectQuestionnaireRejectsInvalidSelections(t *testing.T) {
 		})
 	}
 }
+
+// The refusal half cannot be reached through a real authority in a review test:
+// this build is qualified for one to four attempts, so emptying the slots needs
+// a live Run, and the review fixture exists to prove nothing is created. The
+// decision is therefore its own function, and both branches are checked here.
+// Until 0.13.10 there was no way to ask this at all -- capacity_conflict creates
+// and queues a Run, so the question changed its own answer.
+func TestAdmissionPreviewNamesTheRefusalOnlyWhenNoSlotIsFree(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		capacity      int64
+		held, waiting int
+		available     int64
+		refusal       string
+	}{
+		{"idle authority", 4, 0, 0, 4, ""},
+		{"one slot left", 4, 3, 0, 1, ""},
+		{"every slot taken", 4, 4, 2, 0, "capacity_conflict"},
+		{"more held than the lowered capacity allows", 1, 3, 0, -2, "capacity_conflict"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			preview := projectAdmissionState(test.capacity, test.held, test.waiting)
+			if preview.Capacity != test.capacity || preview.Held != int64(test.held) || preview.Waiting != int64(test.waiting) {
+				t.Fatalf("the reading was not reported as read: %+v", preview)
+			}
+			if preview.Available != test.available || preview.WouldRefuse != test.refusal {
+				t.Fatalf("got available=%d refusal=%q, want %d %q", preview.Available, preview.WouldRefuse, test.available, test.refusal)
+			}
+		})
+	}
+}

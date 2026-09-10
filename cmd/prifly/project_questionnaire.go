@@ -97,6 +97,35 @@ type projectLaunchSummary struct {
 	DecisionStates      []projectDecisionState        `json:"decision_states"`
 	KnownQuestionsOnly  bool                          `json:"known_questions_only"`
 	ReviewDigest        string                        `json:"review_digest,omitempty"`
+	// Admission is filled only by --prepare, and deliberately after the review
+	// digest is computed: it reads a quantity other Runs move, and folding it in
+	// would make the digest go stale on its own.
+	Admission *projectAdmissionPreview `json:"admission,omitempty"`
+}
+
+// projectAdmissionState turns a reading of the authority's slots into the
+// answer a caller wanted from an attempt: would this launch be admitted now.
+func projectAdmissionState(capacity int64, held, waiting int) *projectAdmissionPreview {
+	preview := &projectAdmissionPreview{Capacity: capacity, Held: int64(held), Waiting: int64(waiting), Available: capacity - int64(held)}
+	if preview.Available <= 0 {
+		preview.WouldRefuse = "capacity_conflict"
+	}
+	return preview
+}
+
+// projectAdmissionPreview answers "would this launch be admitted right now"
+// without asking the authority to admit it. Until 0.13.10 the only way to learn
+// that a launch would be refused with capacity_conflict was to attempt it, and
+// that refusal creates and queues a Run -- so the question could not be asked
+// without changing the answer, and no stand compared that refusal between
+// releases. This is a reading, not a promise: a slot can be taken or freed
+// between this answer and the start that follows it.
+type projectAdmissionPreview struct {
+	Capacity    int64  `json:"capacity"`
+	Held        int64  `json:"held"`
+	Waiting     int64  `json:"waiting"`
+	Available   int64  `json:"available"`
+	WouldRefuse string `json:"would_refuse,omitempty"`
 }
 
 type projectExecutionReview struct {

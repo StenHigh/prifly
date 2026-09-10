@@ -257,6 +257,22 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return usageError("project_start_stale_launch: sources, inputs, bindings or decisions changed; repeat project questionnaire --prepare and review the new summary")
 		}
 		if prepare {
+			// Read after the digest, never into it.
+			preview, err := prifly.Open(c.project, true)
+			if err != nil {
+				return err
+			}
+			capacity, held, err := preview.AdmissionCapacity(ctx)
+			if err != nil {
+				_ = preview.Close()
+				return err
+			}
+			waiting, err := preview.AdmissionQueue(ctx)
+			_ = preview.Close()
+			if err != nil {
+				return err
+			}
+			summary.Admission = projectAdmissionState(capacity, len(held), len(waiting))
 			return c.emit(summary)
 		}
 		// Keep stdout's one final result intact. The pre-dispatch summary is on
