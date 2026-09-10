@@ -1,0 +1,8 @@
+authoring: prifly-step/1
+id: test:step/tests
+version: 1.0.0
+title: Tests
+kind: worker
+executor: {adapter_ref: "{{assisted}}", operation: session}
+effects: {class: none, retry_class: never}
+result_schema_ref: "{{result}}"

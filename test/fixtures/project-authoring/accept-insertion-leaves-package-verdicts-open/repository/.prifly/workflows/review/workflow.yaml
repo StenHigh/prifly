@@ -1,0 +1,34 @@
+authoring: prifly-project-workflow/1
+package:
+  id: test:package/review
+  version: 1.0.0
+  description: A package step that leaves one verdict unrouted.
+  requires_core_protocol: "1"
+  references:
+    assisted: core:adapter/assisted-session@1.0.0
+    policy: core:policy/local@3.0.0
+    result: core:schema/step-result@1.0.0
+id: test:workflow/review
+version: 1.0.0
+refs:
+  step_build: "{{step_build}}"
+  step_commit: "{{step_commit}}"
+  policy: "{{policy}}"
+inputs: {}
+outputs: {}
+entry: build
+limits: {max_step_instances: 3, max_control_transitions: 8}
+policy_ref: policy
+stages:
+  build:
+    kind: step
+    step_ref: step_build
+    on: {pass: commit, fail: rejected, needs_revision: rejected}
+    on_error: rejected
+  commit:
+    kind: step
+    step_ref: step_commit
+    on: {pass: done, fail: rejected, needs_revision: rejected, no_work: rejected}
+    on_error: rejected
+  done: {kind: finish, outcome: succeeded}
+  rejected: {kind: finish, outcome: rejected}

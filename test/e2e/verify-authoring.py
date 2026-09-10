@@ -85,9 +85,18 @@ def check_case(binary, source):
             assert launches[0]["inputs"] == expectation.get("inputs", [{"name": "task", "required": True, "format": "json"}]), launches
             before = run(binary, "--project", authority, "package", "list")
             output = root / "sealed"
-            compiled = run(binary, "--project", authority, "project", "compile", "--repository", repository, "--package", expectation["package"], "--host", "codex-cli", "--output", output)
+            host = expectation.get("host", "codex-cli")
+            compiled = run(binary, "--project", authority, "project", "compile", "--repository", repository, "--package", expectation["package"], *(["--host", host] if host else []), "--output", output)
             assert compiled.returncode == 0, compiled.stderr
             assert (output / "prifly.package.json").is_file()
+            # An insertion declaring impossible verdicts raises the whole document
+            # to the revision that demands completeness of every step stage --
+            # including the package author's, which this project cannot change.
+            # Those are named here instead of refused; every other accepted case
+            # pins the field empty, so a name appearing where nothing was inserted
+            # fails too.
+            unclosed = json.loads(compiled.stdout).get("package_verdicts_unclosed", [])
+            assert unclosed == expectation.get("package_verdicts_unclosed", []), f"{source.name}: {unclosed}"
             if options := expectation.get("workflow_options"):
                 result = json.loads(compiled.stdout)
                 component = next(item for item in result["components"] if item["kind"] == "workflow" and item["ref"]["id"] == options["workflow"])

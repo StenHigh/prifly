@@ -1,0 +1,7 @@
+extensions:
+  - id: tests-after-build
+    workflow: review
+    between: {from: build, to: commit}
+    step: tests
+    impossible_verdicts: [no_work]
+    on: {pass: commit, fail: rejected, needs_revision: rejected}

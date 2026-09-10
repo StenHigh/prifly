@@ -1,0 +1,9 @@
+{
+  "command": "compile",
+  "accepted": true,
+  "host": null,
+  "launch": "review",
+  "package": "review",
+  "inputs": [],
+  "package_verdicts_unclosed": ["test:workflow/review/build"]
+}

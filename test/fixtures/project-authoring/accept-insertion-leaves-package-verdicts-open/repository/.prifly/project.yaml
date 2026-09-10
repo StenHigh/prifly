@@ -1,0 +1,10 @@
+schema_version: prifly-project-profile/3
+packages:
+  review:
+    source: .prifly/workflows/review
+launches:
+  review:
+    title: Review cycle with an inserted check
+    description: Compile a package whose own step leaves a verdict unrouted.
+    kind: workflow
+    workflow: .prifly/workflows/review/workflow.yaml
