@@ -926,7 +926,10 @@ stages:
 			assertPreflight("project_start_unknown_input", append(append([]string{}, base...), "--input", "missing=unused.json")...)
 			assertPreflight("project_start_invalid_workspace", append(append([]string{}, base...), "--workspace", "surprise")...)
 			assertPreflight("project_start_missing_decision", base...)
-			assertPreflight("project_start_missing_decision: roadmap_milestone", append(append([]string{}, base...), "--preflight-answer", "checkpoint=true", "--preflight-answer", `roadmap_linkage="link"`)...)
+			// The refusal names the decision and the exit that actually applies to
+			// it. roadmap_milestone is not answerable by policy, so it must be
+			// pointed at --preflight-answer and never at --decision-policy.
+			assertPreflight("roadmap_milestone must be answered with --preflight-answer", append(append([]string{}, base...), "--preflight-answer", "checkpoint=true", "--preflight-answer", `roadmap_linkage="link"`)...)
 			assertPreflight("project_start_stale_decision_catalog", append(append([]string{}, base...), "--package-profile", "full", "--preflight-answer", "checkpoint=true", "--preflight-answer", `roadmap_linkage="skip"`, "--expected-decision-catalog-digest", "sha256:"+strings.Repeat("0", 64))...)
 			assertPreflight("project_start_unknown_decision", append(append([]string{}, base...), "--preflight-answer", "unknown=true")...)
 			assertPreflight("project_start_invalid_decision_answer", append(append([]string{}, base...), "--preflight-answer", "checkpoint=false")...)

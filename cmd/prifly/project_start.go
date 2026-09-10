@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -563,11 +564,11 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 			continue
 		}
 		if _, answered := answers[definition.ID]; !answered {
-			if decisionPolicy != "autonomous" || !definition.Automatic || definition.Sensitivity != "ordinary" || len(definition.Recommendation) == 0 {
+			if decisionPolicy != "autonomous" || !projectPolicyCanAnswer(definition) {
 				if !complete {
 					continue
 				}
-				return projectPreflight{}, usageError("project_start_missing_decision: " + definition.ID)
+				return projectPreflight{}, usageError(projectMissingDecisionRefusal(source.DecisionCatalog, selected, answers, decisionPolicy))
 			}
 			value, err := flow.Canonical(definition.Recommendation)
 			if err != nil || projectValidateDecisionValue(definition, value) != nil {
@@ -883,4 +884,53 @@ func projectInstalledWorkflowPath(ctx context.Context, engine *prifly.Engine, re
 		reason = "the installed one has " + installed
 	}
 	return "", usageError("project_start_package_not_installed: the sealed package " + ref.ID + "@" + ref.Version + " was not found among trusted packages: " + reason + "; read package list")
+}
+
+// projectPolicyCanAnswer reports whether an autonomous policy may answer this
+// decision on the caller's behalf: it has to be declared automatic, ordinary in
+// sensitivity, and carry a recommendation to use.
+func projectPolicyCanAnswer(definition prifly.DecisionDefinition) bool {
+	return definition.Automatic && definition.Sensitivity == "ordinary" && len(definition.Recommendation) != 0
+}
+
+// projectMissingDecisionRefusal names every unanswered decision, not the first
+// one found, and says which of the two exits applies to each. Until 0.13.12 it
+// named one id and nothing else: a caller with six unanswered decisions learned
+// them one refusal at a time, and was told neither that the decision was
+// declared automatic nor that --decision-policy autonomous would answer it. The
+// two exits are not interchangeable -- a decision that is sensitive, not
+// automatic, or carries no recommendation is never answered by policy, and
+// advising the policy there would send the reader in a circle.
+func projectMissingDecisionRefusal(catalog []prifly.DecisionDefinition, selected string, answers map[string]json.RawMessage, decisionPolicy string) string {
+	byPolicy, byHand := []string{}, []string{}
+	for _, definition := range catalog {
+		if definition.Phase != "preflight" || !projectDecisionApplies(definition, selected, answers) || !definition.Required || definition.Destination.Kind == "package_profile" {
+			continue
+		}
+		if _, answered := answers[definition.ID]; answered {
+			continue
+		}
+		if projectPolicyCanAnswer(definition) {
+			byPolicy = append(byPolicy, definition.ID)
+		} else {
+			byHand = append(byHand, definition.ID)
+		}
+	}
+	count := len(byPolicy) + len(byHand)
+	subject := " declared decisions are unanswered."
+	if count == 1 {
+		subject = " declared decision is unanswered."
+	}
+	message := "project_start_missing_decision: " + strconv.Itoa(count) + subject
+	if len(byPolicy) != 0 && decisionPolicy != "autonomous" {
+		message += " " + strings.Join(byPolicy, ", ") + " are declared automatic and carry a recommendation, so --decision-policy autonomous answers them without asking"
+		if len(byHand) == 0 {
+			return message + "; answering each with --preflight-answer ID=JSON does the same explicitly"
+		}
+		message += "."
+	}
+	if len(byHand) != 0 {
+		message += " " + strings.Join(byHand, ", ") + " must be answered with --preflight-answer ID=JSON: no policy answers them, because they are not declared automatic, not of ordinary sensitivity, or carry no recommendation"
+	}
+	return message + ". project questionnaire --repository DIR --launch ID lists every declared question with its choices"
 }
