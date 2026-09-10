@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -40,11 +41,18 @@ type projectPackageSource struct {
 	Profiles              map[string]map[string]any
 	DecisionCatalog       []prifly.DecisionDefinition
 	Documents             []projectPackageDocument
-	RootValue             any
-	ResolvedDependencies  []flow.Ref
-	Build                 *projectBuildProvenance
-	ExecutionBindings     *projectPackageExecution
-	Folder                string
+	// ReadPaths names every file under the repository this compile opened to
+	// produce the package, repository-relative. A file with the right name in a
+	// tree that is not the declared source is simply not read, and until 0.13.10
+	// nothing said so: the digest was unchanged, the sealed document unchanged,
+	// no refusal and no warning, so "the edit does not matter" and "the edit is
+	// not read" were indistinguishable.
+	ReadPaths            []string
+	RootValue            any
+	ResolvedDependencies []flow.Ref
+	Build                *projectBuildProvenance
+	ExecutionBindings    *projectPackageExecution
+	Folder               string
 }
 
 type projectPackageDocument struct {
@@ -93,8 +101,13 @@ type projectCompileResult struct {
 	// insertion rather than authorship. It rides in the result rather than on
 	// stderr: a --json caller reads the last document of stderr for a refusal,
 	// and a bare line there would look like one.
-	PackageVerdictsUnclosed []string                 `json:"package_verdicts_unclosed,omitempty"`
-	ExecutionBindings       *projectPackageExecution `json:"-"`
+	PackageVerdictsUnclosed []string `json:"package_verdicts_unclosed,omitempty"`
+	// Sources names every file under the repository this compile read, so a
+	// reader can tell an edit that did not matter from an edit that was never
+	// read. It is always present: a caller may rely on it being the whole list,
+	// and an empty one would be indistinguishable from an older build.
+	Sources           []string                 `json:"sources"`
+	ExecutionBindings *projectPackageExecution `json:"-"`
 }
 
 func (c *cli) projectCompile(ctx context.Context, args []string) error {
@@ -590,76 +603,94 @@ func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error
 	if err != nil {
 		return projectPackageSource{}, err
 	}
-	source.DecisionCatalog, err = projectWorkflowFolderDecisionCatalog(root, folder, workflowValue, source)
+	var catalogSources []string
+	source.DecisionCatalog, catalogSources, err = projectWorkflowFolderDecisionCatalog(root, folder, workflowValue, source)
 	if err != nil {
 		return projectPackageSource{}, err
 	}
+	read := map[string]bool{}
+	for _, document := range source.Documents {
+		read[document.Source] = true
+		if document.Extensions != "" {
+			read[document.Extensions] = true
+		}
+	}
+	for _, path := range catalogSources {
+		read[path] = true
+	}
+	source.ReadPaths = slices.Sorted(maps.Keys(read))
 	source.RootValue = workflowValue
 	source.Folder = folder
 	return source, nil
 }
 
-func projectWorkflowFolderDecisionCatalog(root, folder string, workflowValue any, source projectPackageSource) ([]prifly.DecisionDefinition, error) {
+func projectWorkflowFolderDecisionCatalog(root, folder string, workflowValue any, source projectPackageSource) ([]prifly.DecisionDefinition, []string, error) {
 	workflow, ok := workflowValue.(map[string]any)
 	if !ok {
-		return nil, errors.New("workflow.yaml must be an object")
+		return nil, nil, errors.New("workflow.yaml must be an object")
 	}
 	rawCatalog, exists := workflow["decision_catalog"]
 	if !exists {
-		return []prifly.DecisionDefinition{}, nil
+		return []prifly.DecisionDefinition{}, nil, nil
 	}
 	paths, ok := rawCatalog.([]any)
 	if !ok {
-		return nil, usageError("project_workflow_folder_invalid: decision_catalog must be a list")
+		return nil, nil, usageError("project_workflow_folder_invalid: decision_catalog must be a list")
 	}
 	canonicalFolder, err := canonicalProjectPath(folder)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	result := make([]prifly.DecisionDefinition, 0, len(paths))
 	seenPaths := map[string]bool{}
 	seenIDs := map[string]bool{}
+	sources := []string{}
 	for index, rawPath := range paths {
 		sourcePath, ok := rawPath.(string)
 		if !ok || sourcePath == "" {
-			return nil, usageError(fmt.Sprintf("project_workflow_folder_invalid: decision_catalog/%d must be a non-empty source path", index))
+			return nil, nil, usageError(fmt.Sprintf("project_workflow_folder_invalid: decision_catalog/%d must be a non-empty source path", index))
 		}
 		path, err := projectPackageSourcePath(root, sourcePath)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		relative, err := filepath.Rel(canonicalFolder, path)
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return nil, usageError("project_workflow_folder_invalid: decision catalog source must stay inside its workflow folder")
+			return nil, nil, usageError("project_workflow_folder_invalid: decision catalog source must stay inside its workflow folder")
 		}
 		if filepath.Ext(path) != ".yaml" && filepath.Ext(path) != ".yml" {
-			return nil, usageError("project_workflow_folder_invalid: decision catalog source must be YAML")
+			return nil, nil, usageError("project_workflow_folder_invalid: decision catalog source must be YAML")
 		}
 		if seenPaths[path] {
-			return nil, usageError("project_workflow_folder_invalid: decision_catalog must not repeat an exact source")
+			return nil, nil, usageError("project_workflow_folder_invalid: decision_catalog must not repeat an exact source")
 		}
 		seenPaths[path] = true
+		// The declared path, not the canonical one: canonicalizing resolves
+		// symlinks, and a repository reached through one then reads as outside
+		// itself. The declared form is also what a reader compares their edit
+		// against.
+		sources = append(sources, filepath.ToSlash(sourcePath))
 		documents, err := projectYAMLDocuments(path)
 		if err != nil {
-			return nil, usageError("project_workflow_folder_invalid: " + err.Error())
+			return nil, nil, usageError("project_workflow_folder_invalid: " + err.Error())
 		}
 		if len(documents) != 1 {
-			return nil, usageError("project_workflow_folder_invalid: decision catalog source requires exactly one YAML document")
+			return nil, nil, usageError("project_workflow_folder_invalid: decision catalog source requires exactly one YAML document")
 		}
 		definition, err := projectDecisionDefinition(documents[0])
 		if err != nil {
-			return nil, usageError("project_workflow_folder_invalid: " + err.Error())
+			return nil, nil, usageError("project_workflow_folder_invalid: " + err.Error())
 		}
 		if seenIDs[definition.ID] {
-			return nil, usageError("project_workflow_folder_invalid: duplicate decision ID " + definition.ID)
+			return nil, nil, usageError("project_workflow_folder_invalid: duplicate decision ID " + definition.ID)
 		}
 		if err := projectValidateDecisionDefinition(definition, workflow, source, result); err != nil {
-			return nil, usageError("project_workflow_folder_invalid: " + err.Error())
+			return nil, nil, usageError("project_workflow_folder_invalid: " + err.Error())
 		}
 		seenIDs[definition.ID] = true
 		result = append(result, definition)
 	}
-	return result, nil
+	return result, sources, nil
 }
 
 func projectDecisionDefinition(value any) (prifly.DecisionDefinition, error) {

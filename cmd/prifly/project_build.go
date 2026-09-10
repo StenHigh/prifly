@@ -170,7 +170,11 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	if err != nil {
 		return projectCompileResult{}, err
 	}
-	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings, PackageVerdictsUnclosed: unclosed}
+	// The profile is read on every compile and is where each package's source is
+	// declared, so it belongs in the list a reader checks their edit against.
+	sources := append([]string{filepath.ToSlash(filepath.Join(".prifly", "project.yaml"))}, source.ReadPaths...)
+	slices.Sort(sources)
+	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings, PackageVerdictsUnclosed: unclosed, Sources: slices.Compact(sources)}
 	if source.Build != nil {
 		result.SchemaVersion = "project-compile/2"
 		result.AuthorPackage = &source.Build.AuthorPackage

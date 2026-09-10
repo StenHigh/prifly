@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -266,5 +267,55 @@ definition:
 				t.Fatalf("the insertion was accepted: %d %s", code, stderr)
 			}
 		})
+	}
+}
+
+// A dependent session edited a step under .prifly/extensions/… while the
+// package's declared source was .prifly/workflows/…; the copies were
+// byte-identical, so a diff said nothing, the digest did not move and the
+// compile stayed green. They spent two attempts concluding the rule they were
+// testing had been removed, and nearly reported it as a defect here. The result
+// now names what it read, and the twin that was not read must stay out of it.
+func TestProjectCompileNamesTheFilesItRead(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	root, authority := t.TempDir(), filepath.Join(t.TempDir(), "authority")
+	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", authority); code != 0 {
+		t.Fatalf("neutral init: %d %s", code, stderr)
+	}
+	writeExtensionInputFixture(t, root, extensionInputExtend)
+	// The same file name under a tree nobody declared as the package source.
+	writeFixtureFile(t, root, ".prifly/extensions/cycle/steps/tests.yaml", `authoring: prifly-step/1
+id: test:step/tests
+version: 1.0.0
+title: Tests
+kind: worker
+executor: {adapter_ref: "{{assisted}}", operation: session}
+effects: {class: none, retry_class: never}
+result_schema_ref: "{{result}}"
+inputs:
+  handoff: {schema_ref: "{{schema_handoff}}", required: true}
+`)
+	output := filepath.Join(t.TempDir(), "compiled")
+	code, out, stderr := runCLI(t, "--project", authority, "project", "compile", "--repository", root, "--package", "cycle", "--output", output)
+	if code != 0 {
+		t.Fatalf("compile: %d %s", code, stderr)
+	}
+	var compiled projectCompileResult
+	if err := json.Unmarshal([]byte(out), &compiled); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(compiled.Sources, ".prifly/workflows/cycle/steps/tests.yaml") {
+		t.Fatalf("the step that was read is missing from sources: %v", compiled.Sources)
+	}
+	if slices.Contains(compiled.Sources, ".prifly/extensions/cycle/steps/tests.yaml") {
+		t.Fatalf("a file this compile never read is named as read: %v", compiled.Sources)
+	}
+	for _, expected := range []string{".prifly/project.yaml", ".prifly/workflows/cycle/workflow.yaml", ".prifly/workflows/cycle/extend.yaml", ".prifly/workflows/cycle/schemas/handoff.yaml"} {
+		if !slices.Contains(compiled.Sources, expected) {
+			t.Fatalf("%s was read and is not named: %v", expected, compiled.Sources)
+		}
+	}
+	if !slices.IsSorted(compiled.Sources) {
+		t.Fatalf("sources is not sorted, so two compiles of one tree can differ by order: %v", compiled.Sources)
 	}
 }
