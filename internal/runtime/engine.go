@@ -171,6 +171,12 @@ func (e *Engine) applyControlledWithControlMutation(ctx context.Context, control
 		if change.ReceiptOnly {
 			return change, nil
 		}
+		// A Run that has settled will never ask for admission again, so holding
+		// its place in the queue only blocks whoever is behind it. Set here
+		// rather than at each settling site: terminal status is reached from
+		// cancellation, completion and failure alike, and one of them would have
+		// been forgotten.
+		change.LeaveAdmissionQueue = change.LeaveAdmissionQueue || r.terminal()
 		if err := r.syncInvocationState(); err != nil {
 			return local.Change{}, err
 		}
@@ -604,8 +610,15 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		actions = append(actions, "run.drive", "run.cancel")
 	case "resume_required":
 		actions = append(actions, "run.resume", "run.cancel")
-	case "active", "check", "cancel":
+	case "active", "check":
 		actions = append(actions, "run.cancel")
+	case "cancel":
+		// Cancellation is already requested and nothing is left running, so the
+		// move that finishes it is the driver stating that. Listing run.cancel
+		// here offered a loop that changes nothing: a dependent session spent
+		// four commands hunting an exit while `action` already said "cancel"
+		// and the one command that settles the Run was absent from the list.
+		actions = append(actions, "run.drive")
 	case "waiting_decision":
 		actions = append(actions, "run.decision.answer", "run.cancel")
 	case "blocked_child":

@@ -1778,3 +1778,49 @@ func TestCapacityRefusalDistinguishesAttemptsFromRuns(t *testing.T) {
 		}
 	}
 }
+
+// A dependent session cancelled a duplicate Run and their live one stopped
+// moving: two slots, nothing held, two waiters, and admission handed to the
+// cancelled one. Patience would have cleared it after 128 admission decisions;
+// until then the authority was blocked by a Run that would never ask again.
+// A settled Run now leaves the queue in the same transaction that settles it.
+func TestASettledRunLeavesTheAdmissionQueueImmediately(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	if rejection := admitRun(t, s, "admit-holder", "run-holder", "attempt-holder"); rejection != nil {
+		t.Fatal(rejection)
+	}
+	// The doomed run queues first, the live one behind it.
+	if rejection := admitRun(t, s, "admit-doomed", "run-doomed", "attempt-doomed"); rejection == nil || rejection.Code != "capacity_conflict" {
+		t.Fatalf("a full authority did not refuse by name: %+v", rejection)
+	}
+	if rejection := admitRun(t, s, "admit-live", "run-live", "attempt-live"); rejection == nil || rejection.Code != "capacity_conflict" {
+		t.Fatalf("a full authority did not refuse by name: %+v", rejection)
+	}
+	release := storeChange(`{"attempt":null}`)
+	release.ReleaseSlot = "attempt-holder"
+	if r := applyChange(t, s, storeCommand("release-holder", "run-holder", 1), release); r.Receipt.Rejection != nil {
+		t.Fatal(r.Receipt.Rejection)
+	}
+	// Before settling, the queue is honoured strictly and the live run waits.
+	deferred := admitRun(t, s, "admit-live-2", "run-live", "attempt-live")
+	if deferred == nil || deferred.Code != "admission_deferred" || !strings.Contains(deferred.Message, "run-doomed") {
+		t.Fatalf("the queue is not ordered as this test assumes: %+v", deferred)
+	}
+	settle := storeChange(`{"settled":true}`)
+	settle.LeaveAdmissionQueue = true
+	if r := applyChange(t, s, storeCommand("settle-doomed", "run-doomed", 0), settle); r.Receipt.Rejection != nil {
+		t.Fatal(r.Receipt.Rejection)
+	}
+	waiting, err := s.SlotWaiters(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, still := waiting["run-doomed"]; still {
+		t.Fatalf("a settled run kept its place in the queue: %v", waiting)
+	}
+	// And the live run is admitted now, not 128 admission decisions from now.
+	if rejection := admitRun(t, s, "admit-live-3", "run-live", "attempt-live"); rejection != nil {
+		t.Fatalf("a free slot was withheld from the only live waiter: %+v", rejection)
+	}
+}

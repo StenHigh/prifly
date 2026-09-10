@@ -243,6 +243,14 @@ type Change struct {
 	Result      json.RawMessage
 	AcquireSlot string
 	ReleaseSlot string
+	// LeaveAdmissionQueue drops this run's place in the admission queue. A queued
+	// run holds its place by asking again, and the store cannot tell a live
+	// waiter from an abandoned one by looking at the row -- so a run that reached
+	// a terminal state, and will therefore never ask again, used to keep the head
+	// of the queue until patience expired, 128 admission decisions later. A
+	// dependent session met exactly that: two free slots, nothing held, and a live
+	// Run refused admission behind a cancelled one.
+	LeaveAdmissionQueue bool
 	// AdvanceRunVersion distinguishes a publication that also commits a
 	// workflow assignment from a scoped hook update. Only publication mode may
 	// request it; ordinary CAS mutations advance unconditionally.
@@ -1028,6 +1036,11 @@ ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.ev
 		}
 		if release != "" {
 			if _, err := conn.ExecContext(ctx, "DELETE FROM slots WHERE slot_id=?", release); err != nil {
+				return out, err
+			}
+		}
+		if change.LeaveAdmissionQueue {
+			if _, err := conn.ExecContext(ctx, "DELETE FROM slot_waiters WHERE run_id=?", cmd.RunID); err != nil {
 				return out, err
 			}
 		}
