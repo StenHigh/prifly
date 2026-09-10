@@ -71,6 +71,41 @@ func exitForCode(code string) int {
 	return 2
 }
 
+// retryableRefusals names every refusal where the identical call, unchanged,
+// may succeed later because the only obstacle is a resource somebody else is
+// holding or a moment that has not arrived. It is deliberately short: until
+// 0.13.10 the envelope reported `retryable: false` for all of them, including
+// storage_busy, whose own message tells the reader to retry after the holder
+// closes. A field that is always false is worse than no field, because a reader
+// who believes it will not repeat an operation that would have succeeded.
+//
+// Two kinds are kept out on purpose. A refusal that asks the caller to do
+// something first is not retryable (driver_active wants the driver stopped).
+// Neither is one whose retry is not free: capacity_conflict creates and queues
+// a Run, so a caller looping on it manufactures work rather than waiting for
+// it. An allowance that does not refill by itself — the *_exhausted family —
+// is not retryable either.
+//
+// New codes default to false, which is the safe direction: a reader may always
+// retry a refusal marked false, but must not be told to retry one that will
+// never clear.
+var retryableRefusals = map[string]bool{
+	// A lock another process holds, in each of the three places one is taken.
+	"storage_busy": true,
+	// The driver lock, held by another `run drive` that will release it.
+	"driver_already_active": true,
+	// Publisher request capacity, which frees as requests complete.
+	"publisher_busy": true,
+	// The Run is already queued and an older one holds the next free slot;
+	// asking again costs nothing and creates nothing.
+	"admission_deferred": true,
+	// A moment that has not arrived yet by the authority's clock.
+	"wait_not_due":         true,
+	"deadline_not_reached": true,
+}
+
+func retryableCode(code string) bool { return retryableRefusals[code] }
+
 func validProblemCode(s string) bool {
 	if len(s) < 1 || len(s) > 64 || s[0] < 'a' || s[0] > 'z' {
 		return false
@@ -198,6 +233,7 @@ func ProblemFor(err error) (Problem, int) {
 	if !validProblemCode(p.Code) {
 		p.Code = "invalid_input"
 	}
+	p.Retryable = retryableCode(p.Code)
 	if len(p.Message) > 2048 {
 		p.Message = "The selected contract was rejected; inspect the reported pointer."
 	}

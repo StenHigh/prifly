@@ -166,3 +166,32 @@ func TestFlowProblemFillsViolationsOnlyWhereThereIsAPlace(t *testing.T) {
 		t.Fatalf("the explanation did not stay in the message: %q", placeless.Message)
 	}
 }
+
+// Until 0.13.10 `retryable` was never assigned, so every refusal claimed false —
+// including storage_busy, whose own message says to retry after the holder
+// closes. Two dependent sessions confirmed it independently across thirteen
+// codes. This pins both halves: the short list that is true, and the fact that
+// everything else stays false, so a new code cannot join by accident.
+func TestRetryableIsTrueOnlyWhereTheSameCallMaySucceedLater(t *testing.T) {
+	for _, code := range []string{"storage_busy", "driver_already_active", "publisher_busy", "admission_deferred", "wait_not_due", "deadline_not_reached"} {
+		problem, _ := ProblemFor(&Fault{Code: code, Message: "held right now"})
+		if !problem.Retryable {
+			t.Fatalf("%s waits for a holder to release and still reports retryable=false", code)
+		}
+	}
+	// capacity_conflict is the one that looks retryable and is not: the refusal
+	// creates and queues a Run, so a caller looping on it manufactures work.
+	// driver_active asks the caller to stop the driver first. An exhausted
+	// allowance does not refill on its own.
+	for _, code := range []string{"capacity_conflict", "driver_active", "budget_exhausted", "not_found", "invalid_usage", "unsafe_path", "schema_invalid", "missing_stage", "authority_not_found", "no_active_handoff", "package_component_not_found", "terminal_run"} {
+		problem, _ := ProblemFor(&Fault{Code: code, Message: "refused"})
+		if problem.Retryable {
+			t.Fatalf("%s is not cleared by waiting and must not invite a retry", code)
+		}
+	}
+	// The envelope of a refusal with no code at all keeps the safe default.
+	problem, _ := ProblemFor(errors.New("no code here"))
+	if problem.Retryable {
+		t.Fatalf("an uncoded refusal reported retryable=true: %+v", problem)
+	}
+}
