@@ -275,3 +275,49 @@ func TestMonitorRegistrationAndConcurrentStart(t *testing.T) {
 		t.Fatal("unrelated service accepted as monitor")
 	}
 }
+
+// A maintenance request takes the authority exclusively, so the read-only
+// refresh running beside it fails to open with storage_busy. Blanking the
+// source's rows on that made every maintenance request -- a refused one
+// included -- report zero Runs for up to half a second, which on a screen whose
+// whole job is visibility reads as "everything was deleted". Measured: 188 dips
+// in 200 refused requests before this.
+func TestMonitorCatalogKeepsRunsWhileTheAuthorityIsBusy(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "busy")
+	monitorFixture(t, source)
+	catalog := newMonitorCatalog(filepath.Join(root, "registry"), []string{})
+	catalog.add(source)
+	catalog.refresh(context.Background())
+	id := monitorSourceID(source)
+	if len(catalog.runs[id]) != 1 {
+		t.Fatalf("the fixture Run was not indexed: %+v", catalog.runs[id])
+	}
+	// The same opener a cleanup preview uses: exclusive, so the read-only
+	// refresh beside it cannot take its shared lock.
+	holder, err := prifly.OpenMonitorMaintenance(source, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog.refresh(context.Background())
+	held := len(catalog.runs[id])
+	busy := catalog.sources[id].Error
+	_ = holder.Close()
+	if held != 1 {
+		t.Fatalf("a busy authority erased %d indexed Runs; the source said %q", 1-held, busy)
+	}
+	if !strings.Contains(busy, "storage_busy") || catalog.sources[id].Indexed {
+		t.Fatalf("the source did not report itself unread while busy: %q indexed=%v", busy, catalog.sources[id].Indexed)
+	}
+	// And a source that is genuinely unreadable still contributes nothing.
+	if err = os.WriteFile(filepath.Join(source, "prifly.json"), []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	catalog.refresh(context.Background())
+	if len(catalog.runs[id]) != 0 {
+		t.Fatalf("a broken source kept %d Runs", len(catalog.runs[id]))
+	}
+}

@@ -20,6 +20,11 @@ import (
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
+// monitorBusyCode is the refusal an authority gives while another process
+// holds its lock; it says the source could not be read now, never that it is
+// empty.
+const monitorBusyCode = "storage_busy"
+
 type monitorSource struct {
 	physical  [2]uint64
 	ID        string `json:"id"`
@@ -404,14 +409,31 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 		}
 		m.mu.Lock()
 		m.sources[s.ID] = s
-		if err == nil {
+		// A source that cannot be read contributes nothing -- except when the
+		// reason is that someone holds the authority for a moment. Every
+		// maintenance request takes it exclusively, so the refresh running
+		// beside one fails to open, and blanking the rows there reported zero
+		// Runs until the next refresh: on a screen whose whole job is
+		// visibility, a refused cleanup looked exactly like a completed one.
+		// The source still carries the error, so the rows read as stale, not
+		// as current.
+		switch {
+		case err == nil:
 			m.runs[s.ID] = next
-		} else {
+		case !monitorAuthorityBusy(err):
 			m.runs[s.ID] = map[string]monitorRun{}
 		}
 		m.mu.Unlock()
 	}
 }
+
+// monitorAuthorityBusy reports the one open failure that says nothing about
+// the source's contents: another process holds its lock right now.
+func monitorAuthorityBusy(err error) bool {
+	var fault *prifly.Fault
+	return errors.As(err, &fault) && fault.Code == monitorBusyCode
+}
+
 func (m *monitorCatalog) open(id string) (*prifly.Engine, error) {
 	m.mu.RLock()
 	source, ok := m.sources[id]

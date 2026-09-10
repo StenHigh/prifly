@@ -124,7 +124,8 @@ def main():
         # any other, so an unattended page cannot delete a list nobody saw.
         stale = {**plan_request, "action": "delete", "digest": "sha256:" + "0" * 64}
         assert "cleanup_plan_changed" in post(stale, token, expect=409), "a stale plan was not refused by name"
-        assert get("/api/runs?page=1")["total"] == RUNS, "a refused delete still removed Runs"
+        after_refusal = get("/api/runs?page=1")
+        assert after_refusal["total"] == RUNS, f"a refused delete left {after_refusal['total']} of {RUNS} Runs"
 
         deleted = post({**plan_request, "action": "delete", "digest": plan["digest"]}, token)
         assert deleted["deleted_runs"] == RUNS and deleted["deleted_files"] == plan["files"], (deleted, plan["files"])
