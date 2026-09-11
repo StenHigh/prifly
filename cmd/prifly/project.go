@@ -82,10 +82,10 @@ var projectRunnerSkillTemplateBeforeEffects = strings.NewReplacer(
    Read each task's pinned context from `+"`workspace`"+` and respect its`,
 ).Replace(projectRunnerSkillTemplateBeforeAttemptID)
 
-// Current instructions are derived from the frozen previous template, never
-// the reverse: updating current behavior must not change recognized old bytes.
+// projectRunnerSkillTemplateBeforeOverlay is the exact template 0.13.19 and
+// 0.13.20 installed, frozen so a runner from those releases stays recognized.
 // 0.13.19 measures the effect boundary the runner was only asked to respect.
-var projectRunnerSkillTemplate = strings.NewReplacer(
+var projectRunnerSkillTemplateBeforeOverlay = strings.NewReplacer(
 	`change that repository; otherwise use scratch and declared output slots.`,
 	`change that repository; otherwise use scratch and declared output slots.
    This is measured, not trusted: a task without a workspace effect is handed
@@ -95,6 +95,26 @@ var projectRunnerSkillTemplate = strings.NewReplacer(
    Build or test byproducts among the named paths belong in .gitignore, which
    the mark respects; never widen a gate's effects to make room for them.`,
 ).Replace(projectRunnerSkillTemplateBeforeEffects)
+
+// Current instructions are derived from the frozen previous template, never
+// the reverse: updating current behavior must not change recognized old bytes.
+// 0.13.21 names the project's own addition beside this generated file, so a
+// team keeps its rules there and `project runners update` keeps replacing the
+// generated text. The host loads only SKILL.md; the sibling is read because
+// these first lines say so, which is why they are conditional and exact.
+var projectRunnerSkillTemplate = strings.NewReplacer(
+	`PRIFLY_BIN with --project "$authority_root"; never edit authority state.
+`,
+	`PRIFLY_BIN with --project "$authority_root"; never edit authority state.
+
+If PROJECT.md exists beside this file, read it right after this text: it is
+this project's addition to the runner, and prifly project runners update
+replaces this file only, never PROJECT.md. PROJECT.md wins where the two
+conflict; it cannot widen what the engine enforces -- declared effects,
+claimed workspaces and output slots are measured by the engine, not read from
+text.
+`,
+).Replace(projectRunnerSkillTemplateBeforeOverlay)
 
 const projectRunnerSkillTemplateBeforeTiming = `---
 name: prifly-run
@@ -1895,6 +1915,15 @@ func projectRunnerSkill(host projectHost) string {
 	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
 }
 
+func projectRunnerSkillBeforeOverlay(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeOverlay, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
+}
+
 func projectRunnerSkillBeforeEffects(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -1980,7 +2009,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

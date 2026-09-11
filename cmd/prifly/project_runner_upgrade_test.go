@@ -55,9 +55,9 @@ func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
 // projectKnownRunnerSkills leaves every installed runner unreplaceable.
 func TestProjectRunnerTextIsPinned(t *testing.T) {
 	pinned := map[string]string{
-		"codex-cli":   "sha256:9a3be36eff25058224021ea95262883135f8322570b6fa0ff71f442e4e5f4d56",
-		"codex-app":   "sha256:28347f95c01eb753088f38ac91aad0f6b2711c73dbf1b49d99971415e3365360",
-		"claude-code": "sha256:9796f27034085259a220bcf1367ec7951bc4071e22a892f3bb33e38a6b383607",
+		"codex-cli":   "sha256:d8b32fac0d6e70c7ba1a61679401a24ce676d77955f33fcd23b2f5e0483d30d3",
+		"codex-app":   "sha256:aff816b527b3baecdbaf1e7bc253c9bdfcf822d94063dce7c4a37b42308d2f95",
+		"claude-code": "sha256:9cc0bf9ba4c7434124a97fc4ac19e6d4ab1682862528392f829271682b729865",
 	}
 	for _, host := range projectHosts {
 		sum := sha256.Sum256([]byte(projectRunnerSkill(host)))
@@ -69,8 +69,8 @@ func TestProjectRunnerTextIsPinned(t *testing.T) {
 }
 
 func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
-	// Keep the five pre-neutral forms, the pre-timing runner, the
-	// pre-state-id runner and the pre-attempt-id runner byte-identical.
+	// Keep the five pre-neutral forms, the pre-timing, pre-state-id,
+	// pre-attempt-id, pre-effects and pre-overlay runners byte-identical.
 	pinned := map[string][]string{
 		"codex-cli": {
 			"sha256:ad7b4782ffa2d341350a2ef6890da52ff19d70bb3da05f08f0e4ee52a2ae74dc",
@@ -82,6 +82,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:99ae7e0369d3d94289e80a5ee09305f8b8957438b1e8426291765161211a67f0",
 			"sha256:3ee9e67e7d84eaaf0a7c0a93b5a8c72ee895be146865463f7c17493c2be685c7",
 			"sha256:5c662606a95bd68cce763fd222feb48a8fc79c30efdb5304694131d377f55d7e",
+			"sha256:9a3be36eff25058224021ea95262883135f8322570b6fa0ff71f442e4e5f4d56",
 		},
 		"codex-app": {
 			"sha256:0fecbf3f6b3b67b2347896025b6f0e28f64d7cf6002b5151790bcb8352623376",
@@ -93,6 +94,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:f6ec008de627079177f33788e01f5b5ac6cf7ef7166f73fca6d077d043bb8beb",
 			"sha256:6c2ff8e6c7e5cd6f68e63124cc40e11bc50cff8db074a96f46b7b4ee7236e74c",
 			"sha256:f4ead048dc87e09e4dc22b7dd5ef2323814bbe9518af3e7d17c2ed5dc8d0ffb7",
+			"sha256:28347f95c01eb753088f38ac91aad0f6b2711c73dbf1b49d99971415e3365360",
 		},
 		"claude-code": {
 			"sha256:416af8429794e5adef4b7180427c3b74b517404b44f36be226f752aa0f61196d",
@@ -104,6 +106,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:622879f5c7eb6778b28adf4351e981c53103268c31b4bf9f255f97a7b83c2a9a",
 			"sha256:9f821f7f18c7120cf92776583c839515cc6e07302ba9d88f75809f455d7b4500",
 			"sha256:f4b5facdc1888fbd5ff6e9b089648bd7fd58eb4e357020ee8ed03e9ce50be37f",
+			"sha256:9796f27034085259a220bcf1367ec7951bc4071e22a892f3bb33e38a6b383607",
 		},
 	}
 	for _, host := range projectHosts {

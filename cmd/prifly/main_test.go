@@ -3365,3 +3365,52 @@ func TestCLIProjectRunnersUpdateReportsADeclaredHostWithoutARunner(t *testing.T)
 		t.Fatalf("a profile with no runner at all was updated: %d %s", code, errout.String())
 	}
 }
+
+// A team's own rules for the runner live in PROJECT.md beside the generated
+// SKILL.md, so the generated text keeps following releases. Two properties,
+// because either alone is a green that reads nothing: update replaces the
+// generated file and leaves PROJECT.md byte-identical, and the generated text
+// names PROJECT.md in its first lines -- the host loads only SKILL.md, so a
+// sibling nobody points at is a file nobody reads.
+func TestCLIProjectRunnersUpdateKeepsTheProjectOverlayAndNamesIt(t *testing.T) {
+	repository := filepath.Join(t.TempDir(), "repository")
+	if err := os.MkdirAll(repository, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command("git", "init", "-q", repository).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"project", "init", "--repository", repository, "--state-root", filepath.Join(t.TempDir(), "authority"), "--host", "claude-code", "--json"}, &out, &errout); code != 0 {
+		t.Fatalf("project init %d: %s", code, errout.String())
+	}
+	host := projectHosts[2]
+	runner := projectRunnerPath(repository, host)
+	overlay := []byte("# This project\n\nRun the verify gate twice.\n")
+	if err := os.WriteFile(filepath.Join(runner, "PROJECT.md"), overlay, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runner, "SKILL.md"), []byte(projectRunnerSkillBeforeOverlay(host)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"project", "runners", "update", "--repository", repository, "--json"}, &out, &errout); code != 0 || !strings.Contains(out.String(), `"updated_hosts":["claude-code"]`) {
+		t.Fatalf("runner update beside an overlay: %d %s %s", code, out.String(), errout.String())
+	}
+	if data, err := os.ReadFile(filepath.Join(runner, "PROJECT.md")); err != nil || !bytes.Equal(data, overlay) {
+		t.Fatalf("update touched the project overlay: %v %q", err, data)
+	}
+	data, err := os.ReadFile(filepath.Join(runner, "SKILL.md"))
+	if err != nil || string(data) != projectRunnerSkill(host) {
+		t.Fatalf("the generated runner was not replaced: %v", err)
+	}
+	body := string(data)
+	pointer := strings.Index(body, "If PROJECT.md exists beside this file, read it right after this text")
+	if pointer < 0 || !strings.Contains(body, "PROJECT.md wins where the two") || !strings.Contains(body, "replaces this file only, never PROJECT.md") {
+		t.Fatalf("the generated runner does not name the overlay, its precedence and what update replaces")
+	}
+	if firstStep := strings.Index(body, "\n1. Read .prifly/local.yaml"); firstStep < 0 || pointer > firstStep {
+		t.Fatalf("the overlay is named after the protocol starts, not in the first lines: pointer=%d first_step=%d", pointer, firstStep)
+	}
+}
