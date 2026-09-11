@@ -90,13 +90,23 @@ func isReportedCostState(version string) bool { return atLeast(version, CoreRepo
 // SessionHandoff is what the Run knows about work given to a host. Absence of a
 // report is never success: it becomes a disconnected fact that recovery reads.
 type SessionHandoff struct {
-	SchemaVersion      string                     `json:"schema_version"`
-	PrincipalID        string                     `json:"principal_id"`
-	SkillRefs          []flow.Ref                 `json:"skill_refs"`
-	ClaimID            string                     `json:"claim_id,omitempty"`
-	ClaimGeneration    int64                      `json:"claim_generation,omitempty"`
-	WorkspaceMode      string                     `json:"workspace_mode,omitempty"`
-	WorkspaceTrees     []WorkspaceTreeHandoff     `json:"workspace_trees,omitempty"`
+	SchemaVersion   string                 `json:"schema_version"`
+	PrincipalID     string                 `json:"principal_id"`
+	SkillRefs       []flow.Ref             `json:"skill_refs"`
+	ClaimID         string                 `json:"claim_id,omitempty"`
+	ClaimGeneration int64                  `json:"claim_generation,omitempty"`
+	WorkspaceMode   string                 `json:"workspace_mode,omitempty"`
+	WorkspaceTrees  []WorkspaceTreeHandoff `json:"workspace_trees,omitempty"`
+	// WorkspaceMarks records, by claim id, how each workspace the Run holds
+	// stood when this step was handed over -- only for a step permitted no
+	// workspace effect. A report that leaves one changed is refused; until this
+	// the boundary named in permitted_effects held by the executor's discipline
+	// alone, and a dependent session paid for theirs with a reverted patch and
+	// an extra test run.
+	WorkspaceMarks map[string]string `json:"workspace_marks,omitempty"`
+	// WorkspaceStatus is the porcelain listing behind each mark, kept so a
+	// refusal can name the paths that moved rather than only that some did.
+	WorkspaceStatus    map[string]string          `json:"workspace_status,omitempty"`
 	DecisionContext    map[string]json.RawMessage `json:"decision_context,omitempty"`
 	DeliveryGeneration int64                      `json:"delivery_generation,omitempty"`
 	Timing             *SessionTiming             `json:"timing,omitempty"`
@@ -751,6 +761,9 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	// no second chance. Reading them here keeps a malformed report a refusal
 	// with its handoff still awaiting.
 	if err := plan.ValidateJSON(step.ResultSchemaRef, canonicalResult); err != nil {
+		return local.ApplyResult{}, err
+	}
+	if err := e.checkEffectsBoundary(ctx, r.ID, attempt, step); err != nil {
 		return local.ApplyResult{}, err
 	}
 	if _, err := e.readResultOutputs(r, attempt, step, plan, reported); err != nil {

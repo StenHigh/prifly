@@ -70,9 +70,9 @@ var projectRunnerSkillTemplateBeforeAttemptID = strings.NewReplacer(
 	"project-launch-summary/2", "project-launch-summary/3",
 ).Replace(projectRunnerSkillTemplateBeforeStateID)
 
-// Current instructions are derived from the frozen previous template, never
-// the reverse: updating current behavior must not change recognized old bytes.
-var projectRunnerSkillTemplate = strings.NewReplacer(
+// projectRunnerSkillTemplateBeforeEffects is the exact template 0.13.18 and
+// earlier installed, frozen so a runner from those releases stays recognized.
+var projectRunnerSkillTemplateBeforeEffects = strings.NewReplacer(
 	`Handle only those tasks, regardless of
    their number; use separate host sessions only if the platform provides
    them. Read each task's pinned context from `+"`workspace`"+` and respect its`, `Handle only those tasks, however many
@@ -81,6 +81,20 @@ var projectRunnerSkillTemplate = strings.NewReplacer(
    `+"`run.attempts`"+` by `+"`attempt_id`"+`: read one by that ID, never by position.
    Read each task's pinned context from `+"`workspace`"+` and respect its`,
 ).Replace(projectRunnerSkillTemplateBeforeAttemptID)
+
+// Current instructions are derived from the frozen previous template, never
+// the reverse: updating current behavior must not change recognized old bytes.
+// 0.13.19 measures the effect boundary the runner was only asked to respect.
+var projectRunnerSkillTemplate = strings.NewReplacer(
+	`change that repository; otherwise use scratch and declared output slots.`,
+	`change that repository; otherwise use scratch and declared output slots.
+   This is measured, not trusted: a task without a workspace effect is handed
+   the Run's workspaces as they stand, and its report is refused with
+   `+"`effect_not_permitted`"+` if `+"`git status --porcelain --untracked-files=all`"+`
+   or HEAD differs at submission -- put the workspace back and report again.
+   Build or test byproducts among the named paths belong in .gitignore, which
+   the mark respects; never widen a gate's effects to make room for them.`,
+).Replace(projectRunnerSkillTemplateBeforeEffects)
 
 const projectRunnerSkillTemplateBeforeTiming = `---
 name: prifly-run
@@ -1881,6 +1895,15 @@ func projectRunnerSkill(host projectHost) string {
 	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
 }
 
+func projectRunnerSkillBeforeEffects(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeEffects, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
+}
+
 func projectRunnerSkillBeforeAttemptID(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -1957,7 +1980,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

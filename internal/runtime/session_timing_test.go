@@ -179,7 +179,7 @@ func TestTimedSessionWaitReopenAndCapacityKeepRemainingAllowance(t *testing.T) {
 		if !bytes.Equal(envelope, current.Attempts[task.AttemptID].Envelope) || len(current.Attempts) != 1 {
 			t.Fatal("resume replaced pinned work")
 		}
-		for name, value := range map[string]any{"CoreRunStateV28": current, "SessionTaskV7": resumed} {
+		for name, value := range map[string]any{"CoreRunStateV29": current, "SessionTaskV7": resumed} {
 			if err := validatePublic(t, name, value); err != nil {
 				t.Fatal(name, err)
 			}
@@ -337,7 +337,7 @@ func TestTimedSessionExpiryAndCancellation(t *testing.T) {
 				if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "late")); err == nil {
 					t.Fatal("closed delivery accepted result")
 				}
-				if err := validatePublic(t, "CoreRunStateV28", final); err != nil {
+				if err := validatePublic(t, "CoreRunStateV29", final); err != nil {
 					t.Fatal(err)
 				}
 			})
@@ -480,7 +480,7 @@ func TestSessionWithoutDeclaredWorkDeadlineOutlivesTheInheritedHour(t *testing.T
 		if final.Status != "completed" {
 			t.Fatalf("final: %s", final.Status)
 		}
-		if err := validatePublic(t, "CoreRunStateV28", final); err != nil {
+		if err := validatePublic(t, "CoreRunStateV29", final); err != nil {
 			t.Fatal(err)
 		}
 	})

@@ -96,7 +96,7 @@ func TestMixedTimedRunKeepsLegacyDecisionVisible(t *testing.T) {
 	// Both steps of a mixed Run are handed the same routed contract now. What
 	// still separates them is the allowance: this one declared none, so it has
 	// no delivery and works to one absolute deadline.
-	if before.SchemaVersion != CoreRoutedStateVersion || task.SchemaVersion != AssistedSessionRoutedVersion || task.Delivery != nil {
+	if before.SchemaVersion != CoreEffectsStateVersion || task.SchemaVersion != AssistedSessionRoutedVersion || task.Delivery != nil {
 		t.Fatal("mixed fixture did not hand the untimed step an untimed delivery")
 	}
 	definition := before.DecisionCatalog.Decisions[0]

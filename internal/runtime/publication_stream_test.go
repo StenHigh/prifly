@@ -307,7 +307,7 @@ func TestEachPublicationKeepsIndependentCursorsAndPendingAssignments(t *testing.
 		t.Fatalf("stream did not start with one held producer: %+v", tasks)
 	}
 	r := driverRun(t, e, runID)
-	if r.SchemaVersion != CoreRoutedStateVersion || len(r.PublicationSubscriptions) != 2 {
+	if r.SchemaVersion != CoreEffectsStateVersion || len(r.PublicationSubscriptions) != 2 {
 		t.Fatalf("two durable subscribers were not created: state=%s subscriptions=%+v", r.SchemaVersion, r.PublicationSubscriptions)
 	}
 	for _, subscription := range r.PublicationSubscriptions {
@@ -428,8 +428,8 @@ func TestEachPublicationKeepsIndependentCursorsAndPendingAssignments(t *testing.
 		t.Fatal(err)
 	}
 	for name, value := range map[string]any{
-		"CoreRunStateV28": r, "CoreRunViewV28": view, "CoreNextViewV28": next, "CorePreviewV28": preview,
-		"CoreWorkflowInvocationV28": r.Invocations[r.RootInvocationID], "CoreCapabilitiesV28": Capabilities(),
+		"CoreRunStateV29": r, "CoreRunViewV29": view, "CoreNextViewV29": next, "CorePreviewV29": preview,
+		"CoreWorkflowInvocationV29": r.Invocations[r.RootInvocationID], "CoreCapabilitiesV29": Capabilities(),
 	} {
 		if err := validatePublic(t, name, value); err != nil {
 			t.Fatalf("%s rejects the live stream value: %v", name, err)
@@ -513,7 +513,7 @@ func TestNewOnlyStreamStartsAfterItsAuthorityCut(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := driverRun(t, e, started.Receipt.RunID)
-	if r.SchemaVersion != CoreRoutedStateVersion || len(r.PublicationSubscriptions) != 2 {
+	if r.SchemaVersion != CoreEffectsStateVersion || len(r.PublicationSubscriptions) != 2 {
 		t.Fatalf("new-only stream did not select the current session state with durable subscriptions: state=%s subscriptions=%+v", r.SchemaVersion, r.PublicationSubscriptions)
 	}
 	var subscription *PublicationSubscription
@@ -526,7 +526,7 @@ func TestNewOnlyStreamStartsAfterItsAuthorityCut(t *testing.T) {
 	if subscription == nil {
 		t.Fatal("new-only stream has no subscription")
 	}
-	if err := validatePublic(t, "CoreRunStateV28", r); err != nil {
+	if err := validatePublic(t, "CoreRunStateV29", r); err != nil {
 		t.Fatalf("current session state rejects the persisted stream cut: %v", err)
 	}
 	state, err := canonicalState(r)
@@ -711,7 +711,7 @@ func TestEachPublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := driverRun(t, e, started.Receipt.RunID)
-	if r.SchemaVersion != CoreRoutedStateVersion || len(r.PublicationAssignments) != 2 {
+	if r.SchemaVersion != CoreEffectsStateVersion || len(r.PublicationAssignments) != 2 {
 		t.Fatalf("producer failure did not create interrupted deliveries in the current session state: state=%s assignments=%+v", r.SchemaVersion, r.PublicationAssignments)
 	}
 	for _, assignment := range r.PublicationAssignments {
@@ -727,7 +727,7 @@ func TestEachPublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
 			t.Fatalf("stream interruption lost its terminal failure reason: delivery=%+v err=%v", delivery, err)
 		}
 	}
-	if err := validatePublic(t, "CoreRunStateV28", r); err != nil {
+	if err := validatePublic(t, "CoreRunStateV29", r); err != nil {
 		t.Fatalf("current session state rejects terminal producer failure: %v", err)
 	}
 }

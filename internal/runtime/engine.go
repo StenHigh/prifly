@@ -714,7 +714,9 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		if isPublicationFailureState(r.SchemaVersion) {
 			next.SchemaVersion = CorePublicationFailureNextVersion
 		}
-		if isRoutedState(r.SchemaVersion) {
+		if isEffectsState(r.SchemaVersion) {
+			next.SchemaVersion = CoreEffectsNextVersion
+		} else if isRoutedState(r.SchemaVersion) {
 			next.SchemaVersion = CoreRoutedNextVersion
 		} else if isTimingState(r.SchemaVersion) {
 			next.SchemaVersion = CoreTimingNextVersion

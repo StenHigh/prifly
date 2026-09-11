@@ -196,11 +196,20 @@ const (
 	CoreRoutedNextVersion     = "core-next/28"
 	CoreRoutedPreviewVersion  = "core-preview/28"
 	CoreRoutedStepReadVersion = "core-step-read/28"
-	CoreConfigVersion         = "core-configuration/1"
-	CoreContextConfigVersion  = "core-configuration/2"
-	MaxDefinitionBytes        = 2 << 20
-	MaxArtifactBytes          = 16 << 20
-	MaxRunPublications        = 1024
+	// A handoff records the claimed workspaces as they stood, so a step that
+	// was permitted only its output slot is refused a report that left them
+	// changed. Older Runs keep the boundary as prose in permitted_effects,
+	// where it held by the executor's discipline alone.
+	CoreEffectsReadVersion     = "core-read/29"
+	CoreEffectsStateVersion    = "core-state/29"
+	CoreEffectsNextVersion     = "core-next/29"
+	CoreEffectsPreviewVersion  = "core-preview/29"
+	CoreEffectsStepReadVersion = "core-step-read/29"
+	CoreConfigVersion          = "core-configuration/1"
+	CoreContextConfigVersion   = "core-configuration/2"
+	MaxDefinitionBytes         = 2 << 20
+	MaxArtifactBytes           = 16 << 20
+	MaxRunPublications         = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time

@@ -50,7 +50,7 @@ func TestSessionActionProposalIsDurableAndBlockedBeforeDelivery(t *testing.T) {
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	r, view, err := e.load(ctx, runID)
-	if err != nil || r.SchemaVersion != CoreRoutedStateVersion {
+	if err != nil || r.SchemaVersion != CoreEffectsStateVersion {
 		t.Fatalf("assisted run did not select the routed session state: %s %v", r.SchemaVersion, err)
 	}
 	definitions, _, _, err := e.inventoryResources()
@@ -103,7 +103,7 @@ func TestSessionActionProposalIsDurableAndBlockedBeforeDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := validatePublic(t, "CoreRunViewV28", actionView); err != nil {
+	if err := validatePublic(t, "CoreRunViewV29", actionView); err != nil {
 		t.Fatalf("action-admission read view is outside its public contract: %v", err)
 	}
 	if _, err := e.SetControlApprovalPolicy(ctx, ControlApprovalPolicyRequest{CommandID: "command:action-policy", Operations: []string{"action.admit"}, Quorum: 1, Independence: "none", Reason: "the action needs a recorded decision"}); err != nil {

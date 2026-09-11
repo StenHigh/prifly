@@ -53,6 +53,7 @@ def main():
 		("neutral-start", ["--neutral-start"], ("internal/runtime/neutral-start.schema.json", "schemas/core/neutral-start.schema.json")),
 		("timed-session", ["--timed-session"], ("internal/runtime/timed-session.schema.json", "schemas/core/timed-session.schema.json")),
 		("routed-session", ["--routed-session"], ("internal/runtime/routed-session.schema.json", "schemas/core/routed-session.schema.json")),
+		("effects-session", ["--effects-session"], ("internal/runtime/effects-session.schema.json", "schemas/core/effects-session.schema.json")),
 		("run-start-v2", ["--run-start-v2"], ("schemas/core/run-start-v2.schema.json",)),
 		("package-manifest-v2", ["--package-manifest-v2"], ("schemas/core/package-manifest-v2.schema.json",)),
 		("execution-bindings", ["--execution-bindings"], ("schemas/core/execution-bindings.schema.json",)),

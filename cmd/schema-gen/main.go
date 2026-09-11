@@ -48,6 +48,7 @@ type generator struct {
 	neutralStart          bool
 	timedSessions         bool
 	routedSessions        bool
+	effectsSessions       bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -152,6 +153,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						continue
 					}
 					if !g.routedSessions && routedSessionField(t, field.Name) {
+						continue
+					}
+					if !g.effectsSessions && effectsSessionField(t, field.Name) {
 						continue
 					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
@@ -269,6 +273,7 @@ var profileContracts = []struct {
 	{"neutral-start", "generate optional RunBrief state/read version 26 contracts", func(g *generator) { g.neutralStart = true }},
 	{"timed-session", "generate assisted timing state/read version 27 contracts", func(g *generator) { g.timedSessions = true }},
 	{"routed-session", "generate routed assisted session state/read version 28 contracts", func(g *generator) { g.routedSessions = true }},
+	{"effects-session", "generate enforced assisted effects state/read version 29 contracts", func(g *generator) { g.effectsSessions = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -775,6 +780,12 @@ func main() {
 			delete(contracts, name+"V6")
 		}
 	}
+	if g.effectsSessions {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V29"] = contracts[name+"V28"]
+			delete(contracts, name+"V28")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -994,6 +1005,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-routed-session:28"
 			bundle["title"] = "Pri-Fly routed assisted session contracts"
 			bundle["description"] = "State/read 28 hands every assisted step of a Run the same session 7 contract. A task names the StepResult verdicts its own node routes, so an executor no longer picks a legal verdict the graph cannot receive, and it names the deadline actually in force, whether the step declared session limits or inherited the runtime default. An absent deadline is absent rather than an empty string. Route targets, the rest of the graph and every prior bundle remain unchanged."
+		}
+		if g.effectsSessions {
+			effectsSessionConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-effects-session:29"
+			bundle["title"] = "Pri-Fly enforced assisted effects contracts"
+			bundle["description"] = "State/read 29 records, on the handoff of a step permitted no workspace effect, how each workspace the Run holds stood when the step began, and refuses the step's report with effect_not_permitted if one changed. The boundary that permitted_effects named since state 23 held by the executor's discipline alone; a dependent session paid for theirs with a reverted patch and a second test run. Session 7 tasks and submissions, route targets and every prior bundle remain unchanged."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

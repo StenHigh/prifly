@@ -241,7 +241,7 @@ func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testi
 				t.Fatal(err)
 			}
 			r := driverRun(t, e, runID)
-			if r.SchemaVersion != CoreRoutedStateVersion || r.Status != "completed" {
+			if r.SchemaVersion != CoreEffectsStateVersion || r.Status != "completed" {
 				t.Fatalf("tree run did not use and settle the v24 contract: %+v", r)
 			}
 			ref := r.Attempts[third.AttemptID].Accepted.Outputs["final"]

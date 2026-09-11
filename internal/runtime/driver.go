@@ -529,6 +529,28 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 			handoff.Timing = &SessionTiming{Limits: *step.SessionLimits, RemainingMS: step.SessionLimits.ActiveAllowanceMS()}
 			handoff.DeliveryGeneration = 0
 		}
+		// A step permitted no workspace effect is handed the Run's workspaces
+		// as they stand, so its report can be refused if it left them changed.
+		// Recorded only under the state that enforces it: an older Run keeps
+		// the boundary as prose.
+		if step.Effects.Class != "workspace_write" && isEffectsState(r.SchemaVersion) {
+			paths, err := e.effectsBoundaryPaths(ctx, r.ID)
+			if err != nil {
+				return err
+			}
+			for claimID, path := range paths {
+				mark, status, err := e.workspaceMark(ctx, path)
+				if err != nil {
+					// Not a repository, or no commit yet: nothing to hold a
+					// step to, and nothing an executor could reproduce.
+					continue
+				}
+				if handoff.WorkspaceMarks == nil {
+					handoff.WorkspaceMarks, handoff.WorkspaceStatus = map[string]string{}, map[string]string{}
+				}
+				handoff.WorkspaceMarks[claimID], handoff.WorkspaceStatus[claimID] = mark, status
+			}
+		}
 		// A worktree is claimed for a step that declared it will write one. A
 		// proposal-only step is handed no worktree, so it cannot quietly share
 		// one with another step that is running beside it.

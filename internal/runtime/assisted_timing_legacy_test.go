@@ -36,7 +36,7 @@ func TestUntimedAssistedDecisionAcceptsLateAnswerButRejectsResult(t *testing.T) 
 		attempt := before.Attempts[task.AttemptID]
 		originalDeadline := attempt.Deadline
 		originalEnvelope := string(attempt.Envelope)
-		if before.SchemaVersion != "core-state/28" || task.SchemaVersion != "assisted-session/7" || attempt.Session.Timing != nil {
+		if before.SchemaVersion != "core-state/29" || task.SchemaVersion != "assisted-session/7" || attempt.Session.Timing != nil {
 			t.Fatalf("fixture did not select an untimed routed delivery: state=%s session=%s timing=%+v", before.SchemaVersion, task.SchemaVersion, attempt.Session.Timing)
 		}
 		admitted, err := time.Parse(time.RFC3339Nano, attempt.Admitted.UTC)
@@ -135,7 +135,7 @@ func TestLegacyAssistedRunsCannotShareInstallationClaim(t *testing.T) {
 	if err != nil || bound.RunID != first.RunID || bound.Generation != first.ClaimGeneration || bound.ID != first.ClaimID || bound.Repository.Toplevel != first.RepositoryWorkspace {
 		t.Fatalf("first admission did not bind the exact checkout: %+v %v", bound, err)
 	}
-	if second := driverRun(t, e, started.Receipt.RunID); len(second.Attempts) != 0 || second.SchemaVersion != "core-state/28" {
+	if second := driverRun(t, e, started.Receipt.RunID); len(second.Attempts) != 0 || second.SchemaVersion != "core-state/29" {
 		t.Fatalf("refusal changed the run contract or admitted work: %+v", second.Attempts)
 	}
 }

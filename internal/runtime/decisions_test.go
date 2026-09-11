@@ -166,7 +166,7 @@ func TestDecisionBridgeResumesSameAssistedAttempt(t *testing.T) {
 		t.Fatalf("paused delivery remained available: %v", err)
 	}
 	next, err := e.Next(context.Background(), runID)
-	if err != nil || next.SchemaVersion != CoreRoutedNextVersion || next.Action != "waiting_decision" {
+	if err != nil || next.SchemaVersion != CoreEffectsNextVersion || next.Action != "waiting_decision" {
 		t.Fatalf("pending bridge state is not visible: %+v %v", next, err)
 	}
 	requestDigest, err := DecisionRequestDigest(request)
