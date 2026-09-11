@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math/big"
 	"slices"
 	"strconv"
 	"strings"
@@ -677,8 +679,47 @@ func declaredExpectation(e *jsonschema.ValidationError, contract string) string 
 		if len(want.Missing) != 0 {
 			return "; the contract requires " + strings.Join(want.Missing, ", ")
 		}
+	// A bound is the contract's side too, and the value's length or count is
+	// not the value: it answers the one question left, how much to shrink or
+	// add. A gate composition of 4277 characters against maxLength 4000 was
+	// diagnosed by reading the package schema, not this message.
+	case *kind.MaxLength:
+		return fmt.Sprintf("; the contract allows at most %d characters, this value has %d", want.Want, want.Got)
+	case *kind.MinLength:
+		return fmt.Sprintf("; the contract requires at least %d characters, this value has %d", want.Want, want.Got)
+	case *kind.MaxItems:
+		return fmt.Sprintf("; the contract allows at most %d items, this value has %d", want.Want, want.Got)
+	case *kind.MinItems:
+		return fmt.Sprintf("; the contract requires at least %d items, this value has %d", want.Want, want.Got)
+	case *kind.MaxProperties:
+		return fmt.Sprintf("; the contract allows at most %d fields, this value has %d", want.Want, want.Got)
+	case *kind.MinProperties:
+		return fmt.Sprintf("; the contract requires at least %d fields, this value has %d", want.Want, want.Got)
+	// A numeric bound names only the bound: the number that failed it is the
+	// value itself, and a pattern's match is the value too.
+	case *kind.Maximum:
+		return "; the contract allows at most " + renderBound(want.Want)
+	case *kind.Minimum:
+		return "; the contract requires at least " + renderBound(want.Want)
+	case *kind.ExclusiveMaximum:
+		return "; the contract requires a value below " + renderBound(want.Want)
+	case *kind.ExclusiveMinimum:
+		return "; the contract requires a value above " + renderBound(want.Want)
+	case *kind.Pattern:
+		return "; the contract requires a value matching " + want.Want
 	}
 	return ""
+}
+
+func renderBound(bound *big.Rat) string {
+	if bound == nil {
+		return ""
+	}
+	if bound.IsInt() {
+		return bound.Num().String()
+	}
+	value, _ := bound.Float64()
+	return strconv.FormatFloat(value, 'g', -1, 64)
 }
 
 func decodeValue(value any, target any) error {

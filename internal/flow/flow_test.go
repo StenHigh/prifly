@@ -27,6 +27,19 @@ func TestSchemaRefusalNamesWhatTheContractDeclares(t *testing.T) {
 		{"type", `{"type":"array"}`, `"text"`, "the declared type is array"},
 		{"const", `{"const":"exact"}`, `"other"`, `the declared value is "exact"`},
 		{"required", `{"type":"object","required":["owner"]}`, `{}`, "the contract requires owner"},
+		// A bound and the count that failed it; the count is not the value.
+		// The package session's cut: 16001 characters against maxLength
+		// 16000 must name 16000, which the silent text never did.
+		{"maxLength", `{"type":"string","maxLength":16000}`, `"` + strings.Repeat("x", 16001) + `"`, "the contract allows at most 16000 characters, this value has 16001"},
+		{"minLength", `{"type":"string","minLength":3}`, `"ab"`, "the contract requires at least 3 characters, this value has 2"},
+		{"maxItems", `{"type":"array","maxItems":2}`, `[1,2,3]`, "the contract allows at most 2 items, this value has 3"},
+		{"minItems", `{"type":"array","minItems":1}`, `[]`, "the contract requires at least 1 items, this value has 0"},
+		{"maxProperties", `{"type":"object","maxProperties":1}`, `{"a":1,"b":2}`, "the contract allows at most 1 fields, this value has 2"},
+		// A numeric bound names the bound alone: the failing number is the value.
+		{"maximum", `{"type":"number","maximum":10}`, `11`, "the contract allows at most 10"},
+		{"minimum", `{"type":"number","minimum":0.5}`, `0`, "the contract requires at least 0.5"},
+		{"exclusiveMaximum", `{"type":"integer","exclusiveMaximum":4}`, `4`, "the contract requires a value below 4"},
+		{"pattern", `{"type":"string","pattern":"^[a-z]+$"}`, `"A1"`, "the contract requires a value matching ^[a-z]+$"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			compiler := jsonschema.NewCompiler()
@@ -53,7 +66,7 @@ func TestSchemaRefusalNamesWhatTheContractDeclares(t *testing.T) {
 				t.Fatalf("the refusal does not state the contract: %v", err)
 			}
 			// The supplied value is the caller's input and never appears.
-			if strings.Contains(err.Error(), "four") || strings.Contains(err.Error(), "other") {
+			if strings.Contains(err.Error(), "four") || strings.Contains(err.Error(), "other") || strings.Contains(err.Error(), "xxxx") || strings.Contains(err.Error(), "A1") {
 				t.Fatalf("the refusal echoed the supplied value: %v", err)
 			}
 		})
