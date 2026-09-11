@@ -197,6 +197,11 @@ func ProblemFor(err error) (Problem, int) {
 		p.Code, p.Message = "unsafe_path", "Use explicit regular files under separate roots, without symlinks or traversal."
 	case errors.Is(err, local.ErrBlobLimit) || errors.Is(err, local.ErrSampleLimit):
 		p.Code, p.Message, exit = "quota_exceeded", "A bounded local storage or payload allowance was exceeded.", 5
+	// A busy store is a wait, not a lost write: another process held the
+	// authority past the busy bound and this command was never tried. Read as
+	// a persistence failure it told the operator not to assume the commit.
+	case local.IsBusy(err):
+		p.Code, p.Message, exit = "storage_busy", "Another process held the authority for longer than the busy bound; nothing was written. Retry.", 5
 	case persistenceFailure(err):
 		p.Code, p.Message, exit = "persistence_unavailable", "The authority could not persist or read mandatory evidence. Do not assume the operation committed.", 6
 	// A refusal this engine authored keeps its own words even when it also

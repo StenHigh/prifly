@@ -1123,9 +1123,19 @@ func TestConcurrentAdmissionsNeverExceedTheSlot(t *testing.T) {
 			runID := fmt.Sprintf("run-%d", i)
 			change := storeChange(fmt.Sprintf(`{"attempt":"attempt-%d"}`, i))
 			change.AcquireSlot = fmt.Sprintf("attempt-%d", i)
-			result, err := s.Apply(context.Background(), storeCommand(fmt.Sprintf("admit-%d", i), runID, 0), func(Snapshot) (Change, error) {
-				return change, nil
-			})
+			// Busy is a wait, not a decision: on a contended disk eight
+			// serialized commits outlast the fixture's busy bound, so a racer
+			// waits it out as the driver does and only a decision counts.
+			var result ApplyResult
+			var err error
+			for {
+				result, err = s.Apply(context.Background(), storeCommand(fmt.Sprintf("admit-%d", i), runID, 0), func(Snapshot) (Change, error) {
+					return change, nil
+				})
+				if !IsBusy(err) {
+					break
+				}
+			}
 			if err != nil {
 				t.Errorf("a racing admission failed instead of deciding: %v", err)
 				results <- &Rejection{Code: "error"}

@@ -1,13 +1,18 @@
 package runtime
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stenhigh/prifly/internal/flow"
+	"github.com/stenhigh/prifly/internal/local"
 )
 
 // A refusal names its subject, and it names it in one place. The explanation is
@@ -193,5 +198,52 @@ func TestRetryableIsTrueOnlyWhereTheSameCallMaySucceedLater(t *testing.T) {
 	problem, _ := ProblemFor(errors.New("no code here"))
 	if problem.Retryable {
 		t.Fatalf("an uncoded refusal reported retryable=true: %+v", problem)
+	}
+}
+
+// A store that another writer held past the busy bound is a wait, not a lost
+// write. Until 0.13.19 it was reported as persistence_unavailable — exit 6,
+// not retryable, "do not assume the operation committed" — for a command that
+// was never tried. The busy error comes from a real store, not a constructed one.
+func TestProblemForReportsABusyStoreAsAWait(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "authority")
+	options := local.StoreOptions{EventTypes: EventTypes, BusyTimeout: time.Millisecond}
+	holder, err := local.OpenStore(dir, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer holder.Close()
+	waiter, err := local.OpenStore(dir, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer waiter.Close()
+	version := int64(0)
+	command := func(id string) local.Command {
+		return local.Command{ID: id, Actor: "owner", RunID: "run-a", Payload: json.RawMessage(`{"value":1}`), ExpectedVersion: &version, Mode: local.CommandCAS}
+	}
+	change := local.Change{Data: json.RawMessage(`{"value":1}`), Events: []local.EventInput{{Type: EventTypes[0], Data: json.RawMessage(`{"observed":true}`)}}, Result: json.RawMessage(`{"accepted":true}`)}
+	entered, release := make(chan struct{}), make(chan struct{})
+	held := make(chan error, 1)
+	go func() {
+		_, err := holder.Apply(context.Background(), command("hold"), func(local.Snapshot) (local.Change, error) {
+			close(entered)
+			<-release
+			return change, nil
+		})
+		held <- err
+	}()
+	<-entered
+	_, err = waiter.Apply(context.Background(), command("wait"), func(local.Snapshot) (local.Change, error) { return change, nil })
+	close(release)
+	if err := <-held; err != nil {
+		t.Fatal(err)
+	}
+	if !local.IsBusy(err) {
+		t.Fatalf("the waiter did not meet a busy store: %v", err)
+	}
+	problem, exit := ProblemFor(fmt.Errorf("apply: %w", err))
+	if problem.Code != "storage_busy" || !problem.Retryable || exit != 5 {
+		t.Fatalf("a busy store was not reported as a wait: %+v exit %d", problem, exit)
 	}
 }
