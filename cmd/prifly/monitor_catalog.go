@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -26,7 +27,13 @@ import (
 const monitorBusyCode = "storage_busy"
 
 type monitorSource struct {
-	physical  [2]uint64
+	physical [2]uint64
+	// mark is the storage fingerprint the last successful read saw. A refresh
+	// runs twice a second over every discovered authority, and each read is a
+	// full prifly.Open -- config parse, canonicalization, digests, an SQLite
+	// open -- so with two hundred sources an idle monitor burned a whole core
+	// for days. Storage that has not moved has nothing new to say.
+	mark      string
 	ID        string `json:"id"`
 	Root      string `json:"root"`
 	Project   string `json:"project"`
@@ -53,12 +60,14 @@ type monitorDiscovery struct {
 	Completed   string   `json:"completed,omitempty"`
 }
 type monitorCatalog struct {
-	storage   monitorStorage
-	mu        sync.RWMutex
-	sources   map[string]monitorSource
-	runs      map[string]map[string]monitorRun
-	discovery monitorDiscovery
-	registry  string
+	storage monitorStorage
+	mu      sync.RWMutex
+	// registryMark is the sources directory's mtime and size at the last read.
+	registryMark string
+	sources      map[string]monitorSource
+	runs         map[string]map[string]monitorRun
+	discovery    monitorDiscovery
+	registry     string
 }
 
 var monitorUserConfigDir = os.UserConfigDir
@@ -176,7 +185,22 @@ func (m *monitorCatalog) add(root string) {
 	m.runs[id] = map[string]monitorRun{}
 }
 func (m *monitorCatalog) registered() {
-	entries, err := os.ReadDir(filepath.Join(m.registry, "sources"))
+	sources := filepath.Join(m.registry, "sources")
+	// The registry is read at the top of every refresh, twice a second. Four
+	// hundred entries meant four hundred file reads a second on an idle
+	// machine; the directory's mtime moves whenever an entry is added or
+	// removed, so an unchanged directory has nothing new to register.
+	if info, err := os.Stat(sources); err == nil {
+		mark := strconv.FormatInt(info.ModTime().UnixNano(), 10) + ":" + strconv.FormatInt(info.Size(), 10)
+		m.mu.Lock()
+		unchanged := mark == m.registryMark
+		m.registryMark = mark
+		m.mu.Unlock()
+		if unchanged {
+			return
+		}
+	}
+	entries, err := os.ReadDir(sources)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		m.scanError(m.registry, err)
 	}
@@ -191,9 +215,18 @@ func (m *monitorCatalog) registered() {
 		}
 		data, err := os.ReadFile(path)
 		if err == nil {
-			m.add(string(data))
-			// A previously registered root remains visible when access is lost.
 			root := string(data)
+			// An authority that no longer exists is a dangling entry, not a
+			// source: every start registers the authority it touches, so test
+			// fixtures under /tmp piled up by the hundreds, and each refresh
+			// re-added them only for the next step to drop them again. Access
+			// lost is different from gone, and stays visible below.
+			if _, statErr := os.Stat(filepath.Join(root, ".prifly", "installation.json")); errors.Is(statErr, fs.ErrNotExist) {
+				_ = os.Remove(path)
+				continue
+			}
+			m.add(root)
+			// A previously registered root remains visible when access is lost.
 			if _, statErr := os.Stat(filepath.Join(root, ".prifly", "installation.json")); statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 				id := monitorSourceID(root)
 				m.mu.Lock()
@@ -356,6 +389,14 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 			m.mu.Unlock()
 			continue
 		}
+		// Only the state files move when a Run changes; -shm moves on reads too,
+		// so it is left out. An unchanged mark means the previous rows still
+		// describe the source, and the previous status stays with them. A read
+		// that failed recorded no mark, so it is retried on the next pass.
+		mark := monitorStorageMark(s.Root)
+		if mark != "" && mark == s.mark {
+			continue
+		}
 		next := map[string]monitorRun{}
 		engine, err := prifly.Open(s.Root, true)
 		if err == nil {
@@ -404,8 +445,10 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 		s.Indexed = err == nil
 		if err != nil {
 			s.Error = err.Error()
+			s.mark = ""
 		} else {
 			s.Updated = time.Now().UTC().Format(time.RFC3339)
+			s.mark = mark
 		}
 		m.mu.Lock()
 		m.sources[s.ID] = s
@@ -425,6 +468,37 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 		}
 		m.mu.Unlock()
 	}
+}
+
+// monitorStorageMark fingerprints the files a Run change must touch: the
+// database's size and mtime, the WAL's size, and the two documents Open reads
+// first (prifly.json, installation.json). A write
+// grows the WAL or, on checkpoint, rewrites the database; a read-only open
+// creates an empty WAL and -shm and touches nothing else -- measured, which is
+// why the WAL's mtime is not part of the mark and a missing WAL counts as
+// empty. Empty when the authority has no database yet, so the caller reads it
+// the ordinary way rather than assume it is unchanged.
+func monitorStorageMark(root string) string {
+	state := filepath.Join(root, ".prifly", "state")
+	db, err := os.Stat(filepath.Join(state, "state.sqlite3"))
+	if err != nil {
+		return ""
+	}
+	walSize := int64(0)
+	if wal, err := os.Stat(filepath.Join(state, "state.sqlite3-wal")); err == nil {
+		walSize = wal.Size()
+	}
+	mark := strconv.FormatInt(db.Size(), 10) + ":" + strconv.FormatInt(db.ModTime().UnixNano(), 10) + "|" + strconv.FormatInt(walSize, 10)
+	// The two documents Open reads before it touches the database: a rewritten
+	// config or installation must be seen even when no Run moved.
+	for _, name := range []string{"prifly.json", filepath.Join(".prifly", "installation.json")} {
+		if info, err := os.Stat(filepath.Join(root, name)); err == nil {
+			mark += "|" + strconv.FormatInt(info.Size(), 10) + ":" + strconv.FormatInt(info.ModTime().UnixNano(), 10)
+		} else {
+			mark += "|-"
+		}
+	}
+	return mark
 }
 
 // monitorAuthorityBusy reports the one open failure that says nothing about

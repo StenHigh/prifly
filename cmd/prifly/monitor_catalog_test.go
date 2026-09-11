@@ -302,6 +302,12 @@ func TestMonitorCatalogKeepsRunsWhileTheAuthorityIsBusy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Make the refresh read rather than skip: storage that has not moved is
+	// not re-opened, and the property here is what a read that meets the
+	// lock does with the rows it already holds.
+	forced := catalog.sources[id]
+	forced.mark = ""
+	catalog.sources[id] = forced
 	catalog.refresh(context.Background())
 	held := len(catalog.runs[id])
 	busy := catalog.sources[id].Error
@@ -319,5 +325,128 @@ func TestMonitorCatalogKeepsRunsWhileTheAuthorityIsBusy(t *testing.T) {
 	catalog.refresh(context.Background())
 	if len(catalog.runs[id]) != 0 {
 		t.Fatalf("a broken source kept %d Runs", len(catalog.runs[id]))
+	}
+}
+
+// Every refresh used to be a full prifly.Open of every discovered authority,
+// twice a second: with two hundred sources an idle monitor burned a whole core
+// for days, and an orphaned one on a deleted authority kept re-reading two
+// hundred and fifty-nine other people's authorities for three. A source whose
+// state files have not moved is skipped; one that moved, or one whose last read
+// failed, is read again.
+func TestMonitorCatalogSkipsSourcesWhoseStorageHasNotMoved(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "quiet")
+	monitorFixture(t, source)
+	catalog := newMonitorCatalog(filepath.Join(root, "registry"), []string{})
+	catalog.add(source)
+	catalog.refresh(context.Background())
+	id := monitorSourceID(source)
+	first := catalog.sources[id]
+	if first.mark == "" || !first.Indexed || len(catalog.runs[id]) != 1 {
+		t.Fatalf("the first read did not index the source or record its mark: %+v", first)
+	}
+	// Nothing moved: the source keeps its rows, its status and its read time.
+	catalog.sources[id] = monitorSource{ID: first.ID, Root: first.Root, Project: first.Project, Authority: first.Authority, Indexed: true, Updated: "1970-01-01T00:00:00Z", mark: first.mark, physical: first.physical}
+	catalog.refresh(context.Background())
+	if catalog.sources[id].Updated != "1970-01-01T00:00:00Z" {
+		t.Fatalf("an unchanged source was read again: %+v", catalog.sources[id])
+	}
+	if len(catalog.runs[id]) != 1 {
+		t.Fatalf("skipping the read dropped the rows: %+v", catalog.runs[id])
+	}
+	// A change to the authority moves the state files, and the next refresh
+	// reads it and sees the new Run.
+	writer, err := prifly.Open(source, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Start(context.Background(), prifly.StartOptions{CommandID: "command:monitor-second", WorkflowFile: "workflows/monitor.json", BriefFile: "brief.json", Inputs: map[string]string{}}); err != nil {
+		t.Fatal(err)
+	}
+	_ = writer.Close()
+	catalog.refresh(context.Background())
+	if catalog.sources[id].Updated == "1970-01-01T00:00:00Z" || len(catalog.runs[id]) != 2 {
+		t.Fatalf("a changed source was not read: %+v rows=%d", catalog.sources[id], len(catalog.runs[id]))
+	}
+	// A read that failed leaves no mark, so it is retried rather than assumed
+	// unchanged: the busy authority is read again once its holder lets go.
+	holder, err := prifly.OpenMonitorMaintenance(source, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := monitorSource{ID: first.ID, Root: first.Root, Project: first.Project, Authority: first.Authority, Indexed: true, mark: "", physical: first.physical}
+	catalog.sources[id] = stale
+	catalog.refresh(context.Background())
+	busy := catalog.sources[id]
+	_ = holder.Close()
+	if busy.Indexed || !strings.Contains(busy.Error, "storage_busy") || busy.mark != "" {
+		t.Fatalf("a busy read recorded a mark or reported success: %+v", busy)
+	}
+	catalog.refresh(context.Background())
+	if !catalog.sources[id].Indexed || catalog.sources[id].mark == "" {
+		t.Fatalf("the source was not read again after its holder let go: %+v", catalog.sources[id])
+	}
+}
+
+// Every start registers the authority it touches, so test fixtures under /tmp
+// piled up by the hundreds: 428 entries, 218 of them already deleted, re-read
+// twice a second and re-added by one step only for the next to drop them. A
+// registry entry whose authority is gone is removed; one whose authority is
+// merely unreadable stays visible, as before.
+func TestMonitorCatalogPrunesRegistryEntriesWhoseAuthorityIsGone(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := filepath.Join(root, "kept")
+	gone := filepath.Join(root, "gone")
+	monitorFixture(t, kept)
+	monitorFixture(t, gone)
+	registry := filepath.Join(root, "registry")
+	for _, source := range []string{kept, gone} {
+		if err := os.MkdirAll(filepath.Join(registry, "sources"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(registry, "sources", monitorSourceID(source)), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	catalog := newMonitorCatalog(registry, []string{})
+	catalog.refresh(context.Background())
+	if len(catalog.sources) != 2 {
+		t.Fatalf("both registered authorities were not indexed: %d", len(catalog.sources))
+	}
+	if err := os.RemoveAll(gone); err != nil {
+		t.Fatal(err)
+	}
+	// The registry directory did not change, so the entries are not re-read;
+	// the refresh itself notices the missing authority and drops it.
+	catalog.refresh(context.Background())
+	if _, still := catalog.sources[monitorSourceID(gone)]; still {
+		t.Fatal("a deleted authority stayed indexed")
+	}
+	// A registry read after the directory changed prunes the dangling entry
+	// instead of re-adding it, and keeps the one whose authority exists.
+	if err := os.WriteFile(filepath.Join(registry, "sources", "newcomer"), []byte(filepath.Join(root, "absent")), 0600); err != nil {
+		t.Fatal(err)
+	}
+	catalog.refresh(context.Background())
+	entries, err := os.ReadDir(filepath.Join(registry, "sources"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{}
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if len(names) != 1 || names[0] != monitorSourceID(kept) {
+		t.Fatalf("dangling registry entries survived the read: %v", names)
+	}
+	if _, indexed := catalog.sources[monitorSourceID(kept)]; !indexed {
+		t.Fatal("the surviving authority was dropped along with the dangling ones")
 	}
 }

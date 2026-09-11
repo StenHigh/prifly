@@ -51,6 +51,13 @@ schemas-check:
 	python3 scripts/check-schema.py --go "$(GO)"
 release-ci-check:
 	python3 -B test/e2e/verify-release-ci.py
+# Every start registers its authority in the user's monitor registry and
+# spawns a monitor for it; run against the real HOME the fixtures left four
+# hundred temporary authorities registered and a monitor re-reading them for
+# days. A throwaway HOME keeps the machine's own registry out of it.
+E2E_HOME := $(shell mktemp -d /tmp/prifly-e2e-home-XXXXXX)
+e2e: export HOME := $(E2E_HOME)
+e2e: export XDG_CONFIG_HOME := $(E2E_HOME)/.config
 e2e: build
 	sh test/e2e/verify-install.sh
 	python3 -B test/e2e/test_examples.py
