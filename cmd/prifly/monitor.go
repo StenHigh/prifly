@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -33,6 +34,10 @@ var monitorJS []byte
 // It listens on the loopback interface only. Any address reachable from another
 // machine would publish sealed plans, skill bytes and results to that machine,
 // and this build has no way to say who is asking.
+// monitorAuthorityCheckInterval is how often a project-bound monitor confirms
+// its authority still exists; a variable so a test need not wait five seconds.
+var monitorAuthorityCheckInterval = 5 * time.Second
+
 func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 	f := flags("monitor")
 	scanRoot := f.String("scan-root", "", "search roots separated by the OS path-list separator; default: all accessible local directories")
@@ -61,7 +66,32 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 		return err
 	}
 	defer listener.Close()
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
 	catalog.start(ctx)
+	// A monitor started for one authority and no scan root is the form every
+	// start spawns for itself, detached, when none is listening. Its authority
+	// under /tmp was deleted with the test that made it, and the process lived
+	// on for three days reading every other authority on the machine at 90%
+	// CPU: nobody knew it existed to stop it. A monitor whose own authority is
+	// gone has nothing left to serve; one given scan roots was asked to browse
+	// and stays.
+	if *scanRoot == "" {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(monitorAuthorityCheckInterval):
+				}
+				if _, err := os.Stat(filepath.Join(root, ".prifly", "installation.json")); errors.Is(err, fs.ErrNotExist) {
+					fmt.Fprintf(c.errout, "monitor: the authority at %s is gone; stopping\n", root)
+					stop()
+					return
+				}
+			}
+		}()
+	}
 	server := &http.Server{Handler: monitorHost(listener.Addr().String())(monitorMux(catalog)), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()

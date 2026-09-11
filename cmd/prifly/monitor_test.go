@@ -1,9 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	prifly "github.com/stenhigh/prifly/internal/runtime"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 // The monitor serves sealed plans, skill bytes and results. This build cannot
@@ -59,5 +66,62 @@ func TestMonitorAnswersAlternateLoopbackAddress(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != 200 {
 		t.Fatal(response.Code)
+	}
+}
+
+// Every start spawns a monitor for its authority, detached, when none is
+// listening. One spawned for a test fixture under /tmp outlived the fixture by
+// three days, reading every other authority on the machine at 90% CPU, because
+// nothing knew it existed. A monitor started for one authority stops when that
+// authority is gone; one given scan roots was asked to browse and stays.
+func TestMonitorForOneAuthorityStopsWhenThatAuthorityIsGone(t *testing.T) {
+	previous := monitorAuthorityCheckInterval
+	monitorAuthorityCheckInterval = 50 * time.Millisecond
+	t.Cleanup(func() { monitorAuthorityCheckInterval = previous })
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), ".config"))
+
+	run := func(t *testing.T, scanRoot bool) (string, <-chan error) {
+		t.Helper()
+		root := filepath.Join(t.TempDir(), "authority")
+		if err := prifly.Init(root); err != nil {
+			t.Fatal(err)
+		}
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		addr := listener.Addr().String()
+		_ = listener.Close()
+		args := []string{"--addr", addr}
+		if scanRoot {
+			args = append(args, "--scan-root", filepath.Dir(root))
+		}
+		done := make(chan error, 1)
+		var errout bytes.Buffer
+		c := &cli{errout: &errout}
+		go func() { done <- c.monitor(context.Background(), root, args) }()
+		time.Sleep(200 * time.Millisecond)
+		if err := os.RemoveAll(root); err != nil {
+			t.Fatal(err)
+		}
+		return root, done
+	}
+
+	_, bound := run(t, false)
+	select {
+	case err := <-bound:
+		if err != nil {
+			t.Fatalf("the project-bound monitor stopped with an error: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("a monitor whose authority was deleted kept running")
+	}
+
+	_, browsing := run(t, true)
+	select {
+	case err := <-browsing:
+		t.Fatalf("a monitor given scan roots stopped when one authority vanished: %v", err)
+	case <-time.After(500 * time.Millisecond):
 	}
 }
