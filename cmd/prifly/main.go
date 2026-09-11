@@ -946,6 +946,13 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			return usageError("run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N | answer --decision ID --request-digest DIGEST --expected-run-version N --value JSON")
 		}
 	case "status", "timing", "next", "explain", "drive":
+		// drive answers with the shared read document, which status and timing
+		// also return, so it says what the Run is and not what to do now. A
+		// dependent session called `session task` after every successful step to
+		// learn that -- nine extra round trips in one Run. Widening the read
+		// contract for three commands to save a call in one is the wrong trade;
+		// asking for the other document by name is not.
+		driveNext := f.Bool("next", false, "with drive: answer with the next action instead of the run view")
 		if err := parse(f, args[2:]); err != nil {
 			return err
 		}
@@ -954,7 +961,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 				return err
 			}
 		}
-		if args[0] == "next" || args[0] == "explain" {
+		if args[0] == "next" || args[0] == "explain" || args[0] == "drive" && *driveNext {
 			result, err := e.Next(ctx, id)
 			if err != nil {
 				return err
@@ -2392,7 +2399,7 @@ Global: --project DIR  --json  --format text|json|csv
                                    timing node kinds: run, workflow_invocation, stage_activation, step_instance, attempt, check_execution
                                    A node's metrics carry only numbers; the boundaries they were measured between are the same-named entry of its intervals, as from_ref/to_ref
                                    kind inside from_ref/to_ref names what a boundary was read from and is a separate vocabulary from a node's kind: it also uses step, activation, invocation, stop and report
-  run drive RUN_ID                  Foreground owner; interrupt requests cancel
+  run drive RUN_ID [--next]         Foreground owner; interrupt requests cancel. --next answers with the next action instead of the run view
   run decisions RUN_ID              Read the sealed decision ledger and pending question
   run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N [--yield-execution]
                                    Compatible executor requests one declared runtime decision
