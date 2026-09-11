@@ -51,23 +51,11 @@ schemas-check:
 	python3 scripts/check-schema.py --go "$(GO)"
 release-ci-check:
 	python3 -B test/e2e/verify-release-ci.py
-# Every start registers its authority in the user's monitor registry and
-# spawns a monitor for it; run against the real HOME the fixtures left four
-# hundred temporary authorities registered and a monitor re-reading them for
-# days. A throwaway HOME keeps the machine's own registry out of it.
-E2E_HOME := $(shell mktemp -d /tmp/prifly-e2e-home-XXXXXX)
-e2e: export HOME := $(E2E_HOME)
-e2e: export XDG_CONFIG_HOME := $(E2E_HOME)/.config
+# test/e2e/run.sh owns the throwaway HOME and every fixture directory, and
+# removes them on exit; a mktemp evaluated here ran on every make invocation
+# and its directory was never removed.
 e2e: build
-	sh test/e2e/verify-install.sh
-	python3 -B test/e2e/test_examples.py
-	python3 -B test/e2e/verify-authoring.py --binary bin/prifly
-	python3 -B test/e2e/verify-cli.py --binary bin/prifly
-	python3 -B test/e2e/verify-core.py --binary bin/prifly
-	python3 -B test/e2e/verify-context.py --binary bin/prifly
-	python3 -B test/e2e/verify-parallel-worktrees.py --binary bin/prifly
-	python3 -B test/e2e/verify-monitor.py --binary bin/prifly
-	python3 -B test/e2e/verify-capacity.py --binary bin/prifly
+	sh test/e2e/run.sh bin/prifly
 examples: e2e
 release: build
 	python3 scripts/release.py --go "$(GO)" --binary bin/prifly

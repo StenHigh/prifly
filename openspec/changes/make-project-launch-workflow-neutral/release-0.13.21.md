@@ -38,9 +38,11 @@ text.
 до первого шага протокола. Разрезы: указание на другой файл — красный на
 втором свойстве; текст без абзаца — `updated_hosts: []`.
 
-Текст раннера 0.13.19–0.13.20 заморожен вариантом 9; `update` берёт его.
-Digest'ы: codex-cli `sha256:d8b32fac…`, codex-app `sha256:aff816b5…`,
-claude-code `sha256:9cc0bf9b…`.
+Текст раннера 0.13.19–0.13.20 заморожен вариантом 9 (его digest'ы — прежние:
+codex-cli `sha256:9a3be36e…`, codex-app `sha256:28347f95…`, claude-code
+`sha256:9796f270…`); `update` берёт его. Digest'ы **текста 0.13.21**:
+codex-cli `sha256:d8b32fac…`, codex-app `sha256:aff816b5…`, claude-code
+`sha256:9cc0bf9b…`.
 
 ## Миграция кастомного runner'а
 
