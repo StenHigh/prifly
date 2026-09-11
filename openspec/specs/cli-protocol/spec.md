@@ -750,6 +750,13 @@ Runner `prifly-run` MUST содержать инструкции: по явно�
 - **THEN** `project runners update` заменяет его новым, не трогая
   кастомизированные файлы
 
+#### Scenario: Объявленный host без runner в этом clone
+- **WHEN** профиль объявляет host, чей `prifly-run/SKILL.md` в repository
+  отсутствует, и хотя бы один другой объявленный runner присутствует
+- **THEN** `project runners update` обновляет присутствующие runner'ы и
+  перечисляет отсутствующие в `missing_hosts`, ничего для них не создавая;
+  профиль без единого runner по-прежнему получает `project_runner_missing`
+
 ### Requirement: Handoff описывает, что требуется от host
 
 Sealed handoff MUST быть самодостаточным описанием ожидаемого от host: каждая

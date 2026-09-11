@@ -2344,7 +2344,8 @@ Global: --project DIR  --json  --format text|json|csv
   project questionnaire --prepare --launch ID [the same arguments as project start]
                                    Profile /3: validate and show the exact launch summary read-only; pass its review_digest to start
   project runners update [--repository DIR]
-                                   Replace only exact known generated host runners; customized files are refused
+                                   Replace only exact known generated host runners; customized files are refused,
+                                   a declared host without a runner in this clone is listed as missing_hosts
   project runners add --host codex-cli|codex-app|claude-code [--repository DIR]
                                    Attach selected hosts explicitly; repeat --host to add more than one
   project local set [--executable PATH] [--allow-executable NAME=PATH] [--repository DIR]

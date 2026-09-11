@@ -3306,3 +3306,62 @@ func TestValidateSaysWhichRootItSearched(t *testing.T) {
 		}
 	}
 }
+
+// A shared profile may declare a host that only some clones keep: the pilot's
+// repository declares codex and claude-code and tracks only the claude-code
+// runner. Until 0.13.20 `runners update` refused the whole update over the
+// absent one, so the live runner could not follow a release; `runners add`
+// for the declared host answered with a conflict, and no command was left.
+// The absent runner is reported, the present one is updated, and a profile
+// with no runner at all is still refused.
+func TestCLIProjectRunnersUpdateReportsADeclaredHostWithoutARunner(t *testing.T) {
+	repository := filepath.Join(t.TempDir(), "repository")
+	if err := os.MkdirAll(repository, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command("git", "init", "-q", repository).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	var out, errout bytes.Buffer
+	if code := execute(context.Background(), []string{"project", "init", "--repository", repository, "--state-root", filepath.Join(t.TempDir(), "authority"), "--host", "codex-cli", "--host", "claude-code", "--json"}, &out, &errout); code != 0 {
+		t.Fatalf("project init %d: %s", code, errout.String())
+	}
+	absent, present := projectHosts[0], projectHosts[2]
+	if absent.ID != "codex-cli" || present.ID != "claude-code" {
+		t.Fatalf("host table changed: %s %s", absent.ID, present.ID)
+	}
+	absentPath := filepath.Join(projectRunnerPath(repository, absent), "SKILL.md")
+	if err := os.RemoveAll(filepath.Dir(absentPath)); err != nil {
+		t.Fatal(err)
+	}
+	presentPath := filepath.Join(projectRunnerPath(repository, present), "SKILL.md")
+	if err := os.WriteFile(presentPath, []byte(projectRunnerSkillBeforeEffects(present)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"project", "runners", "update", "--repository", repository, "--json"}, &out, &errout); code != 0 {
+		t.Fatalf("an absent declared runner blocked the update: %d %s", code, errout.String())
+	}
+	var result struct {
+		UpdatedHosts []string `json:"updated_hosts"`
+		MissingHosts []string `json:"missing_hosts"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil || !slices.Equal(result.UpdatedHosts, []string{present.ID}) || !slices.Equal(result.MissingHosts, []string{absent.ID}) {
+		t.Fatalf("the update did not name what it did and what it skipped: %v %s", err, out.String())
+	}
+	if data, err := os.ReadFile(presentPath); err != nil || string(data) != projectRunnerSkill(present) {
+		t.Fatalf("the present runner was not updated: %v", err)
+	}
+	if _, err := os.Lstat(absentPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the absent runner was laid down: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Dir(presentPath)); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errout.Reset()
+	if code := execute(context.Background(), []string{"project", "runners", "update", "--repository", repository, "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "project_runner_missing") {
+		t.Fatalf("a profile with no runner at all was updated: %d %s", code, errout.String())
+	}
+}

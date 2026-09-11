@@ -743,11 +743,11 @@ func (c *cli) projectRunners(ctx context.Context, args []string) error {
 	if len(hostIDs) != 0 {
 		return usageError("project runners update does not accept --host; it updates declared hosts only")
 	}
-	updated, err := updateProjectRunners(root, profile.hosts()...)
+	updated, missing, err := updateProjectRunners(root, profile.hosts()...)
 	if err != nil {
 		return err
 	}
-	return c.emit(map[string]any{"schema_version": "project-runners-update/1", "repository": root, "updated_hosts": updated})
+	return c.emit(map[string]any{"schema_version": "project-runners-update/1", "repository": root, "updated_hosts": updated, "missing_hosts": missing})
 }
 
 func (c *cli) projectAddRunners(root string, profile projectProfile, ids []string) error {
@@ -2084,50 +2084,59 @@ func checkExistingProjectRunners(root string, hosts ...projectHost) error {
 }
 
 // updateProjectRunners validates every tracked runner before replacing any
-// file. This keeps a local customization from being partly overwritten.
-func updateProjectRunners(root string, hosts ...projectHost) ([]string, error) {
+// file. This keeps a local customization from being partly overwritten. A
+// declared host whose runner was never laid down in this clone is reported,
+// not refused: a shared profile may declare a host that only some clones keep,
+// and blocking the live host's update over it left the runner stale for
+// everyone. Only a profile with no runner at all has nothing to update.
+func updateProjectRunners(root string, hosts ...projectHost) (updated, missing []string, err error) {
 	type runnerUpdate struct {
 		host projectHost
 		path string
 	}
 	updates := make([]runnerUpdate, 0, len(projectHosts))
+	missing = []string{}
 	for _, host := range hosts {
 		if err := checkProjectRunnerRoot(root, host); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		path := filepath.Join(projectRunnerPath(root, host), "SKILL.md")
 		info, err := os.Lstat(path)
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, usageError("project_runner_missing: project runners update requires " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run", "SKILL.md")))
+			missing = append(missing, host.ID)
+			continue
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			return nil, usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+			return nil, nil, usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		switch string(data) {
 		case projectRunnerSkill(host):
 			continue
 		default:
 			if !projectRunnerSkillAccepted(host, string(data)) {
-				return nil, usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+				return nil, nil, usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
 			}
 			updates = append(updates, runnerUpdate{host: host, path: path})
 		}
 	}
-	updated := make([]string, 0, len(updates))
+	if len(hosts) != 0 && len(missing) == len(hosts) {
+		return nil, nil, usageError("project_runner_missing: project runners update requires " + filepath.ToSlash(filepath.Join(hosts[0].SkillsRoot, "prifly-run", "SKILL.md")))
+	}
+	updated = make([]string, 0, len(updates))
 	for _, update := range updates {
 		if err := replaceProjectRunner(update.path, projectRunnerSkill(update.host)); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		updated = append(updated, update.host.ID)
 	}
-	return updated, nil
+	return updated, missing, nil
 }
 
 func replaceProjectRunner(path, contents string) error {
