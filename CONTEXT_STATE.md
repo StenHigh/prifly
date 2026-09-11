@@ -4,7 +4,7 @@
 в `openspec/` (см. `openspec/SOURCE-OF-TRUTH.md`); этот файл только
 ориентирует.
 
-Обновлено: 2026-09-11 (после v0.13.21; main = тег). Это рабочая копия Pri-Fly (`StenHigh/prifly`),
+Обновлено: 2026-09-11 (после v0.13.22; main = тег). Это рабочая копия Pri-Fly (`StenHigh/prifly`),
 начатая свежей историей из GitLab-дерева `main` = `27fa58c`. GitLab-проект
 `stenhigh/prifly` архивирован (read-only, README указывает на GitHub).
 
@@ -1276,6 +1276,25 @@ HOME и все фикстуры (`--target`) в одном каталоге, `tr
 Ответы пилоту по #117: `failed` после `resolve --outcome not_applied` — норма
 (запись в troubleshooting), claim завершённого Run'а освобождается сам при
 следующем захвате репозитория (`releaseSettledClaim`).
+
+### 0.13.22: отказ схемы называет границу и счёт (тег на `69ddb5c`)
+
+Пилот на живом хосте: `project_start_invalid_decision_answer: gate_checks:
+schema_invalid at : value does not satisfy the declared contract` — ни
+предела, ни длины; причину (`maxLength: 4000`, состав гейта 4277) нашёл
+чтением схемы пакета. Пакетчик воспроизвёл на 0.13.21 и назвал место:
+`declaredExpectation` печатал сторону контракта для `enum`/`const`/`type`/
+`required` и молчал для всех числовых границ, хотя `kind.MaxLength` несёт
+`Got, Want`. Теперь счётные границы (`maxLength`, `minLength`, `maxItems`,
+`minItems`, `maxProperties`, `minProperties`) называют предел и счёт значения
+— счёт не значение, оно по-прежнему не печатается; числовые (`maximum`,
+`minimum`, `exclusive*`) — только предел, число за ним и есть значение;
+`pattern` — только выражение. Разрез пакетчика в таблице теста: 16001 при
+`maxLength: 16000`; вырезанный случай — прежний немой текст. Ворота: check с
+race, e2e, CI verify зелёный с первого раза; оба пира оповещены с просьбой
+обновиться. Пакетная сторона (не наша): в 1.36.0 предел `gate_checks` 16000
+и назван в описании решения; инженерного потолка на `session_context` у
+движка нет — пакетчик проверил.
 
 ### Метод: три вещи, которые эти два выпуска доказали
 
