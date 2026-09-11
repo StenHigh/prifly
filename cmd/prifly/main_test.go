@@ -39,7 +39,18 @@ func TestMain(m *testing.M) {
 		os.Exit(execute(context.Background(), os.Args[1:], os.Stdout, os.Stderr))
 	}
 	ensureRunMonitor = func(string) error { return nil }
-	os.Exit(m.Run())
+	// Both inits register the authority they create, so a test that runs one
+	// would write into the developer's own ~/.prifly. The gate's own counter
+	// found one such entry left behind after a full run. Every test in this
+	// process gets a throwaway user directory instead.
+	userDir, err := os.MkdirTemp("", "prifly-test-user-")
+	if err != nil {
+		panic(err)
+	}
+	priflyUserDir = func() (string, error) { return userDir, nil }
+	code := m.Run()
+	_ = os.RemoveAll(userDir)
+	os.Exit(code)
 }
 
 func emptyCLIWorkflow(t *testing.T) flow.WorkflowRevision {

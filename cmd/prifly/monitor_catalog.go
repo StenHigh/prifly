@@ -96,6 +96,40 @@ func monitorSourceID(root string) string {
 	sum := sha256.Sum256([]byte(root))
 	return hex.EncodeToString(sum[:])
 }
+
+// pruneMonitorRegistry removes every registry entry whose authority no longer
+// exists and reports how many. Until 0.13.17 only a running monitor did this,
+// on read; a machine that started Runs and never opened the monitor kept every
+// deleted test fixture registered forever, which the package session found
+// after one gate run on 0.13.16: two entries, both pointing at nothing. Now
+// every writer sweeps too. Access lost is not gone and is left alone.
+func pruneMonitorRegistry(sources string) (int, error) {
+	entries, err := os.ReadDir(sources)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	removed := 0
+	for _, entry := range entries {
+		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		path := filepath.Join(sources, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(string(data), ".prifly", "installation.json")); errors.Is(err, fs.ErrNotExist) {
+			if os.Remove(path) == nil {
+				removed++
+			}
+		}
+	}
+	return removed, nil
+}
+
 func registerMonitorRoot(root string) error {
 	root, err := filepath.EvalSymlinks(root)
 	if err != nil {
@@ -111,6 +145,9 @@ func registerMonitorRoot(root string) error {
 	}
 	dir = filepath.Join(dir, "sources")
 	if err = os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	if _, err := pruneMonitorRegistry(dir); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(dir, ".register-")
@@ -229,11 +266,9 @@ func (m *monitorCatalog) registered() {
 		data, err := os.ReadFile(path)
 		if err == nil {
 			root := string(data)
-			// An authority that no longer exists is a dangling entry, not a
-			// source: every start registers the authority it touches, so test
-			// fixtures under /tmp piled up by the hundreds, and each refresh
-			// re-added them only for the next step to drop them again. Access
-			// lost is different from gone, and stays visible below.
+			// A dangling entry -- authority gone -- is not a source; the same
+			// sweep every writer runs removes it here. Access lost is
+			// different from gone and stays visible below.
 			if _, statErr := os.Stat(filepath.Join(root, ".prifly", "installation.json")); errors.Is(statErr, fs.ErrNotExist) {
 				_ = os.Remove(path)
 				continue

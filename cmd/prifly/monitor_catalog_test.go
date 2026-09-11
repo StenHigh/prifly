@@ -520,3 +520,67 @@ func TestAuthoritiesRegisterAtInitAndTheMonitorTrustsTheRegistry(t *testing.T) {
 		t.Fatalf("the monitor walked %d directories with no scan root given", catalog.discovery.Directories)
 	}
 }
+
+// The package session's gate ran once on 0.13.16 and left two registry entries
+// pointing at nothing: theirs, and one from this repository's own e2e. The
+// monitor swept dead entries when it read the registry; nothing else did, so a
+// machine that starts Runs and never opens the monitor keeps every deleted
+// fixture registered forever. Every registration now sweeps first.
+func TestRegisteringAnAuthoritySweepsEntriesWhoseAuthorityIsGone(t *testing.T) {
+	userDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := priflyUserDir
+	priflyUserDir = func() (string, error) { return userDir, nil }
+	t.Cleanup(func() { priflyUserDir = previous })
+	sources := filepath.Join(userDir, "monitor", "sources")
+
+	doomed := filepath.Join(t.TempDir(), "doomed")
+	kept := filepath.Join(t.TempDir(), "kept")
+	for _, root := range []string{doomed, kept} {
+		if err := prifly.Init(root); err != nil {
+			t.Fatal(err)
+		}
+		if err := registerMonitorRoot(root); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if entries, _ := os.ReadDir(sources); len(entries) != 2 {
+		t.Fatalf("two registrations did not leave two entries: %d", len(entries))
+	}
+	// The fixture is deleted the way a test deletes it: the directory goes,
+	// the registry entry does not.
+	if err := os.RemoveAll(doomed); err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := os.ReadDir(sources); len(entries) != 2 {
+		t.Fatalf("deleting the directory should not touch the registry by itself: %d", len(entries))
+	}
+	// The next registration, from anyone, sweeps it.
+	third := filepath.Join(t.TempDir(), "third")
+	if err := prifly.Init(third); err != nil {
+		t.Fatal(err)
+	}
+	if err := registerMonitorRoot(third); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := map[string]bool{}
+	for _, entry := range entries {
+		data, _ := os.ReadFile(filepath.Join(sources, entry.Name()))
+		roots[string(data)] = true
+	}
+	resolvedDoomed, _ := filepath.EvalSymlinks(filepath.Dir(doomed))
+	for root := range roots {
+		if strings.HasPrefix(root, resolvedDoomed) {
+			t.Fatalf("a registration left the dead entry in place: %v", roots)
+		}
+	}
+	if len(roots) != 2 {
+		t.Fatalf("expected the two live authorities and nothing else: %v", roots)
+	}
+}
