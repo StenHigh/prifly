@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -213,9 +214,9 @@ func TestMonitorRegistrationAndConcurrentStart(t *testing.T) {
 	}
 	authority := filepath.Join(root, "authority")
 	monitorFixture(t, authority)
-	previous := monitorUserConfigDir
-	t.Cleanup(func() { monitorUserConfigDir = previous })
-	monitorUserConfigDir = func() (string, error) { return root, nil }
+	previous := priflyUserDir
+	t.Cleanup(func() { priflyUserDir = previous })
+	priflyUserDir = func() (string, error) { return root, nil }
 	alias := filepath.Join(root, "alias")
 	if err = os.Symlink(authority, alias); err != nil {
 		t.Fatal(err)
@@ -448,5 +449,74 @@ func TestMonitorCatalogPrunesRegistryEntriesWhoseAuthorityIsGone(t *testing.T) {
 	}
 	if _, indexed := catalog.sources[monitorSourceID(kept)]; !indexed {
 		t.Fatal("the surviving authority was dropped along with the dangling ones")
+	}
+}
+
+// The owner: too expensive to walk the whole disk looking for Runs, and too
+// hard to find them afterwards to clean up. So there is one place -- the user
+// directory -- and one population, the registry. Every init registers the
+// authority it creates, a project without an explicit state root gets one
+// under the user directory, and the monitor shows what is registered rather
+// than what a walk of home, /tmp and / turns up: 953,692 directories on the
+// owner's machine.
+func TestAuthoritiesRegisterAtInitAndTheMonitorTrustsTheRegistry(t *testing.T) {
+	userDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := priflyUserDir
+	priflyUserDir = func() (string, error) { return userDir, nil }
+	t.Cleanup(func() { priflyUserDir = previous })
+	t.Setenv("PATH", t.TempDir())
+
+	// A plain init registers itself.
+	registered := filepath.Join(t.TempDir(), "registered")
+	if code, _, stderr := runCLI(t, "init", "--profile", "core-workflow/1", registered); code != 0 {
+		t.Fatalf("init: %d %s", code, stderr)
+	}
+	// A project init without a state root lands under the user directory and
+	// registers too.
+	repository := t.TempDir()
+	if code, out, stderr := runCLI(t, "project", "init", "--repository", repository); code != 0 {
+		t.Fatalf("project init: %d %s", code, stderr)
+	} else {
+		var result projectProfileInit
+		if err := json.Unmarshal([]byte(out), &result); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(result.AuthorityRoot, filepath.Join(userDir, "authorities")+string(filepath.Separator)) {
+			t.Fatalf("a project without a state root was put outside the user directory: %s", result.AuthorityRoot)
+		}
+	}
+	// An authority made behind the CLI's back exists on disk and is not
+	// registered: the old walk would have found it, the registry does not.
+	unregistered := filepath.Join(t.TempDir(), "unregistered")
+	if err := prifly.Init(unregistered); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(userDir, "monitor", "sources"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected the two inits to register exactly two authorities, found %d", len(entries))
+	}
+	catalog := newMonitorCatalog(filepath.Join(userDir, "monitor"), []string{})
+	catalog.scan(context.Background())
+	catalog.refresh(context.Background())
+	roots := []string{}
+	for _, source := range catalog.sourceList() {
+		roots = append(roots, source.Root)
+	}
+	resolved, _ := filepath.EvalSymlinks(registered)
+	if !slices.Contains(roots, resolved) {
+		t.Fatalf("the registered authority is not shown: %v", roots)
+	}
+	if resolvedUnregistered, _ := filepath.EvalSymlinks(unregistered); slices.Contains(roots, resolvedUnregistered) {
+		t.Fatalf("an unregistered authority was found by walking the disk: %v", roots)
+	}
+	if catalog.discovery.Directories != 0 {
+		t.Fatalf("the monitor walked %d directories with no scan root given", catalog.discovery.Directories)
 	}
 }

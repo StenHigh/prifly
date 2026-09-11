@@ -908,6 +908,12 @@ func (c *cli) projectInit(ctx context.Context, args []string) error {
 	if err := ensureProjectAuthority(authority); err != nil {
 		return err
 	}
+	// Registered at creation, not at the first start: the monitor discovers
+	// from the registry alone now, and an authority that was initialised and
+	// never started would otherwise be invisible to it.
+	if err := registerMonitorRoot(authority); err != nil {
+		return err
+	}
 	if existing {
 		if err := writeProjectLocal(profile, authority, executable); err != nil {
 			return err
@@ -1820,12 +1826,12 @@ func projectPathsOverlap(first, second string) bool {
 }
 
 func defaultProjectAuthorityRoot(repository string) (string, error) {
-	base, err := os.UserConfigDir()
+	base, err := priflyUserDir()
 	if err != nil {
 		return "", &prifly.Fault{Code: "local_state_root_unavailable", Cause: err}
 	}
 	digest := sha256.Sum256([]byte(repository))
-	return filepath.Join(base, "Pri-Fly", "projects", hex.EncodeToString(digest[:])), nil
+	return filepath.Join(base, "authorities", hex.EncodeToString(digest[:])), nil
 }
 
 func projectExecutable() (string, error) {

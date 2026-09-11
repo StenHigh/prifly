@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	prifly "github.com/stenhigh/prifly/internal/runtime"
@@ -40,7 +41,7 @@ var monitorAuthorityCheckInterval = 5 * time.Second
 
 func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 	f := flags("monitor")
-	scanRoot := f.String("scan-root", "", "search roots separated by the OS path-list separator; default: all accessible local directories")
+	scanRoot := f.String("scan-root", "", "also walk these directories for authorities, separated by the OS path-list separator; by default only registered authorities are shown")
 	addr := f.String("addr", "127.0.0.1:7777", "loopback address to listen on")
 	if err := parse(f, args); err != nil {
 		return err
@@ -52,12 +53,13 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Every authority prifly creates registers itself, so the registry is the
+	// population and a disk walk finds nothing it does not already know. The
+	// default walk of home, /tmp and / cost 366,999 directories a minute on
+	// the owner's machine; it is now something you ask for.
 	roots := []string{}
 	if *scanRoot != "" {
 		roots = append(roots, strings.Split(*scanRoot, string(os.PathListSeparator))...)
-	} else {
-		home, _ := os.UserHomeDir()
-		roots = []string{filepath.Join(filepath.Dir(registry), "projects"), home, os.TempDir(), "/"}
 	}
 	catalog := newMonitorCatalog(registry, roots)
 	catalog.add(root)
@@ -76,6 +78,7 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 	// CPU: nobody knew it existed to stop it. A monitor whose own authority is
 	// gone has nothing left to serve; one given scan roots was asked to browse
 	// and stays.
+	var authorityGone atomic.Bool
 	if *scanRoot == "" {
 		go func() {
 			for {
@@ -85,7 +88,9 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 				case <-time.After(monitorAuthorityCheckInterval):
 				}
 				if _, err := os.Stat(filepath.Join(root, ".prifly", "installation.json")); errors.Is(err, fs.ErrNotExist) {
-					fmt.Fprintf(c.errout, "monitor: the authority at %s is gone; stopping\n", root)
+					// Only stop from here; the line is written below, on the
+					// goroutine that owns errout, once Serve has returned.
+					authorityGone.Store(true)
 					stop()
 					return
 				}
@@ -102,6 +107,9 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 	fmt.Fprintf(c.errout, "monitor: http://%s (local monitor)\n", listener.Addr())
 	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
+	}
+	if authorityGone.Load() {
+		fmt.Fprintf(c.errout, "monitor: the authority at %s is gone; stopped\n", root)
 	}
 	return nil
 }

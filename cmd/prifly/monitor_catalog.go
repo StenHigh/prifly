@@ -70,14 +70,27 @@ type monitorCatalog struct {
 	registry     string
 }
 
-var monitorUserConfigDir = os.UserConfigDir
-
-func monitorDirectory() (string, error) {
-	base, err := monitorUserConfigDir()
+// priflyUserDir is the one place Pri-Fly keeps for the user: the monitor
+// registry and every authority created without an explicit location. Until
+// 0.13.16 these lived under the platform config directory and authorities
+// could be anywhere a test or a command put them, so finding the Runs to clean
+// meant walking the disk -- 366,999 directories per scan on the owner's
+// machine. One directory under HOME is something a person can list and delete.
+// A variable so a test can point it elsewhere.
+var priflyUserDir = func() (string, error) {
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "Pri-Fly", "monitor"), nil
+	return filepath.Join(home, ".prifly"), nil
+}
+
+func monitorDirectory() (string, error) {
+	base, err := priflyUserDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "monitor"), nil
 }
 func monitorSourceID(root string) string {
 	sum := sha256.Sum256([]byte(root))

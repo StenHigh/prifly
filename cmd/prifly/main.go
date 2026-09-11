@@ -545,6 +545,9 @@ func (c *cli) run(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
+		if err := registerMonitorRoot(absolute); err != nil {
+			return err
+		}
 		return c.emit(map[string]any{"schema_version": "foundation-init/1", "project": absolute, "initialized": true, "installed_packages": 0, "network_used": false})
 	case "capabilities":
 		if len(args) != 1 {
@@ -2463,7 +2466,7 @@ Global: --project DIR  --json  --format text|json|csv
   grant issue --subject ID --capability OP [--resource RESOURCE.json] --max-operations N --lifetime-ms MS --reason TEXT
   grant revoke --id GRANT --reason TEXT | grant list
                                    Bounded delegation; issuing it is gated exactly like what it delegates
-  monitor [--addr 127.0.0.1:7777] [--scan-root DIRS]
+  monitor [--addr 127.0.0.1:7777] [--scan-root DIRS]   registered authorities; --scan-root also walks DIRS
                                    Local user Runs, disk usage and confirmed cleanup; DIRS is an OS path-list. Auto-starts on Run creation, without opening a browser.
   capacity show | capacity set --capacity N --reason TEXT
                                    How many attempts run at once here; a workflow declares its own and the smaller governs
