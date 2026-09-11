@@ -125,7 +125,11 @@ func (p *Plan) checkRepeatBinding(binding Binding, target Port, required bool, b
 	if !exists {
 		return problem("unknown_port", path+"/port", "iteration output is not declared by the body workflow")
 	}
-	return p.checkBoundPort(binding, output.Port, target, required, requiredForAll(output, outcomes), path)
+	unguaranteed := ""
+	if !requiredForAll(output, outcomes) {
+		unguaranteed = unguaranteedNotEveryOutcome
+	}
+	return p.checkBoundPort(binding, output.Port, target, required, unguaranteed, path)
 }
 
 func (p *Plan) checkSubscriptionBinding(binding Binding, target Port, body *Plan, stageID string, initial bool, path string) error {

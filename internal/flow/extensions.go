@@ -633,61 +633,69 @@ func (p *Plan) itemPredicatePublicationStage(predicate Predicate) string {
 }
 
 func (p *Plan) checkAvailableBinding(binding Binding, target Port, required bool, available map[outputKey]bool, path string) error {
-	source, guaranteed, err := p.bindingSource(binding, available, path)
+	source, unguaranteed, err := p.bindingSource(binding, available, path)
 	if err != nil {
 		return err
 	}
-	return p.checkBoundPort(binding, source, target, required, guaranteed, path)
+	return p.checkBoundPort(binding, source, target, required, unguaranteed, path)
 }
 
 // bindingSource resolves what a binding reads and whether that value is
 // guaranteed on every incoming path. It says nothing about whether the
 // destination accepts it: that judgement differs between a port-to-port
 // binding and a collection a map fans out over.
-func (p *Plan) bindingSource(binding Binding, available map[outputKey]bool, path string) (Port, bool, error) {
+func (p *Plan) bindingSource(binding Binding, available map[outputKey]bool, path string) (Port, string, error) {
 	var source Port
-	guaranteed := true
+	unguaranteed := ""
 	switch binding.From {
 	case "workflow_input":
 		input, exists := p.Workflow.Inputs[binding.Port]
 		if !exists {
-			return Port{}, false, problem("unknown_port", path+"/port", "workflow input does not exist")
+			return Port{}, "", problem("unknown_port", path+"/port", "workflow input does not exist")
 		}
 		source = input.Port
-		guaranteed = input.Required || (input.Configuration != nil && len(input.Configuration.Default) != 0)
+		if !(input.Required || (input.Configuration != nil && len(input.Configuration.Default) != 0)) {
+			unguaranteed = unguaranteedOptionalInput
+		}
 	case "stage_output":
 		output, exists := p.StageOutputs(binding.StageID)[binding.Port]
 		if !exists {
-			return Port{}, false, problem("unknown_port", path+"/port", "producer output does not exist")
+			return Port{}, "", problem("unknown_port", path+"/port", "producer output does not exist")
 		}
 		source = output.Port
-		guaranteed, exists = available[outputKey{binding.StageID, binding.Port}]
+		guaranteed, exists := available[outputKey{binding.StageID, binding.Port}]
 		if !exists {
-			return Port{}, false, problem("unavailable_output", path+"/stage_id", "producer has not executed on any incoming path")
+			return Port{}, "", problem("unavailable_output", path+"/stage_id", "producer has not executed on any incoming path")
+		}
+		if !guaranteed {
+			unguaranteed = unguaranteedNotEveryRoute
 		}
 	case "literal":
 		var err error
 		if source, err = p.literalPort(binding, path); err != nil {
-			return Port{}, false, err
+			return Port{}, "", err
 		}
 	case "publication":
 		stage, exists := p.Workflow.Definition.Stages[binding.StageID]
 		if !exists || stage.Kind != "wait" {
-			return Port{}, false, problem("missing_stage", path+"/stage_id", "publication binding producer is not a wait")
+			return Port{}, "", problem("missing_stage", path+"/stage_id", "publication binding producer is not a wait")
 		}
 		definition, exists := p.PublicationSource(stage.SourceRef)
 		if !exists || definition.Mode != "each_publication" {
-			return Port{}, false, problem("invalid_publication_source", path+"/stage_id", "publication binding requires an each_publication wait")
+			return Port{}, "", problem("invalid_publication_source", path+"/stage_id", "publication binding requires an each_publication wait")
 		}
 		source = definition.ArtifactPort()
-		guaranteed, exists = available[outputKey{binding.StageID, WaitPublicationPort}]
+		guaranteed, exists := available[outputKey{binding.StageID, WaitPublicationPort}]
 		if !exists {
-			return Port{}, false, problem("unavailable_output", path+"/stage_id", "publication item is not proven on this path")
+			return Port{}, "", problem("unavailable_output", path+"/stage_id", "publication item is not proven on this path")
+		}
+		if !guaranteed {
+			unguaranteed = "the publication item is not proven on every route into this stage"
 		}
 	default:
-		return Port{}, false, problem("unsupported", path+"/from", "unsupported binding source")
+		return Port{}, "", problem("unsupported", path+"/from", "unsupported binding source")
 	}
-	return source, guaranteed, nil
+	return source, unguaranteed, nil
 }
 
 // checkOpaqueJSON validates a binding whose value has no destination port to
@@ -698,12 +706,12 @@ func (p *Plan) bindingSource(binding Binding, available map[outputKey]bool, path
 // checked where it is used - each item against the body's item schema when the
 // collection is sealed, the key against the event when one arrives.
 func (p *Plan) checkOpaqueJSON(binding Binding, available map[outputKey]bool, path, subject string) error {
-	source, guaranteed, err := p.bindingSource(binding, available, path)
+	source, unguaranteed, err := p.bindingSource(binding, available, path)
 	if err != nil {
 		return err
 	}
-	if !guaranteed {
-		return problem("unavailable_output", path, subject+" is not guaranteed on this path")
+	if unguaranteed != "" {
+		return problem("unavailable_output", path, subject+" is not guaranteed on this path: "+unguaranteed)
 	}
 	if binding.Pointer != nil {
 		if _, err := pointerParts(*binding.Pointer); err != nil {

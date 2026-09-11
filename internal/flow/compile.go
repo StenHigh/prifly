@@ -855,9 +855,22 @@ func (p *Plan) checkFinishBindings(stage Stage, path string, check func(Binding,
 	return nil
 }
 
+// The reasons a bound value is not guaranteed on a path. They are decided in
+// five places and printed in one, and each names a different exit: telling a
+// reader whose input is merely optional to move a choice inside a called
+// workflow sends them to fix something that is not there. The package session
+// cut exactly that on the first version of this text. An empty reason means
+// guaranteed.
+const (
+	unguaranteedOptionalInput   = "the workflow input is optional and has no default: make it required, give it a default, or bind the port to something present on every route"
+	unguaranteedNotRequiredFor  = "the producer ran on this route, but its output is not required_for the verdict this route follows: declare it required_for that verdict, or do not read it on this route"
+	unguaranteedNotEveryRoute   = "the producer does not deliver this output on every route into this stage: a choice may skip it, an on_error edge may reach here without it, or a check may fail after it wrote. Do not bind to an older producer that is guaranteed -- that value goes stale on the routes where the newer one ran. Make the producer guaranteed instead: move the choice inside the called workflow and pass the input through unchanged when its gate is off, or send the route that lacks the output somewhere that does not read it"
+	unguaranteedNotEveryOutcome = "the output is not required for every outcome of the repeat body: declare it required_for each outcome the body can end in"
+)
+
 func (p *Plan) checkBinding(binding Binding, target Port, required bool, completed map[string]string, path string) error {
 	var source Port
-	guaranteed := true
+	unguaranteed := ""
 	switch binding.From {
 	case "workflow_input":
 		input, exists := p.Workflow.Inputs[binding.Port]
@@ -865,7 +878,9 @@ func (p *Plan) checkBinding(binding Binding, target Port, required bool, complet
 			return problem("unknown_port", path+"/port", "workflow input does not exist")
 		}
 		source = input.Port
-		guaranteed = input.Required
+		if !input.Required {
+			unguaranteed = unguaranteedOptionalInput
+		}
 	case "stage_output":
 		verdict, exists := completed[binding.StageID]
 		if !exists {
@@ -876,7 +891,9 @@ func (p *Plan) checkBinding(binding Binding, target Port, required bool, complet
 			return problem("unknown_port", path+"/port", "producer output does not exist")
 		}
 		source = output.Port
-		guaranteed = slices.Contains(output.RequiredFor, verdict)
+		if !slices.Contains(output.RequiredFor, verdict) {
+			unguaranteed = unguaranteedNotRequiredFor + " (" + verdict + ")"
+		}
 	case "literal":
 		var err error
 		if source, err = p.literalPort(binding, path); err != nil {
@@ -885,7 +902,7 @@ func (p *Plan) checkBinding(binding Binding, target Port, required bool, complet
 	default:
 		return problem("unsupported", path+"/from", "unsupported binding source")
 	}
-	return p.checkBoundPort(binding, source, target, required, guaranteed, path)
+	return p.checkBoundPort(binding, source, target, required, unguaranteed, path)
 }
 
 func (p *Plan) literalPort(binding Binding, path string) (Port, error) {
@@ -902,9 +919,15 @@ func (p *Plan) literalPort(binding Binding, path string) (Port, error) {
 	return source, nil
 }
 
-func (p *Plan) checkBoundPort(binding Binding, source, target Port, required, guaranteed bool, path string) error {
-	if required && !guaranteed {
-		return problem("unavailable_output", path, "required value is not guaranteed on this path")
+func (p *Plan) checkBoundPort(binding Binding, source, target Port, required bool, unguaranteed string, path string) error {
+	if required && unguaranteed != "" {
+		// The refusal is right; what an author did under its pressure was not
+		// always. A package bound review and commit to the one producer
+		// guaranteed on every route -- the original implementation -- and
+		// after a fix round the artifact named a commit two behind the tree.
+		// The words that would have stopped that belong to the reason that
+		// applies, so each site that decides "not guaranteed" says why.
+		return problem("unavailable_output", path, "required value is not guaranteed on this path: "+unguaranteed)
 	}
 	if binding.Pointer != nil {
 		if p.Profile != CoreProfile {

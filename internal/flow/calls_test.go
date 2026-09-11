@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -500,4 +501,37 @@ func TestCoreCallChoiceUsesOnlyDeclaredExports(t *testing.T) {
 	root.Definition.Stages["choose"] = stage
 	_, err = compileCallFixture(t, root, child, registry)
 	expectProblem(t, err, "missing_stage")
+}
+
+// The first version of this refusal's text put one diagnosis on a sink fed by
+// five sites, and the package session cut it: an optional input without a
+// default was told to "move the choice inside the called workflow" -- there was
+// no choice in its binding. Each site that decides "not guaranteed" now names
+// its own exit, and the two most easily confused are pinned here by their words.
+func TestUnavailableOutputNamesTheReasonThatApplies(t *testing.T) {
+	// An optional workflow input bound to a required child port: nothing about
+	// a choice, everything about the input.
+	root, child, registry := callBindingFixture(t)
+	p := root.Inputs["value"]
+	p.Required = false
+	root.Inputs["value"] = p
+	_, err := compileCallFixture(t, root, child, registry)
+	optional := expectProblem(t, err, "unavailable_output")
+	if !strings.Contains(optional.Message, "input is optional") || strings.Contains(optional.Message, "choice") {
+		t.Fatalf("an optional input was diagnosed as something else: %s", optional.Message)
+	}
+
+	// A producer whose output is not delivered on every route in -- here an
+	// error edge from the call reaches the finish that exports its report.
+	// The diagnosis is the route, and the exit names making the producer
+	// guaranteed rather than binding to something older.
+	root, child, registry = callBindingFixture(t)
+	s := root.Definition.Stages["call"]
+	s.OnError = "done"
+	root.Definition.Stages["call"] = s
+	_, err = compileCallFixture(t, root, child, registry)
+	route := expectProblem(t, err, "unavailable_output")
+	if !strings.Contains(route.Message, "every route") || strings.Contains(route.Message, "input is optional") {
+		t.Fatalf("a producer missing on one route was diagnosed as something else: %s", route.Message)
+	}
 }
