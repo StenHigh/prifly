@@ -15,7 +15,10 @@
 - [`authoring/step-authoring-reference.yaml`](authoring/step-authoring-reference.yaml) — все поля
   `prifly-step/1`, ports, hooks и telemetry с comments.
 - [`authoring/extension-authoring-reference.yaml`](authoring/extension-authoring-reference.yaml) —
-  tracked `settings`, `exclude` и простая вставка шага через `extend.yaml`.
+  tracked `profile`, `answers` (постоянные ответы проекта на объявленные
+  решения: `decision_policy`, `preflight`, `runtime` — источник
+  `project_default`, флаг перебивает), `settings`, `exclude` и простая
+  вставка шага через `extend.yaml`.
 - [`authoring/project-profile-authoring-reference.yaml`](authoring/project-profile-authoring-reference.yaml) —
   полный `.prifly/project.yaml` `/3`; hosts необязательны и выбираются явно.
 - [`authoring/execution-bindings-authoring-reference.yaml`](authoring/execution-bindings-authoring-reference.yaml) —

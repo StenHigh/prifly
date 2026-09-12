@@ -10,6 +10,26 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9_-]*$"
     },
+    "answers": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "decision_policy": {"enum": ["attended", "autonomous"]},
+        "preflight": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_-]*$"},
+          "additionalProperties": true
+        },
+        "runtime": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_-]*$"},
+          "additionalProperties": true
+        }
+      }
+    },
     "settings": {
       "type": "object",
       "propertyNames": {"pattern": "^[a-z][a-z0-9_-]*$"},

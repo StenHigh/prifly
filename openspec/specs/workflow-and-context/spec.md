@@ -667,6 +667,15 @@ per-Run launch value. Default MAY заполнить omitted optional launch cho
 - **THEN** новый Run использует выбор пользователя, а `extend.yaml` остаётся
   byte-for-byte прежним
 
+#### Scenario: Постоянные ответы проекта на объявленные решения
+- **WHEN** `extend.yaml` содержит `answers` с `decision_policy`, `preflight`
+  и/или `runtime`, и запуск не называет соответствующий флаг
+- **THEN** `project questionnaire` и `project start` применяют эти ответы как
+  `project_default`, проверяют их по каталогу решений так же, как флаги
+  (неизвестное решение, чужая фаза или неверное значение — отказ, называющий
+  `extend.yaml answers.<phase>`), а названный флаг перебивает только тот
+  ответ, который называет, без записи обратно в `extend.yaml`
+
 ### Requirement: Workflow repository содержит discoverable Project workflow folders
 Workflow repository — любой Git-репозиторий, доступный пользователю, который
 содержит одну или несколько Project workflow folders. Pri-Fly MUST находить

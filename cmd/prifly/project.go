@@ -822,7 +822,7 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	name := f.String("package", "", "named package from project.yaml")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
 	selectedProfile := f.String("package-profile", "", "per-Run package profile")
-	policy := f.String("decision-policy", "attended", "attended or autonomous declared-decision policy")
+	policy := f.String("decision-policy", "", "attended or autonomous declared-decision policy; unnamed, the project's answers.decision_policy in extend.yaml, then attended")
 	expectedCatalog := f.String("expected-decision-catalog-digest", "", "catalog from the preceding questionnaire")
 	var answers, runtimeAnswers stringsFlag
 	f.Var(&answers, "preflight-answer", "declared preflight decision ID=JSON")
@@ -1015,6 +1015,77 @@ type projectWorkflowOptions struct {
 	Settings   map[string]map[string]any
 	Exclude    []string
 	Profile    string
+	Answers    projectWorkflowAnswers
+}
+
+// projectWorkflowAnswers are the owner's standing answers to a package's
+// declared decisions, read from extend.yaml beside profile: a decision the
+// owner settled for the project is not a choice to make at every launch, and
+// until 0.13.23 five of them lived in the operator's memory and a launcher's
+// fixed flags. A flag still overrides each one, and every answer is validated
+// against the catalog exactly as a flag is.
+type projectWorkflowAnswers struct {
+	DecisionPolicy string
+	Preflight      map[string]json.RawMessage
+	Runtime        map[string]json.RawMessage
+}
+
+// projectExtensionAnswersSource names where a standing answer came from in a
+// refusal, so a reader edits extend.yaml rather than retyping a flag.
+const projectExtensionAnswersSource = "extend.yaml answers"
+
+// projectReadWorkflowAnswers reads the answers block of extend.yaml. Values
+// are canonical JSON, the same form a flag carries, so the catalog validates
+// both alike; which decisions exist is the catalog's business and is checked
+// where flags are checked, not here.
+func projectReadWorkflowAnswers(raw any) (projectWorkflowAnswers, error) {
+	block, ok := raw.(map[string]any)
+	if !ok || len(block) == 0 {
+		return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers must be a non-empty object")
+	}
+	result := projectWorkflowAnswers{Preflight: map[string]json.RawMessage{}, Runtime: map[string]json.RawMessage{}}
+	for key := range block {
+		switch key {
+		case "decision_policy", "preflight", "runtime":
+		default:
+			return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers has unknown field " + key + "; use decision_policy, preflight or runtime")
+		}
+	}
+	if raw, exists := block["decision_policy"]; exists {
+		policy, ok := raw.(string)
+		if !ok || policy != "attended" && policy != "autonomous" {
+			return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers.decision_policy must be attended or autonomous")
+		}
+		result.DecisionPolicy = policy
+	}
+	for _, phase := range []struct {
+		name   string
+		target map[string]json.RawMessage
+	}{{"preflight", result.Preflight}, {"runtime", result.Runtime}} {
+		raw, exists := block[phase.name]
+		if !exists {
+			continue
+		}
+		entries, ok := raw.(map[string]any)
+		if !ok || len(entries) == 0 {
+			return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers." + phase.name + " must be a non-empty object of ID: value")
+		}
+		for id, value := range entries {
+			if !projectValueName.MatchString(id) || value == nil {
+				return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers." + phase.name + " entries need a valid decision ID and a non-null value; got " + id)
+			}
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers." + phase.name + "." + id + ": " + err.Error())
+			}
+			canonical, err := flow.Canonical(encoded)
+			if err != nil {
+				return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers." + phase.name + "." + id + ": " + err.Error())
+			}
+			phase.target[id] = canonical
+		}
+	}
+	return result, nil
 }
 
 func (c *cli) projectExtend(_ context.Context, args []string) error {
@@ -1132,12 +1203,19 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	for key := range root {
 		switch key {
-		case "extensions", "settings", "exclude", "profile":
+		case "extensions", "settings", "exclude", "profile", "answers":
 		default:
 			return projectWorkflowOptions{}, usageError("project_extension_invalid: unknown field " + key)
 		}
 	}
 	result := projectWorkflowOptions{Extensions: []projectWorkflowExtension{}, Settings: map[string]map[string]any{}, Exclude: []string{}}
+	if raw, exists := root["answers"]; exists {
+		answers, err := projectReadWorkflowAnswers(raw)
+		if err != nil {
+			return projectWorkflowOptions{}, err
+		}
+		result.Answers = answers
+	}
 	if raw, exists := root["profile"]; exists {
 		profile, ok := raw.(string)
 		if !ok || !projectValueName.MatchString(profile) {

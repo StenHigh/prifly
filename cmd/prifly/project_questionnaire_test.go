@@ -285,3 +285,80 @@ func TestAdmissionPreviewNamesTheRefusalOnlyWhenNoSlotIsFree(t *testing.T) {
 		})
 	}
 }
+
+// A decision the owner settled for the project is not a choice to make at
+// every launch. Until 0.13.23 five such answers lived in the operator's memory
+// and a launcher's fixed flags: extend.yaml had a slot for the package profile
+// and none for the policy or the answers. The standing answers are read where
+// the profile is, validated where a flag is, recorded as project_default, and
+// a flag overrides each one -- the questionnaire shows the same resolution
+// Start seals.
+func TestProjectStandingAnswersInExtendYAML(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	root, authority := projectQuestionnaireFixture(t)
+	profile, err := readProjectProfile(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const extend = ".prifly/workflows/questions/extend.yaml"
+	writeFixtureFile(t, root, extend, "extensions: []\nanswers:\n  decision_policy: autonomous\n  preflight:\n    gate: false\n  runtime:\n    plain: true\n")
+	record := func(sheet prifly.DecisionSheet, id string) (string, string) {
+		for _, record := range sheet.Records {
+			if record.DefinitionID == id {
+				return string(record.Value), record.Source
+			}
+		}
+		return "", ""
+	}
+	standing, err := projectStartPreflight(root, profile, "questions", "", "", nil, nil)
+	if err != nil {
+		t.Fatalf("standing answers were not accepted: %v", err)
+	}
+	if standing.Sheet.DecisionPolicy != "autonomous" {
+		t.Fatalf("the standing policy was not read: %+v", standing.Sheet)
+	}
+	if value, source := record(standing.Sheet, "gate"); value != "false" || source != "project_default" {
+		t.Fatalf("the standing preflight answer was not sealed as the project's: %q %q", value, source)
+	}
+	if value, source := record(standing.Sheet, "plain"); value != "true" || source != "project_default" {
+		t.Fatalf("the standing runtime answer was not sealed as the project's: %q %q", value, source)
+	}
+	// A flag wins, and only over the answer it names.
+	flagged, err := projectStartPreflight(root, profile, "questions", "", "attended", []string{"gate=true"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flagged.Sheet.DecisionPolicy != "attended" {
+		t.Fatalf("the flag did not override the standing policy: %+v", flagged.Sheet)
+	}
+	if value, source := record(flagged.Sheet, "gate"); value != "true" || source != "actor" {
+		t.Fatalf("the flag did not override the standing answer: %q %q", value, source)
+	}
+	if value, source := record(flagged.Sheet, "plain"); value != "true" || source != "project_default" {
+		t.Fatalf("an unnamed standing answer was lost beside a flag: %q %q", value, source)
+	}
+	// The read-only questionnaire resolves the same sheet Start seals.
+	code, out, stderr := runCLI(t, "--project", authority, "project", "questionnaire", "--repository", root, "--launch", "questions")
+	var result projectQuestionnaire
+	if code != 0 || json.Unmarshal([]byte(out), &result) != nil {
+		t.Fatalf("questionnaire with standing answers: %d %s %s", code, out, stderr)
+	}
+	if !reflect.DeepEqual(result.DecisionSheet, standing.Sheet) {
+		t.Fatalf("questionnaire and Start resolved different standing answers:\n%+v\n%+v", result.DecisionSheet, standing.Sheet)
+	}
+	// A standing answer is validated like a flag, and the refusal names the
+	// file to edit, not a flag to retype.
+	for _, test := range []struct{ name, block, want string }{
+		{"unknown", "  preflight:\n    nobody: true\n", "project_start_unknown_decision: nobody (from extend.yaml answers.preflight) is not declared"},
+		{"wrong-phase", "  preflight:\n    plain: true\n", "plain is a runtime decision; pass it with extend.yaml answers.runtime, not extend.yaml answers.preflight"},
+		{"invalid-value", "  runtime:\n    retry: 9\n  preflight:\n    gate: true\n", "project_start_invalid_decision_answer: retry (from extend.yaml answers.runtime): "},
+		{"bad-policy", "  decision_policy: sometimes\n", "answers.decision_policy must be attended or autonomous"},
+		{"unknown-field", "  defaults: {}\n", "answers has unknown field defaults"},
+	} {
+		writeFixtureFile(t, root, extend, "extensions: []\nanswers:\n"+test.block)
+		_, err := projectStartPreflight(root, profile, "questions", "", "", nil, nil)
+		if err == nil || !strings.Contains(err.Error(), test.want) {
+			t.Fatalf("%s: standing answer refusal does not name its place: %v", test.name, err)
+		}
+	}
+}

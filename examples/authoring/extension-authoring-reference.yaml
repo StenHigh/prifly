@@ -7,6 +7,21 @@
 # that package's sealed YAML substitutions; it is not a Core runtime profile.
 profile: standard
 
+# Standing answers to the package's declared decisions: what the owner settled
+# for this project and does not choose again at every launch. Each is validated
+# against the decision catalog exactly as a flag is, sealed into the Run's
+# decision sheet as project_default, and overridden by the matching flag
+# (--decision-policy, --preflight-answer, --runtime-answer) for one Run without
+# touching this file. A long text answer is a YAML block scalar.
+answers:
+  decision_policy: autonomous
+  preflight:
+    plan_tests: true
+    gate_checks: |
+      composer test -- --group=product
+  runtime:
+    improve_apply: all
+
 # Set defaults for already declared project-scoped configuration inputs.
 settings:
   build-or-pass:

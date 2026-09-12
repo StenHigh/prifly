@@ -2339,6 +2339,7 @@ Global: --project DIR  --json  --format text|json|csv
                                    Delete the folder and its launches from the tracked profile; authority packages and Runs stay
   project questionnaire --repository DIR (--package NAME|--launch ID)
                 [--package-profile NAME] [--decision-policy attended|autonomous] [--preflight-answer ID=JSON] [--runtime-answer ID=JSON]
+                                   An unnamed profile, policy or answer is the project's standing one from extend.yaml (profile:, answers:), then the package's
                 [--expected-decision-catalog-digest DIGEST]
                                    Read applicable/conditional decisions and optional typed preanswers without creating a Run
   project questionnaire --prepare --launch ID [the same arguments as project start]

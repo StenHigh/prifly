@@ -56,7 +56,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	workspace := f.String("workspace", "", "explicit worktree or checkout for assisted repository writes")
 	allowExecution := f.Bool("allow-execution", false, "approve the selected workflow programs, arguments and supporting files")
 	packageProfile := f.String("package-profile", "", "per-Run package profile")
-	decisionPolicy := f.String("decision-policy", "attended", "attended or autonomous declared-decision policy")
+	decisionPolicy := f.String("decision-policy", "", "attended or autonomous declared-decision policy; unnamed, the project's answers.decision_policy in extend.yaml, then attended")
 	expectedCatalog := f.String("expected-decision-catalog-digest", "", "catalog digest returned by project questionnaire")
 	expectedLaunch := f.String("expected-launch-digest", "", "review digest returned by project questionnaire --prepare")
 	command := f.String("command-id", "", "stable command identity for an explicit retry")
@@ -484,7 +484,7 @@ func projectStartPreflight(root string, profile projectProfile, packageName, req
 // The questionnaire validates the same selections as Start, but can display
 // missing required answers while the owner is still filling out the form.
 func projectDecisionPreflight(root string, profile projectProfile, packageName, requestedProfile, decisionPolicy string, rawAnswers, rawRuntimeAnswers []string, complete bool) (projectPreflight, error) {
-	if decisionPolicy != "attended" && decisionPolicy != "autonomous" {
+	if decisionPolicy != "" && decisionPolicy != "attended" && decisionPolicy != "autonomous" {
 		return projectPreflight{}, usageError("project_start_invalid_decision_policy: use attended or autonomous")
 	}
 	pkg, exists := profile.Packages[packageName]
@@ -521,9 +521,30 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 	if selected == "" && len(source.Profiles) != 0 {
 		selected = source.DefaultProfile
 	}
+	// An unnamed policy is the project's standing one, then attended: the
+	// flag overrides extend.yaml, never the reverse.
+	if decisionPolicy == "" {
+		decisionPolicy = options.Answers.DecisionPolicy
+		if decisionPolicy == "" {
+			decisionPolicy = "attended"
+		}
+	}
 	answers, err := projectParseDecisionAnswers(rawAnswers)
 	if err != nil {
 		return projectPreflight{}, err
+	}
+	answerSources := map[string]string{}
+	// origin says where each answer was written, so a refusal sends the reader
+	// to the flag or to extend.yaml -- whichever they must correct.
+	origin := map[string]string{}
+	for id := range answers {
+		origin[id] = "--preflight-answer"
+	}
+	for id, value := range options.Answers.Preflight {
+		if _, named := answers[id]; named {
+			continue
+		}
+		answers[id], origin[id], answerSources[id] = value, projectExtensionAnswersSource+".preflight", "project_default"
 	}
 	definitions := map[string]prifly.DecisionDefinition{}
 	for _, definition := range source.DecisionCatalog {
@@ -532,20 +553,28 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 	for id, value := range answers {
 		definition, exists := definitions[id]
 		if !exists || definition.Phase != "preflight" {
-			return projectPreflight{}, unknownDecision(definition, exists, id, "--preflight-answer")
+			return projectPreflight{}, unknownDecision(definition, exists, id, origin[id])
 		}
 		if definition.Destination.Kind == "package_profile" {
 			return projectPreflight{}, usageError("project_start_profile_is_selected_with_package_profile: " + id)
 		}
 		if err := projectValidateDecisionValue(definition, value); err != nil {
-			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + ": " + err.Error())
+			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + answerOriginNote(origin[id]) + ": " + err.Error())
 		}
 	}
 	runtime, err := projectParseDecisionAnswers(rawRuntimeAnswers)
 	if err != nil {
 		return projectPreflight{}, err
 	}
-	answerSources := map[string]string{}
+	for id := range runtime {
+		origin[id] = "--runtime-answer"
+	}
+	for id, value := range options.Answers.Runtime {
+		if _, named := runtime[id]; named {
+			continue
+		}
+		runtime[id], origin[id], answerSources[id] = value, projectExtensionAnswersSource+".runtime", "project_default"
+	}
 	for _, definition := range source.DecisionCatalog {
 		if definition.Phase != "preflight" || !projectDecisionApplies(definition, selected, answers) {
 			continue
@@ -582,16 +611,16 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 	// dependent answer merely because its predecessor was selected by policy.
 	for id := range answers {
 		if definition, exists := definitions[id]; !projectDecisionApplies(definition, selected, answers) {
-			return projectPreflight{}, unknownDecision(definition, exists, id, "--preflight-answer")
+			return projectPreflight{}, unknownDecision(definition, exists, id, origin[id])
 		}
 	}
 	for id, value := range runtime {
 		definition, exists := definitions[id]
 		if !exists || definition.Phase != "runtime" || !projectDecisionApplies(definition, selected, answers) {
-			return projectPreflight{}, unknownDecision(definition, exists, id, "--runtime-answer")
+			return projectPreflight{}, unknownDecision(definition, exists, id, origin[id])
 		}
 		if err := projectValidateDecisionValue(definition, value); err != nil {
-			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + ": " + err.Error())
+			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + answerOriginNote(origin[id]) + ": " + err.Error())
 		}
 	}
 	catalog := prifly.DecisionCatalog{SchemaVersion: prifly.DecisionCatalogVersion, Decisions: source.DecisionCatalog}
@@ -709,14 +738,29 @@ func projectDecisionApplies(definition prifly.DecisionDefinition, profile string
 // decision that exists in the catalog but belongs to the other phase is the
 // common case, and naming only the id sent the reader to the questionnaire to
 // find out which of the two flags carries it.
-func unknownDecision(definition prifly.DecisionDefinition, exists bool, id, flag string) error {
+// unknownDecision names the place the answer was written -- a flag or a block
+// of extend.yaml -- and the place of the right phase in the same form.
+func unknownDecision(definition prifly.DecisionDefinition, exists bool, id, origin string) error {
 	if !exists {
-		return usageError("project_start_unknown_decision: " + id + " is not declared by this package; project questionnaire lists the decisions it declares")
+		return usageError("project_start_unknown_decision: " + id + answerOriginNote(origin) + " is not declared by this package; project questionnaire lists the decisions it declares")
 	}
-	if other := "--" + definition.Phase + "-answer"; definition.Phase != "" && other != flag {
-		return usageError("project_start_unknown_decision: " + id + " is a " + definition.Phase + " decision; pass it with " + other + ", not " + flag)
+	other := "--" + definition.Phase + "-answer"
+	if strings.HasPrefix(origin, projectExtensionAnswersSource) {
+		other = projectExtensionAnswersSource + "." + definition.Phase
 	}
-	return usageError("project_start_unknown_decision: " + id + " does not apply to this launch; project questionnaire reports its applicability for these arguments")
+	if definition.Phase != "" && other != origin {
+		return usageError("project_start_unknown_decision: " + id + " is a " + definition.Phase + " decision; pass it with " + other + ", not " + origin)
+	}
+	return usageError("project_start_unknown_decision: " + id + answerOriginNote(origin) + " does not apply to this launch; project questionnaire reports its applicability for these arguments")
+}
+
+// answerOriginNote marks an answer that came from extend.yaml; a flag's origin
+// is the command the reader just typed and needs no note.
+func answerOriginNote(origin string) string {
+	if strings.HasPrefix(origin, projectExtensionAnswersSource) {
+		return " (from " + origin + ")"
+	}
+	return ""
 }
 
 func projectValidateDecisionValue(definition prifly.DecisionDefinition, value json.RawMessage) error {
