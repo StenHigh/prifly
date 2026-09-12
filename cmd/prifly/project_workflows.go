@@ -424,6 +424,7 @@ func projectWorkflowTreeCheck(ctx context.Context, checkout projectWorkflowCheck
 	if err != nil {
 		return usageError("project_workflow_repository_unreachable: " + err.Error())
 	}
+	prefix := strings.TrimSuffix(folder, "/") + "/" + projectOwnedFolder + "/"
 	for _, line := range strings.Split(output, "\n") {
 		mode, rest, _ := strings.Cut(line, " ")
 		_, name, _ := strings.Cut(rest, "\t")
@@ -432,6 +433,12 @@ func projectWorkflowTreeCheck(ctx context.Context, checkout projectWorkflowCheck
 			return usageError("project_workflow_folder_invalid: symlinks are not allowed: " + name)
 		case "160000":
 			return usageError("project_workflow_folder_invalid: submodules are not allowed: " + name)
+		}
+		// project/ inside an installed folder is the team's; an upstream that
+		// ships one would be installed as the team's own files and never
+		// updated, so it is refused at add and update alike.
+		if strings.HasPrefix(name, prefix) {
+			return usageError("project_workflow_folder_invalid: upstream ships a " + projectOwnedFolder + "/ folder, which is reserved for the team's own files: " + name)
 		}
 	}
 	return nil
@@ -610,9 +617,6 @@ func carryProjectOwnedFolder(installed, staged string) error {
 	}
 	if !info.IsDir() {
 		return usageError("project_workflow_folder_invalid: " + projectOwnedFolder + " must be a directory")
-	}
-	if _, err := os.Lstat(filepath.Join(staged, projectOwnedFolder)); err == nil {
-		return usageError("project_workflow_folder_invalid: upstream ships a " + projectOwnedFolder + "/ folder, which is reserved for the team's own files")
 	}
 	return filepath.WalkDir(source, func(current string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {

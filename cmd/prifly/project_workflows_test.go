@@ -602,3 +602,36 @@ func TestCLIProjectWorkflowsUpdateExplainsCompiledVariant(t *testing.T) {
 		t.Fatalf("update changed the explicit profile: %v %+v", err, parsed)
 	}
 }
+
+// project/ inside an installed folder is the team's own subtree. An upstream
+// that ships one would be installed as the team's files and never updated, so
+// add refuses it before anything is installed, and update refuses it before
+// anything is swapped -- compile never does: for a compiled folder project/
+// is simply where the team's components live.
+func TestCLIProjectWorkflowsRefuseAnUpstreamProjectFolder(t *testing.T) {
+	source := newWorkflowRepositoryFixture(t, "flows/sample")
+	writeFixtureFile(t, source, "flows/sample/project/steps/tests.yaml", "authoring: prifly-step/1\n")
+	gitFixture(t, source, "add", "-A")
+	gitFixture(t, source, "commit", "-qm", "upstream ships project/")
+	repository, _ := newProjectFixture(t)
+	if code, _, errout := runCLI(t, "project", "workflows", "add", source, "--repository", repository); code == 0 || !strings.Contains(errout, "upstream ships a project/ folder") {
+		t.Fatalf("add installed an upstream project/ folder: %d %s", code, errout)
+	}
+	if _, err := os.Stat(filepath.Join(repository, ".prifly", "workflows", "sample")); !os.IsNotExist(err) {
+		t.Fatalf("a refused add left a folder behind: %v", err)
+	}
+	gitFixture(t, source, "rm", "-rq", "flows/sample/project")
+	gitFixture(t, source, "commit", "-qm", "upstream without project/")
+	if code, _, errout := runCLI(t, "project", "workflows", "add", source, "--repository", repository); code != 0 {
+		t.Fatalf("add %d: %s", code, errout)
+	}
+	writeFixtureFile(t, source, "flows/sample/project/steps/tests.yaml", "authoring: prifly-step/1\n")
+	gitFixture(t, source, "add", "-A")
+	gitFixture(t, source, "commit", "-qm", "upstream ships project/ again")
+	if code, _, errout := runCLI(t, "project", "workflows", "update", "sample", "--repository", repository); code == 0 || !strings.Contains(errout, "upstream ships a project/ folder") {
+		t.Fatalf("update accepted an upstream project/ folder: %d %s", code, errout)
+	}
+	if _, err := os.Stat(filepath.Join(repository, ".prifly", "workflows", "sample", "project")); !os.IsNotExist(err) {
+		t.Fatalf("a refused update installed upstream's project/: %v", err)
+	}
+}
