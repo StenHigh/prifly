@@ -191,6 +191,11 @@ func TestProjectWorkflowTreeDigestIgnoresExtendAndOrder(t *testing.T) {
 	if second, err := projectWorkflowTreeDigest(folder); err != nil || second != first {
 		t.Fatalf("extend.yaml changed the tree digest: %v %q %q", err, first, second)
 	}
+	// The team's project/ subtree is its own, like extend.yaml.
+	writeFixtureFile(t, folder, "project/steps/tests.yaml", "authoring: prifly-step/1\n")
+	if owned, err := projectWorkflowTreeDigest(folder); err != nil || owned != first {
+		t.Fatalf("project/ changed the tree digest: %v %q %q", err, first, owned)
+	}
 	writeFixtureFile(t, folder, "README.md", "# changed\n")
 	if third, err := projectWorkflowTreeDigest(folder); err != nil || third == first {
 		t.Fatalf("content change did not change the digest: %v", err)
@@ -492,6 +497,10 @@ func TestCLIProjectWorkflowsUpdateAndRemove(t *testing.T) {
 	}
 	writeFixtureFile(t, folder, "README.md", "# sample\n")
 	writeFixtureFile(t, folder, "extend.yaml", "extensions: []\n# team note\n")
+	// The team's inserted step and its program live under project/: neither
+	// is drift, and both survive the update byte for byte.
+	writeFixtureFile(t, folder, "project/steps/tests.yaml", "authoring: prifly-step/1\nid: team:step/tests\n")
+	writeFixtureFile(t, folder, "project/workers/tests.sh", "#!/bin/sh\nexit 0\n")
 	writeFixtureFile(t, source, "flows/sample/README.md", "# sample v2\n")
 	writeFixtureFile(t, source, "flows/sample/extend.yaml", "extensions: []\n# upstream note\n")
 	gitFixture(t, source, "commit", "-qam", "upstream change without version bump")
@@ -508,6 +517,12 @@ func TestCLIProjectWorkflowsUpdateAndRemove(t *testing.T) {
 	}
 	if data, err := os.ReadFile(filepath.Join(folder, "extend.yaml")); err != nil || string(data) != "extensions: []\n# team note\n" {
 		t.Fatalf("team extend.yaml was not kept: %v %q", err, data)
+	}
+	if data, err := os.ReadFile(filepath.Join(folder, "project/steps/tests.yaml")); err != nil || string(data) != "authoring: prifly-step/1\nid: team:step/tests\n" {
+		t.Fatalf("the team's project/ step was not carried across the update: %v %q", err, data)
+	}
+	if data, err := os.ReadFile(filepath.Join(folder, "project/workers/tests.sh")); err != nil || string(data) != "#!/bin/sh\nexit 0\n" {
+		t.Fatalf("the team's project/ program was not carried across the update: %v %q", err, data)
 	}
 	parsed, err := readProjectProfile(repository)
 	if err != nil || parsed.Packages["sample"].Origin.Commit != upstream || parsed.Packages["sample"].Origin.Digest != result.Current.Digest {

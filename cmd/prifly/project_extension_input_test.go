@@ -343,9 +343,10 @@ func TestProjectCompileSealsTheProjectsBindingForAnInsertedStep(t *testing.T) {
       grace_ms: 100
       max_output_bytes: 65536
 `
-	writeExtensionInputFixture(t, root, extend)
-	writeFixtureFile(t, root, ".prifly/workflows/cycle/workers/tests.sh", "#!/bin/sh\nexit 0\n")
-	// The inserted step is a program, not a session.
+	writeExtensionInputFixture(t, root, strings.Replace(extend, "files: {tests.sh: workers/tests.sh}", "files: {tests.sh: project/workers/tests.sh}", 1))
+	writeFixtureFile(t, root, ".prifly/workflows/cycle/project/workers/tests.sh", "#!/bin/sh\nexit 0\n")
+	// The inserted step is a program, not a session, and it lives with its
+	// program under the team's project/ subtree, not among upstream's steps.
 	tests := filepath.Join(root, ".prifly/workflows/cycle/steps/tests.yaml")
 	data, err := os.ReadFile(tests)
 	if err != nil {
@@ -355,9 +356,10 @@ func TestProjectCompileSealsTheProjectsBindingForAnInsertedStep(t *testing.T) {
 	if program == string(data) {
 		t.Fatal("the fixture step no longer declares the assisted executor this test replaces")
 	}
-	if err := os.WriteFile(tests, []byte(program), 0644); err != nil {
+	if err := os.Remove(tests); err != nil {
 		t.Fatal(err)
 	}
+	writeFixtureFile(t, root, ".prifly/workflows/cycle/project/steps/tests.yaml", program)
 	workflow := strings.Replace(extensionInputWorkflow, "    assisted: core:adapter/assisted-session@1.0.0\n", "    assisted: core:adapter/assisted-session@1.0.0\n    process: core:adapter/local-process@2.0.0\n", 1)
 	writeFixtureFile(t, root, ".prifly/workflows/cycle/workflow.yaml", workflow)
 	output := filepath.Join(t.TempDir(), "compiled")

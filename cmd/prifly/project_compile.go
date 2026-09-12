@@ -580,6 +580,14 @@ func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error
 			return projectPackageSource{}, err
 		}
 		documents = append(documents, items...)
+		// The team's own components live under project/ in the same kinds of
+		// folders; workflows update carries that subtree and never counts it
+		// as drift, so an inserted step no longer has to sit among upstream's.
+		owned, err := projectWorkflowFolderDocuments(root, folder, projectOwnedFolder+"/"+declaration.directory, declaration.kind, declaration.prefix)
+		if err != nil {
+			return projectPackageSource{}, err
+		}
+		documents = append(documents, owned...)
 	}
 	workflowSource, err := projectRelativePath(root, workflowPath)
 	if err != nil {

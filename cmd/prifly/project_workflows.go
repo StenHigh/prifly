@@ -580,7 +580,7 @@ func projectWorkflowFileDigests(folder string) (map[string]string, error) {
 			return err
 		}
 		name := filepath.ToSlash(relative)
-		if name == "extend.yaml" {
+		if projectOwnedPath(name) {
 			return nil
 		}
 		digest, err := projectFileDigest(current)
@@ -592,6 +592,56 @@ func projectWorkflowFileDigests(folder string) (map[string]string, error) {
 	})
 	return digests, err
 }
+
+// projectOwnedPath says whether a path inside an installed workflow folder is
+// the team's rather than upstream's: extend.yaml, and everything under
+// project/, where a project keeps the steps, contexts and schemas its
+// extensions insert and the programs they run. Neither counts as drift and
+// both move into the updated tree byte for byte, so `workflows update` no
+// longer forces a project with its own inserted steps through remove and add.
+func carryProjectOwnedFolder(installed, staged string) error {
+	source := filepath.Join(installed, projectOwnedFolder)
+	info, err := os.Lstat(source)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return usageError("project_workflow_folder_invalid: " + projectOwnedFolder + " must be a directory")
+	}
+	if _, err := os.Lstat(filepath.Join(staged, projectOwnedFolder)); err == nil {
+		return usageError("project_workflow_folder_invalid: upstream ships a " + projectOwnedFolder + "/ folder, which is reserved for the team's own files")
+	}
+	return filepath.WalkDir(source, func(current string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.Type()&fs.ModeSymlink != 0 {
+			return usageError("project_workflow_folder_invalid: symlinks are not allowed")
+		}
+		relative, err := filepath.Rel(installed, current)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(staged, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0755)
+		}
+		data, err := readFile(current, projectWorkflowMaxFileBytes)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0644)
+	})
+}
+
+func projectOwnedPath(name string) bool {
+	return name == "extend.yaml" || name == projectOwnedFolder || strings.HasPrefix(name, projectOwnedFolder+"/")
+}
+
+const projectOwnedFolder = "project"
 
 func projectFileDigest(filePath string) (string, error) {
 	data, err := readFile(filePath, projectWorkflowMaxFileBytes)
@@ -1388,6 +1438,12 @@ func (c *cli) projectWorkflowsUpdate(ctx context.Context, args []string) error {
 			return err
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
+		staging.discard()
+		return err
+	}
+	// So does the team's project/ subtree, and an upstream that ships a folder
+	// of that name is refused rather than merged with the team's files.
+	if err := carryProjectOwnedFolder(folder, staging.folder); err != nil {
 		staging.discard()
 		return err
 	}
