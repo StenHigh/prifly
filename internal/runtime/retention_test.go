@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,36 @@ func TestCleanupRemovesOnlyOwnedWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer m.Close()
+	// A validation probe in metadata blocks even a single-Run cleanup. Name
+	// the probe, keep the Run, and allow retry once probes leave metadata.
+	probe := filepath.Join(root, ".prifly", "fp")
+	if err := os.Mkdir(probe, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(probe, "symlinked.json")); err != nil {
+		t.Fatal(err)
+	}
+	for _, selected := range []string{id, ""} {
+		_, err := m.PreviewCleanup(ctx, selected)
+		problem, _ := ProblemFor(err)
+		if err == nil || problem.Code != "unsafe_path" || !strings.Contains(problem.Message, ".prifly/fp/symlinked.json") {
+			t.Fatalf("cleanup must name the blocking metadata link: %+v (%v)", problem, err)
+		}
+	}
+	if _, err := m.Cleanup(ctx, id, "unconfirmed"); err != nil {
+		problem, _ := ProblemFor(err)
+		if problem.Code != "unsafe_path" || !strings.Contains(problem.Message, ".prifly/fp/symlinked.json") {
+			t.Fatalf("cleanup must recheck metadata before the digest: %+v", problem)
+		}
+	} else {
+		t.Fatal("cleanup ignored the metadata link")
+	}
+	if kept := driverRun(t, m, id); kept.ID != id {
+		t.Fatal("refused cleanup removed the Run")
+	}
+	if err := os.Rename(probe, filepath.Join(root, "fp")); err != nil {
+		t.Fatal(err)
+	}
 	plan, err := m.PreviewCleanup(ctx, id)
 	if err != nil {
 		t.Fatal(err)

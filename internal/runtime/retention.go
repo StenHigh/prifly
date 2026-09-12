@@ -240,7 +240,7 @@ func (e *Engine) PreviewCleanup(ctx context.Context, selected string) (CleanupPl
 			return fs.SkipDir
 		}
 		if d.Type()&os.ModeSymlink != 0 {
-			return local.ErrUnsafePath
+			return faultf("unsafe_path", "Подготовка очистки остановлена: путь метаданных %q — символическая ссылка. Уберите ссылку из метаданных authority; тестовые файлы храните за пределами .prifly. Run ещё не удалены.", path)
 		}
 		if !d.IsDir() && strings.HasSuffix(path, ".json") {
 			data, err := readLocal(e.Root, path, MaxArtifactBytes)
