@@ -175,6 +175,17 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 		}
 		return nil, problem("schema_invalid", "/"+escapePointer(key), "field is not part of "+marker)
 	}
+	// prifly-step/2 describes an assisted source and nothing else; a program
+	// written against it was refused on the adapter's id with the assisted
+	// adapter named as the declared value, which reads as a typo to fix, not
+	// as the other authoring version to use.
+	if timed {
+		if executor, ok := source["executor"].(map[string]any); ok {
+			if operation, ok := executor["operation"].(string); ok && operation != "session" {
+				return nil, problem("schema_invalid", "/executor/operation", StepSessionAuthoringVersion+" describes an assisted session step; a program step (operation: "+operation+") is written as authoring: "+StepAuthoringVersion)
+			}
+		}
+	}
 	if version, exists := source["schema_version"]; exists {
 		if timed && version != "6" && version != "7" {
 			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6 or v7")

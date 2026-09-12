@@ -39,6 +39,12 @@
         "additionalProperties": true
       }
     },
+    "references": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_-]*$"},
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
     "execution_bindings": {
       "type": "object",
       "additionalProperties": false,

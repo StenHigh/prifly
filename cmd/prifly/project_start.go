@@ -844,7 +844,7 @@ func (c *cli) compileDeclaredProjectPackage(ctx context.Context, root string, pr
 	if err != nil {
 		return projectCompileResult{}, err
 	}
-	for alias, logical := range source.References {
+	for alias, logical := range projectAllReferences(source, options) {
 		ref, err := projectLogicalRef(registry, logical)
 		if err != nil {
 			return projectCompileResult{}, usageError("project_compile_reference " + alias + ": " + err.Error())

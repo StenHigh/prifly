@@ -1051,6 +1051,12 @@ type projectWorkflowOptions struct {
 	// extensions insert, keyed by the extension's short step name; the
 	// package's own bindings live in its root workflow.yaml and stay there.
 	ExecutionBindings map[string]any
+	// References are the project's logical refs (core:adapter/local-process@2.0.0)
+	// for the components it adds under project/, resolved from the inventory
+	// at compile exactly as the package's own and reachable as {{name}}. A
+	// project step needed the adapter's digest typed by hand from prifly
+	// inventory, because extend.yaml had no references of its own.
+	References map[string]string
 }
 
 // projectWorkflowAnswers are the owner's standing answers to a package's
@@ -1238,7 +1244,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	for key := range root {
 		switch key {
-		case "extensions", "settings", "exclude", "profile", "answers", "execution_bindings":
+		case "extensions", "settings", "exclude", "profile", "answers", "execution_bindings", "references":
 		default:
 			return projectWorkflowOptions{}, usageError("project_extension_invalid: unknown field " + key)
 		}
@@ -1392,6 +1398,20 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 			return projectWorkflowOptions{}, err
 		}
 		result.ExecutionBindings = bindings
+	}
+	if raw, exists := root["references"]; exists {
+		references, ok := raw.(map[string]any)
+		if !ok || len(references) == 0 {
+			return projectWorkflowOptions{}, usageError("project_extension_invalid: references must be a non-empty object of NAME: logical ref")
+		}
+		result.References = map[string]string{}
+		for name, rawLogical := range references {
+			logical, ok := rawLogical.(string)
+			if !projectValueName.MatchString(name) || !ok || logical == "" {
+				return projectWorkflowOptions{}, usageError("project_extension_invalid: references require valid names and logical refs such as core:adapter/local-process@2.0.0")
+			}
+			result.References[name] = logical
+		}
 	}
 	return result, nil
 }

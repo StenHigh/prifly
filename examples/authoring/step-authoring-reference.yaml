@@ -1,5 +1,8 @@
 # yaml-language-server: $schema=../../schemas/authoring/step-v2.schema.json
-# Complete reference for one prifly-step/2 assisted source. Copy only the fields that
+# Complete reference for one prifly-step/2 assisted source -- session steps only:
+# a program step (executor operation: process) is written as authoring:
+# prifly-step/1, with the same ports, effects and result_schema_ref and no
+# session_limits. Copy only the fields that
 # describe this step; the compiler inserts the documented safe defaults before
 # it seals StepDefinition v6 or v7. This file is intentionally verbose, not a ready
 # executable package: replace the illustrative exact refs with real definitions.

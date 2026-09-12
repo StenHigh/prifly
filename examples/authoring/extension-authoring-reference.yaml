@@ -22,6 +22,12 @@ answers:
   runtime:
     improve_apply: all
 
+# Logical refs for the components this project adds under project/, resolved
+# from the inventory at compile exactly as the package's own and reachable as
+# {{name}} in project/steps etc.; a name the package already declares is refused.
+references:
+  process: core:adapter/local-process@2.0.0
+
 # Programs for the steps this file's extensions insert (keyed by the extension's
 # short step name). Same form, allowed executable (`project local set
 # --allow-executable shell=/bin/sh`) and `--allow-execution` as a package

@@ -87,7 +87,11 @@ prifly project start --repository . --launch NAME --input source=./input.csv --a
 `--allow-execution`, закрепляет выбранные programs/argv/files отдельно от inputs.
 Программа получает чистое окружение (`PATH=/usr/bin:/bin`, `LANG`, `TMPDIR`,
 `PRIFLY_*`); что ей нужно сверх этого на **этой машине** — `PATH` до php/composer,
-`APP_ENV` — задаётся рядом с бинарём, в ignored `local.yaml`:
+`APP_ENV` — задаётся рядом с бинарём, в ignored `local.yaml`
+(пути портов в `context.json` — относительно scratch попытки, cwd программы;
+после `cd "$PRIFLY_REPOSITORY_WORKSPACE"` разрешайте их от каталога
+`PRIFLY_CONTEXT_FILE`; ссылки на встроенные адаптеры для своих шагов в
+`project/` — `references:` в `extend.yaml`, форма `core:adapter/local-process@2.0.0`):
 `prifly project local set --env PATH=/opt/homebrew/bin:/usr/bin:/bin --env APP_ENV=testing`;
 `--prepare` показывает его у каждой программы (`execution[].environment`) и
 учитывает в digest'е. Программа шага в Run, который держит рабочую копию

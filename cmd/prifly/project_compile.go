@@ -188,7 +188,7 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	for alias, logical := range source.References {
+	for alias, logical := range projectAllReferences(source, options) {
 		ref, err := projectLogicalRef(registry, logical)
 		if err != nil {
 			return usageError("project_compile_reference " + alias + ": " + err.Error())
@@ -1300,6 +1300,11 @@ func projectReadWorkflowOptions(root string, source projectPackageSource, values
 		if err != nil {
 			return projectWorkflowOptions{}, err
 		}
+		for name := range options.References {
+			if _, taken := source.References[name]; taken {
+				return projectWorkflowOptions{}, usageError("project_extension_invalid: references." + name + " is already a reference of the package")
+			}
+		}
 		if len(result.Extensions) != 0 || len(result.Settings) != 0 || len(result.Exclude) != 0 {
 			return projectWorkflowOptions{}, usageError("project_extension_invalid: only one extend.yaml is allowed per workflow folder")
 		}
@@ -1653,4 +1658,16 @@ func writeProjectPackageManifest(output string, source projectPackageSource, com
 	}
 	digest := fmt.Sprintf("sha256:%x", sha256.Sum256(append(data, '\n')))
 	return flow.Ref{ID: source.ID, Version: source.Version, Digest: digest}, nil
+}
+
+// projectAllReferences is the package's references and, after them, the
+// project's from extend.yaml; a name both declare was refused when the
+// options were read.
+func projectAllReferences(source projectPackageSource, options projectWorkflowOptions) map[string]string {
+	all := maps.Clone(source.References)
+	if all == nil {
+		all = map[string]string{}
+	}
+	maps.Copy(all, options.References)
+	return all
 }

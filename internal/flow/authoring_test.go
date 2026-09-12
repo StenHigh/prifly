@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"go.yaml.in/yaml/v3"
+	"strings"
 )
 
 func TestConciseWorkflowYAMLCompilesToTheSameRevision(t *testing.T) {
@@ -489,4 +490,21 @@ func mapsEqual(left, right any) bool {
 	a, _ := json.Marshal(left)
 	b, _ := json.Marshal(right)
 	return bytes.Equal(a, b)
+}
+
+// A program step written against prifly-step/2 was refused on the adapter id
+// with the assisted adapter named as the declared value -- a typo to fix, as
+// far as the author could tell; the pilot's first hour with a program step
+// went there. The refusal now names the authoring version a program uses.
+func TestAProgramStepUnderTheSessionAuthoringNamesTheVersionToUse(t *testing.T) {
+	_, err := StepJSONBytes([]byte(`authoring: prifly-step/2
+id: test:step/tests
+version: 1.0.0
+kind: worker
+executor: {adapter_ref: {id: core:adapter/local-process, version: 2.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}, operation: process}
+`), "yaml")
+	p := expectProblem(t, err, "schema_invalid")
+	if p.Path != "/executor/operation" || !strings.Contains(p.Message, "a program step (operation: process) is written as authoring: prifly-step/1") {
+		t.Fatalf("the refusal does not name the authoring version a program uses: %s %s", p.Path, p.Message)
+	}
 }

@@ -360,8 +360,10 @@ func TestProjectCompileSealsTheProjectsBindingForAnInsertedStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeFixtureFile(t, root, ".prifly/workflows/cycle/project/steps/tests.yaml", program)
-	workflow := strings.Replace(extensionInputWorkflow, "    assisted: core:adapter/assisted-session@1.0.0\n", "    assisted: core:adapter/assisted-session@1.0.0\n    process: core:adapter/local-process@2.0.0\n", 1)
-	writeFixtureFile(t, root, ".prifly/workflows/cycle/workflow.yaml", workflow)
+	// The adapter the project's step needs is the project's reference, declared
+	// in extend.yaml and resolved from the inventory like the package's own;
+	// the package's workflow.yaml is upstream's and stays untouched.
+	writeFixtureFile(t, root, ".prifly/workflows/cycle/extend.yaml", strings.Replace(extend, "files: {tests.sh: workers/tests.sh}", "files: {tests.sh: project/workers/tests.sh}", 1)+"references:\n  process: core:adapter/local-process@2.0.0\n")
 	output := filepath.Join(t.TempDir(), "compiled")
 	code, _, stderr := runCLI(t, "--project", authority, "project", "compile", "--repository", root, "--package", "cycle", "--output", output)
 	if code != 0 {
@@ -388,9 +390,14 @@ func TestProjectCompileSealsTheProjectsBindingForAnInsertedStep(t *testing.T) {
 	if len(bindings.Bindings) != 1 || bindings.Bindings[0].DefinitionRef.ID != "test:step/tests" || bindings.Bindings[0].Config.Executable != "shell" || !slices.Equal(bindings.Bindings[0].Config.Args, []string{"tests.sh"}) {
 		t.Fatalf("the project's binding for the inserted step was not sealed: %s", sealed)
 	}
+	// A reference the package already declares is refused, not shadowed.
+	writeFixtureFile(t, root, ".prifly/workflows/cycle/extend.yaml", strings.Replace(extend, "files: {tests.sh: workers/tests.sh}", "files: {tests.sh: project/workers/tests.sh}", 1)+"references:\n  process: core:adapter/local-process@2.0.0\n  assisted: core:adapter/assisted-session@1.0.0\n")
+	if code, _, stderr := runCLI(t, "--project", authority, "project", "compile", "--repository", root, "--package", "cycle", "--output", filepath.Join(t.TempDir(), "shadowed")); code == 0 || !strings.Contains(stderr, "references.assisted is already a reference of the package") {
+		t.Fatalf("a project reference shadowed the package's: %d %s", code, stderr)
+	}
 	// A step no extension inserts is the package's; a binding for it is refused
 	// before any program is read.
-	writeFixtureFile(t, root, ".prifly/workflows/cycle/extend.yaml", strings.Replace(extend, "    tests:\n", "    build:\n", 1))
+	writeFixtureFile(t, root, ".prifly/workflows/cycle/extend.yaml", strings.Replace(extend, "    tests:\n", "    build:\n", 1)+"references:\n  process: core:adapter/local-process@2.0.0\n")
 	if code, _, stderr := runCLI(t, "--project", authority, "project", "compile", "--repository", root, "--package", "cycle", "--output", filepath.Join(t.TempDir(), "refused")); code == 0 || !strings.Contains(stderr, "execution_bindings.steps.build names a step no extension in this file inserts") {
 		t.Fatalf("a binding for the package's own step was accepted: %d %s", code, stderr)
 	}
