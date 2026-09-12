@@ -1406,7 +1406,17 @@ help. Текст раннера не менялся. Тест — фикстур
 1.37.0 готовится под AI Factory 2.19.0 (новый стоп `requirement-conflict` /
 `blocked_external` в трёх навыках, мосты называют вердикт; `aif-warmup` в
 upstream; пин security → `aif-security-checklist`) — граф и схемы не
-менялись, к движку ничего. **Замечено попутно, не
+менялись, к движку ничего; `blocking_owner_only` читается `choice` в графе
+с 1.17.0 (финиш `owner-decides`), движку отличать нечего. **Пилот подтвердил
+0.13.23 у себя:** блок `answers` в extend.yaml aif-classic (`gate_checks`
+7399 байт блочным скаляром, байт-в-байт прежнему файлу), анкета и
+`--prepare` показывают пять ответов `project_default`, `decision_policy:
+autonomous`; `.prifly/gate-checks.txt` удалён (решение владельца — один
+источник), лаунчер ужат до двух проверок базы; MR !1134. Два наблюдения
+закрыты на main (`ae043cc`, в следующий тег): read-only анкета принимает
+`--host` для симметрии с `--prepare` (раньше `flag provided but not
+defined`); `origin.extend_digest` — отпечаток upstream-файла на момент
+установки, правка `answers` его не трогает — записано в README и в записку. **Замечено попутно, не
 трогал:** в корне репозитория лежит **tracked бинарь `prifly`** (commit
 `350a2e0`, 2026-09-04), его пересобирают ворота — `git status` после
 `make check` показывает `M prifly`; восстановил до HEAD, не коммитил. Снять
