@@ -4,7 +4,7 @@
 в `openspec/` (см. `openspec/SOURCE-OF-TRUTH.md`); этот файл только
 ориентирует.
 
-Обновлено: 2026-09-12 (после v0.13.25 и aif-classic 1.37.0; main = тег). Это рабочая копия Pri-Fly (`StenHigh/prifly`),
+Обновлено: 2026-09-12 (после v0.13.26 и aif-classic 1.37.0; main = тег). Это рабочая копия Pri-Fly (`StenHigh/prifly`),
 начатая свежей историей из GitLab-дерева `main` = `27fa58c`. GitLab-проект
 `stenhigh/prifly` архивирован (read-only, README указывает на GitHub).
 
@@ -1517,6 +1517,24 @@ read-only анкеты (`ae043cc`). Ворота: check с race, e2e, CI verify 
 на `project/` переписан («`add` и `update` с 0.13.25»); пакета выпуск не
 касается.
 
+### 0.13.26: `references:` в `extend.yaml` и два текста (тег на `6ba4b0a`)
+
+Пилот собрал `tests` как шаг-программу на 0.13.25 (`project/steps/tests.yaml`
+на `prifly-step/1`, `execution_bindings.steps.tests`, `--env PATH/HOME/APP_ENV`;
+три сухих прогона: 6730 тестов, `measured_tree == head`, копия чистая; MR
+!1140) и принёс три наблюдения: (1) `prifly-step/2` не пускает программу и
+отказ читается как опечатка — теперь `/executor/operation`: «a program step
+(operation: process) is written as authoring: prifly-step/1»
+(`flow/authoring.go`, шапка `step-authoring-reference.yaml`); (2) digest
+адаптера для своего шага приходилось вписывать руками — теперь
+`references:` в `extend.yaml` (`projectWorkflowOptions.References`,
+`projectAllReferences` на обоих сайтах разрешения — compile и start; имя
+пакета — отказ, не тень; разрез — `project_extension_unknown_step`); (3) пути
+портов в `context.json` относительно scratch — по замыслу, названо в
+документах. `merge-request` как программа — наружное действие из шага,
+**решение владельца**; пилот спросит после боевого `tests`. Ворота зелёные,
+CI verify с первого раза; оба пира оповещены.
+
 ### Метод: три вещи, которые эти два выпуска доказали
 
 **Красный, окружённый зелёными, требует счётчика, а не повтора.** `e2e` покраснел
@@ -1697,7 +1715,9 @@ Claude Code кэширует `SKILL.md` на старте, посреди сес
 ## Следующие шаги
 
 **Состояние на 2026-09-12 (после v0.13.24 и aif-classic 1.36.0).** Открыто
-владельцу — петля после `tests` (2) и tracked бинарь в корне (см. 0.13.23).
+владельцу — петля после `tests` (2), tracked бинарь в корне (см. 0.13.23),
+`merge-request` как программа (наружное действие из шага; см. 0.13.26) и
+вопрос про держателя LOCK_EX в 17:36 (см. #126).
 **Четыре запроса из карты — ЗАКРЫТЫ 0.13.24** (см. раздел); карта сохранена
 как история:
 1. *Шаг-программа без ИИ* — ЕСТЬ в пакете (`core:adapter/local-process`,
