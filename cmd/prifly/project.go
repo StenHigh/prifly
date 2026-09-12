@@ -1020,6 +1020,10 @@ type projectWorkflowOptions struct {
 	Exclude    []string
 	Profile    string
 	Answers    projectWorkflowAnswers
+	// ExecutionBindings are the project's programs for the steps its
+	// extensions insert, keyed by the extension's short step name; the
+	// package's own bindings live in its root workflow.yaml and stay there.
+	ExecutionBindings map[string]any
 }
 
 // projectWorkflowAnswers are the owner's standing answers to a package's
@@ -1207,7 +1211,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	for key := range root {
 		switch key {
-		case "extensions", "settings", "exclude", "profile", "answers":
+		case "extensions", "settings", "exclude", "profile", "answers", "execution_bindings":
 		default:
 			return projectWorkflowOptions{}, usageError("project_extension_invalid: unknown field " + key)
 		}
@@ -1355,7 +1359,50 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		extensions = append(extensions, extension)
 	}
 	result.Extensions = extensions
+	if raw, exists := root["execution_bindings"]; exists {
+		bindings, err := projectReadExtensionBindings(raw, result.Extensions)
+		if err != nil {
+			return projectWorkflowOptions{}, err
+		}
+		result.ExecutionBindings = bindings
+	}
 	return result, nil
+}
+
+// projectReadExtensionBindings reads the project's execution bindings for the
+// steps its extensions insert. Until 0.13.24 a binding could be declared only
+// in the package's root workflow.yaml, so a project's inserted step could be
+// assisted and nothing else: its tests program needed an AI session to run it.
+// Only an inserted step may be bound here -- a package's own program is the
+// package's -- and the form, the allowed executable and --allow-execution are
+// the ones a package binding uses; only the place of declaration is new.
+func projectReadExtensionBindings(raw any, extensions []projectWorkflowExtension) (map[string]any, error) {
+	block, ok := raw.(map[string]any)
+	if !ok || len(block) == 0 {
+		return nil, usageError("project_extension_invalid: execution_bindings must be a non-empty object")
+	}
+	for key := range block {
+		if key != "steps" {
+			return nil, usageError("project_extension_invalid: execution_bindings has unknown group " + key + "; only inserted steps are bound here")
+		}
+	}
+	steps, ok := block["steps"].(map[string]any)
+	if !ok || len(steps) == 0 {
+		return nil, usageError("project_extension_invalid: execution_bindings.steps must be a non-empty object keyed by the inserted step's short name")
+	}
+	inserted := map[string]bool{}
+	for _, extension := range extensions {
+		inserted[extension.Step] = true
+	}
+	for name, config := range steps {
+		if !inserted[name] {
+			return nil, usageError("project_extension_invalid: execution_bindings.steps." + name + " names a step no extension in this file inserts; a package's own program is bound in its workflow.yaml")
+		}
+		if _, ok := config.(map[string]any); !ok {
+			return nil, usageError("project_extension_invalid: execution_bindings.steps." + name + " must be an object")
+		}
+	}
+	return steps, nil
 }
 
 func parseProjectExtensionRefs(values []string) (map[string]any, error) {

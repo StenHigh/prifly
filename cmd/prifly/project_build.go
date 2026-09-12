@@ -125,7 +125,7 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	if err != nil {
 		return projectCompileResult{}, err
 	}
-	source.ExecutionBindings, err = projectReadExecution(root, source, components, values)
+	source.ExecutionBindings, err = projectReadExecution(root, source, components, values, options.ExecutionBindings)
 	if err != nil {
 		return projectCompileResult{}, err
 	}

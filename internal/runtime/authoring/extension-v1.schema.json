@@ -39,6 +39,32 @@
         "additionalProperties": true
       }
     },
+    "execution_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["steps"],
+      "properties": {
+        "steps": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_-]*$"},
+          "additionalProperties": {
+            "type": "object",
+            "required": ["executable", "timeout_ms", "grace_ms", "max_output_bytes"],
+            "additionalProperties": false,
+            "properties": {
+              "executable": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+              "args": {"type": "array", "items": {"type": "string"}},
+              "files": {"type": "object", "additionalProperties": {"type": "string"}},
+              "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 3600000},
+              "grace_ms": {"type": "integer", "minimum": 1, "maximum": 5000},
+              "max_output_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+              "context_profile_ref": {"type": "object"}
+            }
+          }
+        }
+      }
+    },
     "exclude": {
       "type": "array",
       "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},

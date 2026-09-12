@@ -36,22 +36,80 @@ func (c *cli) projectAuthority(root string, profile projectProfile) error {
 	return err
 }
 
-func projectReadExecution(projectRoot string, source projectPackageSource, components []projectCompileComponent, values map[string]any) (*projectPackageExecution, error) {
+// projectReadExecution reads the package's bindings from its root
+// workflow.yaml and, after them, the project's bindings for inserted steps
+// from extend.yaml (projectBindings, keyed by the step's short name). A step
+// bound by both is refused: the package's program is not overridden quietly.
+func projectReadExecution(projectRoot string, source projectPackageSource, components []projectCompileComponent, values map[string]any, projectBindings map[string]any) (*projectPackageExecution, error) {
 	root, _ := source.RootValue.(map[string]any)
 	raw, present := root["execution_bindings"]
-	if !present {
+	if !present && len(projectBindings) == 0 {
 		return nil, nil
 	}
-	rendered, missing, err := projectSubstituteValue(raw, values)
-	if err != nil || len(missing) != 0 {
-		return nil, usageError("project_execution_invalid: unresolved binding values")
-	}
-	object, ok := rendered.(map[string]any)
-	if !ok {
-		return nil, usageError("project_execution_invalid: execution_bindings must be an object")
+	object := map[string]any{}
+	if present {
+		rendered, missing, err := projectSubstituteValue(raw, values)
+		if err != nil || len(missing) != 0 {
+			return nil, usageError("project_execution_invalid: unresolved binding values")
+		}
+		var ok bool
+		if object, ok = rendered.(map[string]any); !ok {
+			return nil, usageError("project_execution_invalid: execution_bindings must be an object")
+		}
 	}
 	result := &projectPackageExecution{SchemaVersion: projectExecutionVersion, Bindings: []prifly.ExecutionBinding{}}
 	total := 0
+	bound := map[string]bool{}
+	readBinding := func(kind string, ref flow.Ref, rawConfig any) error {
+		fields, ok := rawConfig.(map[string]any)
+		if !ok {
+			return usageError("project_execution_invalid: binding must be an object")
+		}
+		for key := range fields {
+			if fields[key] == nil {
+				return usageError("project_execution_invalid: omit optional fields instead of null: " + key)
+			}
+			if key != "executable" && key != "args" && key != "files" && key != "timeout_ms" && key != "grace_ms" && key != "max_output_bytes" && key != "context_profile_ref" {
+				return usageError("project_execution_invalid: unknown binding field " + key)
+			}
+		}
+		data, err := json.Marshal(fields)
+		if err != nil {
+			return err
+		}
+		var config prifly.ExecutorConfig
+		if err := json.Unmarshal(data, &config); err != nil {
+			return usageError("project_execution_invalid: " + err.Error())
+		}
+		if !projectLaunchID(config.Executable) {
+			return usageError("project_execution_invalid: executable must be a logical name")
+		}
+		if config.Args == nil {
+			config.Args = []string{}
+		}
+		if config.Files == nil {
+			config.Files = map[string]string{}
+		}
+		config.Environment = map[string]string{}
+		binding := prifly.ExecutionBinding{DefinitionRef: ref, Config: config, Files: map[string][]byte{}}
+		for _, name := range config.Files {
+			if _, exists := binding.Files[name]; exists {
+				continue
+			}
+			data, err := projectExecutionSource(projectRoot, source.Folder, name)
+			if err != nil {
+				return err
+			}
+			total += len(data)
+			if total > prifly.MaxArtifactBytes {
+				return usageError("project_execution_invalid: supporting files exceed the byte limit")
+			}
+			binding.Files[name] = data
+		}
+		bound[kind+" "+ref.ID] = true
+		result.Bindings = append(result.Bindings, binding)
+		return nil
+	}
 	for group, rawBindings := range object {
 		kind := strings.TrimSuffix(group, "s")
 		if group != "steps" && group != "checks" {
@@ -74,52 +132,29 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 			if ref.ID == "" {
 				return nil, usageError("project_execution_invalid: unknown owned component " + id)
 			}
-			fields, ok := rawConfig.(map[string]any)
-			if !ok {
-				return nil, usageError("project_execution_invalid: binding must be an object")
-			}
-			for key := range fields {
-				if fields[key] == nil {
-					return nil, usageError("project_execution_invalid: omit optional fields instead of null: " + key)
-				}
-				if key != "executable" && key != "args" && key != "files" && key != "timeout_ms" && key != "grace_ms" && key != "max_output_bytes" && key != "context_profile_ref" {
-					return nil, usageError("project_execution_invalid: unknown binding field " + key)
-				}
-			}
-			data, err := json.Marshal(fields)
-			if err != nil {
+			if err := readBinding(kind, ref, rawConfig); err != nil {
 				return nil, err
 			}
-			var config prifly.ExecutorConfig
-			if err := json.Unmarshal(data, &config); err != nil {
-				return nil, usageError("project_execution_invalid: " + err.Error())
-			}
-			if !projectLaunchID(config.Executable) {
-				return nil, usageError("project_execution_invalid: executable must be a logical name")
-			}
-			if config.Args == nil {
-				config.Args = []string{}
-			}
-			if config.Files == nil {
-				config.Files = map[string]string{}
-			}
-			config.Environment = map[string]string{}
-			binding := prifly.ExecutionBinding{DefinitionRef: ref, Config: config, Files: map[string][]byte{}}
-			for _, name := range config.Files {
-				if _, exists := binding.Files[name]; exists {
-					continue
+		}
+	}
+	for name, rawConfig := range projectBindings {
+		var ref flow.Ref
+		for _, component := range components {
+			if component.Kind == "step" && component.Ref.ID[strings.LastIndex(component.Ref.ID, "/")+1:] == name {
+				if ref.ID != "" {
+					return nil, usageError("project_execution_invalid: ambiguous inserted step " + name)
 				}
-				data, err := projectExecutionSource(projectRoot, source.Folder, name)
-				if err != nil {
-					return nil, err
-				}
-				total += len(data)
-				if total > prifly.MaxArtifactBytes {
-					return nil, usageError("project_execution_invalid: supporting files exceed the byte limit")
-				}
-				binding.Files[name] = data
+				ref = component.Ref
 			}
-			result.Bindings = append(result.Bindings, binding)
+		}
+		if ref.ID == "" {
+			return nil, usageError("project_execution_invalid: extend.yaml binds " + name + ", which is not a step of this package")
+		}
+		if bound["step "+ref.ID] {
+			return nil, usageError("project_execution_invalid: " + ref.ID + " is bound by the package's workflow.yaml and by extend.yaml; the package's program is not overridden")
+		}
+		if err := readBinding("step", ref, rawConfig); err != nil {
+			return nil, err
 		}
 	}
 	sort.Slice(result.Bindings, func(i, j int) bool {

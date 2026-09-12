@@ -319,3 +319,77 @@ inputs:
 		t.Fatalf("sources is not sorted, so two compiles of one tree can differ by order: %v", compiled.Sources)
 	}
 }
+
+// A project's inserted step could be assisted and nothing else: execution
+// bindings were read from the package's root workflow.yaml alone, so a tests
+// program the project owns needed an AI session to run it. extend.yaml now
+// binds the steps its own extensions insert -- the same form, the same allowed
+// executable and --allow-execution -- and the package's programs stay the
+// package's: a binding for a step no extension inserts is refused, and a step
+// bound on both sides is refused rather than overridden.
+func TestProjectCompileSealsTheProjectsBindingForAnInsertedStep(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	root, authority := t.TempDir(), filepath.Join(t.TempDir(), "authority")
+	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", authority); code != 0 {
+		t.Fatalf("neutral init: %d %s", code, stderr)
+	}
+	extend := extensionInputExtend + `execution_bindings:
+  steps:
+    tests:
+      executable: shell
+      args: [tests.sh]
+      files: {tests.sh: workers/tests.sh}
+      timeout_ms: 30000
+      grace_ms: 100
+      max_output_bytes: 65536
+`
+	writeExtensionInputFixture(t, root, extend)
+	writeFixtureFile(t, root, ".prifly/workflows/cycle/workers/tests.sh", "#!/bin/sh\nexit 0\n")
+	// The inserted step is a program, not a session.
+	tests := filepath.Join(root, ".prifly/workflows/cycle/steps/tests.yaml")
+	data, err := os.ReadFile(tests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	program := strings.Replace(string(data), `executor: {adapter_ref: "{{assisted}}", operation: session}`, `executor: {adapter_ref: "{{process}}", operation: process}`, 1)
+	if program == string(data) {
+		t.Fatal("the fixture step no longer declares the assisted executor this test replaces")
+	}
+	if err := os.WriteFile(tests, []byte(program), 0644); err != nil {
+		t.Fatal(err)
+	}
+	workflow := strings.Replace(extensionInputWorkflow, "    assisted: core:adapter/assisted-session@1.0.0\n", "    assisted: core:adapter/assisted-session@1.0.0\n    process: core:adapter/local-process@2.0.0\n", 1)
+	writeFixtureFile(t, root, ".prifly/workflows/cycle/workflow.yaml", workflow)
+	output := filepath.Join(t.TempDir(), "compiled")
+	code, _, stderr := runCLI(t, "--project", authority, "project", "compile", "--repository", root, "--package", "cycle", "--output", output)
+	if code != 0 {
+		t.Fatalf("compile with a project-bound insertion: %d %s", code, stderr)
+	}
+	sealed, err := os.ReadFile(filepath.Join(output, projectExecutionFile))
+	if err != nil {
+		t.Fatalf("no execution bindings were sealed beside the package: %v", err)
+	}
+	var bindings struct {
+		Bindings []struct {
+			DefinitionRef struct {
+				ID string `json:"id"`
+			} `json:"definition_ref"`
+			Config struct {
+				Executable string   `json:"executable"`
+				Args       []string `json:"args"`
+			} `json:"config"`
+		} `json:"bindings"`
+	}
+	if err := json.Unmarshal(sealed, &bindings); err != nil {
+		t.Fatal(err)
+	}
+	if len(bindings.Bindings) != 1 || bindings.Bindings[0].DefinitionRef.ID != "test:step/tests" || bindings.Bindings[0].Config.Executable != "shell" || !slices.Equal(bindings.Bindings[0].Config.Args, []string{"tests.sh"}) {
+		t.Fatalf("the project's binding for the inserted step was not sealed: %s", sealed)
+	}
+	// A step no extension inserts is the package's; a binding for it is refused
+	// before any program is read.
+	writeFixtureFile(t, root, ".prifly/workflows/cycle/extend.yaml", strings.Replace(extend, "    tests:\n", "    build:\n", 1))
+	if code, _, stderr := runCLI(t, "--project", authority, "project", "compile", "--repository", root, "--package", "cycle", "--output", filepath.Join(t.TempDir(), "refused")); code == 0 || !strings.Contains(stderr, "execution_bindings.steps.build names a step no extension in this file inserts") {
+		t.Fatalf("a binding for the package's own step was accepted: %d %s", code, stderr)
+	}
+}

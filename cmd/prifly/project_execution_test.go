@@ -24,7 +24,7 @@ func TestProjectExecutionSourceAndBuild(t *testing.T) {
 	source := projectPackageSource{Folder: folder, ID: "test:package/convert", Version: "1.0.0", Description: "Convert", RequiresCoreProtocol: "1", RootValue: map[string]any{"execution_bindings": map[string]any{"steps": map[string]any{ref.ID: config}}}}
 	build := func() (projectPackageSource, []projectCompileComponent, string) {
 		t.Helper()
-		payload, err := projectReadExecution(folder, source, components, map[string]any{})
+		payload, err := projectReadExecution(folder, source, components, map[string]any{}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -101,7 +101,7 @@ func TestProjectExecutionSourceAndBuild(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			saved, _ := json.Marshal(config)
 			mutate()
-			if _, err := projectReadExecution(folder, source, components, map[string]any{}); err == nil {
+			if _, err := projectReadExecution(folder, source, components, map[string]any{}, nil); err == nil {
 				t.Fatal("unsafe execution binding accepted")
 			}
 			for key := range config {

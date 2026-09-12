@@ -22,6 +22,21 @@ answers:
   runtime:
     improve_apply: all
 
+# Programs for the steps this file's extensions insert (keyed by the extension's
+# short step name). Same form, allowed executable (`project local set
+# --allow-executable shell=/bin/sh`) and `--allow-execution` as a package
+# binding; only the place of declaration is the project's. A package's own
+# program stays bound in its workflow.yaml and cannot be overridden here.
+execution_bindings:
+  steps:
+    lint:
+      executable: shell
+      args: [lint.sh]
+      files: {lint.sh: project/workers/lint.sh}
+      timeout_ms: 600000
+      grace_ms: 1000
+      max_output_bytes: 1048576
+
 # Set defaults for already declared project-scoped configuration inputs.
 settings:
   build-or-pass:
