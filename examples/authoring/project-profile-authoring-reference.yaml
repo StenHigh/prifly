@@ -33,3 +33,9 @@ launches:
     kind: workflow # The only supported launch kind.
     workflow: .prifly/workflows/example/workflow.yaml # Marker file inside the package source.
     workspace: worktree # Optional standing choice; the host does not ask, --workspace still overrides for one Run.
+    # Optional program project start runs in the repository before it takes
+    # anything; exit 0 lets the launch go on, anything else refuses it with the
+    # program's output. The binary is the one allowed with
+    # `project local set --allow-executable shell=/bin/sh`; no --allow-execution
+    # is needed for the project's own declaration. --prepare does not run it.
+    preflight: {executable: shell, args: [.prifly/preflight.sh], timeout_ms: 60000}

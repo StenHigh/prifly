@@ -17,13 +17,20 @@
 - [`authoring/extension-authoring-reference.yaml`](authoring/extension-authoring-reference.yaml) —
   tracked `profile`, `answers` (постоянные ответы проекта на объявленные
   решения: `decision_policy`, `preflight`, `runtime` — источник
-  `project_default`, флаг перебивает), `settings`, `exclude` и простая
-  вставка шага через `extend.yaml`. Правка `extend.yaml` — правка команды:
+  `project_default`, флаг перебивает), `execution_bindings` (программы для
+  вставных шагов проекта — та же форма и то же доверие, что у пакетных),
+  `settings`, `exclude` и простая вставка шага через `extend.yaml`. Свои
+  компоненты (steps/contexts/schemas/checks) и программы кладите в
+  `<папка пакета>/project/`: `workflows update` переносит это поддерево
+  вместе с `extend.yaml` и не считает его правкой upstream. Правка `extend.yaml` — правка команды:
   `origin.extend_digest` в `project.yaml` — отпечаток **upstream**-файла на
   момент установки (по нему `workflows update` видит изменения upstream), к
   локальному файлу он не относится и после правки `answers` не меняется.
 - [`authoring/project-profile-authoring-reference.yaml`](authoring/project-profile-authoring-reference.yaml) —
-  полный `.prifly/project.yaml` `/3`; hosts необязательны и выбираются явно.
+  полный `.prifly/project.yaml` `/3`; hosts необязательны и выбираются явно;
+  у launch — постоянный `workspace` (host не спрашивает, `--workspace`
+  перебивает на один Run) и `preflight` — программа проекта, которую
+  `project start` исполняет до любого захвата и отказывает при ненулевом коде.
 - [`authoring/execution-bindings-authoring-reference.yaml`](authoring/execution-bindings-authoring-reference.yaml) —
   все поля локальных execution bindings для steps/checks с comments.
 - [`authoring/check-authoring-reference.yaml`](authoring/check-authoring-reference.yaml) —

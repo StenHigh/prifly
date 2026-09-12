@@ -2334,7 +2334,7 @@ Global: --project DIR  --json  --format text|json|csv
   project workflows add SOURCE [--ref REF] [--path DIR] [--name NAME] [--catalog URL] [--repository DIR]
                                    Copy one workflow folder from a Git repository or catalog entry into .prifly/workflows and declare it; nothing is sealed, trusted or executed
   project workflows update NAME [--ref REF] [--repository DIR]
-                                   Refresh an installed folder to its tracked ref; local edits are refused and extend.yaml is kept
+                                   Refresh an installed folder to its tracked ref; local edits are refused, extend.yaml and the team's project/ subtree are kept
   project workflows remove NAME [--repository DIR]
                                    Delete the folder and its launches from the tracked profile; authority packages and Runs stay
   project questionnaire --repository DIR (--package NAME|--launch ID)
@@ -2364,7 +2364,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    A runtime answer is sealed before the Run starts: the step that raises that decision gets this value and does not wait
                                    Show a pre-dispatch summary on stderr, then seal and drive; stdout keeps one final result
                                    On a refusal that summary stays in front of the Problem envelope: read the last document of stderr
-                                   Profile /3 needs host/Git/brief only when declared; Git writes require explicit workspace. Legacy /2 retains its defaults
+                                   Profile /3 needs host/Git/brief only when declared; Git writes require a workspace: --workspace, else the launch's standing workspace: in project.yaml
+                                   A launch's preflight: program in project.yaml runs in the repository before anything is taken; a non-zero exit refuses the launch with its output
                                    Answer the declared questions up front with repeated --preflight-answer; project questionnaire lists them and returns the digest
                                    Profile /3: get --expected-launch-digest from project questionnaire --prepare with the same start arguments
                                    A package profile is chosen once: with --package-profile, do not also answer the decision that selects it

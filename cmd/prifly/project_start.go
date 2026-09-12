@@ -114,6 +114,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if _, err := projectCompileSkillsRoot(root, profile, *host); err != nil {
 		return err
 	}
+	// The project's preflight runs before the tree is read for compilation
+	// and before anything is taken; the read-only review does not run it.
+	if !prepare {
+		if err := runProjectLaunchPreflight(ctx, root, *launchID, launch.Preflight); err != nil {
+			return err
+		}
+	}
 	packageName, err := profile.packageForLaunch(root, launch)
 	if err != nil {
 		return err

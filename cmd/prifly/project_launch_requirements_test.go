@@ -194,3 +194,95 @@ func TestCLIProjectAssistedLaunchRequirementsBeforeMutation(t *testing.T) {
 		})
 	}
 }
+
+// A project's check of the base -- "clean development equal to origin, then
+// check it out" -- lived in a launcher wrapped around project start. The
+// launch now declares it: a program the owner allowed in local.yaml runs in
+// the repository before anything is taken, its non-zero exit refuses the
+// launch with what it printed, and the read-only review never runs it.
+func TestCLIProjectLaunchPreflightRunsBeforeAnythingIsTaken(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	root, authority := t.TempDir(), filepath.Join(t.TempDir(), "authority")
+	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", authority, "--host", "codex-cli"); code != 0 {
+		t.Fatalf("init: %d %s", code, stderr)
+	}
+	writeProjectLaunchRequirementsFixture(t, root, "3", "none")
+	profilePath := filepath.Join(root, ".prifly/project.yaml")
+	data, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(root, "preflight-ran")
+	declare := func(script string) {
+		t.Helper()
+		writeFixtureFile(t, root, "preflight.sh", "#!/bin/sh\n"+script)
+		declared := strings.Replace(string(data), "    workflow: .prifly/workflows/inspect/workflow.yaml\n", "    workflow: .prifly/workflows/inspect/workflow.yaml\n    preflight: {executable: shell, args: [preflight.sh], timeout_ms: 5000}\n", 1)
+		if declared == string(data) {
+			t.Fatal("the fixture profile changed shape")
+		}
+		if err := os.WriteFile(profilePath, []byte(declared), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	declare("echo base is not clean >&2\n: > '" + marker + "'\nexit 3\n")
+	// The binary is the owner's to allow; until then the launch is refused for
+	// that, not run.
+	code, _, stderr := runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "inspect", "--host", "codex-cli")
+	if code == 0 || !strings.Contains(stderr, "project_execution_not_allowed: use project local set --allow-executable shell=") {
+		t.Fatalf("an unallowed preflight binary was run or passed: %d %s", code, stderr)
+	}
+	if _, err := os.Lstat(marker); !os.IsNotExist(err) {
+		t.Fatal("the preflight ran before its binary was allowed")
+	}
+	if code, _, stderr := runCLI(t, "project", "local", "set", "--repository", root, "--allow-executable", "shell=/bin/sh"); code != 0 {
+		t.Fatalf("allow: %d %s", code, stderr)
+	}
+	code, _, stderr = runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "inspect", "--host", "codex-cli")
+	if code == 0 || !strings.Contains(stderr, "project_start_preflight_failed: launch inspect preflight shell exited 3; nothing was started; output: base is not clean") {
+		t.Fatalf("a failing preflight did not refuse the launch with its output: %d %s", code, stderr)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("the preflight did not run in the repository: %v", err)
+	}
+	engine, err := prifly.Open(authority, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+	if packages, err := engine.Packages(context.Background()); err != nil || len(packages.Packages) != 0 {
+		t.Fatalf("a refused preflight left a package behind: %+v %v", packages, err)
+	}
+	if runs, err := engine.Runs(context.Background()); err != nil || len(runs) != 0 {
+		t.Fatalf("a refused preflight created a Run: %+v %v", runs, err)
+	}
+	// The read-only review does not run the program.
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	// Whatever the review says about this launch, it says it without running
+	// the program: the failing preflight would refuse first if it ran.
+	if _, _, stderr := runCLI(t, "--project", authority, "project", "questionnaire", "--prepare", "--repository", root, "--launch", "inspect", "--host", "codex-cli"); strings.Contains(stderr, "preflight") {
+		t.Fatalf("the read-only review answered from the preflight: %s", stderr)
+	}
+	if _, err := os.Lstat(marker); !os.IsNotExist(err) {
+		t.Fatal("the read-only review ran the preflight")
+	}
+	// A passing preflight hands over to the launch itself.
+	declare(": > '" + marker + "'\nexit 0\n")
+	code, _, stderr = runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "inspect", "--host", "codex-cli")
+	if code != 0 || strings.Contains(stderr, "preflight") {
+		t.Fatalf("a passing preflight did not hand over to the launch: %d %s", code, stderr)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("the passing preflight did not run: %v", err)
+	}
+	// A preflight that never finishes is a refusal, not a hang.
+	declare("while :; do :; done\n")
+	if err := os.WriteFile(profilePath, []byte(strings.Replace(string(data), "    workflow: .prifly/workflows/inspect/workflow.yaml\n", "    workflow: .prifly/workflows/inspect/workflow.yaml\n    preflight: {executable: shell, args: [preflight.sh], timeout_ms: 300}\n", 1)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr = runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "inspect", "--host", "codex-cli")
+	if code == 0 || !strings.Contains(stderr, "project_start_preflight_timeout: launch inspect preflight shell did not finish within 300ms") {
+		t.Fatalf("a hanging preflight was not bounded: %d %s", code, stderr)
+	}
+}

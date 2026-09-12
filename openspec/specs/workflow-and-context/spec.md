@@ -667,6 +667,15 @@ per-Run launch value. Default MAY заполнить omitted optional launch cho
 - **THEN** новый Run использует выбор пользователя, а `extend.yaml` остаётся
   byte-for-byte прежним
 
+#### Scenario: Программа проекта для вставного шага
+- **WHEN** `extend.yaml` содержит `execution_bindings.steps.<short name>` для
+  шага, который вставляет одно из его `extensions`, и этот шаг объявляет
+  `operation: process`
+- **THEN** компиляция запечатывает привязку вместе с пакетными (та же форма,
+  тот же `--allow-executable` и `--allow-execution`); привязка для шага,
+  который ни одно расширение не вставляет, и шаг, привязанный и пакетом, и
+  проектом — отказ
+
 #### Scenario: Постоянные ответы проекта на объявленные решения
 - **WHEN** `extend.yaml` содержит `answers` с `decision_policy`, `preflight`
   и/или `runtime`, и запуск не называет соответствующий флаг
@@ -761,11 +770,13 @@ origin не подлежит `update`.
 
 ### Requirement: Update сохраняет exact identity и правки команды
 `project workflows update NAME` MUST требовать origin, пересчитать digest
-folder без `extend.yaml` и при расхождении отказать с изменёнными paths без
-перезаписи. Неизменный remote commit при совпадающем digest MUST давать read-only
-успех. Иначе команда MUST получить новую folder по тому же path, проверить её
-как при add, перенести локальный `extend.yaml` byte-for-byte, атомарно заменить
-folder и origin. Результат MUST сообщать изменение upstream `extend.yaml` и
+folder без `extend.yaml` и без поддерева `project/` (файлы команды) и при
+расхождении отказать с изменёнными paths без перезаписи. Неизменный remote
+commit при совпадающем digest MUST давать read-only успех. Иначе команда MUST
+получить новую folder по тому же path, проверить её как при add, перенести
+локальный `extend.yaml` и поддерево `project/` byte-for-byte (upstream с
+папкой `project/` — отказ), атомарно заменить folder и origin. Компилятор MUST
+читать компоненты и из `project/<kind>/`. Результат MUST сообщать изменение upstream `extend.yaml` и
 сохранение авторской `package.version`. Sealed packages, locks, Runs и evidence
 MUST NOT меняться. В `/3` новые source bytes при прежней авторской версии MUST
 давать новую exact сборку. `/2` сохраняет legacy identity conflict и явное

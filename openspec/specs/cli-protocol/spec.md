@@ -750,6 +750,18 @@ Runner `prifly-run` MUST содержать инструкции: по явно�
 - **THEN** `project runners update` заменяет его новым, не трогая
   кастомизированные файлы
 
+#### Scenario: Постоянный workspace и предстартовая программа запуска
+- **WHEN** `project.yaml` объявляет у launch `workspace: worktree|checkout`
+  и/или `preflight: {executable, args, timeout_ms}`
+- **THEN** `project start` без `--workspace` берёт постоянный выбор там, где
+  workflow требует рабочую копию (и молча не применяет там, где флаг был бы
+  отказан как лишний), анкета называет его в `workspace`, host не спрашивает;
+  предстартовая программа (бинарь из `local.yaml`, без `--allow-execution`)
+  исполняется в корне repository до компиляции и любого захвата, ненулевой
+  код или таймаут — отказ `project_start_preflight_failed` /
+  `project_start_preflight_timeout` с хвостом вывода; `--prepare` её не
+  исполняет
+
 #### Scenario: Проектная надстройка над runner
 - **WHEN** рядом с сгенерированным `prifly-run/SKILL.md` лежит `PROJECT.md`
 - **THEN** сгенерированный текст в первых строках велит прочитать его после

@@ -629,6 +629,9 @@ type projectLaunch struct {
 	// this launch: a decision the owner made once, not a question at every
 	// start. --workspace still overrides it for one Run.
 	Workspace string `json:"workspace,omitempty"`
+	// Preflight is a project program project start runs before it takes
+	// anything; a non-zero exit refuses the launch with the program's output.
+	Preflight *projectLaunchPreflight `json:"preflight,omitempty"`
 }
 
 type projectWorkflowList struct {
@@ -1705,7 +1708,7 @@ func readProjectProfile(root string) (projectProfile, error) {
 		}
 		for key := range object {
 			switch key {
-			case "title", "description", "kind", "workflow", "workspace":
+			case "title", "description", "kind", "workflow", "workspace", "preflight":
 			default:
 				return projectProfile{}, usageError("project_profile_invalid: unknown field in launch " + id + ": " + key)
 			}
@@ -1733,6 +1736,13 @@ func readProjectProfile(root string) (projectProfile, error) {
 		}
 		if launch.Workspace != "" && launch.Workspace != "worktree" && launch.Workspace != "checkout" {
 			return projectProfile{}, usageError("project_profile_invalid: launch " + id + " workspace must be worktree or checkout")
+		}
+		if raw, exists := object["preflight"]; exists {
+			preflight, err := readProjectLaunchPreflight(id, raw)
+			if err != nil {
+				return projectProfile{}, err
+			}
+			launch.Preflight = preflight
 		}
 		profile.Launches[id] = launch
 	}
