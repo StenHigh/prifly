@@ -837,11 +837,20 @@ func driverFailureCode(err error, fallback string) string {
 	return fallback
 }
 
+// deadlineClockSlewAllowance is how far the wall clock may lag the monotonic
+// clock within one session before that reads as a reset. The lag cannot buy
+// execution -- the monotonic allowance governs and the wall clock can only
+// shorten it -- so the check is a tamper signal, and a signal that fires on
+// ordinary discipline is noise: a laptop's wall clock is slewed by NTP a few
+// milliseconds a minute, and a 2 ms allowance killed a tests program 58 s into
+// its half hour with deadline_clock_rollback on a first battle Run. A reset
+// worth refusing moves the clock by seconds or more.
+const deadlineClockSlewAllowance = 5 * time.Second
+
 // remainingBudget never reconstructs a monotonic deadline from a wall date.
 // The unqualified wall clock can only shorten a same-session allowance; an
-// apparent rollback is refused. Across sessions only explicitly trusted UTC
-// bounds can authorize more execution. Millisecond observations allow 2ms of
-// sampling/rounding disagreement, not a time-reset or suspend allowance.
+// apparent rollback beyond deadlineClockSlewAllowance is refused. Across
+// sessions only explicitly trusted UTC bounds can authorize more execution.
 func remainingBudget(admitted, deadline, now Observation) (time.Duration, error) {
 	expired := func() (time.Duration, error) {
 		return 0, local.Reject("attempt_deadline_expired", "admitted deadline has expired")
@@ -889,8 +898,8 @@ func remainingBudget(admitted, deadline, now Observation) (time.Duration, error)
 		return unqualified()
 	}
 	monotonic := time.Duration(ms) * time.Millisecond
-	if wall > monotonic+2*time.Millisecond {
-		return 0, local.Reject("deadline_clock_rollback", "wall clock moved backwards relative to the admitted clock")
+	if wall > monotonic+deadlineClockSlewAllowance {
+		return 0, local.Reject("deadline_clock_rollback", "wall clock moved backwards relative to the admitted clock by more than "+deadlineClockSlewAllowance.String())
 	}
 	return min(monotonic, wall), nil
 }

@@ -298,7 +298,13 @@ func TestDriverRemainingBudget(t *testing.T) {
 		{"exact deadline", func(_, _, n *Observation) { n.UTC, n.MonotonicMS = due.UTC, due.MonotonicMS }, 0, "attempt_deadline_expired"},
 		{"wall forward including suspend", func(_, _, n *Observation) { n.UTC = "2026-08-28T00:00:09Z" }, time.Second, ""},
 		{"wall jumped past deadline", func(_, _, n *Observation) { n.UTC = "2026-08-28T00:00:11Z" }, 0, "attempt_deadline_expired"},
-		{"rollback", func(_, _, n *Observation) { n.UTC = "2026-08-28T00:00:03Z" }, 0, "deadline_clock_rollback"},
+		// NTP discipline lags the wall clock a few milliseconds a minute; only a
+		// reset beyond the slew allowance is a rollback.
+		{"wall slewed behind", func(_, _, n *Observation) { n.UTC = "2026-08-28T00:00:03.900Z" }, 6 * time.Second, ""},
+		{"rollback", func(_, d, n *Observation) {
+			d.UTC, d.MonotonicMS = "2026-08-28T00:01:00Z", 60000
+			n.UTC, n.MonotonicMS = "2026-08-28T00:00:12Z", 20000
+		}, 0, "deadline_clock_rollback"},
 		{"monotonic expired after rollback", func(_, _, n *Observation) { n.MonotonicMS = 11000 }, 0, "attempt_deadline_expired"},
 		{"new session not trusted", func(_, _, n *Observation) { n.Session, n.MonotonicMS = "clock:two", 0 }, 0, "deadline_clock_unqualified"},
 		{"new session explicitly trusted bounds", func(a, d, n *Observation) {
