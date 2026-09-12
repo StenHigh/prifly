@@ -283,11 +283,17 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				return err
 			}
 			waiting, err := preview.AdmissionQueue(ctx)
+			if err != nil {
+				_ = preview.Close()
+				return err
+			}
+			budget, err := projectRegistryBudgetAfter(ctx, preview, compiled)
 			_ = preview.Close()
 			if err != nil {
 				return err
 			}
 			summary.Admission = projectAdmissionState(capacity, len(held), len(waiting))
+			summary.RegistryBudget = &budget
 			return c.emit(summary)
 		}
 		// Keep stdout's one final result intact. The pre-dispatch summary is on
@@ -355,7 +361,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 	}
 	importedPackage := false
-	if err := projectPackageAvailable(ctx, engine, compiled.Package); err != nil {
+	if err := projectPackageAvailable(ctx, engine, compiled.Package, *command); err != nil {
 		if !errors.Is(err, local.ErrNotFound) {
 			if createdClaim {
 				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
@@ -897,7 +903,38 @@ func projectCompiledLaunchWorkflow(root string, launch projectLaunch, components
 	return "", local.ErrIntegrity
 }
 
-func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flow.Ref) error {
+// projectPackageAvailable finds the declared edition among the trusted
+// packages. A removed edition of the very bytes this launch declares is
+// re-trusted rather than refused: removed means closed for new resolution,
+// and this launch is a new, explicit resolution of exactly this edition -- the
+// same bytes it would import were they absent. A start that failed after
+// importing rolls its edition back to removed, and the next start of the same
+// build used to answer "not trusted" for it, so the operator ran package
+// restore by hand. Quarantined and revoked are judgments about the bytes and
+// still refuse.
+// projectRegistryBudgetAfter is the authority's definition budget as this
+// launch would leave it: the current entries plus this edition's components
+// when the edition is not trusted yet. Read after the review digest, never into
+// it -- other launches move it.
+func projectRegistryBudgetAfter(ctx context.Context, engine *prifly.Engine, compiled projectCompileResult) (prifly.RegistryBudget, error) {
+	budget, err := engine.RegistryBudget()
+	if err != nil {
+		return prifly.RegistryBudget{}, err
+	}
+	packages, err := engine.Packages(ctx)
+	if err != nil {
+		return prifly.RegistryBudget{}, err
+	}
+	for _, entry := range packages.Packages {
+		if entry.Ref == compiled.Package && (entry.Status == "" || entry.Status == prifly.PackageTrusted) {
+			return budget, nil
+		}
+	}
+	budget.Entries += len(compiled.Components)
+	return budget, nil
+}
+
+func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flow.Ref, commandID string) error {
 	packages, err := engine.Packages(ctx)
 	if err != nil {
 		return err
@@ -909,8 +946,14 @@ func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flo
 		if entry.Ref != ref {
 			return usageError("project_start_package_identity_conflict: declared package ID and version already name different bytes")
 		}
+		if entry.Status == prifly.PackageRemoved {
+			if _, err := engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: commandID + ":restore-package", ID: ref.ID, Version: ref.Version, Status: prifly.PackageTrusted, Reason: "project start declares this edition again"}); err != nil {
+				return err
+			}
+			return nil
+		}
 		if entry.Status != "" && entry.Status != prifly.PackageTrusted {
-			return usageError("project_start_package_unavailable: declared package is not trusted")
+			return usageError("project_start_package_unavailable: declared package is " + entry.Status + ", not trusted; package restore --id " + ref.ID + " --version " + ref.Version + " --reason TEXT re-trusts it")
 		}
 		return nil
 	}

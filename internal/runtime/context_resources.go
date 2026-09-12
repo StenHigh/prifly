@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	maxLocalRegistryEntries = 512
+	maxLocalRegistryEntries = MaxLocalRegistryEntries
 	maxInventoryBytes       = 64 << 20
 )
 
@@ -34,6 +34,28 @@ type PinnedResource struct {
 
 // localRegistry validates the version before accepting any new representation
 // fields. A shared Go struct must not make explicit null valid in old contracts.
+// MaxLocalRegistryEntries bounds the local and trusted-package definitions an
+// authority resolves from; a launch review reports the count against it so a
+// project sees the budget filling before a start refuses dependency_limit.
+const MaxLocalRegistryEntries = 512
+
+// RegistryBudget is the definitions an authority currently resolves from,
+// against the bound a launch is refused at.
+type RegistryBudget struct {
+	Entries int `json:"entries"`
+	Limit   int `json:"limit"`
+}
+
+// RegistryBudget counts local and trusted-package definitions the way the
+// dependency_limit refusal does.
+func (e *Engine) RegistryBudget() (RegistryBudget, error) {
+	file, err := e.localRegistry()
+	if err != nil {
+		return RegistryBudget{}, err
+	}
+	return RegistryBudget{Entries: len(file.Entries) + len(e.packageEntries()), Limit: MaxLocalRegistryEntries}, nil
+}
+
 func (e *Engine) localRegistry() (RegistryFile, error) {
 	b, err := readLocal(e.Root, e.Config.Configuration.RegistryFile, MaxDefinitionBytes)
 	if err != nil {

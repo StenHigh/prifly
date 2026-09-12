@@ -2406,6 +2406,7 @@ Global: --project DIR  --json  --format text|json|csv
                                    A node's metrics carry only numbers; the boundaries they were measured between are the same-named entry of its intervals, as from_ref/to_ref
                                    kind inside from_ref/to_ref names what a boundary was read from and is a separate vocabulary from a node's kind: it also uses step, activation, invocation, stop and report
   run drive RUN_ID [--next]         Foreground owner; interrupt requests cancel. --next answers with the next action instead of the run view
+                                   A program step runs to completion inside this call: a host with a client timeout drives such a Run in the background
   run decisions RUN_ID              Read the sealed decision ledger and pending question
   run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N [--yield-execution]
                                    Compatible executor requests one declared runtime decision

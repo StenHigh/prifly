@@ -152,3 +152,39 @@ destination: {kind: launch_input, name: value}
 		t.Fatalf("runtime launch-input destination accepted: %d %s", code, stderr)
 	}
 }
+
+// A start that fails after importing its edition rolls the edition back to
+// removed, and the next start of the same build -- the same bytes it would
+// import were they absent -- used to refuse "not trusted" until the operator
+// ran package restore by hand; the pilot met it right after a dependency_limit
+// refusal. Removed is closed for new resolution, and a start is one: the
+// edition is re-trusted. Quarantine is a judgment about the bytes and still
+// refuses, naming the command that lifts it.
+func TestCLIProjectStartReTrustsARemovedEditionOfItsOwnBuild(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	root, authority := projectQuestionnaireFixture(t)
+	writeFixtureFile(t, root, ".prifly/.gitignore", "local.yaml\n")
+	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", authority); code != 0 {
+		t.Fatalf("init: %d %s", code, stderr)
+	}
+	start := []string{"project", "start", "--repository", root, "--launch", "questions", "--preflight-answer", "gate=false"}
+	code, out, stderr := runCLI(t, start...)
+	var started projectStartResult
+	if code != 0 || json.Unmarshal([]byte(out), &started) != nil || started.Run.Run.Status != "completed" {
+		t.Fatalf("first start: %d %s %s", code, out, stderr)
+	}
+	edition := started.Package
+	if code, _, stderr := runCLI(t, "--project", authority, "package", "remove", "--id", edition.ID, "--version", edition.Version, "--reason", "rollback of a failed start"); code != 0 {
+		t.Fatalf("remove: %d %s", code, stderr)
+	}
+	code, out, stderr = runCLI(t, start...)
+	if code != 0 || json.Unmarshal([]byte(out), &started) != nil || started.Run.Run.Status != "completed" || started.Package != edition {
+		t.Fatalf("a start did not re-trust the removed edition of its own build: %d %s %s", code, out, stderr)
+	}
+	if code, _, stderr := runCLI(t, "--project", authority, "package", "quarantine", "--id", edition.ID, "--version", edition.Version, "--reason", "suspect bytes"); code != 0 {
+		t.Fatalf("quarantine: %d %s", code, stderr)
+	}
+	if code, _, stderr := runCLI(t, start...); code == 0 || !strings.Contains(stderr, "project_start_package_unavailable: declared package is quarantined, not trusted; package restore") {
+		t.Fatalf("a quarantined edition was started or refused without the way out: %d %s", code, stderr)
+	}
+}

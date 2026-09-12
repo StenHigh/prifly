@@ -136,6 +136,12 @@ launches:
 	}
 	reviewed := prepare()
 	assertNoEffects(t)
+	// The definition budget is shown as this launch would leave it, before its
+	// edition is imported: a refusal for dependency_limit should not be the
+	// first a project hears of the budget filling.
+	if reviewed.RegistryBudget == nil || reviewed.RegistryBudget.Limit != prifly.MaxLocalRegistryEntries || reviewed.RegistryBudget.Entries < len(reviewed.Execution) || reviewed.RegistryBudget.Entries <= 0 {
+		t.Fatalf("the review does not show the definition budget after this edition: %+v", reviewed.RegistryBudget)
+	}
 	if reviewed.WorkspaceMode != "" {
 		t.Fatalf("a launch without a standing workspace reviewed one: %q", reviewed.WorkspaceMode)
 	}
@@ -286,7 +292,7 @@ launches:
 	// Runs move it, --prepare answers it and start does not, and folding it in
 	// would make a prepared launch go stale by itself.
 	agreed := reviewed
-	agreed.Admission = nil
+	agreed.Admission, agreed.RegistryBudget = nil, nil
 	var out, stderr bytes.Buffer
 	writes := 0
 	writer := projectSummaryWriter(func(data []byte) (int, error) {
