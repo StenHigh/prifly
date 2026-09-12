@@ -22,3 +22,29 @@ assert.equal(cycle.nodes.length,2);assert.ok(Number.isFinite(cycle.width));
 assert.equal(fileChanges(null,{files:[]}),null);
 assert.deepEqual(fileChanges({files:[{path:'a',ref:{digest:'old'}},{path:'deleted',ref:{digest:'d'}}]},{files:[{path:'a',ref:{digest:'new'}},{path:'new',ref:{digest:'n'}}]}),[{path:'a',change:'Изменён'},{path:'deleted',change:'Удалён'},{path:'new',change:'Добавлен'}]);
 console.log('monitor UI: escaping, timing quality, graph scope/parallel/repeat/cycles, file evidence passed');
+
+// Exercise the actual pre-paint script, including browsers that deny storage.
+const vm = require('node:vm');
+const fs = require('node:fs');
+const themeSource = fs.readFileSync(require('node:path').join(__dirname,'monitor-theme.js'),'utf8');
+function themeSession(saved, dark, blocked=false) {
+ const callbacks={},media={matches:dark,addEventListener:(_,fn)=>callbacks.system=fn};
+ const select={value:'',addEventListener:(_,fn)=>callbacks.select=fn};
+ const document={documentElement:{dataset:{}},addEventListener:(_,fn)=>callbacks.ready=fn,getElementById:()=>select};
+ const localStorage={getItem:()=>{if(blocked)throw Error('denied');return saved;},setItem:(_,value)=>{if(blocked)throw Error('denied');saved=value;}};
+ vm.runInNewContext(themeSource,{window:{matchMedia:()=>media},document,localStorage});
+ const firstPaint=document.documentElement.dataset.theme;
+ callbacks.ready();
+ return {document,firstPaint,select,change(value){select.value=value;callbacks.select();},system(value){media.matches=value;callbacks.system();},saved:()=>saved};
+}
+const automatic=themeSession(null,true);
+assert.equal(automatic.firstPaint,'dark');assert.equal(automatic.select.value,'system');
+automatic.system(false);assert.equal(automatic.document.documentElement.dataset.theme,'light');
+automatic.change('dark');automatic.system(false);
+assert.equal(automatic.document.documentElement.dataset.theme,'dark');
+assert.equal(themeSession(automatic.saved(),false).firstPaint,'dark');
+automatic.change('system');assert.equal(automatic.document.documentElement.dataset.theme,'light');
+assert.equal(themeSession('invalid',true).firstPaint,'dark');
+const denied=themeSession(null,false,true);denied.change('dark');
+assert.equal(denied.document.documentElement.dataset.theme,'dark');
+console.log('monitor themes: pre-paint, persistence, system changes and denied storage passed');

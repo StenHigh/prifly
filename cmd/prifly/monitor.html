@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="ru">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pri-Fly · Прогоны</title><link rel="stylesheet" href="/monitor.css"><script defer src="/monitor.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pri-Fly · Прогоны</title><script src="/monitor-theme.js"></script><link rel="stylesheet" href="/monitor.css"><script defer src="/monitor.js"></script></head>
 <body>
-<header><a class="brand" href="#">Pri-Fly <span>Локальные прогоны</span></a><span class="readonly">Локальная панель</span><span id="connection" role="status">Подключение…</span></header>
+<header><a class="brand" href="#"><img src="/monitor-logo.jpg" width="42" height="42" alt="">Pri-Fly <span>Flight control</span></a><span class="readonly">LOCAL</span><div class="header-tools"><span id="connection" role="status">Подключение…</span><label class="theme-picker">Тема<select id="theme"><option value="dark">Тёмная</option><option value="light">Светлая</option><option value="system" selected>Системная</option></select></label></div></header>
 <main>
-<section id="run-list" aria-labelledby="runs-title"><div class="heading"><div><p class="eyebrow">РАБОЧАЯ МАШИНА · ТЕКУЩИЙ ПОЛЬЗОВАТЕЛЬ</p><h1 id="runs-title">Все прогоны</h1></div><div id="totals" class="totals">Читаем каталог…</div></div>
-<details id="coverage"><summary id="coverage-title">Обнаружение хранилищ…</summary><div id="sources"></div></details>
-<details id="storage"><summary id="storage-title">Размер хранилищ: измерение…</summary><div id="storage-details"></div></details>
+<section id="run-list" aria-labelledby="runs-title"><div class="heading flight-deck"><div><p class="eyebrow">PRI-FLY / FLIGHT OPERATIONS</p><h1 id="runs-title">Pri-Fly<span class="heading-note">Все прогоны · локальная машина · текущий пользователь</span></h1></div><div id="totals" class="totals">Читаем каталог…</div></div>
+<div class="storage-overview"><details id="coverage"><summary id="coverage-title">Обнаружение хранилищ…</summary><div id="sources"></div></details>
+<details id="storage"><summary id="storage-title">Размер хранилищ: измерение…</summary><div id="storage-details"></div></details></div>
 <form id="filters" class="filters"><label class="search">Поиск<input name="q" type="search" placeholder="Задача, Run, workflow или путь…"></label><label>Проект<select name="project"><option value="">Все проекты</option></select></label><label>Статус<select name="status"><option value="">Все статусы</option></select></label><label>Исполнитель<select name="executor"><option value="">Все исполнители</option></select></label><label>С даты<input name="from" type="date"></label><label>По дату<input name="to" type="date"></label><label>Порядок<select name="sort"><option value="">Последние изменения</option><option value="created">Сначала новые</option><option value="oldest">Сначала старые</option><option value="status">По статусу</option></select></label></form>
 <div class="table-wrap"><table class="run-table"><thead><tr><th>Задача / Run</th><th>Проект / workflow</th><th>Состояние</th><th>Шаги / попытки</th><th>Создан</th></tr></thead><tbody id="runs"><tr><td colspan="5">Загрузка прогонов…</td></tr></tbody></table></div>
 <nav class="pagination" aria-label="Страницы прогонов"><span id="matches"></span><button id="previous" type="button">← Назад</button><span id="page"></span><button id="next" type="button">Далее →</button></nav>

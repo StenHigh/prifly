@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/stenhigh/prifly/assets"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
@@ -27,6 +28,9 @@ var monitorCSS []byte
 
 //go:embed monitor.js
 var monitorJS []byte
+
+//go:embed monitor-theme.js
+var monitorThemeJS []byte
 
 // The monitor is a window, not a second control plane. It serves what the read
 // model already returns and offers no command: a page cannot start, stop or
@@ -140,12 +144,22 @@ func monitorMux(catalog *monitorCatalog) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		_, _ = w.Write(monitorPage)
 	})
+	for path, image := range map[string][]byte{"/monitor-logo.jpg": assets.MonitorLogo, "/monitor-hero.jpg": assets.MonitorHero} {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write(image)
+		})
+	}
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		write(w, map[string]any{"service": "prifly-local-monitor/1", "uid": os.Geteuid()}, nil)
 	})
 	mux.HandleFunc("/monitor.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		_, _ = w.Write(monitorCSS)
+	})
+	mux.HandleFunc("/monitor-theme.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		_, _ = w.Write(monitorThemeJS)
 	})
 	mux.HandleFunc("/monitor.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")

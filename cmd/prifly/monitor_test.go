@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"github.com/stenhigh/prifly/assets"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 	"net"
 	"net/http"
@@ -12,6 +13,32 @@ import (
 	"testing"
 	"time"
 )
+
+func TestMonitorServesDesignAssets(t *testing.T) {
+	handler := monitorHost("127.0.0.1:7777")(monitorMux(newMonitorCatalog(t.TempDir(), nil)))
+	for _, asset := range []struct {
+		path, contentType string
+		body              []byte
+	}{
+		{"/monitor-theme.js", "text/javascript; charset=utf-8", monitorThemeJS},
+		{"/monitor-logo.jpg", "image/jpeg", assets.MonitorLogo},
+		{"/monitor-hero.jpg", "image/jpeg", assets.MonitorHero},
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest("GET", "http://127.0.0.1:7777"+asset.path, nil))
+		if response.Code != http.StatusOK || response.Header().Get("Content-Type") != asset.contentType || len(asset.body) == 0 || !bytes.Equal(response.Body.Bytes(), asset.body) {
+			t.Fatalf("design asset unavailable or changed: %s (%d)", asset.path, response.Code)
+		}
+	}
+	if theme, css := bytes.Index(monitorPage, []byte("/monitor-theme.js")), bytes.Index(monitorPage, []byte("/monitor.css")); theme < 0 || css < theme {
+		t.Fatal("theme must load before the stylesheet")
+	}
+	for _, required := range []string{`id="theme"`, `src="/monitor-logo.jpg"`, `<h1 id="runs-title">Pri-Fly`, `url('/monitor-hero.jpg')`} {
+		if !bytes.Contains(monitorPage, []byte(required)) && !bytes.Contains(monitorCSS, []byte(required)) {
+			t.Fatalf("design binding missing: %s", required)
+		}
+	}
+}
 
 // The monitor serves sealed plans, skill bytes and results. This build cannot
 // say who is asking from another machine, so an address reachable from one is
