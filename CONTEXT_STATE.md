@@ -4,7 +4,7 @@
 в `openspec/` (см. `openspec/SOURCE-OF-TRUTH.md`); этот файл только
 ориентирует.
 
-Обновлено: 2026-09-12 (после v0.13.24 и aif-classic 1.36.0; main = тег). Это рабочая копия Pri-Fly (`StenHigh/prifly`),
+Обновлено: 2026-09-12 (после v0.13.25 и aif-classic 1.37.0; main = тег). Это рабочая копия Pri-Fly (`StenHigh/prifly`),
 начатая свежей историей из GitLab-дерева `main` = `27fa58c`. GitLab-проект
 `stenhigh/prifly` архивирован (read-only, README указывает на GitHub).
 
@@ -1482,6 +1482,37 @@ Run в этот момент; не дефект, пока не найден не
 `local.yaml`, видимо, указывает на `…/Pri-Fly/github/bin/prifly` — сказано
 проверить; процесс их, не трогаю. Пилот переезжает на 0.13.24, отчёт — с
 анкеты и #104.
+
+### 0.13.25: программа шага получает рабочую копию и окружение машины (тег на `318ea73`)
+
+Пилот переехал на 0.13.24 (три из четырёх применены: `workspace: worktree`,
+пять `project_default`, `project/{steps,schemas,contexts}`, `preflight` через
+`launches`, лаунчер/`build-package.sh`/`.prifly/extensions` удалены, MR !1139) и
+упёрся в п.1 по коду: процесс-шаг не получал пути рабочей копии
+(`ExecutionEnvelope.claims` — `{id, generation}`, `context.json` — `claim_id`
+без пути, cwd — scratch), а окружение программы чистое (`PATH=/usr/bin:/bin`),
+до php/composer не добраться без машинных путей в общем файле. Сделано:
+- **(а)** `PRIFLY_REPOSITORY_WORKSPACE` + `PRIFLY_CLAIM_ID` в окружении
+  процесса, когда Run держит ровно одну активную claim
+  (`processWorkspaceBoundary` в `effects.go`; `driver.go` у `env`). Не в
+  `context.json`: `local-context/1`/`2` — замороженный опубликованный
+  контракт (`runtime_ContextManifest` в public.schema.json), новая версия
+  ради поля — не та цена. **Та же мера, что у хоста:** шаг без
+  `workspace_write` под `isEffectsState` измеряется по `workspaceMark` до
+  запуска и после выхода; изменилось → `outcome.StopReason =
+  effect_not_permitted`, детали — через `settlementEvidence.EffectDetail` в
+  диагностику (`ProcessOutcome` — тоже опубликованная схема, поле не
+  добавлялось). Тест на helper-режимах `workspace-read`/`workspace-write`
+  (assisted plan → process check), оба разреза красные.
+- **(б)** `project local set --env NAME=VALUE` → `environment` в `local.yaml`
+  (`PRIFLY_*` — отказ); `projectExecutionPayload` кладёт его в
+  `Config.Environment` каждой привязки запуска; `projectExecutionReview`
+  показывает `environment`, `configuration_digest` его учитывает (тест в
+  launch summary; разрез — пустое окружение красный).
+Плюс в тег: отказ upstream-`project/` на `add` (`f78f036`), `--host` у
+read-only анкеты (`ae043cc`). Ворота: check с race, e2e, CI verify зелёный с
+первого раза. Оба пира оповещены с просьбой обновиться; пилоту — шаги для
+`tests`-программы и `merge-request`.
 
 ### Метод: три вещи, которые эти два выпуска доказали
 
