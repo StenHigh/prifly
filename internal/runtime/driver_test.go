@@ -1854,6 +1854,17 @@ func TestDriverWorkerHelper(t *testing.T) {
 		}
 	}
 	result := Result{SchemaVersion: "1", RunID: envelope.RunID, StepInstanceID: envelope.StepID, AttemptID: envelope.AttemptID, EnvelopeDigest: os.Getenv("PRIFLY_ENVELOPE_DIGEST"), Verdict: "pass", Outputs: map[string]ArtifactRef{}, EvidenceRefs: []any{}, EffectReceiptRefs: []any{}, Summary: "driver test"}
+	if strings.HasPrefix(mode, "workspace-") {
+		// The program reports the workspace it was handed on stdout, and in
+		// the write mode leaves a file there that it was not permitted to.
+		workspace := os.Getenv("PRIFLY_REPOSITORY_WORKSPACE")
+		result.Summary = "workspace=" + workspace
+		if mode == "workspace-write" {
+			if err := os.WriteFile(filepath.Join(workspace, "program-wrote.txt"), []byte("not permitted\n"), 0600); err != nil {
+				os.Exit(120)
+			}
+		}
+	}
 	if withReport {
 		manifestBytes, err := os.ReadFile(os.Getenv("PRIFLY_CONTEXT_FILE"))
 		var manifest ContextManifest

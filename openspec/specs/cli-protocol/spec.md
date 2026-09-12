@@ -762,6 +762,18 @@ Runner `prifly-run` MUST содержать инструкции: по явно�
   `project_start_preflight_timeout` с хвостом вывода; `--prepare` её не
   исполняет
 
+#### Scenario: Программа шага получает рабочую копию и окружение машины
+- **WHEN** Run держит ровно одну активную claim и шаг с `operation: process`
+  запускается, а `local.yaml` содержит `environment` (задано `project local
+  set --env NAME=VALUE`; имена `PRIFLY_*` — отказ)
+- **THEN** программа получает `PRIFLY_REPOSITORY_WORKSPACE` и
+  `PRIFLY_CLAIM_ID` рядом с `PRIFLY_SOCKET`/`PRIFLY_CONTEXT_FILE`, окружение
+  машины поверх чистого (`context.json` не меняется), `--prepare` показывает
+  окружение у каждой программы и учитывает его в `configuration_digest`; шаг
+  без `effects.class: workspace_write` под состоянием с проверкой эффектов
+  измеряется по метке рабочей копии до и после программы — изменившееся
+  дерево завершает попытку `effect_not_permitted` с именами путей
+
 #### Scenario: Проектная надстройка над runner
 - **WHEN** рядом с сгенерированным `prifly-run/SKILL.md` лежит `PROJECT.md`
 - **THEN** сгенерированный текст в первых строках велит прочитать его после

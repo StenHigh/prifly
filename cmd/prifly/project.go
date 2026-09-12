@@ -710,18 +710,19 @@ func (c *cli) projectCommand(ctx context.Context, args []string) error {
 // or the authority chosen by project init.
 func (c *cli) projectLocal(args []string) error {
 	if len(args) == 0 || args[0] != "set" {
-		return usageError("project local requires set --executable PATH or --allow-executable NAME=PATH [--repository DIR]")
+		return usageError("project local requires set --executable PATH, --allow-executable NAME=PATH or --env NAME=VALUE [--repository DIR]")
 	}
 	f := flags("project local set")
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	executable := f.String("executable", "", "absolute path to the prifly binary this machine runs")
-	var allowed stringsFlag
+	var allowed, environment stringsFlag
 	f.Var(&allowed, "allow-executable", "allow a local executable NAME=/absolute/path (repeatable)")
+	f.Var(&environment, "env", "environment for this machine's programs NAME=VALUE (repeatable); PATH, APP_ENV and the like live here, never in the shared package")
 	if err := parse(f, args[1:]); err != nil {
 		return err
 	}
-	if *executable == "" && len(allowed) == 0 {
-		return usageError("project local set requires --executable PATH or --allow-executable NAME=PATH")
+	if *executable == "" && len(allowed) == 0 && len(environment) == 0 {
+		return usageError("project local set requires --executable PATH, --allow-executable NAME=PATH or --env NAME=VALUE")
 	}
 	if *executable != "" && !filepath.IsAbs(*executable) {
 		return usageError("project_local_executable_relative: --executable needs an absolute path; received " + strconv.Quote(*executable))
@@ -734,8 +735,8 @@ func (c *cli) projectLocal(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(allowed) != 0 {
-		return c.projectLocalAllowExecutables(root, current, *executable, allowed)
+	if len(allowed) != 0 || len(environment) != 0 {
+		return c.projectLocalAllowExecutables(root, current, *executable, allowed, environment)
 	}
 	lines := strings.Split(string(current), "\n")
 	replaced := false

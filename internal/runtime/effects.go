@@ -122,3 +122,54 @@ func (e *Engine) checkEffectsBoundary(ctx context.Context, runID string, attempt
 	}
 	return nil
 }
+
+// processWorkspaceBoundary is what a program step is handed and held to: the
+// Run's claimed repository workspace, when the Run holds exactly one, and --
+// for a step permitted no workspace effect -- the mark of that workspace as
+// it stood before the program started.
+type processWorkspaceBoundary struct {
+	claimID, path string
+	mark, status  string
+	measured      bool
+}
+
+func (e *Engine) processWorkspaceBoundary(ctx context.Context, r Run, step flow.StepDefinition) (processWorkspaceBoundary, error) {
+	paths, err := e.effectsBoundaryPaths(ctx, r.ID)
+	if err != nil {
+		return processWorkspaceBoundary{}, err
+	}
+	if len(paths) != 1 {
+		return processWorkspaceBoundary{}, nil
+	}
+	boundary := processWorkspaceBoundary{}
+	for claimID, path := range paths {
+		boundary.claimID, boundary.path = claimID, path
+	}
+	if step.Effects.Class == "workspace_write" || !isEffectsState(r.SchemaVersion) {
+		return boundary, nil
+	}
+	mark, status, err := e.workspaceMark(ctx, boundary.path)
+	if err != nil {
+		// Not a repository, or no commit yet: nothing to hold the program to.
+		return boundary, nil
+	}
+	boundary.mark, boundary.status, boundary.measured = mark, status, true
+	return boundary, nil
+}
+
+// changes names what the program changed in the workspace it was shown, or
+// returns "" when it was not measured or left the tree as it found it.
+func (b processWorkspaceBoundary) changes(ctx context.Context, e *Engine) string {
+	if !b.measured {
+		return ""
+	}
+	mark, status, err := e.workspaceMark(ctx, b.path)
+	if err != nil || mark == b.mark {
+		return ""
+	}
+	named := strings.Join(workspaceChanges(b.status, status), ", ")
+	if named == "" {
+		named = "HEAD moved"
+	}
+	return "this step may write only inside its declared output slot, and the workspace at " + b.path + " changed while its program ran: " + named + ". Byproducts of a build or a test run belong in .gitignore, which the mark respects; declare effects.class: workspace_write only for a step that is meant to change the tree"
+}

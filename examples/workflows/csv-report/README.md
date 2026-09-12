@@ -110,6 +110,10 @@ Malformed input or duplicate names ends with `rejected`, without a final report.
 The worker reads the execution envelope from stdin and port paths from
 `PRIFLY_CONTEXT_FILE`. It writes each output to its allocated slot and returns
 one typed result on file descriptor 3. Pri-Fly verifies and seals those bytes.
+A worker in a Run that holds a claimed repository workspace is also told where
+it is (`PRIFLY_REPOSITORY_WORKSPACE`, `PRIFLY_CLAIM_ID`); this example claims
+none. Machine-specific environment for a worker (`PATH`, `APP_ENV`) is set with
+`prifly project local set --env NAME=VALUE`, never in the shared package.
 The worker never edits the project, claims a Git worktree or invokes an AI model.
 
 `TestCLIProjectCSVReportNoGitNoAI` exercises these shipped files through the

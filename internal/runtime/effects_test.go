@@ -156,3 +156,122 @@ func readRuntimeJSON(t *testing.T, path string, value any) {
 		t.Fatal(err)
 	}
 }
+
+// A program step is handed the Run's claimed workspace the way a host is --
+// PRIFLY_REPOSITORY_WORKSPACE beside the socket and the context file -- and a
+// program permitted no workspace effect is held to the same mark: a tests
+// program has to run the project's suite in the tree the write steps produced,
+// and until 0.13.25 it had no path but a guess from claim naming, and nothing
+// measured what it did there.
+func TestAProgramStepIsHandedTheWorkspaceAndHeldToItsEffects(t *testing.T) {
+	for _, test := range []struct {
+		mode, failure string
+	}{
+		{"workspace-read", ""},
+		{"workspace-write", "effect_not_permitted"},
+	} {
+		t.Run(test.mode, func(t *testing.T) {
+			e, runID, claim := programAfterWriteFixture(t, test.mode)
+			ctx := context.Background()
+			planTask := handOver(t, e, runID)
+			if _, err := e.SubmitSession(ctx, hostResult(t, e, planTask, "planned")); err != nil {
+				t.Fatalf("the write step's report was refused: %v", err)
+			}
+			if err := e.Drive(ctx, runID); err != nil {
+				t.Fatalf("drive: %v", err)
+			}
+			r := driverRun(t, e, runID)
+			// The program's attempt is the one with a process outcome; the
+			// write step's was a session.
+			var attempt *Attempt
+			for _, candidate := range r.Attempts {
+				if candidate.ProcessOutcome != nil {
+					attempt = candidate
+				}
+			}
+			if attempt == nil || attempt.Settled == nil {
+				t.Fatalf("the program step did not settle: run=%s", r.Status)
+			}
+			if test.failure == "" {
+				if attempt.Status != "completed" || r.Status != "completed" {
+					t.Fatalf("a program that only read the workspace failed: %s %s", attempt.Status, r.Status)
+				}
+				if attempt.Accepted == nil || attempt.Accepted.Summary != "workspace="+claim.Path {
+					t.Fatalf("the program was not handed the claimed workspace path: %+v", attempt.Accepted)
+				}
+				return
+			}
+			if attempt.Status != "failed" {
+				t.Fatalf("a program that changed the workspace settled as %q, not failed", attempt.Status)
+			}
+			named := false
+			for _, diagnostic := range r.Diagnostics {
+				if diagnostic.Code == test.failure && strings.Contains(diagnostic.Message, "program-wrote.txt") && strings.Contains(diagnostic.Message, claim.Path) {
+					named = true
+				}
+			}
+			if !named {
+				t.Fatalf("the failure does not name the path the program changed: %+v", r.Diagnostics)
+			}
+		})
+	}
+}
+
+// programAfterWriteFixture rewrites the assisted checkout fixture: the write
+// step hands over to a program step (the test binary in the given helper
+// mode) that declares no workspace effect.
+func programAfterWriteFixture(t *testing.T, mode string) (*Engine, string, WorktreeClaim) {
+	t.Helper()
+	e, _, claim := assistedWorkspaceFixture(t, "checkout")
+	definitions, _, err := Builtins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var registry RegistryFile
+	readRuntimeJSON(t, filepath.Join(e.Root, e.Config.Configuration.RegistryFile), &registry)
+	var planStep flow.StepDefinition
+	var planRef flow.Ref
+	for _, entry := range registry.Entries {
+		if entry.Kind == "step" {
+			readRuntimeJSON(t, filepath.Join(e.Root, entry.Path), &planStep)
+			planRef = entry.Ref
+		}
+	}
+	check := planStep
+	check.ID, check.Title = "aif:step/check", "Check the tree with a program"
+	check.Effects.Class = "none"
+	check.InstructionsRef = nil
+	check.Outputs = map[string]flow.OutputPort{}
+	check.Executor.AdapterRef = builtinVersionRef(definitions, "core:adapter/local-process", "2.0.0")
+	check.Executor.Operation = "process"
+	checkBytes := writeRegistryDocument(t, e, "steps/check.json", check)
+	checkRef := flow.Ref{ID: check.ID, Version: check.Version, Digest: rawDigest(checkBytes)}
+	registry.Entries = append(registry.Entries, Definition{Ref: checkRef, Kind: "step", Path: "steps/check.json"})
+	writeRuntimeJSON(t, filepath.Join(e.Root, e.Config.Configuration.RegistryFile), registry)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Config.Configuration.Executors[check.ID] = ExecutorConfig{Executable: executable, Args: []string{"-test.run=^TestDriverWorkerHelper$", "--", mode}, Files: map[string]string{}, Environment: map[string]string{"DRIVER_TEST_HELPER": "1", "GORACE": "atexit_sleep_ms=0"}, TimeoutMS: 20000, GraceMS: 30, MaxOutputBytes: 1 << 20}
+	writeRuntimeJSON(t, filepath.Join(e.Root, "prifly.json"), e.Config)
+
+	workflow := flow.WorkflowRevision{
+		SchemaVersion: "1", ID: "aif:workflow/pilot-program", Version: "1.0.0", Title: "Plan, then check with a program",
+		Inputs: map[string]flow.InputPort{}, Outputs: map[string]flow.OutputPort{}, AllowedOutcomes: []string{"succeeded"},
+		Limits: flow.Limits{MaxStepInstances: 4, MaxControlTransitions: 16, MaxParallelism: 1}, PolicyRef: builtinVersionRef(definitions, "core:policy/local", "2.0.0"),
+	}
+	workflow.Definition.Entry = "plan"
+	workflow.Definition.Stages = map[string]flow.Stage{
+		"plan":     {Kind: "step", StepRef: planRef, InputBindings: map[string]flow.Binding{}, On: map[string]string{"pass": "check"}},
+		"check":    {Kind: "step", StepRef: checkRef, InputBindings: map[string]flow.Binding{}, On: map[string]string{"pass": "done"}, OnError: "rejected"},
+		"done":     {Kind: "finish", Outcome: "succeeded", OutputBindings: map[string]flow.Binding{}},
+		"rejected": {Kind: "finish", Outcome: "rejected", OutputBindings: map[string]flow.Binding{}},
+	}
+	workflow.AllowedOutcomes = []string{"succeeded", "rejected"}
+	writeRuntimeJSON(t, filepath.Join(e.Root, "workflows/pilot-program.json"), workflow)
+	result, err := e.Start(context.Background(), StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/pilot-program.json", BriefFile: "brief.json", Inputs: map[string]string{}, WorkspaceMode: "checkout"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e, result.Receipt.RunID, claim
+}

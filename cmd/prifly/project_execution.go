@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -281,6 +282,10 @@ func projectExecutionPayload(root string, compiled projectCompileResult, closure
 	if err != nil {
 		return nil, err
 	}
+	environment, err := projectLocalEnvironment(root)
+	if err != nil {
+		return nil, err
+	}
 	for _, binding := range compiled.ExecutionBindings.Bindings {
 		if !closure[binding.DefinitionRef] {
 			continue
@@ -297,6 +302,7 @@ func projectExecutionPayload(root string, compiled projectCompileResult, closure
 			return nil, usageError("project_execution_unavailable: selected executable is unavailable: " + binding.Config.Executable)
 		}
 		binding.Config.Executable = path
+		binding.Config.Environment = maps.Clone(environment)
 		result.Bindings = append(result.Bindings, binding)
 	}
 	return result, nil

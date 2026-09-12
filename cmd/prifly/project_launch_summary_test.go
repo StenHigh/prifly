@@ -158,6 +158,36 @@ launches:
 		t.Fatalf("the profile was rewritten by a launch review: %v", err)
 	}
 	writeFixtureFile(t, root, ".prifly/project.yaml", string(profileBytes))
+	// The machine's environment for its programs lives beside the allowed
+	// binary in local.yaml, never in the shared package: the review shows it
+	// and folds it into the configuration digest; an engine name is refused.
+	if code, _, stderr := runCLI(t, "project", "local", "set", "--repository", root, "--env", "PRIFLY_TOKEN=x"); code == 0 || !strings.Contains(stderr, "project_local_invalid_environment") {
+		t.Fatalf("an engine environment name was accepted: %d %s", code, stderr)
+	}
+	localBytes, err := os.ReadFile(filepath.Join(root, ".prifly/local.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	command("project", "local", "set", "--repository", root, "--env", "APP_ENV=testing", "--env", "PATH=/opt/tools/bin:/usr/bin:/bin")
+	withEnvironment := prepare()
+	if len(withEnvironment.Execution) == 0 {
+		t.Fatal("no program was reviewed")
+	}
+	for _, program := range withEnvironment.Execution {
+		if program.Environment["APP_ENV"] != "testing" || program.Environment["PATH"] != "/opt/tools/bin:/usr/bin:/bin" {
+			t.Fatalf("the machine's environment did not reach the reviewed program: %+v", program.Environment)
+		}
+	}
+	if withEnvironment.Execution[0].ConfigurationDigest == reviewed.Execution[0].ConfigurationDigest {
+		t.Fatal("the environment is not part of the configuration digest")
+	}
+	if data, err := os.ReadFile(filepath.Join(root, ".prifly/local.yaml")); err != nil || !strings.Contains(string(data), "APP_ENV: testing") {
+		t.Fatalf("the environment was not written to local.yaml: %v %s", err, data)
+	}
+	// The rest of this test reviews the launch without that environment.
+	if err := os.WriteFile(filepath.Join(root, ".prifly/local.yaml"), localBytes, 0644); err != nil {
+		t.Fatal(err)
+	}
 	if reviewed.SchemaVersion != "project-launch-summary/3" || !reviewed.KnownQuestionsOnly || reviewed.ReviewDigest == "" || reviewed.BuildKey == "" || len(reviewed.Execution) != 3 || len(reviewed.InputDigests) != 1 || reviewed.BriefDigest != "" {
 		t.Fatalf("incomplete neutral launch review: %+v", reviewed)
 	}

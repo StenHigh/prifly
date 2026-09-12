@@ -85,6 +85,16 @@ prifly project start --repository . --launch NAME --input source=./input.csv --a
 Замените NAME, executable и input на объявления своего package. Compile не
 создаёт Run и не исполняет программы. Start требует локальное разрешение и
 `--allow-execution`, закрепляет выбранные programs/argv/files отдельно от inputs.
+Программа получает чистое окружение (`PATH=/usr/bin:/bin`, `LANG`, `TMPDIR`,
+`PRIFLY_*`); что ей нужно сверх этого на **этой машине** — `PATH` до php/composer,
+`APP_ENV` — задаётся рядом с бинарём, в ignored `local.yaml`:
+`prifly project local set --env PATH=/opt/homebrew/bin:/usr/bin:/bin --env APP_ENV=testing`;
+`--prepare` показывает его у каждой программы (`execution[].environment`) и
+учитывает в digest'е. Программа шага в Run, который держит рабочую копию
+(claim), получает её путь в `PRIFLY_REPOSITORY_WORKSPACE` (и `PRIFLY_CLAIM_ID`)
+— туда, где ассистируемый шаг читает `repository_workspace`; шаг без
+`effects.class: workspace_write` измеряется по той же метке, что и отчёт хоста:
+изменил дерево — попытка падает `effect_not_permitted` с именами путей.
 RunBrief не создаётся автоматически: если такой документ объявлен required
 typed input, передайте его как соответствующий input. История и results
 сохраняются вне проекта; scratch — не sandbox для недоверенных программ.

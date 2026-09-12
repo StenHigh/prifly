@@ -135,6 +135,9 @@ type projectExecutionReview struct {
 	Args                []string          `json:"args"`
 	FileDigests         map[string]string `json:"file_digests"`
 	ConfigurationDigest string            `json:"configuration_digest"`
+	// Environment is this machine's, from local.yaml, shown so the reviewer
+	// sees what the program runs with; it is part of the configuration digest.
+	Environment map[string]string `json:"environment,omitempty"`
 }
 
 func projectReviewDigest(value any) (string, error) {
@@ -177,7 +180,7 @@ func projectReviewExecutors(bindings *prifly.ExecutionBindings) ([]projectExecut
 		if err != nil {
 			return nil, err
 		}
-		item := projectExecutionReview{DefinitionRef: binding.DefinitionRef, Executable: binding.Config.Executable, ExecutableDigest: digest, Args: binding.Config.Args, FileDigests: map[string]string{}, ConfigurationDigest: configDigest}
+		item := projectExecutionReview{DefinitionRef: binding.DefinitionRef, Executable: binding.Config.Executable, ExecutableDigest: digest, Args: binding.Config.Args, FileDigests: map[string]string{}, ConfigurationDigest: configDigest, Environment: binding.Config.Environment}
 		for target, source := range binding.Config.Files {
 			item.FileDigests[target] = projectBytesDigest(binding.Files[source])
 		}

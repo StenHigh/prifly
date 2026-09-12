@@ -1077,6 +1077,20 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	for name, value := range executor.Config.Environment {
 		env[name] = value
 	}
+	// A program is handed the Run's claimed repository workspace the way a host
+	// is: a tests program has to run the project's suite in the tree the write
+	// steps produced, and guessing the path from claim naming is a workaround.
+	// The path travels in the process environment, beside the socket and the
+	// context file, because context.json is a published contract. A step
+	// permitted no workspace effect is measured on the same mark a host's
+	// report is, so the program cannot change the tree it was shown.
+	boundary, err := e.processWorkspaceBoundary(ctx, r, step)
+	if err != nil {
+		return failBeforeStart(driverFailureCode(err, "workspace_validation_failed"))
+	}
+	if boundary.path != "" {
+		env["PRIFLY_REPOSITORY_WORKSPACE"], env["PRIFLY_CLAIM_ID"] = boundary.path, boundary.claimID
+	}
 	outcome, runErr := local.RunProcess(processCtx, local.ProcessSpec{Executable: executor.Config.Executable, ExecutableDigest: executor.ExecutableDigest, Args: executor.Config.Args, Dir: a.Workspace, Env: env, Envelope: a.Envelope, MaxRuntime: remaining, GracePeriod: time.Duration(executor.Config.GraceMS) * time.Millisecond, KillWait: 2 * time.Second, MaxStdoutBytes: 64 << 10, MaxStderrBytes: 64 << 10, MaxResultBytes: 1 << 20, BeforeStart: func() error {
 		readCtx, readCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer readCancel()
@@ -1118,9 +1132,16 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 		}
 		return errors.Join(watchErr, failBeforeStart(code))
 	}
+	effectDetail := ""
+	if outcome.StopReason == "" {
+		if changed := boundary.changes(ctx, e); changed != "" {
+			outcome.StopReason, effectDetail = "effect_not_permitted", changed
+		}
+	}
 	settleCtx, settleCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer settleCancel()
-	return errors.Join(watchErr, e.settle(settleCtx, r.ID, a.ID, outcome, runErr))
+	actor := "runner:" + strings.TrimPrefix(a.ID, "attempt:")
+	return errors.Join(watchErr, e.settleWith(settleCtx, r.ID, a.ID, settlementEvidence{Kind: "process", Outcome: &outcome, Actor: actor, CommandID: newID("command"), EffectDetail: effectDetail}, runErr))
 }
 
 // dispatchWindow bounds how long an admitted attempt may sit between its
@@ -1471,6 +1492,9 @@ type settlementEvidence struct {
 	// reading the attempt: recovery closes what it can prove, and does not
 	// judge a saved result candidate it never owned.
 	Failure string
+	// EffectDetail names what a program changed in the workspace it was
+	// shown when the outcome stopped for effect_not_permitted.
+	EffectDetail string
 }
 
 func (e *Engine) settle(ctx context.Context, runID, attemptID string, outcome local.ProcessOutcome, runErr error) error {
@@ -1515,6 +1539,9 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 		failure = "executor_observation_failed"
 	} else if outcome != nil && outcome.StopReason != "" {
 		failure = outcome.StopReason
+		if failure == "effect_not_permitted" {
+			detail = evidence.EffectDetail
+		}
 	} else if outcome != nil && (outcome.ExitCode == nil || *outcome.ExitCode != 0) {
 		failure = "nonzero_exit"
 	} else if outcome != nil && outcome.ResultError != "" || a.CandidateConflict {

@@ -2349,8 +2349,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    a declared host without a runner in this clone is listed as missing_hosts
   project runners add --host codex-cli|codex-app|claude-code [--repository DIR]
                                    Attach selected hosts explicitly; repeat --host to add more than one
-  project local set [--executable PATH] [--allow-executable NAME=PATH] [--repository DIR]
-                                   Set machine-only local.yaml paths; the authority and shared workflow stay unchanged
+  project local set [--executable PATH] [--allow-executable NAME=PATH] [--env NAME=VALUE] [--repository DIR]
+                                   Set machine-only local.yaml paths and the environment its programs run with; the authority and shared workflow stay unchanged
   project extend --workflow FILE --workflow-id ID --extensions FILE --output FILE [--step-ref NAME=JSON] [--step-source NAME=FILE]
                                    Insert declared steps into one exact compiled workflow; nothing is sealed, imported or run
                                    --step-ref and --step-source are one pair per step: the ref is written into the workflow, the source is the file it is checked against
