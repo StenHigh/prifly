@@ -136,6 +136,28 @@ launches:
 	}
 	reviewed := prepare()
 	assertNoEffects(t)
+	if reviewed.WorkspaceMode != "" {
+		t.Fatalf("a launch without a standing workspace reviewed one: %q", reviewed.WorkspaceMode)
+	}
+	// A launch's standing workspace is the answer to a question this Git-less
+	// workflow never asks: the review ignores it, where the same flag is
+	// refused as unused, and the profile is never rewritten.
+	profilePath := filepath.Join(root, ".prifly/project.yaml")
+	profileBytes, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, root, ".prifly/project.yaml", strings.Replace(string(profileBytes), "    workflow: .prifly/workflows/csv-report/workflow.yaml\n", "    workflow: .prifly/workflows/csv-report/workflow.yaml\n    workspace: checkout\n", 1))
+	if standing := prepare(); standing.WorkspaceMode != "" {
+		t.Fatalf("a standing workspace was applied to a workflow without Git work: %q", standing.WorkspaceMode)
+	}
+	if code, _, stderr := runCLI(t, append([]string{"project", "questionnaire", "--prepare", "--workspace", "worktree"}, args...)...); code == 0 || !strings.Contains(stderr, "project_start_workspace_unused") {
+		t.Fatalf("an explicit workspace for a Git-less workflow was accepted: %d %s", code, stderr)
+	}
+	if after, err := os.ReadFile(profilePath); err != nil || !strings.Contains(string(after), "workspace: checkout") {
+		t.Fatalf("the profile was rewritten by a launch review: %v", err)
+	}
+	writeFixtureFile(t, root, ".prifly/project.yaml", string(profileBytes))
 	if reviewed.SchemaVersion != "project-launch-summary/3" || !reviewed.KnownQuestionsOnly || reviewed.ReviewDigest == "" || reviewed.BuildKey == "" || len(reviewed.Execution) != 3 || len(reviewed.InputDigests) != 1 || reviewed.BriefDigest != "" {
 		t.Fatalf("incomplete neutral launch review: %+v", reviewed)
 	}

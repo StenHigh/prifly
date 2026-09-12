@@ -132,10 +132,16 @@ func TestCLIProjectAssistedLaunchRequirementsBeforeMutation(t *testing.T) {
 	for _, test := range []struct {
 		name, effects, refusal string
 		args                   []string
+		standing               string
 	}{
-		{"host-required", "none", "project_start_host_required", nil},
-		{"workspace-required", "workspace_write", "project_start_workspace_required", []string{"--host", "codex-cli"}},
-		{"git-required", "workspace_write", "repository_required", []string{"--host", "codex-cli", "--workspace", "checkout"}},
+		{"host-required", "none", "project_start_host_required", nil, ""},
+		{"workspace-required", "workspace_write", "project_start_workspace_required", []string{"--host", "codex-cli"}, ""},
+		{"git-required", "workspace_write", "repository_required", []string{"--host", "codex-cli", "--workspace", "checkout"}, ""},
+		// The launch's standing workspace answers the question no flag asked:
+		// the refusal moves past the workspace to Git, exactly as with the flag.
+		{"standing-workspace", "workspace_write", "repository_required", []string{"--host", "codex-cli"}, "checkout"},
+		// A Git-less workflow ignores a standing choice it would refuse as a flag.
+		{"standing-workspace-unused", "none", "project_start_host_required", nil, "checkout"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// No Git installation or repository: only a selected write workspace
@@ -146,6 +152,20 @@ func TestCLIProjectAssistedLaunchRequirementsBeforeMutation(t *testing.T) {
 				t.Fatalf("init: %d %s", code, stderr)
 			}
 			writeProjectLaunchRequirementsFixture(t, root, "3", test.effects)
+			if test.standing != "" {
+				profilePath := filepath.Join(root, ".prifly/project.yaml")
+				data, err := os.ReadFile(profilePath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				declared := strings.Replace(string(data), "    workflow: .prifly/workflows/inspect/workflow.yaml\n", "    workflow: .prifly/workflows/inspect/workflow.yaml\n    workspace: "+test.standing+"\n", 1)
+				if declared == string(data) {
+					t.Fatal("the fixture profile changed shape")
+				}
+				if err := os.WriteFile(profilePath, []byte(declared), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
 			args := append([]string{"--project", authority, "project", "start", "--repository", root, "--launch", "inspect"}, test.args...)
 			code, out, stderr := runCLI(t, args...)
 			if code == 0 || !strings.Contains(stderr, test.refusal) {

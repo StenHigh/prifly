@@ -96,13 +96,13 @@ var projectRunnerSkillTemplateBeforeOverlay = strings.NewReplacer(
    the mark respects; never widen a gate's effects to make room for them.`,
 ).Replace(projectRunnerSkillTemplateBeforeEffects)
 
-// Current instructions are derived from the frozen previous template, never
-// the reverse: updating current behavior must not change recognized old bytes.
-// 0.13.21 names the project's own addition beside this generated file, so a
-// team keeps its rules there and `project runners update` keeps replacing the
-// generated text. The host loads only SKILL.md; the sibling is read because
-// these first lines say so, which is why they are conditional and exact.
-var projectRunnerSkillTemplate = strings.NewReplacer(
+// projectRunnerSkillTemplateBeforeWorkspace is the exact template 0.13.21
+// through 0.13.23 installed, frozen so a runner from those releases stays
+// recognized. 0.13.21 names the project's own addition beside this generated
+// file, so a team keeps its rules there and `project runners update` keeps
+// replacing the generated text. The host loads only SKILL.md; the sibling is
+// read because these first lines say so, which is why they are conditional.
+var projectRunnerSkillTemplateBeforeWorkspace = strings.NewReplacer(
 	`PRIFLY_BIN with --project "$authority_root"; never edit authority state.
 `,
 	`PRIFLY_BIN with --project "$authority_root"; never edit authority state.
@@ -115,6 +115,19 @@ claimed workspaces and output slots are measured by the engine, not read from
 text.
 `,
 ).Replace(projectRunnerSkillTemplateBeforeOverlay)
+
+// Current instructions are derived from the frozen previous template, never
+// the reverse: updating current behavior must not change recognized old bytes.
+// 0.13.24 lets a launch declare its standing workspace mode; a host that reads
+// it in the questionnaire has nothing to ask.
+var projectRunnerSkillTemplate = strings.NewReplacer(
+	`in /3 is an ordinary input. Ask worktree or checkout only when Git work
+   requires it, then pass `+"`--workspace worktree|checkout`"+`. Legacy /2 keeps`,
+	`in /3 is an ordinary input. Ask worktree or checkout only when Git work
+   requires it and the questionnaire names no `+"`workspace`"+`; a named one is the
+   project's standing choice -- use it without asking. Pass
+   `+"`--workspace worktree|checkout`"+` only to override it for this Run. Legacy /2 keeps`,
+).Replace(projectRunnerSkillTemplateBeforeWorkspace)
 
 const projectRunnerSkillTemplateBeforeTiming = `---
 name: prifly-run
@@ -612,6 +625,10 @@ type projectLaunch struct {
 	Description string `json:"description"`
 	Kind        string `json:"kind"`
 	Workflow    string `json:"workflow"`
+	// Workspace is the project's standing choice of worktree or checkout for
+	// this launch: a decision the owner made once, not a question at every
+	// start. --workspace still overrides it for one Run.
+	Workspace string `json:"workspace,omitempty"`
 }
 
 type projectWorkflowList struct {
@@ -655,6 +672,9 @@ type projectQuestionnaire struct {
 	DecisionSheet         prifly.DecisionSheet          `json:"decision_sheet"`
 	DecisionStates        []projectDecisionState        `json:"decision_states"`
 	KnownQuestionsOnly    bool                          `json:"known_questions_only"`
+	// Workspace is the launch's standing worktree-or-checkout choice when the
+	// profile declares one, so a host reads it here instead of asking.
+	Workspace string `json:"workspace,omitempty"`
 }
 
 func (c *cli) projectCommand(ctx context.Context, args []string) error {
@@ -880,6 +900,9 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 		return usageError("project_start_stale_decision_catalog: questionnaire differs from the current project catalog")
 	}
 	result := projectQuestionnaire{SchemaVersion: "project-questionnaire/4", Repository: root, Package: flow.Ref{ID: source.ID, Version: source.Version}, Profiles: profiles, Preflight: []prifly.DecisionDefinition{}, Runtime: []prifly.DecisionDefinition{}, CatalogDigest: selection.Sheet.CatalogDigest, DecisionSheet: selection.Sheet, DecisionStates: projectDecisionStates(selection), KnownQuestionsOnly: true}
+	if *launchID != "" {
+		result.Workspace = profile.Launches[*launchID].Workspace
+	}
 	result.ProjectProfileVersion = profile.SchemaVersion
 	for index, state := range result.DecisionStates {
 		if state.Applicability == "inactive" {
@@ -1682,7 +1705,7 @@ func readProjectProfile(root string) (projectProfile, error) {
 		}
 		for key := range object {
 			switch key {
-			case "title", "description", "kind", "workflow":
+			case "title", "description", "kind", "workflow", "workspace":
 			default:
 				return projectProfile{}, usageError("project_profile_invalid: unknown field in launch " + id + ": " + key)
 			}
@@ -1692,7 +1715,7 @@ func readProjectProfile(root string) (projectProfile, error) {
 			name   string
 			target *string
 		}{
-			{"title", &launch.Title}, {"description", &launch.Description}, {"kind", &launch.Kind}, {"workflow", &launch.Workflow},
+			{"title", &launch.Title}, {"description", &launch.Description}, {"kind", &launch.Kind}, {"workflow", &launch.Workflow}, {"workspace", &launch.Workspace},
 		} {
 			if value, exists := object[field.name]; exists {
 				text, ok := value.(string)
@@ -1707,6 +1730,9 @@ func readProjectProfile(root string) (projectProfile, error) {
 		}
 		if launch.Kind != "workflow" || launch.Workflow == "" {
 			return projectProfile{}, usageError("project_profile_invalid: launch " + id + " kind must be workflow with workflow source")
+		}
+		if launch.Workspace != "" && launch.Workspace != "worktree" && launch.Workspace != "checkout" {
+			return projectProfile{}, usageError("project_profile_invalid: launch " + id + " workspace must be worktree or checkout")
 		}
 		profile.Launches[id] = launch
 	}
@@ -2044,6 +2070,15 @@ func projectRunnerSkill(host projectHost) string {
 	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
 }
 
+func projectRunnerSkillBeforeWorkspace(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeWorkspace, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
+}
+
 func projectRunnerSkillBeforeOverlay(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -2138,7 +2173,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

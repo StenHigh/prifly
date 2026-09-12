@@ -32,3 +32,4 @@ launches:
     description: A tracked YAML workflow package. # Human-facing chooser explanation.
     kind: workflow # The only supported launch kind.
     workflow: .prifly/workflows/example/workflow.yaml # Marker file inside the package source.
+    workspace: worktree # Optional standing choice; the host does not ask, --workspace still overrides for one Run.

@@ -14,11 +14,18 @@ type projectLaunchRequirements struct {
 	Assisted      bool              `json:"assisted"`
 	GitWorkspace  bool              `json:"git_workspace"`
 	EffectClasses map[string]string `json:"effect_classes"`
+	// WorkspaceMode is the mode this launch runs with: the flag, else the
+	// launch's standing choice where the workflow needs a workspace, else none.
+	WorkspaceMode string `json:"-"`
 	sessionLimits []prifly.SessionLimitPreview
 }
 
-func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root string, compiled projectCompileResult, workflowPath, host, workspace string, allow bool, values map[string]json.RawMessage, refs map[string]prifly.ArtifactRef) (*prifly.ExecutionBindings, projectLaunchRequirements, error) {
-	requirements := projectLaunchRequirements{EffectClasses: map[string]string{}}
+// standingWorkspace is the launch's declared worktree-or-checkout choice. It
+// answers the workspace question only where the workflow asks it: a Git-less
+// workflow still refuses an explicit --workspace and silently ignores a
+// standing one, so a project declares the choice once for every launch.
+func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root string, compiled projectCompileResult, workflowPath, host, workspace, standingWorkspace string, allow bool, values map[string]json.RawMessage, refs map[string]prifly.ArtifactRef) (*prifly.ExecutionBindings, projectLaunchRequirements, error) {
+	requirements := projectLaunchRequirements{EffectClasses: map[string]string{}, WorkspaceMode: workspace}
 	definitions, registry, resources, err := engine.CompilationInventory()
 	if err != nil {
 		return nil, requirements, err
@@ -82,6 +89,10 @@ func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root stri
 	}
 	visit(plan)
 	requirements.Assisted, requirements.GitWorkspace = needsHost, needsWorkspace
+	if workspace == "" && needsWorkspace && standingWorkspace != "" {
+		workspace = standingWorkspace
+		requirements.WorkspaceMode = workspace
+	}
 	for ref := range plan.Checks {
 		closure[ref] = true
 	}

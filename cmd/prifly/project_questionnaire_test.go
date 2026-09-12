@@ -363,3 +363,39 @@ func TestProjectStandingAnswersInExtendYAML(t *testing.T) {
 		}
 	}
 }
+
+// A launch's worktree-or-checkout choice is the owner's, made once: the
+// profile declares it, the questionnaire shows it so the host has nothing to
+// ask, and --workspace still overrides it for one Run. An unknown mode is
+// refused where the profile is read.
+func TestProjectLaunchDeclaresItsStandingWorkspace(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	root, authority := projectQuestionnaireFixture(t)
+	profilePath := filepath.Join(root, ".prifly/project.yaml")
+	data, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, out, stderr := runCLI(t, "--project", authority, "project", "questionnaire", "--repository", root, "--launch", "questions")
+	if code != 0 || strings.Contains(out, `"workspace"`) {
+		t.Fatalf("a launch without a standing workspace named one: %d %s %s", code, out, stderr)
+	}
+	declared := strings.Replace(string(data), "    workflow: .prifly/workflows/questions/workflow.yaml\n", "    workflow: .prifly/workflows/questions/workflow.yaml\n    workspace: checkout\n", 1)
+	if declared == string(data) {
+		t.Fatal("the fixture profile changed shape")
+	}
+	writeFixtureFile(t, root, ".prifly/project.yaml", declared)
+	profile, err := readProjectProfile(root)
+	if err != nil || profile.Launches["questions"].Workspace != "checkout" {
+		t.Fatalf("the standing workspace was not read: %v %+v", err, profile.Launches["questions"])
+	}
+	code, out, stderr = runCLI(t, "--project", authority, "project", "questionnaire", "--repository", root, "--launch", "questions")
+	var result projectQuestionnaire
+	if code != 0 || json.Unmarshal([]byte(out), &result) != nil || result.Workspace != "checkout" {
+		t.Fatalf("the questionnaire does not name the standing workspace: %d %s %s", code, out, stderr)
+	}
+	writeFixtureFile(t, root, ".prifly/project.yaml", strings.Replace(declared, "workspace: checkout", "workspace: sometimes", 1))
+	if _, err := readProjectProfile(root); err == nil || !strings.Contains(err.Error(), "workspace must be worktree or checkout") {
+		t.Fatalf("an unknown workspace mode was accepted: %v", err)
+	}
+}

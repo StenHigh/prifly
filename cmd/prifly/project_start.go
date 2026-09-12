@@ -107,6 +107,10 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if !exists || launch.Kind != "workflow" {
 		return usageError("project_start_unknown_launch: " + *launchID)
 	}
+	// An unnamed workspace mode is the launch's standing one, applied only
+	// where the workflow needs a workspace at all: a standing choice is the
+	// answer to the question, not a flag that a Git-less workflow refuses.
+	standingWorkspace := launch.Workspace
 	if _, err := projectCompileSkillsRoot(root, profile, *host); err != nil {
 		return err
 	}
@@ -221,7 +225,10 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
-		execution, requirements, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, workflowPath, *host, *workspace, *allowExecution, inputValues, refs)
+		execution, requirements, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, workflowPath, *host, *workspace, standingWorkspace, *allowExecution, inputValues, refs)
+		if err == nil {
+			*workspace = requirements.WorkspaceMode
+		}
 		needsWorkspace = requirements.GitWorkspace
 		closeErr := preflightEngine.Close()
 		if err != nil {
