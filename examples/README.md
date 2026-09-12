@@ -18,7 +18,10 @@
   tracked `profile`, `answers` (постоянные ответы проекта на объявленные
   решения: `decision_policy`, `preflight`, `runtime` — источник
   `project_default`, флаг перебивает), `settings`, `exclude` и простая
-  вставка шага через `extend.yaml`.
+  вставка шага через `extend.yaml`. Правка `extend.yaml` — правка команды:
+  `origin.extend_digest` в `project.yaml` — отпечаток **upstream**-файла на
+  момент установки (по нему `workflows update` видит изменения upstream), к
+  локальному файлу он не относится и после правки `answers` не меняется.
 - [`authoring/project-profile-authoring-reference.yaml`](authoring/project-profile-authoring-reference.yaml) —
   полный `.prifly/project.yaml` `/3`; hosts необязательны и выбираются явно.
 - [`authoring/execution-bindings-authoring-reference.yaml`](authoring/execution-bindings-authoring-reference.yaml) —

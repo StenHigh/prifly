@@ -824,6 +824,10 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	selectedProfile := f.String("package-profile", "", "per-Run package profile")
 	policy := f.String("decision-policy", "", "attended or autonomous declared-decision policy; unnamed, the project's answers.decision_policy in extend.yaml, then attended")
 	expectedCatalog := f.String("expected-decision-catalog-digest", "", "catalog from the preceding questionnaire")
+	// --prepare requires a host and the read-only form selects none; a host
+	// re-reading the questionnaire with the flags it already holds was refused
+	// for the one flag the other form demands.
+	f.String("host", "", "accepted for symmetry with --prepare; the read-only questionnaire selects no host")
 	var answers, runtimeAnswers stringsFlag
 	f.Var(&answers, "preflight-answer", "declared preflight decision ID=JSON")
 	f.Var(&runtimeAnswers, "runtime-answer", "optional runtime preanswer ID=JSON")

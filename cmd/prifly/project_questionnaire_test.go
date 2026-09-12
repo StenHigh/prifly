@@ -337,8 +337,9 @@ func TestProjectStandingAnswersInExtendYAML(t *testing.T) {
 	if value, source := record(flagged.Sheet, "plain"); value != "true" || source != "project_default" {
 		t.Fatalf("an unnamed standing answer was lost beside a flag: %q %q", value, source)
 	}
-	// The read-only questionnaire resolves the same sheet Start seals.
-	code, out, stderr := runCLI(t, "--project", authority, "project", "questionnaire", "--repository", root, "--launch", "questions")
+	// The read-only questionnaire resolves the same sheet Start seals, and
+	// takes the --host that --prepare demands instead of refusing the flag.
+	code, out, stderr := runCLI(t, "--project", authority, "project", "questionnaire", "--repository", root, "--launch", "questions", "--host", "claude-code")
 	var result projectQuestionnaire
 	if code != 0 || json.Unmarshal([]byte(out), &result) != nil {
 		t.Fatalf("questionnaire with standing answers: %d %s %s", code, out, stderr)
