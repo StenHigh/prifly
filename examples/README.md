@@ -99,6 +99,14 @@ prifly project start --repository . --launch NAME --input source=./input.csv --a
 — туда, где ассистируемый шаг читает `repository_workspace`; шаг без
 `effects.class: workspace_write` измеряется по той же метке, что и отчёт хоста:
 изменил дерево — попытка падает `effect_not_permitted` с именами путей.
+Что сейчас исполняется и что шаг выдал — всё в `run status --json`, без
+нового поля: исполняющаяся программа — попытка с `process` и без `settled`
+(`.run.attempts[] | select(.process != null and .settled == null) |
+{step_instance_id, started: .started.utc}`), её стадия — `.run.steps[<step_instance_id>]`;
+последний принятый выход шага — `.run.attempts[] | select(.accepted != null)
+| .accepted.outputs.<port>` — это `ArtifactRef`, читается `prifly artifact
+export --ref REF.json --output FILE`, не нужно искать `work/<attempt>/outputs`
+по mtime.
 `run drive` исполняет программу шага внутри вызова и возвращается после неё:
 хосту с таймаутом на вызов инструмента (обычно 5 минут) такой Run стоит вести
 в фоне или с таймаутом больше `timeout_ms` привязки. Бюджет определений

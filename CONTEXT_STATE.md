@@ -1579,6 +1579,23 @@ symlinks blocking cleanup` (OpenSpec `explain-cleanup-metadata-symlink`,
 ассетах (подписи, стенды, четверо ворот, реестр чист; `unsafe_path` ни одна
 проба стенда не сравнивает).
 
+### #98 на 0.13.28 — первый заход с полным fix-кругом, `tests`-программой и без доделок руками
+
+`completed / succeeded`, MR !1150 влит. Маршрут: warmup → plan → improve
+(`improve_apply=all` из decision_context) → implement → verify → review
+(challenger: 2 блокера → `gate.blocking=true` → fix) → review-2 → tests
+(программа под движком, ~9,5 мин, 6756 тестов, `new_failures=[]`) → commit
+(PLAN.md снят движком, дерево чистое) → merge-request (программа отдала
+запись; push и MR руками — решение владельца) → done. Все submit с первого
+раза, `storage_busy` не встречался, `deadline_clock_rollback` не
+воспроизвёлся, preflight прошёл, `registry_budget` 55/512, эффект-проверки на
+verify/review чистые. Два наблюдения пилота — не дефекты, ответ рецептом по
+имеющемуся `run status --json` (исполняющаяся программа — попытка с `process`
+без `settled`; последний выход шага — `accepted.outputs.<port>` →
+`artifact export`), записано в `examples/README.md`; новых полей в замороженных
+DTO не добавлял. Ошибка пилота (`git checkout <base> -- dir` стёр
+незакоммиченные правки) — их урок, не инструмент.
+
 ### Метод: три вещи, которые эти два выпуска доказали
 
 **Красный, окружённый зелёными, требует счётчика, а не повтора.** `e2e` покраснел
