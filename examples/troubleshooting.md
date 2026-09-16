@@ -100,6 +100,26 @@ location — **не** отказ: runtime берёт объявленный path
 видно, какой вызов определил исход. Диагностика `resolved_not_applied` с
 версии 0.13.0 называет эту разницу прямо.
 
+### `project start` отказывает `invalid_input: Check its arguments…` после завершённого захода
+
+**Причина (до 0.13.29).** Старт освобождает claim прошлого Run'а
+(`releaseSettledClaim`) и снимает его worktree командой `git worktree remove
+--force`; если другой инструмент залочил этот worktree (GUI-обёртки вроде
+supacode лочат все worktree репозитория, какие видят — `.git/worktrees/<имя>/locked`
+с `"owner"`), git отказывает «cannot remove a locked working tree», а отказ
+доезжал до оператора родовым `invalid_input` без claim'а и без слов git.
+Claim оставался в `releasing`, `claim release` упирался в тот же лок.
+
+**С 0.13.29.** Каталог claim'а проверяется по inode и снимается вторым
+`--force` (лок чужого инструмента ничего его не защищает); отказ, который
+git всё же даёт, называется `claim_worktree_removal_failed` с id claim'а,
+путём и причиной git. **Выход руками на любой версии:** `git worktree unlock
+<путь claim>` в репозитории, затем повторить `project start` — release
+довершится сам.
+
+**Команда.** `claim list` показывает claim в `status: releasing`;
+`git worktree list` в репозитории помечает залоченные деревья словом `locked`.
+
 ### `claim_conflict`, хотя рабочая копия своя
 
 **Причина.** До 0.13.0 конфликт определялся репозиторием, и линкованные

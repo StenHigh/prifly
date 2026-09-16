@@ -751,11 +751,18 @@ func (e *Engine) removeWorktree(ctx context.Context, claim WorktreeClaim) error 
 	if claim.Inode == 0 || stat.Ino != claim.Inode {
 		return fault("claim_identity_conflict", "the directory at "+claim.Path+" is not the one this claim created: its inode differs from the recorded one, so removing it would delete something this claim never made. Move or delete it yourself, then claim release --id "+claim.ID+" --generation N ends the claim")
 	}
-	if _, err := e.git(ctx, claim.Repository.Toplevel, "worktree", "remove", "--force", "--end-of-options", target); err != nil {
-		return err
+	// The second --force overrides a worktree lock. A tool that manages the
+	// owner's repository locks every worktree it sees, this claim's included,
+	// seconds after it appears; the directory was verified above to be the
+	// one this claim created, so the lock protects nothing of the tool's.
+	// Without the override the claim stayed releasing and every later start of
+	// the repository was refused with a plain error naming neither the claim
+	// nor git's reason.
+	if _, err := e.git(ctx, claim.Repository.Toplevel, "worktree", "remove", "--force", "--force", "--end-of-options", target); err != nil {
+		return fault("claim_worktree_removal_failed", "git could not remove the worktree of claim "+claim.ID+" at "+claim.Path+": "+strings.TrimPrefix(err.Error(), "git worktree: ")+". The directory is the claim's own; remove it and prune with git worktree prune yourself, then claim release --id "+claim.ID+" --generation N ends the claim")
 	}
 	if _, err := os.Lstat(target); err == nil {
-		return errors.New("claim cleanup left the worktree in place")
+		return fault("claim_worktree_removal_failed", "git removed nothing at "+claim.Path+" for claim "+claim.ID+"; remove the directory yourself, then claim release --id "+claim.ID+" --generation N ends the claim")
 	}
 	_, _ = e.git(ctx, claim.Repository.Toplevel, "branch", "--delete", "--force", "--end-of-options", claim.Branch)
 	return nil

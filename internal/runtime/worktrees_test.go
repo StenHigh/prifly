@@ -513,3 +513,73 @@ func TestCapacityRefusalPointsAtTheNumberThatRefused(t *testing.T) {
 		t.Fatalf("a capacity refusal was sent to a state diagnostic: %+v", problem.SafeNextActions)
 	}
 }
+
+// A GUI that manages the owner's repository locks every worktree it sees,
+// the engine's claim worktrees included, seconds after they appear. Cleanup
+// ran `git worktree remove --force`, which refuses a locked tree, and the
+// refusal reached the operator as a plain error -- "Check its arguments and
+// selected files" -- naming neither the claim nor git's reason; the claim
+// stayed releasing and every later start of that repository was refused the
+// same way, with claim release running into the same wall. The directory is
+// the claim's own (its inode is verified first), so the lock is overridden;
+// a removal that still fails names the claim, the path and git's words.
+func TestWorktreeReleaseRemovesAWorktreeAnotherToolLocked(t *testing.T) {
+	e := contextRegistryRuntime(t)
+	ctx := context.Background()
+	repository := gitRepository(t)
+	claim, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:claim", Repository: repository, OwnerID: "run:pilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(e.Root, filepath.FromSlash(claim.Path))
+	lock := exec.Command("git", "worktree", "lock", "--reason", "supacode", "--end-of-options", target)
+	lock.Dir = repository
+	if out, err := lock.CombinedOutput(); err != nil {
+		t.Fatalf("git worktree lock: %v: %s", err, out)
+	}
+	released, err := e.ReleaseWorktree(ctx, ClaimReleaseRequest{CommandID: "command:release", ClaimID: claim.ID, Generation: claim.Generation})
+	if err != nil {
+		t.Fatalf("a worktree another tool locked was not released: %v", err)
+	}
+	if released.Status != "released" {
+		t.Fatalf("release was not recorded: %+v", released)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("cleanup left the locked worktree in place: %v", err)
+	}
+	if _, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:next", Repository: repository, OwnerID: "run:pilot"}); err != nil {
+		t.Fatalf("the repository was not free after releasing a locked worktree: %v", err)
+	}
+}
+
+// A removal git still cannot do reaches the operator as a refusal that names
+// the claim, the path and git's reason -- not the generic "check its
+// arguments" the plain error used to become.
+func TestWorktreeRemovalFailureNamesTheClaimAndGitsReason(t *testing.T) {
+	e := contextRegistryRuntime(t)
+	ctx := context.Background()
+	repository := gitRepository(t)
+	claim, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:claim", Repository: repository, OwnerID: "run:pilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(e.Root, filepath.FromSlash(claim.Path))
+	parent := filepath.Dir(target)
+	// A parent git cannot write to makes the removal fail for a reason that
+	// is neither a lock nor a replaced directory.
+	if err := os.Chmod(parent, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0700) })
+	_, err = e.ReleaseWorktree(ctx, ClaimReleaseRequest{CommandID: "command:release", ClaimID: claim.ID, Generation: claim.Generation})
+	if err == nil {
+		t.Fatal("a removal that could not happen was reported as a release")
+	}
+	problem, exit := ProblemFor(err)
+	if problem.Code != "claim_worktree_removal_failed" || !strings.Contains(problem.Message, claim.ID) || !strings.Contains(problem.Message, claim.Path) || exit == 2 && problem.Message == "" {
+		t.Fatalf("the removal failure does not name the claim and the reason: %+v exit %d", problem, exit)
+	}
+	if strings.Contains(problem.Message, "Check its arguments") {
+		t.Fatalf("the removal failure is still the generic refusal: %s", problem.Message)
+	}
+}
