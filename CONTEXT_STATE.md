@@ -4,7 +4,7 @@
 в `openspec/` (см. `openspec/SOURCE-OF-TRUTH.md`); этот файл только
 ориентирует.
 
-Обновлено: 2026-09-16 (v0.13.28, aif-classic 1.37.0; main = тег + docs/evidence). Это рабочая копия Pri-Fly (`StenHigh/prifly`),
+Обновлено: 2026-09-17 (v0.13.29, aif-classic 1.37.0; main = тег). Это рабочая копия Pri-Fly (`StenHigh/prifly`),
 начатая свежей историей из GitLab-дерева `main` = `27fa58c`. GitLab-проект
 `stenhigh/prifly` архивирован (read-only, README указывает на GitHub).
 
@@ -1595,6 +1595,31 @@ verify/review чистые. Два наблюдения пилота — не д
 `artifact export`), записано в `examples/README.md`; новых полей в замороженных
 DTO не добавлял. Ошибка пилота (`git checkout <base> -- dir` стёр
 незакоммиченные правки) — их урок, не инструмент.
+
+### 0.13.29: claim-worktree, залоченный чужим инструментом (тег на `ed94783`)
+
+Первый старт после паузы (#137, 17.09 01:31): `project start` отказал
+`invalid_input: The command could not be applied. Check its arguments…`
+дважды; владелец спросил про недоступный монитор на 7777 (монитора не было,
+потому что Run не создавался — он поднимается в `AfterRunCreated`). Сессия
+#137 (`backend-13`, потом `Pri-Fly #137`) прочитала причину по коду клона и
+не трогала ни `.prifly/`, ни движок: `releaseSettledClaim` → `removeWorktree`
+→ `git worktree remove --force` на worktree claim'а прошлого Run (#98,
+`8de771ff…`, `releasing` с 13.09 — fence без complete, причина не
+установлена), а этот worktree залочил **supacode** — GUI-обёртка владельца
+лочит все worktree репозитория, какие видит, через секунды после появления
+(`.git/worktrees/<имя>/locked`, `"owner":"supacode"`); git: «cannot remove a
+locked working tree», `e.git` → обычная ошибка → `ProblemFor` → родовой отказ.
+Воспроизведено тестом (`git worktree lock --reason supacode`). Стало: каталог
+проверен по inode как свой → второй `--force` снимает лок; отказ git —
+`claim_worktree_removal_failed` с claim'ом, путём, словами git; запись в
+troubleshooting с выходом руками (`git worktree unlock` → повторить старт).
+Оба разреза красные (первый — ровно текст пилота). Ворота зелёные, CI verify с
+первого раза. Пока чинилось, старт #137 прошёл в 01:37 (лок сняли руками),
+монитор поднялся релизной сборкой; новый claim `7261cc6f…` supacode залочил
+через 15 с — пилоту сказано поставить 0.13.29 до конца Run. Адреса на 17.09:
+движок `Dev [2ffd3f]`, сессия захода `Pri-Fly #137 [e63e5e]`, пакетчик
+`prifly-aif-workflows [08b163]`.
 
 ### Метод: три вещи, которые эти два выпуска доказали
 
