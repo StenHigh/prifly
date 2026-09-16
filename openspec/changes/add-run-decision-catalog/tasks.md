@@ -34,7 +34,7 @@
 
 - [x] 6.1 Обновить glossary, OpenSpec source specs and единый delivery backlog с active high-priority change; проверить links, terminology bindings and that historical evidence/manifests were not rewritten using `make check`.
 - [x] 6.2 Обновить authoring reference and Project/CLI documentation with one questionnaire, `--package-profile`, autonomous boundary, wait/resume and runner upgrade examples; validate referenced YAML and commands with `make docs-check` or the repository's current documentation gate.
-- [ ] 6.3 Выполнить focused Go tests, `make schema-check`, `make examples`, `make check` и full release gate; записать exact pass/fail counts and preserve a bounded live-pilot record that distinguishes preflight proof from dynamic-bridge qualification.
+- [x] 6.3 Выполнить focused Go tests, `make schema-check`, `make examples`, `make check` и full release gate; записать exact pass/fail counts and preserve a bounded live-pilot record that distinguishes preflight proof from dynamic-bridge qualification.
 
 ## Verification record — 2026-09-03 (second pass, after 3.2 and 5.2)
 
@@ -65,3 +65,47 @@
 - Not completed: the bounded live pilot in both native hosts and the dynamic
   bridge qualification of raw upstream AI Factory questions. Preflight and
   sealed-context coverage must not be presented as proof of those interactions.
+
+## 6.3 — счётчики полного гейта и живой пилотный след, 2026-09-16
+
+Гейт снят на `v0.13.28` (`2734cb4`; текущие имена целей — `schemas-check`,
+`check`, `e2e`; `examples` — псевдоним `e2e`):
+
+- `make schemas-check` — rc 0; foundation 86736 байт
+  `sha256:4fda82e5…`, core 58786 `sha256:573e4409…`, choice 10018
+  `sha256:7fcacd3a…` — опубликованные схемы совпадают.
+- `make check` — rc 0: стадия `test` — 4 пакета `ok` (`cmd/prifly` 55 с,
+  `internal/local` 7.6 с, `internal/release` 0.8 с, `internal/runtime` 276 с);
+  стадия `race` — те же 4 `ok` (`cmd/prifly` 272 с, `internal/runtime`
+  1155 с), `DATA RACE` — 0; `fmt-check` 289 файлов чисто; `refusal-check`
+  158 файлов, кодов в тексте ошибок нет; `release-ci-check` пройден.
+- `make e2e` — rc 0: install verification passed; authoring 8 cases + 1
+  launch case passed; cli 7 cases; core 169 команд passed; context 75 команд
+  / 10 cases passed; parallel-worktrees passed; monitor passed; capacity
+  passed (hold 12 с). После прогона — ноль каталогов `/tmp/prifly-*`, ноль
+  живых мониторов (`test/e2e/run.sh` убирает фикстуры).
+- Focused Go tests — 22/22 `pass` (`make-project-launch-workflow-neutral` 5.1).
+- CI `verify` на каждом теге 0.13.19–0.13.28 зелёный (0.13.19 — со второй
+  попытки: фикстура гонки за слот, починена в 0.13.20).
+
+Живой пилотный след, с разделением **предстартовое доказательство** /
+**квалификация динамического моста**:
+
+- Предстартовое (read-only, без Run): `project questionnaire` на 0.13.23 —
+  пять ответов `project_default`, `decision_policy: autonomous`,
+  `profile_source: project_default`; на 0.13.24 — `workspace: worktree`;
+  `--prepare` без `--workspace` — exit 0, `execution[]` с программой и её
+  окружением, `registry_budget` 55/512 (0.13.28), review_digest стабилен между
+  `--prepare` и `start`.
+- Динамический мост (боевые Runs у пилота, aif-classic 1.35.0–1.37.0):
+  #123 (0.13.22) — первый `succeeded`, три числа проводки ✓; #126 (0.13.23)
+  — первый на постоянных ответах, пять `project_default` в запечатанном
+  Run; #104 (0.13.26) — `tests`-программа убита `deadline_clock_rollback`
+  → дефект, 0.13.27; #43 (0.13.27) — программа до конца, честный `fail` →
+  `rejected`; **#98 (0.13.28) — полный fix-круг (review → fix → review-2),
+  `tests`-программа под движком, commit и merge-request по записи, ноль
+  доделок руками, `completed / succeeded`**. Что квалификация мостов не
+  покрывает: наблюдения в интерфейсах хостов (4.2 — открыто, снимет пилот
+  на следующем заходе по слову владельца; Codex-половина — открыта без
+  исполнителя), ветка `abandoned` 2.19.0, `merge-request` как программа с
+  push (решение владельца).

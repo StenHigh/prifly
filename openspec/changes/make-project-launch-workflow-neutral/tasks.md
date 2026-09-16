@@ -55,7 +55,7 @@
 
 ## 5. Правило проверки каждого среза
 
-- [ ] 5.1 Перед закрытием каждого среза запустить конкретные добавленные/затронутые Go tests через `.tools/go/bin/go test ./cmd/prifly ./internal/runtime ./internal/flow -run '<точные имена>' -count=1`, сузив packages до затронутых; проверить, что тесты действительно исполнились, а не дали `no tests to run`. Записать команды, счётчики и границы доказательства; публикацию коммитов группировать, чтобы не расходовать CI на каждый промежуточный шаг.
+- [x] 5.1 Перед закрытием каждого среза запустить конкретные добавленные/затронутые Go tests через `.tools/go/bin/go test ./cmd/prifly ./internal/runtime ./internal/flow -run '<точные имена>' -count=1`, сузив packages до затронутых; проверить, что тесты действительно исполнились, а не дали `no tests to run`. Записать команды, счётчики и границы доказательства; публикацию коммитов группировать, чтобы не расходовать CI на каждый промежуточный шаг.
 
 ## Срез 1 — проверка реализации, 2026-09-05
 
@@ -400,3 +400,27 @@ rev 1, `sha256:53d5d1f6e82a6c43ec391d1e3be10f86382afc4c2a2a9a679f3ffe41b5610943`
 **Гейт в цикле не смягчился:** круги дали 28 / 24 / 9 находок, `blocking: true`
 на всех трёх. Три находки остались открытыми именно потому, что починка
 ослабила бы измеритель; круг 2 нашёл дефект, порождённый коммитом круга 1.
+
+## Срез 0.13.19–0.13.28 — закрытие 5.1, 2026-09-16
+
+Десять выпусков окна 11–13.09 (эффекты, busy, runner overlay, постоянные
+ответы, четыре места объявления проекта, путь и окружение программы,
+`references`, часы, снятое издание) — каждый шёл через `make check` (race),
+`make e2e` и CI `verify` до тега, а каждая починка была вырезана и показала
+свой старый ответ (записки `release-0.13.19.md` … `release-0.13.28.md`).
+Логи тех ворот жили в scratchpad и не пережили дня, поэтому счётчики сняты
+заново на `v0.13.28` (`2734cb4`), 2026-09-16:
+
+```
+GOTOOLCHAIN=local .tools/go/bin/go test ./cmd/prifly ./internal/runtime ./internal/flow ./internal/local -run '^(TestAReportThatChangedTheWorkspaceWithoutPermissionIsRefused|TestAProgramStepIsHandedTheWorkspaceAndHeldToItsEffects|TestProblemForReportsABusyStoreAsAWait|TestConcurrentAdmissionsNeverExceedTheSlot|TestCLIProjectRunnersUpdateReportsADeclaredHostWithoutARunner|TestCLIProjectRunnersUpdateKeepsTheProjectOverlayAndNamesIt|TestProjectRunnerUpdateReplacesEveryReleasedRunner|TestProjectRunnerTextIsPinned|TestProjectFrozenRunnerTextIsPinned|TestSchemaRefusalNamesWhatTheContractDeclares|TestProjectStandingAnswersInExtendYAML|TestProjectCompileSealsTheProjectsBindingForAnInsertedStep|TestCLIProjectWorkflowsUpdateAndRemove|TestCLIProjectWorkflowsRefuseAnUpstreamProjectFolder|TestProjectWorkflowTreeDigestIgnoresExtendAndOrder|TestProjectLaunchDeclaresItsStandingWorkspace|TestCLIProjectAssistedLaunchRequirementsBeforeMutation|TestCLIProjectLaunchPreflightRunsBeforeAnythingIsTaken|TestCLIProjectLaunchSummaryBeforeDispatch|TestAProgramStepUnderTheSessionAuthoringNamesTheVersionToUse|TestDriverRemainingBudget|TestCLIProjectStartReTrustsARemovedEditionOfItsOwnBuild)$' -count=1 -json
+```
+
+22 названных теста верхнего уровня, 22 `pass`, 0 `fail`/`skip`, четыре
+пакета `pass` (`cmd/prifly`, `internal/runtime`, `internal/flow`,
+`internal/local`); `no tests to run` не встретилось — счётчик снят по
+`-json`, а не по строке `ok`. Границы доказательства: это тесты движка на
+дереве; поведение на опубликованных бинарях читали чужие стенды
+(пакетчик: `1 of 9` / `1 of 10`, два вырезания `unavailable_output` зелёные на
+каждом теге; пилот: 12 проб между соседними выпусками, боевые заходы #113,
+#123, #126, #43, #98). Наблюдения в интерфейсах хостов (3.5) сюда не входят.
+Полный гейт того же дня — в `add-run-decision-catalog` 6.3.
