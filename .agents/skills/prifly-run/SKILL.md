@@ -90,7 +90,8 @@ text.
    `session task --run RUN_ID --all`. Handle only those tasks, however many
    there are; use separate host sessions only if the platform provides them.
    `session task --all` returns them as a list, but a Run keys
-   `run.attempts` by `attempt_id`: read one by that ID, never by position.
+   `run.attempts` by `id` -- the value the task calls `attempt_id`:
+   read one by that ID, never by position.
    Read each task's pinned context from `workspace` and respect its
    `permitted_effects`. Only a task carrying `repository_workspace` may
    change that repository; otherwise use scratch and declared output slots.

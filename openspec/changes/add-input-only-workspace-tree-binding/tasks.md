@@ -17,4 +17,4 @@
 - [x] 3.1 Глоссарий `openspec/specs/specification-governance/terms.md`: Workspace tree binding — materialize-only форма, v8; `TestGlossaryBindings` зелёный.
 - [x] 3.2 `examples/authoring/step-authoring-reference.yaml`, `schemas/authoring/README.md`, `examples/troubleshooting.md` (симптом `schema_invalid … requires output_port, capture` → форма v8). Проверка: `openspec validate --all --strict`.
 - [x] 3.3 Защищённая история не тронута: `git diff --stat openspec/changes/archive schemas/core/step-definition-v[5-7].schema.json` пуст; `make ci-check`, `make e2e`, `make race` в фоне — все зелёные; счётчики ворот записаны в change.
-- [ ] 3.4 Кандидат-сборка передана пакетчику до тега; их ворота и стенд на ней зелёные; форма записи binding'а совпала с их проводкой `plan` в verify/review.
+- [x] 3.4 Кандидат-сборка передана пакетчику до тега; их ворота и стенд на ней зелёные; форма записи binding'а совпала с их проводкой `plan` в verify/review.
