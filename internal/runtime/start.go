@@ -1273,9 +1273,6 @@ func activateFor(r *Run, p *flow.Plan, invocationID, stageID, activationID, step
 func activationFor(r *Run, stageID string) *Activation {
 	return r.activationForInvocation(r.RootInvocationID, stageID)
 }
-func bindingRefs(r Run, invocationID string, bindings map[string]flow.Binding) (map[string]ArtifactRef, error) {
-	return bindingRefsForBody(r, invocationID, "", bindings)
-}
 
 func bindingRefsForBody(r Run, invocationID, bodyID string, bindings map[string]flow.Binding) (map[string]ArtifactRef, error) {
 	refs := map[string]ArtifactRef{}

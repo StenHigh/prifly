@@ -807,30 +807,6 @@ func (e *Engine) git(ctx context.Context, dir string, args ...string) (string, e
 	return strings.TrimSpace(string(output)), nil
 }
 
-// activeClaim returns the single active worktree claim of this installation. An
-// assisted step must have somewhere confined to write before it is handed to a
-// host. The claim is taken before the Run exists, so it is not owned by a run
-// id; ambiguity is refused rather than resolved by guessing which one was meant.
-func (e *Engine) activeClaim(ctx context.Context) (WorktreeClaim, error) {
-	record, _, err := e.readClaims(ctx)
-	if err != nil {
-		return WorktreeClaim{}, err
-	}
-	var active []WorktreeClaim
-	for _, claim := range record.Claims {
-		if claim.Status == "active" {
-			active = append(active, claim)
-		}
-	}
-	if len(active) == 0 {
-		return WorktreeClaim{}, local.Reject("claim_missing", "an assisted step requires an active worktree claim")
-	}
-	if len(active) > 1 {
-		return WorktreeClaim{}, local.Reject("claim_ambiguous", "more than one active claim; this slice admits exactly one")
-	}
-	return active[0], nil
-}
-
 // claimPresence reports whether the owner is still presumed present. An expired
 // lease yields "suspected", never "free": ownership is settled by evidence, not
 // by a clock running out.

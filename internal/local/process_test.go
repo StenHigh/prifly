@@ -83,6 +83,11 @@ func TestProcessNativeIdentity(t *testing.T) {
 	t.Fatal("native group snapshot omitted current process")
 }
 
+// coverageChildWarning is what a coverage-instrumented test binary prints when it
+// is re-executed as the worker without GOCOVERDIR: go test -cover is the only
+// caller that produces it, and it is not the worker's stderr.
+const coverageChildWarning = "warning: GOCOVERDIR not set, no coverage data emitted\n"
+
 func TestProcessWireEnvironmentAndArgv(t *testing.T) {
 	t.Setenv("PRIFLY_PARENT_SECRET", "do-not-inherit-this")
 	spec := processTestSpec(t, "success")
@@ -104,7 +109,7 @@ func TestProcessWireEnvironmentAndArgv(t *testing.T) {
 	if out.ExitCode == nil || *out.ExitCode != 0 || len(out.ResultCandidates) != 1 || out.ResultError != "" {
 		t.Fatalf("wire result lost: %+v", out)
 	}
-	if !bytes.Equal(out.Stdout.Raw, append(bytes.Clone(spec.Envelope), []byte("\n"+literal+"\n"+literal)...)) || string(out.Stderr.Raw) != "plain diagnostic, ERROR is not a verdict" {
+	if !bytes.Equal(out.Stdout.Raw, append(bytes.Clone(spec.Envelope), []byte("\n"+literal+"\n"+literal)...)) || strings.TrimSuffix(string(out.Stderr.Raw), coverageChildWarning) != "plain diagnostic, ERROR is not a verdict" {
 		t.Fatalf("stdio or argv changed: stdout=%q stderr=%q", out.Stdout.Raw, out.Stderr.Raw)
 	}
 	if !out.Stdout.Complete || !out.Stderr.Complete || out.Stdout.Truncated || out.Stderr.Truncated {

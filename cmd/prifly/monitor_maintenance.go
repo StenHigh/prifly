@@ -20,11 +20,11 @@ func monitorMaintenance(mux *http.ServeMux, catalog *monitorCatalog) {
 	})
 	mux.HandleFunc("/api/maintenance", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "POST required", 405)
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
 			return
 		}
 		if r.Header.Get("Origin") != "http://"+r.Host || r.Header.Get("Content-Type") != "application/json" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-PriFly-Maintenance")), []byte(token)) != 1 {
-			http.Error(w, "same-origin confirmation required", 403)
+			http.Error(w, "same-origin confirmation required", http.StatusForbidden)
 			return
 		}
 		var input struct {
@@ -58,7 +58,7 @@ func monitorMaintenance(mux *http.ServeMux, catalog *monitorCatalog) {
 		// A replaced root is a different deletion target, even if its path matches.
 		info, err := os.Stat(source.Root)
 		if err == nil && source.physical != monitorPhysical(info) {
-			http.Error(w, "source changed; refresh catalog", 409)
+			http.Error(w, "source changed; refresh catalog", http.StatusConflict)
 			return
 		}
 		var e *prifly.Engine
@@ -77,7 +77,7 @@ func monitorMaintenance(mux *http.ServeMux, catalog *monitorCatalog) {
 		}
 		defer e.Close()
 		if e.Installation.ID != source.Authority {
-			http.Error(w, "authority identity changed", 409)
+			http.Error(w, "authority identity changed", http.StatusConflict)
 			return
 		}
 		if input.Action == "preview" {

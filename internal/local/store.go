@@ -1,3 +1,5 @@
+// Package local is the authority's storage: the SQLite store and its
+// migrations, blobs, the transform guard and the processes it runs.
 package local
 
 import (

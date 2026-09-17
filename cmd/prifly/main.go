@@ -1,3 +1,5 @@
+// prifly is the Pri-Fly command-line interface: it opens one local authority,
+// runs one command against it and reports one document on stdout.
 package main
 
 import (

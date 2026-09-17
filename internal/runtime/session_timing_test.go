@@ -250,7 +250,7 @@ func TestTimedSessionTwoWeekHumanWaitPreservesExactOutputAndClaimBoundary(t *tes
 					t.Fatal("human wait changed the remaining fifty minutes")
 				}
 				deadline, err := time.Parse(time.RFC3339Nano, resumed.Deadline)
-				if err != nil || deadline.Sub(time.Now()) != 50*time.Minute {
+				if err != nil || time.Until(deadline) != 50*time.Minute {
 					t.Fatal("actual resumed deadline differs from allowance", err)
 				}
 				time.Sleep(49 * time.Minute)
@@ -459,7 +459,7 @@ func TestSessionWithoutDeclaredWorkDeadlineOutlivesTheInheritedHour(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		if remaining := deadline.Sub(time.Now()); remaining < 100*365*24*time.Hour {
+		if remaining := time.Until(deadline); remaining < 100*365*24*time.Hour {
 			t.Fatalf("a step that declared no deadline was handed one: %s (%s away)", task.Deadline, remaining)
 		}
 		time.Sleep(9 * time.Hour)

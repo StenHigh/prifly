@@ -7,7 +7,7 @@ export GOTELEMETRY := off
 export GOCACHE := $(CURDIR)/.cache/go-build
 export GOMODCACHE := $(CURDIR)/.cache/go-mod
 
-.PHONY: build test race vet check ci-check fmt schemas schemas-check release-ci-check e2e examples release
+.PHONY: build test race vet check ci-check fmt schemas schemas-check release-ci-check staticcheck-check vuln-check e2e examples release
 build:
 	$(GO) build -trimpath -buildvcs=false -o bin/prifly ./cmd/prifly
 test:
@@ -20,8 +20,8 @@ vet:
 # to be readable: a package that cannot be type-checked without the driver is a
 # package that has the driver's types in its own contracts.
 	CGO_ENABLED=0 $(GO) vet ./...
-check: test race vet fmt-check refusal-check schemas-check release-ci-check
-ci-check: test vet fmt-check refusal-check schemas-check release-ci-check
+check: test race vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check
+ci-check: test vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check
 fmt:
 	$(GO) fmt ./...
 # Formatting drifted unnoticed because nothing checked it. A gate that does not
@@ -45,6 +45,23 @@ refusal-check:
 	if [ $$status -ge 2 ]; then echo "refusal-check could not search: grep exited $$status"; exit 1; fi; \
 	if [ -n "$$sites" ]; then echo "refusal code inside error text:"; echo "$$sites"; exit 1; fi; \
 	echo "refusal-check: $$files files read, no refusal code inside error text"
+# Pinned, run from the module cache: a floating @latest would make the gate
+# change under a commit that changed nothing. The first real bug staticcheck
+# read here (a shadowed err that left a nil plan for the caller) had passed
+# vet, the tests and two reviews. Both print what they read, so a run that
+# listed no packages cannot pass as a clean one.
+STATICCHECK ?= honnef.co/go/tools/cmd/staticcheck@v0.8.1
+GOVULNCHECK ?= golang.org/x/vuln/cmd/govulncheck@v1.8.0
+staticcheck-check:
+	@packages=$$($(GO) list ./... | wc -l | tr -d ' '); \
+	if [ "$$packages" -lt 1 ]; then echo "staticcheck-check listed no packages"; exit 1; fi; \
+	$(GO) run $(STATICCHECK) ./... || exit 1; \
+	echo "staticcheck: $$packages packages read, no findings"
+vuln-check:
+	@packages=$$($(GO) list ./... | wc -l | tr -d ' '); \
+	if [ "$$packages" -lt 1 ]; then echo "vuln-check listed no packages"; exit 1; fi; \
+	$(GO) run $(GOVULNCHECK) ./... || exit 1; \
+	echo "vuln-check: $$packages packages read"
 schemas:
 	python3 scripts/check-schema.py --go "$(GO)" --write
 schemas-check:

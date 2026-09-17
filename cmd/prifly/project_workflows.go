@@ -126,7 +126,7 @@ func projectWorkflowRepositoryURL(value string) (string, error) {
 	case strings.ContainsAny(value, " \t\r\n\x00"):
 		return "", errors.New("repository must not contain whitespace")
 	case strings.Contains(value, "::"):
-		return "", errors.New("repository must not use a transport helper such as ext::")
+		return "", errors.New("repository must not use a transport helper such as the ext:: prefix")
 	}
 	if strings.Contains(value, "://") {
 		parsed, err := url.Parse(value)
