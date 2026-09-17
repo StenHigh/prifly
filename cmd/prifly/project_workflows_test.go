@@ -501,6 +501,11 @@ func TestCLIProjectWorkflowsUpdateAndRemove(t *testing.T) {
 	// is drift, and both survive the update byte for byte.
 	writeFixtureFile(t, folder, "project/steps/tests.yaml", "authoring: prifly-step/1\nid: team:step/tests\n")
 	writeFixtureFile(t, folder, "project/workers/tests.sh", "#!/bin/sh\nexit 0\n")
+	// A worker the team made runnable comes back runnable: an update that
+	// returns it unexecutable has changed the file it promised to keep.
+	if err := os.Chmod(filepath.Join(folder, "project/workers/tests.sh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	writeFixtureFile(t, source, "flows/sample/README.md", "# sample v2\n")
 	writeFixtureFile(t, source, "flows/sample/extend.yaml", "extensions: []\n# upstream note\n")
 	gitFixture(t, source, "commit", "-qam", "upstream change without version bump")
@@ -523,6 +528,12 @@ func TestCLIProjectWorkflowsUpdateAndRemove(t *testing.T) {
 	}
 	if data, err := os.ReadFile(filepath.Join(folder, "project/workers/tests.sh")); err != nil || string(data) != "#!/bin/sh\nexit 0\n" {
 		t.Fatalf("the team's project/ program was not carried across the update: %v %q", err, data)
+	}
+	if info, err := os.Stat(filepath.Join(folder, "project/workers/tests.sh")); err != nil || info.Mode()&0o111 == 0 {
+		t.Fatalf("the team's program lost its executable bit across the update: %v %v", err, info.Mode())
+	}
+	if info, err := os.Stat(filepath.Join(folder, "project/steps/tests.yaml")); err != nil || info.Mode()&0o111 != 0 {
+		t.Fatalf("a plain project file became executable across the update: %v %v", err, info.Mode())
 	}
 	parsed, err := readProjectProfile(repository)
 	if err != nil || parsed.Packages["sample"].Origin.Commit != upstream || parsed.Packages["sample"].Origin.Digest != result.Current.Digest {

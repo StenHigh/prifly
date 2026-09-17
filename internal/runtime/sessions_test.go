@@ -109,7 +109,7 @@ func TestWorkspaceCheckoutHandoffKeepsScratchOutsideRepository(t *testing.T) {
 	e, runID, claim := assistedWorkspaceFixture(t, "checkout")
 	task := handOver(t, e, runID)
 	r := driverRun(t, e, runID)
-	if r.SchemaVersion != CoreMaterializedStateVersion || task.SchemaVersion != AssistedSessionRoutedVersion || task.WorkspaceMode != "checkout" || task.RepositoryWorkspace != claim.Repository.Toplevel || task.Workspace == task.RepositoryWorkspace {
+	if r.SchemaVersion != CoreStageWorkStateVersion || task.SchemaVersion != AssistedSessionRoutedVersion || task.WorkspaceMode != "checkout" || task.RepositoryWorkspace != claim.Repository.Toplevel || task.Workspace == task.RepositoryWorkspace {
 		t.Fatalf("checkout handoff did not keep workspace identities separate: run=%s task=%+v claim=%+v", r.SchemaVersion, task, claim)
 	}
 	if _, err := os.Stat(filepath.Join(task.RepositoryWorkspace, "context")); !os.IsNotExist(err) {
@@ -119,7 +119,7 @@ func TestWorkspaceCheckoutHandoffKeepsScratchOutsideRepository(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, value := range map[string]any{"CoreRunStateV30": r, "CoreRunViewV30": view, "SessionTaskV7": task} {
+	for name, value := range map[string]any{"CoreRunStateV31": r, "CoreRunViewV31": view, "SessionTaskV7": task} {
 		if err := validatePublic(t, name, value); err != nil {
 			t.Fatalf("%s rejected checkout state: %v", name, err)
 		}
@@ -287,15 +287,15 @@ func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {
 	if !reflect.DeepEqual(attempt.ReportedCosts, submission.ReportedCosts) {
 		t.Fatalf("reported amounts were reconciled or changed: got %+v want %+v", attempt.ReportedCosts, submission.ReportedCosts)
 	}
-	if view.Run.SchemaVersion != CoreMaterializedStateVersion || view.SchemaVersion != CoreMaterializedReadVersion {
+	if view.Run.SchemaVersion != CoreStageWorkStateVersion || view.SchemaVersion != CoreStageWorkReadVersion {
 		t.Fatalf("reported cost used old state/read contracts: %s %s", view.Run.SchemaVersion, view.SchemaVersion)
 	}
 	next, err := e.Next(context.Background(), runID)
-	if err != nil || next.SchemaVersion != CoreMaterializedNextVersion {
+	if err != nil || next.SchemaVersion != CoreStageWorkNextVersion {
 		t.Fatalf("reported cost used old next contract: %+v %v", next, err)
 	}
 	for name, value := range map[string]any{
-		"CoreRunStateV30": view.Run, "CoreRunViewV30": view, "CoreNextViewV30": next,
+		"CoreRunStateV31": view.Run, "CoreRunViewV31": view, "CoreNextViewV31": next,
 		"SessionTaskV7": task, "SessionSubmissionV7": submission, "ReportedCost": submission.ReportedCosts[0],
 	} {
 		if err := validatePublic(t, name, value); err != nil {

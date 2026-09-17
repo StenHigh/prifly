@@ -52,6 +52,21 @@ prifly --project "$AUTH" run next RUN --json | jq -c '{action, safe: .safe_next_
 только `run.status`/`run.events` — ждать нечего, смотрите `run status`.
 Исход прогона `action` не называет: терминальный прогон отвечает `terminal`.
 
+**Что будет делать драйвер.** При `action: stage` тот же ответ называет род
+работы в `stage_work`: `assisted_session` — драйвер выдаст задание вам;
+`program` — **исполнит программу внутри вызова** `run drive`, поэтому гоните
+его фоном (`nohup`) или с таймаутом больше `timeout_ms` привязки; `control` —
+только продвинет граф. Поле необязательное: сборка, которая род определить не
+может, его не присылает. Читать до вызова:
+
+```sh
+prifly --project "$AUTH" run next RUN --json | jq -r '.stage_work // "unknown"'
+```
+
+`run next` и `run explain` ничего не исполняют (`read_only: true`); исполняет
+только `run drive` — флаг `--next` меняет форму ответа, а не работу. Нужен
+движок с `core-read/31`.
+
 ### Assisted шаг останавливается примерно через час
 
 **Причина.** `session_limits.active_timeout_ms` — конечное время разрешённой
@@ -93,6 +108,19 @@ location — **не** отказ: runtime берёт объявленный path
 [`authoring/step-authoring-reference.yaml`](authoring/step-authoring-reference.yaml);
 обязанности стороны host — в
 [cli-protocol](../openspec/specs/cli-protocol/spec.md).
+
+### После `project workflows update` программа шага перестала запускаться
+
+**Причина.** До 0.13.32 перенос папки `project/` в обновлённое дерево писал
+файлы с правами `0644`: байты сохранялись, бит исполнения — нет. Шаг, который
+зовёт свой воркер напрямую (а не `bash worker.sh`), получал
+«permission denied» после каждого обновления пакета.
+
+**Команда.** `git diff` в репозитории показывает это как
+`old mode 100755 / new mode 100644` без изменения содержимого. Обход на старом
+движке — `chmod 755` после каждого `workflows update`. С 0.13.32 перенос
+сохраняет бит исполнения; файлы, пришедшие из upstream-папки пакета,
+по-прежнему кладутся `0644` — скачанное дерево не приносит исполняемых файлов.
 
 ### `schema_invalid … workspace_trees/0: the contract requires output_port, capture` на read-only шаге
 

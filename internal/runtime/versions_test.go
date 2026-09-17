@@ -70,6 +70,7 @@ func TestStatePredicatesFollowTheLadder(t *testing.T) {
 		{"routed sessions", CoreRoutedStateVersion, isRoutedState},
 		{"enforced effects", CoreEffectsStateVersion, isEffectsState},
 		{"materialized trees", CoreMaterializedStateVersion, isMaterializedState},
+		{"named stage work", CoreStageWorkStateVersion, isStageWorkState},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			rank := stateRank(c.version)

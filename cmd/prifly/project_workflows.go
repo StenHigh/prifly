@@ -637,7 +637,15 @@ func carryProjectOwnedFolder(installed, staged string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, 0644)
+		// "Byte for byte" has to include the bit that makes a worker runnable:
+		// the project wrote these files itself, and an update that hands them
+		// back unexecutable is an update that changed them. A fetched upstream
+		// tree keeps 0644 below, where nothing should arrive executable.
+		mode := fs.FileMode(0644)
+		if info, err := entry.Info(); err == nil && info.Mode()&0111 != 0 {
+			mode = 0755
+		}
+		return os.WriteFile(target, data, mode)
 	})
 }
 

@@ -215,11 +215,20 @@ const (
 	CoreMaterializedNextVersion     = "core-next/30"
 	CoreMaterializedPreviewVersion  = "core-preview/30"
 	CoreMaterializedStepReadVersion = "core-step-read/30"
-	CoreConfigVersion               = "core-configuration/1"
-	CoreContextConfigVersion        = "core-configuration/2"
-	MaxDefinitionBytes              = 2 << 20
-	MaxArtifactBytes                = 16 << 20
-	MaxRunPublications              = 1024
+	// The answer about the next action names the kind of work the driver would
+	// do for a ready stage, so a host knows before it calls whether that call
+	// will hand out a task, run a program to completion, or only move the
+	// graph. Older reads keep an answer without that field.
+	CoreStageWorkReadVersion     = "core-read/31"
+	CoreStageWorkStateVersion    = "core-state/31"
+	CoreStageWorkNextVersion     = "core-next/31"
+	CoreStageWorkPreviewVersion  = "core-preview/31"
+	CoreStageWorkStepReadVersion = "core-step-read/31"
+	CoreConfigVersion            = "core-configuration/1"
+	CoreContextConfigVersion     = "core-configuration/2"
+	MaxDefinitionBytes           = 2 << 20
+	MaxArtifactBytes             = 16 << 20
+	MaxRunPublications           = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time

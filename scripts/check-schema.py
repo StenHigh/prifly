@@ -55,6 +55,7 @@ def main():
 		("routed-session", ["--routed-session"], ("internal/runtime/routed-session.schema.json", "schemas/core/routed-session.schema.json")),
 		("effects-session", ["--effects-session"], ("internal/runtime/effects-session.schema.json", "schemas/core/effects-session.schema.json")),
 		("materialized-session", ["--materialized-session"], ("internal/runtime/materialized-session.schema.json", "schemas/core/materialized-session.schema.json")),
+		("stage-work", ["--stage-work"], ("internal/runtime/stage-work.schema.json", "schemas/core/stage-work.schema.json")),
 		("run-start-v2", ["--run-start-v2"], ("schemas/core/run-start-v2.schema.json",)),
 		("package-manifest-v2", ["--package-manifest-v2"], ("schemas/core/package-manifest-v2.schema.json",)),
 		("execution-bindings", ["--execution-bindings"], ("schemas/core/execution-bindings.schema.json",)),

@@ -50,6 +50,7 @@ type generator struct {
 	routedSessions        bool
 	effectsSessions       bool
 	materializedSessions  bool
+	stageWork             bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -160,6 +161,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						continue
 					}
 					if !g.materializedSessions && materializedSessionField(t, field.Name) {
+						continue
+					}
+					if !g.stageWork && stageWorkField(t, field.Name) {
 						continue
 					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
@@ -282,6 +286,7 @@ var profileContracts = []struct {
 	{"routed-session", "generate routed assisted session state/read version 28 contracts", func(g *generator) { g.routedSessions = true }},
 	{"effects-session", "generate enforced assisted effects state/read version 29 contracts", func(g *generator) { g.effectsSessions = true }},
 	{"materialized-session", "generate materialize-only tree and run failure state/read version 30 contracts", func(g *generator) { g.materializedSessions = true }},
+	{"stage-work", "generate named stage work state/read version 31 contracts", func(g *generator) { g.stageWork = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -802,6 +807,12 @@ func main() {
 		}
 		contracts["RunFailure"] = reflect.TypeFor[prifly.RunFailure]()
 	}
+	if g.stageWork {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V31"] = contracts[name+"V30"]
+			delete(contracts, name+"V30")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1033,6 +1044,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-materialized-session:30"
 			bundle["title"] = "Pri-Fly materialize-only tree and run failure contracts"
 			bundle["description"] = "State/read 30 lets a read-only assisted step be handed a captured tree: the handoff records the entries the engine materialized so settlement takes back exactly those, and the read view of a failed or cancelled Run names the diagnostic that stopped it. Session 7 tasks and submissions are unchanged."
+		}
+		if g.stageWork {
+			stageWorkConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-stage-work:31"
+			bundle["title"] = "Pri-Fly named stage work contracts"
+			bundle["description"] = "Read 31 answers what work a ready stage holds — an assisted step, a program the driver runs inside the call, or a control stage — so a host chooses how to call the driver before calling it. Reading names the work without doing it; session 7 tasks and submissions are unchanged."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

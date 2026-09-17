@@ -80,6 +80,12 @@ func Capabilities() CapabilityManifest {
 	profile.ReadVersions = append(profile.ReadVersions, CoreMaterializedReadVersion)
 	profile.StepVersions = append(profile.StepVersions, "8")
 	profile.Capabilities = append(profile.Capabilities, "materialize_only_workspace_tree", "run_failure_named")
+	// The next-action answer names the kind of work a ready stage holds, so a
+	// host chooses how to call the driver before calling it.
+	profile.StateVersion, profile.ReadVersion = CoreStageWorkStateVersion, CoreStageWorkReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreStageWorkStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreStageWorkReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "stage_work_named")
 	return manifest
 }
 

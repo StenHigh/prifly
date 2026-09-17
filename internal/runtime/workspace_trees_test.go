@@ -262,7 +262,7 @@ func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testi
 				t.Fatal(err)
 			}
 			r := driverRun(t, e, runID)
-			if r.SchemaVersion != CoreMaterializedStateVersion || r.Status != "completed" {
+			if r.SchemaVersion != CoreStageWorkStateVersion || r.Status != "completed" {
 				t.Fatalf("tree run did not use and settle the v24 contract: %+v", r)
 			}
 			ref := r.Attempts[third.AttemptID].Accepted.Outputs["final"]
@@ -632,7 +632,7 @@ func TestMaterializeOnlyTreeHandsAReadOnlyStepTheCapturedPlan(t *testing.T) {
 					t.Fatal(err)
 				}
 				r := driverRun(t, e, runID)
-				if r.SchemaVersion != CoreMaterializedStateVersion || r.Status != "completed" || len(r.Attempts[verify.AttemptID].Accepted.Outputs) != 0 {
+				if r.SchemaVersion != CoreStageWorkStateVersion || r.Status != "completed" || len(r.Attempts[verify.AttemptID].Accepted.Outputs) != 0 {
 					t.Fatalf("the read-only step did not settle without an output: %+v", r)
 				}
 				for path := range test.files {
@@ -734,7 +734,7 @@ func TestRunViewNamesTheFailureOfAStoppedRun(t *testing.T) {
 	}
 	// A resolution of not_applied ends the Run failed rather than cancelled
 	// (see examples/troubleshooting.md); either way the view names the stop.
-	if view.SchemaVersion != CoreMaterializedReadVersion || view.Run.Status != "failed" && view.Run.Status != "cancelled" || view.Failure == nil || view.Failure.DiagnosticID == "" {
+	if view.SchemaVersion != CoreStageWorkReadVersion || view.Run.Status != "failed" && view.Run.Status != "cancelled" || view.Failure == nil || view.Failure.DiagnosticID == "" {
 		t.Fatalf("a stopped Run does not name its failure: %+v %+v", view.Run.Status, view.Failure)
 	}
 	last := view.Run.Diagnostics[len(view.Run.Diagnostics)-1]
@@ -747,5 +747,68 @@ func TestRunViewNamesTheFailureOfAStoppedRun(t *testing.T) {
 	data, err := json.Marshal(view)
 	if err != nil || !strings.Contains(string(data), `"failure":{`) {
 		t.Fatalf("failure is not on the wire: %v", err)
+	}
+}
+
+// The answer about the next action names what the driver would do there, so a
+// host learns that a program is next without starting it: a dependent session
+// chained run drive --next after a submit and ran a seventeen-minute test
+// program inside its own harness.
+func TestNextNamesTheWorkAReadyStageHolds(t *testing.T) {
+	e, runID := treeVerifyFixture(t, flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"})
+	next, err := e.Next(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.SchemaVersion != CoreStageWorkNextVersion || next.Action != "stage" || next.StageWork != StageWorkAssistedSession {
+		t.Fatalf("a ready assisted stage is not named as one: %+v", next)
+	}
+	// Reading names the work; it does not do it.
+	r := driverRun(t, e, runID)
+	if len(r.Attempts) != 0 {
+		t.Fatalf("reading the next action admitted work: %+v", r.Attempts)
+	}
+	task := handOver(t, e, runID)
+	handed, err := e.Next(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handed.Action != "idle" || handed.StageWork != "" || !slices.Contains(handed.SafeNextActions, "session.task") {
+		t.Fatalf("a handed-out step reports a stage work or hides its handoff: %+v", handed)
+	}
+	writeWorkspaceTreeFile(t, task.RepositoryWorkspace, ".ai-factory/PLAN.md", "# Plan\n")
+	if _, err := e.SubmitSession(context.Background(), treeSubmission(t, task, "plan", []WorkspaceTreeLocation{{OutputPort: "plan", Path: ".ai-factory/PLAN.md"}})); err != nil {
+		t.Fatal(err)
+	}
+	after, err := e.Next(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Action != "stage" || after.StageWork != StageWorkAssistedSession {
+		t.Fatalf("the next assisted stage lost its name: %+v", after)
+	}
+}
+
+// A control stage is work the driver does alone, and a step this build cannot
+// classify is named nothing rather than guessed at.
+func TestStageWorkNamesControlAndStaysSilentWhenItCannotTell(t *testing.T) {
+	e, runID := treeSessionFixture(t, flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"})
+	r := driverRun(t, e, runID)
+	plan, err := r.planFor(r.RootInvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if work := e.stageWork(r, r.RootInvocationID, "done"); work != StageWorkControl {
+		t.Fatalf("a finish stage is not control work: %q", work)
+	}
+	if work := e.stageWork(r, r.RootInvocationID, "no-such-stage"); work != "" {
+		t.Fatalf("an unknown stage was named: %q", work)
+	}
+	if work := e.stageWork(r, "no-such-invocation", "plan"); work != "" {
+		t.Fatalf("an unreadable plan was named: %q", work)
+	}
+	step := plan.Steps["plan"]
+	if step.Executor.Operation != "session" {
+		t.Fatalf("the fixture stopped using an assisted plan step: %+v", step.Executor)
 	}
 }

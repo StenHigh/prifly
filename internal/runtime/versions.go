@@ -48,6 +48,7 @@ var versionContracts = []versionContract{
 	{CoreRoutedStateVersion, CoreRoutedReadVersion, CoreRoutedStepReadVersion},
 	{CoreEffectsStateVersion, CoreEffectsReadVersion, CoreEffectsStepReadVersion},
 	{CoreMaterializedStateVersion, CoreMaterializedReadVersion, CoreMaterializedStepReadVersion},
+	{CoreStageWorkStateVersion, CoreStageWorkReadVersion, CoreStageWorkStepReadVersion},
 }
 
 func isNeutralState(version string) bool { return atLeast(version, CoreNeutralStateVersion) }
@@ -56,6 +57,9 @@ func isRoutedState(version string) bool  { return atLeast(version, CoreRoutedSta
 func isEffectsState(version string) bool { return atLeast(version, CoreEffectsStateVersion) }
 func isMaterializedState(version string) bool {
 	return atLeast(version, CoreMaterializedStateVersion)
+}
+func isStageWorkState(version string) bool {
+	return atLeast(version, CoreStageWorkStateVersion)
 }
 
 // stateRank is a state version's place in that order, or -1 for a version this

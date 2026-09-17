@@ -590,6 +590,57 @@ type NextView struct {
 	InvocationID    string   `json:"workflow_invocation_id,omitempty"`
 	StageID         string   `json:"stage_id,omitempty"`
 	ReasonCode      string   `json:"reason_code,omitempty"`
+	// StageWork is the kind of work the driver would do for a ready stage:
+	// an assisted step it would hand to a host, a program it would run to
+	// completion inside the call, or a control stage that only moves the
+	// graph. Absent when this build cannot tell, which is not the same as
+	// control, and absent for every action but a ready stage.
+	StageWork string `json:"stage_work,omitempty"`
+}
+
+// Stage work kinds. A host reads these to choose how it calls the driver: a
+// program runs inside that call, so a host with a client timeout starts the
+// driver in the background for it.
+const (
+	StageWorkAssistedSession = "assisted_session"
+	StageWorkProgram         = "program"
+	StageWorkControl         = "control"
+)
+
+// stageWork names the work a ready stage holds, from the pinned definition of
+// its step rather than from its name. An unreadable plan or an executor this
+// build does not know reports nothing: a guess here would send a host to run a
+// long program in the foreground, which is the mistake the field exists for.
+func (e *Engine) stageWork(r Run, invocationID, stageID string) string {
+	if stageID == "" {
+		return ""
+	}
+	p, err := r.planFor(invocationID)
+	if err != nil || p == nil {
+		return ""
+	}
+	stage, exists := p.Workflow.Definition.Stages[stageID]
+	if !exists {
+		return ""
+	}
+	if stage.Kind != "step" {
+		return StageWorkControl
+	}
+	step, exists := p.Steps[stageID]
+	if !exists {
+		return ""
+	}
+	definitions, _, err := Builtins()
+	if err != nil {
+		return ""
+	}
+	if isAssistedExecutor(definitions, step.Executor) {
+		return StageWorkAssistedSession
+	}
+	if step.Executor.Operation == "process" {
+		return StageWorkProgram
+	}
+	return ""
 }
 
 func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
@@ -669,6 +720,10 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		}
 		if kind == "stage" {
 			next.InvocationID, next.StageID = r.readyScope()
+			// What the driver would do here, read before it is asked to do it.
+			if isStageWorkState(r.SchemaVersion) {
+				next.StageWork = e.stageWork(r, next.InvocationID, next.StageID)
+			}
 		}
 		if kind == "active" || kind == "session_resume" || kind == "session_expired" {
 			next.InvocationID = r.Activations[r.Attempts[work].ActivationID].InvocationID
@@ -718,7 +773,9 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		if isPublicationFailureState(r.SchemaVersion) {
 			next.SchemaVersion = CorePublicationFailureNextVersion
 		}
-		if isMaterializedState(r.SchemaVersion) {
+		if isStageWorkState(r.SchemaVersion) {
+			next.SchemaVersion = CoreStageWorkNextVersion
+		} else if isMaterializedState(r.SchemaVersion) {
 			next.SchemaVersion = CoreMaterializedNextVersion
 		} else if isEffectsState(r.SchemaVersion) {
 			next.SchemaVersion = CoreEffectsNextVersion
