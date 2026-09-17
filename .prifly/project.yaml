@@ -16,6 +16,7 @@ launches:
     description: Canonical AI Factory development workflow with bounded plan improvement.
     kind: workflow
     workflow: .prifly/workflows/aif-classic/workflow.yaml
+    workspace: worktree
 hosts:
   codex-app: .agents/skills
   claude-code: .claude/skills

@@ -7,6 +7,8 @@ answers:
   decision_policy: attended
   preflight:
     plan_tests: true
+    plan_docs: false # docs/ is forbidden by release-documentation-layout; no /aif-docs checkpoint
+    plan_logging: minimal # the CLI has no logging: one final document on stdout
     gate_warnings: ignore
     gate_checks: |
       make ci-check

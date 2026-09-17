@@ -17,3 +17,11 @@ what the engine measures (declared effects, claimed workspace, output slots).
   never amended. Pushing and tagging are the owner's own actions.
 - Report in Russian, result first: done, deliberately not done, exact gate
   results.
+- When the developer names an OpenSpec change instead of a task, build the
+  task input from it: `title` = the change's proposal title, `description` =
+  "Implement openspec/changes/<name>: <the open task ids, or all>; requirements
+  in specs/ and design.md", `reference` = `openspec/changes/<name>`. Ask
+  before narrowing to a subset of its tasks.
+- A worktree Run commits on the claim branch `prifly/<claim>`; the next
+  `project start` deletes it. The final report names that branch and says the
+  owner merges it into `main` (`git merge --ff-only`) or pushes it first.

@@ -15,4 +15,5 @@ workflow:
   architecture_updates_roadmap: false
 git:
   base_branch: main
+  create_branches: false # a Pri-Fly claim or the current checkout owns the branch
   skip_push_after_commit: true # push — только владелец, руками
