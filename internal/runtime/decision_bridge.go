@@ -93,16 +93,21 @@ func decisionSessionContext(catalog *DecisionCatalog, sheet *DecisionSheet) map[
 // sealedDecisionAnswer returns the answer the owner gave this decision before
 // the Run started, if they gave one. It is the same person the bridge would
 // otherwise wait for, so the wait has already been satisfied.
-func sealedDecisionAnswer(sheet *DecisionSheet, id string) (json.RawMessage, bool) {
+// sealedDecisionAnswer is the answer the owner gave before the Run started,
+// with the source that gave it: a flag (actor) or the project's standing
+// answer in extend.yaml (project_default). The bridge applied only the flag's
+// until 0.13.30, so a standing runtime answer was asked again, or stopped an
+// unattended Run, although the launch summary showed it sealed.
+func sealedDecisionAnswer(sheet *DecisionSheet, id string) (json.RawMessage, string, bool) {
 	if sheet == nil {
-		return nil, false
+		return nil, "", false
 	}
 	for _, record := range sheet.Records {
-		if record.DefinitionID == id && record.Status == "answered" && record.Source == "actor" && len(record.Value) != 0 {
-			return record.Value, true
+		if record.DefinitionID == id && record.Status == "answered" && len(record.Value) != 0 && (record.Source == "actor" || record.Source == "project_default") {
+			return record.Value, record.Source, true
 		}
 	}
-	return nil, false
+	return nil, "", false
 }
 
 // autonomousBlock reports why an autonomous policy cannot take this decision,
@@ -143,7 +148,7 @@ func DecisionsAutonomyCannotTake(catalog *DecisionCatalog, sheet *DecisionSheet)
 		if definition.Phase != "runtime" || definition.Destination.Kind != "session_context" || !decisionApplies(definition, sheet.PackageProfile, sheet.Records) {
 			continue
 		}
-		if _, sealed := sealedDecisionAnswer(sheet, definition.ID); sealed {
+		if _, _, sealed := sealedDecisionAnswer(sheet, definition.ID); sealed {
 			continue
 		}
 		if reason := autonomousBlock(definition); reason != "" {
@@ -295,7 +300,7 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 		}
 		// The owner's own answer, given before the Run started, outranks any
 		// policy default: waiting for them is what the wait was for.
-		if sealed, exists := sealedDecisionAnswer(r.DecisionSheet, definition.ID); exists {
+		if sealed, source, exists := sealedDecisionAnswer(r.DecisionSheet, definition.ID); exists {
 			if err := checkAutomatic(); err != nil {
 				return local.Change{}, err
 			}
@@ -306,8 +311,8 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 			if err := advanceDecisionDelivery(attempt, definition.Destination.Name, value, observed); err != nil {
 				return local.Change{}, err
 			}
-			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "answered", Source: "actor", Value: value, Observed: &observed})
-			data, err := canonical(map[string]any{"request": request, "request_digest": digest, "observation": observed, "source": "actor"})
+			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "answered", Source: source, Value: value, Observed: &observed})
+			data, err := canonical(map[string]any{"request": request, "request_digest": digest, "observation": observed, "source": source})
 			return local.Change{Events: []local.EventInput{{Type: "decision.answered", Version: 1, Data: data}}}, err
 		}
 		if r.DecisionSheet.DecisionPolicy == "autonomous" && autonomousBlock(definition) == "" {

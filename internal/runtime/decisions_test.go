@@ -279,6 +279,15 @@ func TestDecisionBridgeKeepsRestrictedChoiceForHumanAndRefusesUnknown(t *testing
 // not stop. This is the same person the bridge would have waited for, so the
 // ledger records them, not the policy.
 func TestDecisionBridgeAppliesTheOwnersSealedAnswer(t *testing.T) {
+	for _, source := range []string{"actor", "project_default"} {
+		t.Run(source, func(t *testing.T) { testDecisionBridgeAppliesSealedAnswer(t, source) })
+	}
+}
+
+// A flag and a standing answer in extend.yaml are the same promise to the Run;
+// the pilot's standing improve_apply was asked again because the bridge knew
+// only the flag's source.
+func testDecisionBridgeAppliesSealedAnswer(t *testing.T, source string) {
 	restricted := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "publish_scope", Title: "Publish scope", Phase: "runtime", Choices: []DecisionChoice{{ID: "none", Title: "No publication", Value: json.RawMessage(`false`)}, {ID: "all", Title: "Publish", Value: json.RawMessage(`true`)}}, Sensitivity: "scope-changing", Destination: DecisionDestination{Kind: "session_context", Name: "publish_scope"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{restricted}}
 	digest, err := DecisionCatalogDigest(catalog)
@@ -289,7 +298,7 @@ func TestDecisionBridgeAppliesTheOwnersSealedAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sheet := DecisionSheet{SchemaVersion: DecisionSheetVersion, CatalogDigest: digest, ProfileSource: "none", DecisionPolicy: "autonomous", Records: []DecisionRecord{{SchemaVersion: DecisionRecordVersion, DefinitionID: restricted.ID, DefinitionDigest: definitionDigest, Status: "answered", Source: "actor", Value: json.RawMessage(`true`)}}}
+	sheet := DecisionSheet{SchemaVersion: DecisionSheetVersion, CatalogDigest: digest, ProfileSource: "none", DecisionPolicy: "autonomous", Records: []DecisionRecord{{SchemaVersion: DecisionRecordVersion, DefinitionID: restricted.ID, DefinitionDigest: definitionDigest, Status: "answered", Source: source, Value: json.RawMessage(`true`)}}}
 	if blocked := DecisionsAutonomyCannotTake(&catalog, &sheet); len(blocked) != 0 {
 		t.Fatalf("a sealed decision was reported as one the Run would stop on: %+v", blocked)
 	}
@@ -314,7 +323,7 @@ func TestDecisionBridgeAppliesTheOwnersSealedAnswer(t *testing.T) {
 		t.Fatalf("the sealed answer was not recorded: %+v %v", view.Run.DecisionLedger, err)
 	}
 	consumed := view.Run.DecisionLedger[1]
-	if consumed.Status != "answered" || consumed.Source != "actor" || consumed.AttemptID != task.AttemptID || string(consumed.Value) != "true" {
+	if consumed.Status != "answered" || consumed.Source != source || consumed.AttemptID != task.AttemptID || string(consumed.Value) != "true" {
 		t.Fatalf("the request was not recorded as answered by the owner: %+v", consumed)
 	}
 }
@@ -357,6 +366,13 @@ func TestDecisionsAutonomyCannotTakeNamesEveryDeclaredReason(t *testing.T) {
 	answerable := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{taken}}
 	if reported := DecisionsAutonomyCannotTake(&answerable, &sheet); len(reported) != 0 {
 		t.Fatalf("a catalog the policy can take reported an entry: %+v", reported)
+	}
+	// A standing answer from extend.yaml seals the decision as a flag does, so
+	// a manual decision the project answered is not one the Run would stop on.
+	standing := sheet
+	standing.Records = []DecisionRecord{{SchemaVersion: DecisionRecordVersion, DefinitionID: "manual", Status: "answered", Source: "project_default", Value: json.RawMessage(`true`)}}
+	if reported := DecisionsAutonomyCannotTake(&catalog, &standing); len(reported) != 2 || reported[0].DecisionID != "sensitive" {
+		t.Fatalf("a standing answer was reported as one the Run would stop on: %+v", reported)
 	}
 }
 
