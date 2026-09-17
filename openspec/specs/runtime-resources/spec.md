@@ -427,12 +427,21 @@ Pause переходит в waiting после safe stop; cancel станови�
 reconcile действуют по separate recovery permissions. Managed executor
 прекращает dequeue и перепроверяет admission перед dispatch; assisted host
 честно сообщает, удалось ли остановить worker. Scope cancellation не отменяет
-siblings неявно.
+siblings неявно. Наблюдатель попытки MUST заканчиваться вместе с вызовом
+драйвера, который его создал, на любом выходе этого вызова; он MUST NOT
+запрашивать cancellation Run после того, как его попытка завершена.
 
 #### Scenario: Cancel не может проверить remote target
 
 - **WHEN** target недоступен после cancellation request
 - **THEN** пользователь видит uncertain obligation, а не ложный terminal cancel
+
+#### Scenario: Вызов драйвера отказал до запуска программы
+
+- **WHEN** вызов драйвера завершает попытку неначатой после того, как запустил
+  наблюдателя этой попытки
+- **THEN** наблюдатель заканчивается вместе с вызовом и не запрашивает
+  cancellation Run, который к этому моменту уже идёт дальше
 
 ### Requirement: Recovery классифицирует каждое открытое обязательство
 
