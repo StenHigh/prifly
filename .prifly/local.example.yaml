@@ -2,3 +2,15 @@
 # local.yaml is ignored by Git and must not contain shared workflow rules.
 # authority_root: /absolute/path/to/your/local/Pri-Fly/state
 # prifly_executable: /absolute/path/to/prifly
+# environment is written down here and is read by anyone who can read this
+# file, so it is for what is not a secret: a PATH, an APP_ENV, a locale.
+# environment:
+#   PATH: /opt/homebrew/bin:/usr/bin:/bin
+#   APP_ENV: testing
+# environment_from names where a value is read from when the program starts.
+# The value never enters this file, the Run, its digests or any document made
+# from them; an absent or empty source refuses the start by name.
+# environment_from:
+#   UPSTREAM_TOKEN: {env: CI_TOKEN}
+#   KEY_FILE: {file: /absolute/path/to/token}
+#   DB_PASSWORD: {dotenv: /absolute/path/to/.env, key: PASSWORD}

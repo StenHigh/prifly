@@ -7,8 +7,8 @@ overflow MUST use declared split/summary/refusal, never silent truncation.
 Secrets MUST use restricted runtime channels; redacted material MUST retain
 its own digest and MUST not remove evidence while claiming full proof.
 Machine-local объявление окружения объявленной программы MUST допускать
-источник значения вместо самого значения: переменную окружения вызывающего
-или файл на этой машине. Runtime MUST разрешать источник непосредственно
+источник значения вместо самого значения: переменную окружения вызывающего,
+файл на этой машине целиком или один названный ключ такого файла. Runtime MUST разрешать источник непосредственно
 перед запуском программы, MUST отказывать именованно и до запуска, если
 источник отсутствует или пуст, и MUST NOT печатать разрешённое значение в
 итогах, задачах, диагностиках или журналах. Литеральная форма сохраняется для

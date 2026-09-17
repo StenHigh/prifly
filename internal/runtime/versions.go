@@ -49,6 +49,10 @@ var versionContracts = []versionContract{
 	{CoreEffectsStateVersion, CoreEffectsReadVersion, CoreEffectsStepReadVersion},
 	{CoreMaterializedStateVersion, CoreMaterializedReadVersion, CoreMaterializedStepReadVersion},
 	{CoreStageWorkStateVersion, CoreStageWorkReadVersion, CoreStageWorkStepReadVersion},
+	// 32 adds a field to the sealed executor config alone. The step read is
+	// left empty on purpose: nothing about it changed, so a Run at 32 answers
+	// step reads under the contract 31 already published.
+	{CoreEnvironmentSourceStateVersion, CoreEnvironmentSourceReadVersion, ""},
 }
 
 func isNeutralState(version string) bool { return atLeast(version, CoreNeutralStateVersion) }

@@ -86,6 +86,12 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreStageWorkStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreStageWorkReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "stage_work_named")
+	// A sealed executor config may name where a value comes from rather than
+	// carry it; only the state and the read that show that config changed.
+	profile.StateVersion, profile.ReadVersion = CoreEnvironmentSourceStateVersion, CoreEnvironmentSourceReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreEnvironmentSourceStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreEnvironmentSourceReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "execution_environment_source")
 	return manifest
 }
 

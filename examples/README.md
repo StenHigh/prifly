@@ -93,8 +93,18 @@ prifly project start --repository . --launch NAME --input source=./input.csv --a
 `PRIFLY_CONTEXT_FILE`; ссылки на встроенные адаптеры для своих шагов в
 `project/` — `references:` в `extend.yaml`, форма `core:adapter/local-process@2.0.0`):
 `prifly project local set --env PATH=/opt/homebrew/bin:/usr/bin:/bin --env APP_ENV=testing`;
-`--prepare` показывает его у каждой программы (`execution[].environment`) и
-учитывает в digest'е. Программа шага в Run, который держит рабочую копию
+`--prepare` показывает имена у каждой программы (`execution[].environment_names`)
+и учитывает значения в digest'е. `--env` пишет значение в `local.yaml` — это
+форма для того, что не секрет. Пароль или токен объявляйте местом, а не
+значением: `--env-from DB_PASSWORD=dotenv:/absolute/.env:PASSWORD`,
+`--env-from UPSTREAM_TOKEN=env:CI_TOKEN`, `--env-from KEY_FILE=file:/absolute/token`.
+Место видно в `execution[].environment_sources` и входит в digest, само
+значение читается в момент старта программы и не попадает ни в `local.yaml`,
+ни в состояние Run, ни в один документ из него; отсутствующий или пустой
+источник — отказ `execution_environment_unavailable` **до** запуска, с именем
+переменной и местом. Файл с ключом читается дословно: первая строка `KEY=`,
+значение до конца строки, строки с `#` пропускаются, значение в кавычках —
+именованный отказ, а не молча снятые кавычки. Программа шага в Run, который держит рабочую копию
 (claim), получает её путь в `PRIFLY_REPOSITORY_WORKSPACE` (и `PRIFLY_CLAIM_ID`)
 — туда, где ассистируемый шаг читает `repository_workspace`; шаг без
 `effects.class: workspace_write` измеряется по той же метке, что и отчёт хоста:

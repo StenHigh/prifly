@@ -371,6 +371,17 @@ func validateExecutorConfig(config ExecutorConfig, fullContext bool) error {
 			return errors.New("invalid or reserved environment binding")
 		}
 	}
+	for name, source := range config.EnvironmentFrom {
+		if name == "" || strings.ContainsAny(name, "=\x00") || strings.HasPrefix(name, "PRIFLY_") {
+			return errors.New("invalid or reserved environment binding")
+		}
+		if _, exists := config.Environment[name]; exists {
+			return errors.New("environment name has both a value and a source: " + name)
+		}
+		if err := source.validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1058,6 +1069,22 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		// its host the verdicts it routes and the deadline it works under.
 		if configurations != nil && requiresSessionState(defs, plan) {
 			stateVersion = CoreStageWorkStateVersion
+		}
+		// A Run whose owner named no source is byte-for-byte the Run this
+		// build always wrote, under the version it always wrote: only a
+		// binding that actually carries a declaration moves the state on. The
+		// ladder is cumulative, so 32 is reachable only from the scoped core
+		// state; a flat Run is refused rather than sealed under a version
+		// whose published contract has no place for the declaration.
+		for _, pinned := range executors {
+			if len(pinned.Config.EnvironmentFrom) == 0 {
+				continue
+			}
+			if configurations == nil {
+				return local.Change{}, local.Reject("unsupported_environment_source", "a declared value source requires the scoped invocation state")
+			}
+			stateVersion = CoreEnvironmentSourceStateVersion
+			break
 		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
 		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}}

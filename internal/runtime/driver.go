@@ -1024,6 +1024,19 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	if err := verifyWorkspace(a, executor); err != nil {
 		return failBeforeStart(driverFailureCode(err, "workspace_validation_failed"))
 	}
+	// The declared sources are read here, at the moment of dispatch, and never
+	// when the binding was sealed: a value read at launch would sit in the
+	// Run's saved state and in every document made from it. A refusal here
+	// settles the attempt unstarted with its own code, so the Run says which
+	// variable was missing instead of the program failing on authentication
+	// several minutes in.
+	fromSources, err := resolveEnvironmentSources(executor.Config)
+	if err != nil {
+		if refusal := failBeforeStart("execution_environment_unavailable"); refusal != nil {
+			return errors.Join(err, refusal)
+		}
+		return err
+	}
 	var remaining time.Duration
 	_, err = e.apply(ctx, e.owner, newID("command"), r.ID, "attempt.dispatching", map[string]any{"attempt_id": a.ID}, &v.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		current := r.Attempts[a.ID]
@@ -1125,6 +1138,9 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	}()
 	env := map[string]string{"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "TMPDIR": filepath.Join(a.Workspace, "tmp"), "PRIFLY_SOCKET": socket, "PRIFLY_TOKEN": token, "PRIFLY_CONTEXT_FILE": filepath.Join(a.Workspace, "context.json"), "PRIFLY_RUN_ID": r.ID, "PRIFLY_STEP_ID": a.StepID, "PRIFLY_ATTEMPT_ID": a.ID}
 	for name, value := range executor.Config.Environment {
+		env[name] = value
+	}
+	for name, value := range fromSources {
 		env[name] = value
 	}
 	// A program is handed the Run's claimed repository workspace the way a host

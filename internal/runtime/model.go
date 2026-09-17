@@ -224,11 +224,18 @@ const (
 	CoreStageWorkNextVersion     = "core-next/31"
 	CoreStageWorkPreviewVersion  = "core-preview/31"
 	CoreStageWorkStepReadVersion = "core-step-read/31"
-	CoreConfigVersion            = "core-configuration/1"
-	CoreContextConfigVersion     = "core-configuration/2"
-	MaxDefinitionBytes           = 2 << 20
-	MaxArtifactBytes             = 16 << 20
-	MaxRunPublications           = 1024
+	// A pinned executor may name where a value comes from instead of carrying
+	// it, so the state that holds the sealed binding, and the read that shows
+	// it, gain one field. Nothing else changes shape: the next action, the
+	// preview and the step read never carried an executor config, so they keep
+	// answering under 31 rather than being reissued unchanged.
+	CoreEnvironmentSourceReadVersion  = "core-read/32"
+	CoreEnvironmentSourceStateVersion = "core-state/32"
+	CoreConfigVersion                 = "core-configuration/1"
+	CoreContextConfigVersion          = "core-configuration/2"
+	MaxDefinitionBytes                = 2 << 20
+	MaxArtifactBytes                  = 16 << 20
+	MaxRunPublications                = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time
@@ -313,15 +320,37 @@ type PinnedDefinition struct {
 // ExecutorConfig is the configuration schema's local process binding, not an
 // extra field inserted into StepDefinition or ExecutionEnvelope v1.
 type ExecutorConfig struct {
-	Executable        string            `json:"executable"`
-	Args              []string          `json:"args"`
-	Files             map[string]string `json:"files"`
-	Environment       map[string]string `json:"environment"`
-	TimeoutMS         int64             `json:"timeout_ms"`
-	GraceMS           int64             `json:"grace_ms"`
-	MaxOutputBytes    int64             `json:"max_output_bytes"`
-	ContextProfileRef *flow.Ref         `json:"context_profile_ref,omitempty"`
+	Executable  string            `json:"executable"`
+	Args        []string          `json:"args"`
+	Files       map[string]string `json:"files"`
+	Environment map[string]string `json:"environment"`
+	// EnvironmentFrom names where a value comes from instead of carrying it.
+	// A project's database password lives in a file the project already has;
+	// copying it into machine-local configuration is what a host's credential
+	// classifier refuses, and what left a Run standing before its tests step.
+	// The declaration is sealed — it is part of what this Run was reviewed to
+	// run — and the value is read at the moment the program starts, never
+	// stored, never printed.
+	EnvironmentFrom   map[string]EnvironmentSource `json:"environment_from,omitempty"`
+	TimeoutMS         int64                        `json:"timeout_ms"`
+	GraceMS           int64                        `json:"grace_ms"`
+	MaxOutputBytes    int64                        `json:"max_output_bytes"`
+	ContextProfileRef *flow.Ref                    `json:"context_profile_ref,omitempty"`
 }
+
+// EnvironmentSource is exactly one place a value is read from: the caller's
+// own environment, a whole file, or one key of a file written as NAME=value
+// lines. The grammar of that third form is deliberately small — the first
+// line whose name matches, its value taken verbatim to the end of the line —
+// because guessing at quoting rules would hand a program a password with a
+// quote in it and call that success.
+type EnvironmentSource struct {
+	Env    string `json:"env,omitempty"`
+	File   string `json:"file,omitempty"`
+	DotEnv string `json:"dotenv,omitempty"`
+	Key    string `json:"key,omitempty"`
+}
+
 type PinnedExecutor struct {
 	Config           ExecutorConfig           `json:"config"`
 	ExecutableDigest string                   `json:"executable_digest"`

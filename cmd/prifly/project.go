@@ -748,11 +748,13 @@ func (c *cli) projectLocal(args []string) error {
 	var allowed, environment stringsFlag
 	f.Var(&allowed, "allow-executable", "allow a local executable NAME=/absolute/path (repeatable)")
 	f.Var(&environment, "env", "environment for this machine's programs NAME=VALUE (repeatable); PATH, APP_ENV and the like live here, never in the shared package")
+	var environmentFrom stringsFlag
+	f.Var(&environmentFrom, "env-from", "environment read at run time NAME=env:VAR, NAME=file:/path or NAME=dotenv:/path:KEY (repeatable); the value is never written here and never printed")
 	if err := parse(f, args[1:]); err != nil {
 		return err
 	}
-	if *executable == "" && len(allowed) == 0 && len(environment) == 0 {
-		return usageError("project local set requires --executable PATH, --allow-executable NAME=PATH or --env NAME=VALUE")
+	if *executable == "" && len(allowed) == 0 && len(environment) == 0 && len(environmentFrom) == 0 {
+		return usageError("project local set requires --executable PATH, --allow-executable NAME=PATH, --env NAME=VALUE or --env-from NAME=SOURCE")
 	}
 	if *executable != "" && !filepath.IsAbs(*executable) {
 		return usageError("project_local_executable_relative: --executable needs an absolute path; received " + strconv.Quote(*executable))
@@ -765,8 +767,8 @@ func (c *cli) projectLocal(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(allowed) != 0 || len(environment) != 0 {
-		return c.projectLocalAllowExecutables(root, current, *executable, allowed, environment)
+	if len(allowed) != 0 || len(environment) != 0 || len(environmentFrom) != 0 {
+		return c.projectLocalAllowExecutables(root, current, *executable, allowed, environment, environmentFrom)
 	}
 	lines := strings.Split(string(current), "\n")
 	replaced := false

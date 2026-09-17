@@ -298,20 +298,42 @@ func TestExecutionBindingsExactVersionsChecksAndRestart(t *testing.T) {
 }
 
 func TestExecutionBindingsClosedPayload(t *testing.T) {
-	valid := []byte(`{"schema_version":"execution-bindings/1","bindings":[]}`)
-	if err := ValidateExecutionBindingsPayload(valid); err != nil {
-		t.Fatal(err)
+	for _, data := range [][]byte{
+		[]byte(`{"schema_version":"execution-bindings/1","bindings":[]}`),
+		[]byte(`{"schema_version":"execution-bindings/2","bindings":[]}`),
+	} {
+		if err := ValidateExecutionBindingsPayload(data); err != nil {
+			t.Fatalf("refused its own payload %s: %v", data, err)
+		}
+	}
+	// The binding that names where a value comes from is a field of the second
+	// version only. The first stays exactly as closed as it was published: a
+	// payload that declares 1 and carries the field is refused, not upgraded.
+	sourced := `"environment_from":{"DB_PASSWORD":{"dotenv":"/etc/app.env","key":"PASSWORD"}}`
+	config := `"executable":"/bin/true","args":[],"files":{},"environment":{},"timeout_ms":1000,"grace_ms":30,"max_output_bytes":1024`
+	ref := `{"id":"test:step/one","version":"1.0.0","digest":"sha256:` + strings.Repeat("0", 64) + `"}`
+	binding := func(version, extra string) []byte {
+		return []byte(`{"schema_version":"execution-bindings/` + version + `","bindings":[{"definition_ref":` + ref + `,"config":{` + config + extra + `},"files":{}}]}`)
+	}
+	if err := ValidateExecutionBindingsPayload(binding("2", ","+sourced)); err != nil {
+		t.Fatalf("version 2 refused a declared source: %v", err)
 	}
 	for _, data := range [][]byte{
+		binding("1", ","+sourced),
 		[]byte(`{"schema_version":"execution-bindings/1","bindings":[],"effects":"external_write"}`),
-		[]byte(`{"schema_version":"execution-bindings/2","bindings":[]}`),
+		[]byte(`{"schema_version":"execution-bindings/2","bindings":[],"effects":"external_write"}`),
+		[]byte(`{"schema_version":"execution-bindings/3","bindings":[]}`),
 		[]byte(`{"schema_version":"execution-bindings/1","bindings":null}`),
+		binding("2", `,"environment_from":{"DB_PASSWORD":{"dotenv":"/etc/app.env"}}`),
+		binding("2", `,"environment_from":{"DB_PASSWORD":{"env":"TOKEN","file":"/etc/app.env"}}`),
 	} {
 		if err := ValidateExecutionBindingsPayload(data); err == nil {
 			t.Fatalf("accepted unknown payload: %s", data)
 		}
 	}
-	if _, err := PublicSchema("ExecutionBindings"); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"ExecutionBindings", "ExecutionBindingsV2"} {
+		if _, err := PublicSchema(name); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

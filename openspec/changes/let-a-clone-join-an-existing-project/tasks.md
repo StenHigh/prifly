@@ -23,4 +23,4 @@
 ## 4. Документы и ворота
 
 - [x] 4.1 `examples/troubleshooting.md`: запись «клон не подключается: project_runner_missing у чужого хоста» с новым поведением и обходом для старых сборок (сузить hosts временно). Проверка: `python3 -B test/e2e/test_examples.py`.
-- [ ] 4.2 Защищённая история не тронута; `make ci-check`, `make e2e`, `make race` зелёные, счётчики записаны в change.
+- [x] 4.2 Защищённая история не тронута; `make ci-check`, `make e2e`, `make race` зелёные, счётчики записаны в change (общий прогон окна: `../take-a-secret-without-copying-it/evidence.md`, 2026-09-18).

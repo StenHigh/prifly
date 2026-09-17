@@ -242,6 +242,9 @@ func projectValidateExecution(payload *projectPackageExecution) error {
 		if len(copy.Bindings[i].Config.Environment) != 0 {
 			return usageError("project_execution_invalid: package execution must not contain machine environment")
 		}
+		if len(copy.Bindings[i].Config.EnvironmentFrom) != 0 {
+			return usageError("project_execution_invalid: where a value comes from is the local owner's choice, not the package's")
+		}
 		copy.Bindings[i].Config.Executable = "/" + copy.Bindings[i].Config.Executable
 	}
 	data, err := json.Marshal(copy)
@@ -286,6 +289,10 @@ func projectExecutionPayload(root string, compiled projectCompileResult, closure
 	if err != nil {
 		return nil, err
 	}
+	environmentSources, err := projectLocalEnvironmentSources(root)
+	if err != nil {
+		return nil, err
+	}
 	for _, binding := range compiled.ExecutionBindings.Bindings {
 		if !closure[binding.DefinitionRef] {
 			continue
@@ -303,6 +310,14 @@ func projectExecutionPayload(root string, compiled projectCompileResult, closure
 		}
 		binding.Config.Executable = path
 		binding.Config.Environment = maps.Clone(environment)
+		// The declaration travels with the sealed binding; the value does not.
+		// It is read by the engine at the moment the program starts, so it
+		// never enters the Run's state, its digests or any document made from
+		// them, and the owner still sees which source a reviewed launch uses.
+		binding.Config.EnvironmentFrom = maps.Clone(environmentSources)
+		if len(binding.Config.EnvironmentFrom) != 0 {
+			result.SchemaVersion = prifly.ExecutionBindingsSourceVersion
+		}
 		result.Bindings = append(result.Bindings, binding)
 	}
 	return result, nil

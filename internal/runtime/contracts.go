@@ -115,12 +115,15 @@ var materializedSessionPublicContracts []byte
 //go:embed stage-work.schema.json
 var stageWorkPublicContracts []byte
 
+//go:embed environment-source.schema.json
+var environmentSourcePublicContracts []byte
+
 // PublicSchema selects a named contract from its versioned public bundle.
 // Baseline contracts (including RunSnapshot v1) remain in flow.ProtocolSchema.
 // publicBundles is the ordered set PublicSchema searches. Listing and lookup
 // read the same set, so a listed name always resolves.
 func publicBundles() [][]byte {
-	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts, neutralStartPublicContracts, executionBindingPublicContracts, timedSessionPublicContracts, routedSessionPublicContracts, effectsSessionPublicContracts, materializedSessionPublicContracts, stageWorkPublicContracts}
+	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts, neutralStartPublicContracts, executionBindingPublicContracts, timedSessionPublicContracts, routedSessionPublicContracts, effectsSessionPublicContracts, materializedSessionPublicContracts, stageWorkPublicContracts, environmentSourcePublicContracts, executionBindingSourceContracts}
 }
 
 // PublicSchemaNames lists every contract PublicSchema answers for.

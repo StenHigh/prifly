@@ -51,6 +51,7 @@ type generator struct {
 	effectsSessions       bool
 	materializedSessions  bool
 	stageWork             bool
+	environmentSources    bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -164,6 +165,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						continue
 					}
 					if !g.stageWork && stageWorkField(t, field.Name) {
+						continue
+					}
+					if !g.environmentSources && environmentSourceField(t, field.Name) {
 						continue
 					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
@@ -287,6 +291,7 @@ var profileContracts = []struct {
 	{"effects-session", "generate enforced assisted effects state/read version 29 contracts", func(g *generator) { g.effectsSessions = true }},
 	{"materialized-session", "generate materialize-only tree and run failure state/read version 30 contracts", func(g *generator) { g.materializedSessions = true }},
 	{"stage-work", "generate named stage work state/read version 31 contracts", func(g *generator) { g.stageWork = true }},
+	{"environment-source", "generate declared execution value source state/read version 32 contracts", func(g *generator) { g.environmentSources = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -306,6 +311,9 @@ var documentContracts = []struct {
 	{"run-start-v2", "generate RunStart v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("RunStartV2") }},
 	{"package-manifest-v2", "generate PackageManifest v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("PackageManifestV2") }},
 	{"execution-bindings", "generate explicit execution bindings contract", func() ([]byte, error) { return prifly.PublicSchema("ExecutionBindings") }},
+	{"execution-bindings-v2", "generate execution bindings contract with declared value sources", func() ([]byte, error) {
+		return prifly.PublicSchema("ExecutionBindingsV2")
+	}},
 	{"publication-source", "generate once artifact publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchema() }},
 	{"publication-source-v2", "generate each-publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV2() }},
 	{"publication-source-v3", "generate once new-only source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV3() }},
@@ -813,6 +821,12 @@ func main() {
 			delete(contracts, name+"V30")
 		}
 	}
+	if g.environmentSources {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V32"] = contracts[name+"V31"]
+			delete(contracts, name+"V31")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1050,6 +1064,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-stage-work:31"
 			bundle["title"] = "Pri-Fly named stage work contracts"
 			bundle["description"] = "Read 31 answers what work a ready stage holds — an assisted step, a program the driver runs inside the call, or a control stage — so a host chooses how to call the driver before calling it. Reading names the work without doing it; session 7 tasks and submissions are unchanged."
+		}
+		if g.environmentSources {
+			environmentSourceConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-environment-source:32"
+			bundle["title"] = "Pri-Fly declared execution value source contracts"
+			bundle["description"] = "State/read 32 lets a sealed executor config name where a value comes from — an environment variable of the caller, a whole file, or one key of a NAME=value file — instead of carrying the value. The engine reads it at the moment the program starts, so nothing enters the Run, its digests or any document made from them, and a source that is absent or empty refuses the start by name rather than letting the program fail on authentication. A Run whose owner named no source is unchanged, and the next action, the preview and the step read keep their 31 contracts."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

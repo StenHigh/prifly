@@ -4,6 +4,9 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -14,6 +17,14 @@ const MaxExecutionBindingsBytes = 2 * MaxArtifactBytes
 
 //go:embed execution-bindings.schema.json
 var executionBindingPublicContracts []byte
+
+// ExecutionBindingsSourceVersion carries the same payload plus the declaration
+// of where a value comes from. A caller that names no source keeps sending the
+// version it always sent, so its bytes and digests do not move.
+const ExecutionBindingsSourceVersion = "execution-bindings/2"
+
+//go:embed execution-bindings-v2.schema.json
+var executionBindingSourceContracts []byte
 
 // ExecutionBindings is a per-Run local-owner request, not package permission
 // or ordinary workflow input configuration. Files carry already confined
@@ -35,11 +46,18 @@ func ValidateExecutionBindingsPayload(data []byte) error {
 	if len(data) > MaxExecutionBindingsBytes {
 		return fault("execution_bindings_invalid", "execution bindings exceed the byte limit")
 	}
-	schema, err := flow.Canonical(executionBindingPublicContracts)
+	contract, version := executionBindingPublicContracts, "1.0.0"
+	var declared struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	if json.Unmarshal(data, &declared) == nil && declared.SchemaVersion == ExecutionBindingsSourceVersion {
+		contract, version = executionBindingSourceContracts, "2.0.0"
+	}
+	schema, err := flow.Canonical(contract)
 	if err != nil {
 		return err
 	}
-	ref := flow.Ref{ID: "core:schema/execution-bindings", Version: "1.0.0", Digest: rawDigest(schema)}
+	ref := flow.Ref{ID: "core:schema/execution-bindings", Version: version, Digest: rawDigest(schema)}
 	if err := flow.ValidateSchema(flow.Registry{ref: schema}, ref, data); err != nil {
 		return faultf("execution_bindings_invalid", "%v", err)
 	}
@@ -181,4 +199,107 @@ func executorBindingVersion(version string, bindings *ExecutionBindings) error {
 		return fault("unsupported_execution_bindings", "explicit execution bindings require Start version 2")
 	}
 	return nil
+}
+
+// ValidateEnvironmentSource is the same check a Run makes, offered to the
+// command that writes the declaration so a mistake is named where it is made.
+func ValidateEnvironmentSource(source EnvironmentSource) error { return source.validate() }
+
+// validate accepts exactly one source, named absolutely where it is a file.
+func (s EnvironmentSource) validate() error {
+	named := 0
+	for _, value := range []string{s.Env, s.File, s.DotEnv} {
+		if value != "" {
+			named++
+		}
+	}
+	if named != 1 {
+		return errors.New("an environment source names exactly one of env, file or dotenv")
+	}
+	if s.Env != "" {
+		if s.Key != "" || strings.ContainsAny(s.Env, "=\x00") {
+			return errors.New("an environment source from the caller's environment names one variable and no key")
+		}
+		return nil
+	}
+	if s.DotEnv != "" && (s.Key == "" || strings.ContainsAny(s.Key, "=\x00")) {
+		return errors.New("a dotenv environment source names the key to read")
+	}
+	if s.File != "" && s.Key != "" {
+		return errors.New("a whole-file environment source takes no key")
+	}
+	path := s.File + s.DotEnv
+	if !filepath.IsAbs(path) || strings.ContainsRune(path, 0) {
+		return errors.New("an environment source file is named by an absolute path")
+	}
+	return nil
+}
+
+// maxEnvironmentSourceBytes bounds what is read for one value: a secret is a
+// line, not a payload, and a file handed to a program through the environment
+// has to fit an argument list.
+const maxEnvironmentSourceBytes = 64 << 10
+
+// resolveEnvironmentSources reads the declared sources immediately before the
+// program starts. Nothing is cached, nothing is written back, and an absent or
+// empty source refuses by name before the program runs rather than letting it
+// fail minutes later on authentication.
+func resolveEnvironmentSources(config ExecutorConfig) (map[string]string, error) {
+	if len(config.EnvironmentFrom) == 0 {
+		return nil, nil
+	}
+	resolved := make(map[string]string, len(config.EnvironmentFrom))
+	for name, source := range config.EnvironmentFrom {
+		value, where, err := source.read()
+		if err != nil {
+			// The reason is born at the source, but only this loop knows which
+			// name it was read for, and a refusal that names neither is one the
+			// owner has to guess at.
+			return nil, faultf("execution_environment_unavailable", "%s: %v", name, err)
+		}
+		if value == "" {
+			return nil, fault("execution_environment_unavailable", name+" is declared to come from "+where+", which is absent or empty; the program was not started")
+		}
+		resolved[name] = value
+	}
+	return resolved, nil
+}
+
+// read answers the value and the place it was looked for, so a refusal names
+// both without ever naming what it found.
+func (s EnvironmentSource) read() (value, where string, err error) {
+	if s.Env != "" {
+		return os.Getenv(s.Env), "the caller's environment variable " + s.Env, nil
+	}
+	path := s.File + s.DotEnv
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", "the file " + path, nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	if len(data) > maxEnvironmentSourceBytes {
+		return "", "", fault("execution_environment_unavailable", "the file "+path+" is larger than one environment value may be")
+	}
+	if s.File != "" {
+		return strings.TrimRight(string(data), "\r\n"), "the file " + path, nil
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		key, rest, found := strings.Cut(line, "=")
+		if !found || strings.TrimSpace(key) != s.Key {
+			continue
+		}
+		// The value is taken verbatim. A quoted one is refused rather than
+		// unquoted: a silently stripped quote is a different password.
+		if strings.HasPrefix(rest, "\"") || strings.HasPrefix(rest, "'") {
+			return "", "", fault("execution_environment_unavailable", s.Key+" in "+path+" is quoted, and this reader takes a value verbatim; store it unquoted or name the whole file")
+		}
+		return rest, "key " + s.Key + " of " + path, nil
+	}
+	return "", "key " + s.Key + " of " + path, nil
 }

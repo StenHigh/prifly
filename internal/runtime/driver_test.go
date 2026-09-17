@@ -1758,6 +1758,13 @@ func TestDriverWorkerHelper(t *testing.T) {
 	if err := os.WriteFile("worker-ready", nil, 0600); err != nil {
 		os.Exit(92)
 	}
+	// Proof for the caller that a declared environment source reached this
+	// program: the value is written where only the test can read it.
+	if value := os.Getenv("DRIVER_TEST_SOURCED"); value != "" {
+		if err := os.WriteFile("worker-sourced", []byte(value), 0600); err != nil {
+			os.Exit(93)
+		}
+	}
 	if mode == "cpu" {
 		// These deliberately look like application failures/provider usage.
 		// They are opaque diagnostics, not declared hooks or measured meters.

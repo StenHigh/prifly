@@ -108,7 +108,10 @@ prifly project start --launch NAME --input source=./input.csv --allow-execution
 ```
 
 `NAME`, имя программы и inputs берутся из вашего YAML. `--allow-executable`
-разрешает локальную программу; `--allow-execution` подтверждает выбранные
+разрешает локальную программу; `project local set --env NAME=VALUE` задаёт
+окружение этой машины, а `--env-from NAME=env:VAR|file:/path|dotenv:/path:KEY`
+объявляет, откуда значение читать в момент старта, — так пароль не попадает ни
+в `local.yaml`, ни в состояние Run; `--allow-execution` подтверждает выбранные
 programs, arguments и supporting files этого запуска. Compile ничего не
 исполняет и не импортирует. Программа должна поддерживать существующий Pri-Fly
 worker protocol — произвольный shell script не становится worker автоматически.

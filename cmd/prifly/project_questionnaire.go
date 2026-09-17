@@ -147,6 +147,9 @@ type projectExecutionReview struct {
 	// still enter the configuration digest, so a changed one still invalidates
 	// a reviewed launch.
 	EnvironmentNames []string `json:"environment_names,omitempty"`
+	// EnvironmentSources says where a value that is not written down comes
+	// from: the reviewer sees the place, never the secret.
+	EnvironmentSources map[string]string `json:"environment_sources,omitempty"`
 }
 
 func projectReviewDigest(value any) (string, error) {
@@ -194,7 +197,11 @@ func projectReviewExecutors(bindings *prifly.ExecutionBindings) ([]projectExecut
 			names = append(names, name)
 		}
 		slices.Sort(names)
-		item := projectExecutionReview{DefinitionRef: binding.DefinitionRef, Executable: binding.Config.Executable, ExecutableDigest: digest, Args: binding.Config.Args, FileDigests: map[string]string{}, ConfigurationDigest: configDigest, EnvironmentNames: names}
+		sources := map[string]string{}
+		for name, source := range binding.Config.EnvironmentFrom {
+			sources[name] = projectEnvironmentSourcePlace(source)
+		}
+		item := projectExecutionReview{DefinitionRef: binding.DefinitionRef, Executable: binding.Config.Executable, ExecutableDigest: digest, Args: binding.Config.Args, FileDigests: map[string]string{}, ConfigurationDigest: configDigest, EnvironmentNames: names, EnvironmentSources: sources}
 		for target, source := range binding.Config.Files {
 			item.FileDigests[target] = projectBytesDigest(binding.Files[source])
 		}
