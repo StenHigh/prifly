@@ -629,6 +629,23 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 	// Conditions see the effective answers, including allowed policy choices
 	// above. Validating raw runtime preanswers earlier rejects a legitimate
 	// dependent answer merely because its predecessor was selected by policy.
+	// A standing answer is the project's "if asked, this": a decision the
+	// selected profile or an earlier answer keeps out of this Run is not asked,
+	// so its standing answer is dropped rather than refused -- one extend.yaml
+	// serves every profile. Dropping one can silence a condition on it, hence
+	// the fixed point. A flag was typed for this Run and stays a refusal.
+	for dropped := true; dropped; {
+		dropped = false
+		for _, definition := range source.DecisionCatalog {
+			if strings.HasPrefix(origin[definition.ID], projectExtensionAnswersSource) && !projectDecisionApplies(definition, selected, answers) {
+				delete(answers, definition.ID)
+				delete(runtime, definition.ID)
+				delete(answerSources, definition.ID)
+				delete(origin, definition.ID)
+				dropped = true
+			}
+		}
+	}
 	for id := range answers {
 		if definition, exists := definitions[id]; !projectDecisionApplies(definition, selected, answers) {
 			return projectPreflight{}, unknownDecision(definition, exists, id, origin[id])

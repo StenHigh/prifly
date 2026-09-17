@@ -399,3 +399,54 @@ func TestProjectLaunchDeclaresItsStandingWorkspace(t *testing.T) {
 		t.Fatalf("an unknown workspace mode was accepted: %v", err)
 	}
 }
+
+// A standing answer is the project's "if asked, this". The selected profile
+// or an earlier answer can leave that decision out of one Run -- plan_docs on
+// a fast aif-classic Run under a standing full profile -- and the first such
+// Run was refused with project_start_unknown_decision against extend.yaml, so
+// a project could hold standing answers for one profile only. A flag is typed
+// for this Run and an inapplicable one stays a refusal; a standing answer is
+// dropped here and sealed again by the Run that asks its question.
+func TestProjectStandingAnswerOutsideThisRunIsDropped(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	root, _ := projectQuestionnaireFixture(t)
+	profile, err := readProjectProfile(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, root, ".prifly/workflows/questions/extend.yaml", "extensions: []\nanswers:\n  preflight:\n    gate: false\n  runtime:\n    retry: 2\n    full: true\n")
+	record := func(sheet prifly.DecisionSheet, id string) (string, string) {
+		for _, record := range sheet.Records {
+			if record.DefinitionID == id {
+				return string(record.Value), record.Source
+			}
+		}
+		return "", ""
+	}
+	fast, err := projectStartPreflight(root, profile, "questions", "", "", nil, nil)
+	if err != nil {
+		t.Fatalf("standing answers the fast Run does not ask were refused: %v", err)
+	}
+	for _, id := range []string{"retry", "full"} {
+		if value, source := record(fast.Sheet, id); value != "" || source != "" {
+			t.Fatalf("%s was sealed although this Run does not ask it: %q %q", id, value, source)
+		}
+	}
+	full, err := projectStartPreflight(root, profile, "questions", "full", "", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, source := record(full.Sheet, "full"); value != "true" || source != "project_default" {
+		t.Fatalf("the standing answer did not come back with the profile that asks it: %q %q", value, source)
+	}
+	gated, err := projectStartPreflight(root, profile, "questions", "", "", []string{"gate=true"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, source := record(gated.Sheet, "retry"); value != "2" || source != "project_default" {
+		t.Fatalf("the standing answer did not come back with the answer that asks it: %q %q", value, source)
+	}
+	if _, err := projectStartPreflight(root, profile, "questions", "", "", nil, []string{"retry=2"}); err == nil || !strings.Contains(err.Error(), "does not apply to this launch") {
+		t.Fatalf("a flag for a decision this Run does not ask was accepted: %v", err)
+	}
+}
