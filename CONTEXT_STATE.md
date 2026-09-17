@@ -1690,6 +1690,59 @@ Codex-половина — без исполнителя. Пакетчик за�
 Claude Code кэширует `SKILL.md` на старте, посреди сессии пилот получил старый
 текст при эталоне на диске; «да» из той же сессии было бы ложным.
 
+### 2026-09-17: движок разрабатывается через свой же aif-classic; дефект discovery починен, не выпущен
+
+Владелец: «добавим AI Factory в наш проект, он очень помогает; настрой все
+файлы». Сделано и запушено (`fb939e6`, `498afd0`), 412 файлов:
+
+- **AI Factory 2.19.0** (`ai-factory init --agents claude,codex-app --config`):
+  30 навыков в `.claude/skills/` и `.agents/skills/`, 19 субагентов в
+  `.claude/agents/`, `.ai-factory.json`. Контекст написан руками по шаблонам
+  навыка `aif` (Mode 1) и `aif-rules`, сам `/aif` не запускался — он
+  переписал бы `AGENTS.md`. `.ai-factory/config.yaml`: `ui: ru`,
+  `artifacts: ru`, roadmap = `openspec/specs/delivery-roadmap/spec.md`
+  (второго backlog нет; `architecture_updates_roadmap: false`), warmup читает
+  `agent-brief.md` и `SOURCE-OF-TRUTH.md`, `skip_push_after_commit: true`.
+  Коммиты остаются английскими через overlay
+  `.ai-factory/skill-context/aif-commit/SKILL.md` (навык берёт язык сообщения
+  из `language.ui`). `DESCRIPTION.md`/`ARCHITECTURE.md`/`RULES.md`/
+  `rules/base.md` — карты с указателями на нормативные источники, не копии.
+  `CLAUDE.md` = `@AGENTS.md`; в `AGENTS.md` добавлена карта структуры, правила
+  не тронуты. `docs/` и `/aif-docs` запрещены правилом
+  (`release-documentation-layout`).
+- **Профиль /3** `.prifly/project.yaml` (хосты claude-code, codex-app),
+  `aif-classic v1.37.0` из каталога (`e99872a`), `extend.yaml`: `profile:
+  full`, standing answers `attended`, `plan_tests: true`, `gate_warnings:
+  ignore`, `gate_checks` = `make ci-check` / `make e2e` / `openspec validate
+  --all --strict` / `git diff --check` (`make race` — релизный гейт, в Run не
+  входит). Runner'ы + `PROJECT.md` рядом у обоих хостов. Оба хоста
+  компилируются (61 источник) и проходят `--prepare` read-only; ответы
+  приходят как `project_default`. `.prifly/` теперь tracked (снят ignore
+  корня), `local.yaml` — через `.prifly/.gitignore`. `aif-fanout` не ставился.
+- **Дефект 0.13.29, найден первым же `project init` здесь:** discovery
+  (`projectRoot`) шла вверх и принимала любой `.prifly` предка за профиль —
+  включая наш же user dir `~/.prifly` (монитор, стенды), который лежит над
+  каждым репозиторием под HOME. Первый init в таком репозитории отказывал
+  `unsafe_authority_root`; с явным `--state-root` он записал бы `project.yaml`
+  и runner'ы в HOME. Правка: голый `.prifly` — профиль только в стартовом
+  каталоге; выше считается только `project.yaml`. Тест
+  `TestCLIProjectInitBelowBareUserDirectory` красный без правки. Пилот на это
+  не попадал, потому что его `.prifly` появился раньше, чем `~/.prifly`.
+  **Не выпущено:** установленный 0.13.29 дефект несёт; `local.yaml` этого
+  клона указывает на `bin/prifly` (ignored, machine-only). После релиза
+  0.13.30 и `prifly update` — `prifly project local set --executable
+  ~/.local/bin/prifly`. Выпуск — по слову владельца.
+- Ворота на финальном дереве: `make ci-check` exit 0 (`cmd/prifly` 50 s,
+  `internal/runtime` 244 s, fmt-check 289, refusal-check 158, все публичные
+  схемы совпали), `make e2e` exit 0, `git diff --check` чисто.
+- Наблюдение для пакетчика: в `INVENTORY.md` хеш `aif-security-checklist`
+  (`3d9c4993…`) — байты npm-шаблона с `{{skills_dir}}`; установленные байты у
+  обоих хостов другие (подстановка пути в одной строке). Остальные шесть
+  сходятся. Ничего не сравнивает, но «bytes of 2.19.0» там — не байты хоста.
+- Удалён `cmd/prifly/.prifly/` — артефакт тестового прогона 07.09
+  (`prifly_executable: …/prifly.test`), скрытый прежним ignore; с настоящим
+  `project.yaml` он делал бы `cmd/prifly` профилем для команд из этого cwd.
+
 ## Открыто владельцу по итогам окна
 
 Четыре из шести пунктов закрыты выпусками 0.13.10 и 0.13.11, один — состоянием,
@@ -1845,7 +1898,9 @@ Claude Code кэширует `SKILL.md` на старте, посреди сес
 синхронизированы в `local-run-monitor` и заархивированы; (б): пилоту
 (`backend-06`, адрес после ротации) переданы наблюдения 2.3 и 4.2 для Claude
 Code — снимет на следующем заходе по слову владельца, Run ради них не
-начинает; Codex-половина остаётся без исполнителя. **Открыто владельцу
+начинает; Codex-половина отложена владельцем 17.09 до появления токенов
+Codex — 2.3, 4.2 и зависимая 3.5 остаются открытыми, changes не
+архивируются. **Открыто владельцу
 (решения обещаны позже):** петля после `tests`, tracked бинарь `prifly` в
 корне, `merge-request` как программа (push + draft MR из шага), держатель
 LOCK_EX в 17:36 12.09. Адреса: движок `Dev [5b5037]`, пилот `backend-06
