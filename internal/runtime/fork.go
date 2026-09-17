@@ -106,7 +106,6 @@ type preparedFork struct {
 	effective      *EffectiveConfiguration
 	configurations map[string]*EffectiveConfiguration
 	inputs         map[string]ArtifactRef
-	brief          ArtifactRef
 	lock           flow.Ref
 }
 
@@ -204,6 +203,21 @@ func (e *Engine) prepareFork(command ForkCommand, source Run) (preparedFork, err
 	return prepared, nil
 }
 
+// compileForkPlan compiles the trusted workflow bytes under the installation's
+// configuration. Until 0.13.30 the core branch assigned its error to a shadow
+// of err, so a workflow that no longer compiled left plan nil and the caller
+// dereferenced it.
+func (e *Engine) compileForkPlan(workflow []byte, registry flow.Registry, resources []PinnedResource) (*flow.Plan, error) {
+	if e.Config.Configuration.SchemaVersion == CoreContextConfigVersion {
+		contextResources, err := resourcesFromPins(resources)
+		if err != nil {
+			return nil, err
+		}
+		return flow.CompileCore(workflow, "json", registry, contextResources)
+	}
+	return flow.CompileProfile(workflow, "json", registry, flow.CoreProfile)
+}
+
 func (e *Engine) compileForkWorkflow(ref flow.Ref) (*flow.Plan, []PinnedDefinition, []PinnedResource, error) {
 	definitions, registry, resources, err := e.inventoryResources()
 	if err != nil {
@@ -219,16 +233,7 @@ func (e *Engine) compileForkWorkflow(ref flow.Ref) (*flow.Plan, []PinnedDefiniti
 	if found == nil {
 		return nil, nil, nil, local.Reject("workflow_unavailable", "fork workflow reference is not currently installed and trusted")
 	}
-	var plan *flow.Plan
-	if e.Config.Configuration.SchemaVersion == CoreContextConfigVersion {
-		contextResources, err := resourcesFromPins(resources)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		plan, err = flow.CompileCore(found.Bytes, "json", registry, contextResources)
-	} else {
-		plan, err = flow.CompileProfile(found.Bytes, "json", registry, flow.CoreProfile)
-	}
+	plan, err := e.compileForkPlan(found.Bytes, registry, resources)
 	if err != nil {
 		return nil, nil, nil, err
 	}

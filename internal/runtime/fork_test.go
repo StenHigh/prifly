@@ -89,3 +89,17 @@ func mustReadRuntime(t *testing.T, path string) []byte {
 	}
 	return data
 }
+
+// A trusted workflow that no longer compiles is an error from fork, never a
+// nil plan the caller dereferences: the core branch once assigned its error to
+// a shadowed err, and staticcheck (SA4006) was the first to read it.
+func TestCompileForkPlanReportsACompileFailure(t *testing.T) {
+	e, _ := emptyRuntime(t)
+	for _, version := range []string{CoreContextConfigVersion, CoreConfigVersion} {
+		e.Config.Configuration.SchemaVersion = version
+		plan, err := e.compileForkPlan([]byte("{"), flow.Registry{}, nil)
+		if err == nil || plan != nil {
+			t.Fatalf("%s: a broken workflow compiled: %+v %v", version, plan, err)
+		}
+	}
+}
