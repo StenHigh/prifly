@@ -1004,10 +1004,29 @@ func TestReadingAHandoffLeavesTheWorkspaceUntouched(t *testing.T) {
 	if _, err := os.Stat(materialized); !os.IsNotExist(err) {
 		t.Fatalf("listing handoffs wrote into the workspace: %v", err)
 	}
-	// Handing over is the operator's own act, and it does materialize.
-	if _, err := e.HandOverSessionTask(context.Background(), runID, ""); err != nil {
+	// A host asking for its work by the listing form is handed it, and gets
+	// the file the help promises: the generated runner sends hosts to --all,
+	// so until this existed nobody following our own instructions saw it.
+	if _, err := e.HandOverSessionTasks(context.Background(), runID); err != nil {
 		t.Fatal(err)
 	}
+	handed, err := os.ReadFile(materialized)
+	if err != nil {
+		t.Fatalf("the listing form did not hand over the task it listed: %v", err)
+	}
+	if err := os.Remove(materialized); err != nil {
+		t.Fatal(err)
+	}
+	// Handing over is the operator's own act, and it does materialize.
+	task, err := e.HandOverSessionTask(context.Background(), runID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	single, err := os.ReadFile(materialized)
+	if err != nil || !bytes.Equal(single, handed) {
+		t.Fatalf("the two forms hand over different documents: %v", err)
+	}
+	_ = task
 	if _, err := os.Stat(materialized); err != nil {
 		t.Fatalf("handing over did not leave the envelope where the host stands: %v", err)
 	}

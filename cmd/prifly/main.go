@@ -958,13 +958,20 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		// contract for three commands to save a call in one is the wrong trade;
 		// asking for the other document by name is not.
 		driveNext := f.Bool("next", false, "with drive: answer with the next action instead of the run view")
+		stopBeforeProgram := f.Bool("stop-before-program", false, "with drive: drive through control stages and handoffs, hand control back before a program step is admitted")
 		if err := parse(f, args[2:]); err != nil {
 			return err
 		}
 		if args[0] == "drive" {
-			if err := e.Drive(ctx, id); err != nil {
+			options := []prifly.DriveOption{}
+			if *stopBeforeProgram {
+				options = append(options, prifly.StopBeforeProgram())
+			}
+			if err := e.Drive(ctx, id, options...); err != nil {
 				return err
 			}
+		} else if *stopBeforeProgram {
+			return usageError("--stop-before-program is a bound on run drive; run status, next and explain execute nothing")
 		}
 		if args[0] == "next" || args[0] == "explain" || args[0] == "drive" && *driveNext {
 			result, err := e.Next(ctx, id)
@@ -1394,7 +1401,7 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 			return usageError("session task requires --run RUN_ID")
 		}
 		if *all {
-			tasks, err := e.SessionTasks(ctx, *run)
+			tasks, err := e.HandOverSessionTasks(ctx, *run)
 			if err != nil {
 				return err
 			}
@@ -2407,8 +2414,10 @@ Global: --project DIR  --json  --format text|json|csv
                                    timing node kinds: run, workflow_invocation, stage_activation, step_instance, attempt, check_execution
                                    A node's metrics carry only numbers; the boundaries they were measured between are the same-named entry of its intervals, as from_ref/to_ref
                                    kind inside from_ref/to_ref names what a boundary was read from and is a separate vocabulary from a node's kind: it also uses step, activation, invocation, stop and report
-  run drive RUN_ID [--next]         Foreground owner; interrupt requests cancel. --next answers with the next action instead of the run view
+  run drive RUN_ID [--next] [--stop-before-program]
+                                   Foreground owner; interrupt requests cancel. --next answers with the next action instead of the run view
                                    A program step runs to completion inside this call: a host with a client timeout drives such a Run in the background
+                                   --stop-before-program drives through control stages and handoffs and hands control back before admitting one, so the host chooses how to run it
   run decisions RUN_ID              Read the sealed decision ledger and pending question
   run decision RUN_ID request --attempt ID --envelope-digest DIGEST --decision ID --expected-run-version N [--yield-execution]
                                    Compatible executor requests one declared runtime decision
@@ -2448,8 +2457,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    One decision for the whole set: all resources or none
   claim list | claim heartbeat --id CLAIM --generation N | claim release --id CLAIM --generation N
                                    An expired lease blocks a conflicting claim; it never hands ownership over
-  session task --run RUN_ID         The sealed handoff an assisted host currently holds
-                                   The same document is written to task.json in the attempt workspace, so the host needs only its directory
+  session task --run RUN_ID [--all] The sealed handoff an assisted host currently holds; --all lists every outstanding one
+                                   Each handed-over task is also written to task.json in its attempt workspace, so the host needs only that directory
   session publish --file COMMAND.json
                                    Publish a sealed artifact before the assisted attempt settles
   action propose --file COMMAND.json

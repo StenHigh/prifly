@@ -775,6 +775,14 @@ func claimMode(claim WorktreeClaim) string {
 	return claim.Mode
 }
 
+// ClaimWorkspacePath is where a claim's working copy actually is. The record
+// keeps a path relative to the authority, which beside repository.toplevel
+// reads as relative to the repository: a caller that joined the two looked in
+// the wrong place. A caller that needs to open the tree asks for this.
+func (e *Engine) ClaimWorkspacePath(claim WorktreeClaim) (string, error) {
+	return e.claimWorkspacePath(claim)
+}
+
 func (e *Engine) claimWorkspacePath(claim WorktreeClaim) (string, error) {
 	if claimMode(claim) == "checkout" {
 		if !filepath.IsAbs(claim.Path) || claim.Path != claim.Repository.Toplevel {

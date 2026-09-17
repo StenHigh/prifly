@@ -143,6 +143,17 @@ func assistedAdapter(definitions []PinnedDefinition) flow.Ref {
 	return builtinRef(definitions, "core:adapter/assisted-session")
 }
 
+// isSessionWorkspaceEdition reports the assisted session contracts that carry
+// the workspace fields. The list was spelled out at two call sites and drifted
+// apart once already.
+func isSessionWorkspaceEdition(version string) bool {
+	switch version {
+	case AssistedSessionWorkspaceVersion, AssistedSessionTreeVersion, AssistedSessionDecisionVersion, AssistedSessionTimingVersion, AssistedSessionRoutedVersion:
+		return true
+	}
+	return false
+}
+
 func isAssistedExecutor(definitions []PinnedDefinition, executor flow.Executor) bool {
 	return executor.AdapterRef == assistedAdapter(definitions) && executor.Operation == "session"
 }
@@ -456,7 +467,7 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 			task.RoutedVerdicts = routedVerdicts(p, activation.StageID)
 		}
 		if step.Effects.Class == "workspace_write" {
-			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionTimingVersion || a.Session.SchemaVersion == AssistedSessionRoutedVersion {
+			if isSessionWorkspaceEdition(a.Session.SchemaVersion) {
 				task.PermittedEffects = []string{"write_inside_claimed_workspace", "local_git_commit_on_claimed_workspace"}
 			} else {
 				task.PermittedEffects = []string{"write_inside_claimed_worktree", "local_git_commit_on_claimed_base"}
@@ -467,8 +478,11 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 			if err != nil {
 				return SessionTask{}, err
 			}
+			// claim_path stays the claim record's own path, relative to the
+			// authority that holds it, because that is what the record means
+			// and saved Runs carry it. The absolute one belongs beside it.
 			task.ClaimPath = claim.Path
-			if a.Session.SchemaVersion == AssistedSessionWorkspaceVersion || a.Session.SchemaVersion == AssistedSessionTreeVersion || a.Session.SchemaVersion == AssistedSessionDecisionVersion || a.Session.SchemaVersion == AssistedSessionTimingVersion || a.Session.SchemaVersion == AssistedSessionRoutedVersion {
+			if isSessionWorkspaceEdition(a.Session.SchemaVersion) {
 				if a.Session.WorkspaceMode != claimMode(claim) {
 					return SessionTask{}, local.ErrIntegrity
 				}
@@ -476,6 +490,12 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 				if err != nil {
 					return SessionTask{}, err
 				}
+				// Where the Run's workspace is, for every step that holds the
+				// claim. What the step may do there is permitted_effects and
+				// nothing else: a read-only gate handed a materialised tree
+				// needs the path to read it, and naming the path was never a
+				// grant. A host that read presence as permission was reading
+				// the wrong field, and our own runner said so until 0.13.33.
 				task.WorkspaceMode, task.RepositoryWorkspace = a.Session.WorkspaceMode, workspace
 			}
 		}
@@ -546,7 +566,23 @@ func (e *Engine) writeSessionTask(task SessionTask) error {
 
 // SessionTasks lists every outstanding handoff, so a caller can see that a Run
 // is holding more than one and which attempt each belongs to.
+// SessionTasks lists the handoffs a Run currently holds without handing any
+// over: the machine-wide monitor reads every authority on the machine and must
+// stay the read-only observer it is specified to be.
 func (e *Engine) SessionTasks(ctx context.Context, runID string) ([]SessionTask, error) {
+	return e.sessionTasks(ctx, runID, false)
+}
+
+// HandOverSessionTasks is the host's form of the same listing: a host asking
+// for its work is handed it, so each task is materialized in its own attempt
+// workspace. The help promised that file for `session task`, and the generated
+// runner sends hosts to the listing form, so until 0.13.33 nobody following
+// our own instructions ever saw it.
+func (e *Engine) HandOverSessionTasks(ctx context.Context, runID string) ([]SessionTask, error) {
+	return e.sessionTasks(ctx, runID, true)
+}
+
+func (e *Engine) sessionTasks(ctx context.Context, runID string, handOver bool) ([]SessionTask, error) {
 	r, _, err := e.load(ctx, runID)
 	if err != nil {
 		return nil, err
@@ -560,6 +596,11 @@ func (e *Engine) SessionTasks(ctx context.Context, runID string) ([]SessionTask,
 		task, err := e.SessionTask(ctx, runID, id)
 		if err != nil {
 			return nil, err
+		}
+		if handOver {
+			if err := e.writeSessionTask(task); err != nil {
+				return nil, err
+			}
 		}
 		tasks = append(tasks, task)
 	}

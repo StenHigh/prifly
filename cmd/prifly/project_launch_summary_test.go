@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -179,10 +180,15 @@ launches:
 	if len(withEnvironment.Execution) == 0 {
 		t.Fatal("no program was reviewed")
 	}
+	// Names, never values: this document goes to a terminal and a host's log,
+	// and the value is where a project puts its database password.
 	for _, program := range withEnvironment.Execution {
-		if program.Environment["APP_ENV"] != "testing" || program.Environment["PATH"] != "/opt/tools/bin:/usr/bin:/bin" {
-			t.Fatalf("the machine's environment did not reach the reviewed program: %+v", program.Environment)
+		if !slices.Equal(program.EnvironmentNames, []string{"APP_ENV", "PATH"}) {
+			t.Fatalf("the machine's environment did not reach the reviewed program by name: %+v", program.EnvironmentNames)
 		}
+	}
+	if rendered, err := json.Marshal(withEnvironment); err != nil || strings.Contains(string(rendered), "/opt/tools/bin") || strings.Contains(string(rendered), `"testing"`) {
+		t.Fatalf("the reviewed launch printed an environment value: %v %s", err, rendered)
 	}
 	if withEnvironment.Execution[0].ConfigurationDigest == reviewed.Execution[0].ConfigurationDigest {
 		t.Fatal("the environment is not part of the configuration digest")

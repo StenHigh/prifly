@@ -20,9 +20,29 @@ import (
 
 // Drive owns one foreground authority lock. It has no background scheduler,
 // retry loop or permission to dispatch an uncertain previous launch.
-func (e *Engine) Drive(ctx context.Context, runID string) (retErr error) {
+// DriveOption bounds what one drive will do on the caller's behalf.
+type DriveOption func(*driveOptions)
+
+type driveOptions struct{ stopBeforeProgram bool }
+
+// StopBeforeProgram drives through control stages and handoffs and hands
+// control back before a program step is admitted. A program runs to completion
+// inside the drive call, and a host whose tool call is bounded needs to start
+// that drive differently; until now it could only find out by having the call
+// swallow a twelve-minute test run. The boundary is a guarantee, not a
+// prediction: what lies behind a control stage cannot be foretold, because a
+// choice picks its branch from data that does not exist when the caller asks.
+func StopBeforeProgram() DriveOption {
+	return func(o *driveOptions) { o.stopBeforeProgram = true }
+}
+
+func (e *Engine) Drive(ctx context.Context, runID string, options ...DriveOption) (retErr error) {
 	if e.ReadOnly {
 		return local.ErrReadOnly
+	}
+	bounds := driveOptions{}
+	for _, option := range options {
+		option(&bounds)
 	}
 	lock, err := e.driverLock(runID)
 	if err != nil {
@@ -175,6 +195,11 @@ func (e *Engine) Drive(ctx context.Context, runID string) (retErr error) {
 			invocationID, stageID := r.readyScope()
 			if stageID != work || invocationID == "" {
 				return local.ErrIntegrity
+			}
+			// Nothing is activated and no slot is taken: the caller reads the
+			// same ready stage back, now knowing it holds a program.
+			if bounds.stopBeforeProgram && e.stageWork(r, invocationID, stageID) == StageWorkProgram {
+				return nil
 			}
 			p, err := r.planFor(invocationID)
 			if err != nil {

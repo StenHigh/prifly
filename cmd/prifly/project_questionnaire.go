@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
@@ -139,9 +140,13 @@ type projectExecutionReview struct {
 	Args                []string          `json:"args"`
 	FileDigests         map[string]string `json:"file_digests"`
 	ConfigurationDigest string            `json:"configuration_digest"`
-	// Environment is this machine's, from local.yaml, shown so the reviewer
-	// sees what the program runs with; it is part of the configuration digest.
-	Environment map[string]string `json:"environment,omitempty"`
+	// EnvironmentNames are the machine-local variables this program runs with,
+	// by name only. The values are what a project puts its database password
+	// into, and this document goes to a terminal and a host's log; README
+	// promised they were not printed, and until 0.13.33 they were. The values
+	// still enter the configuration digest, so a changed one still invalidates
+	// a reviewed launch.
+	EnvironmentNames []string `json:"environment_names,omitempty"`
 }
 
 func projectReviewDigest(value any) (string, error) {
@@ -184,7 +189,12 @@ func projectReviewExecutors(bindings *prifly.ExecutionBindings) ([]projectExecut
 		if err != nil {
 			return nil, err
 		}
-		item := projectExecutionReview{DefinitionRef: binding.DefinitionRef, Executable: binding.Config.Executable, ExecutableDigest: digest, Args: binding.Config.Args, FileDigests: map[string]string{}, ConfigurationDigest: configDigest, Environment: binding.Config.Environment}
+		names := make([]string, 0, len(binding.Config.Environment))
+		for name := range binding.Config.Environment {
+			names = append(names, name)
+		}
+		slices.Sort(names)
+		item := projectExecutionReview{DefinitionRef: binding.DefinitionRef, Executable: binding.Config.Executable, ExecutableDigest: digest, Args: binding.Config.Args, FileDigests: map[string]string{}, ConfigurationDigest: configDigest, EnvironmentNames: names}
 		for target, source := range binding.Config.Files {
 			item.FileDigests[target] = projectBytesDigest(binding.Files[source])
 		}

@@ -284,6 +284,11 @@ func ProblemFor(err error) (Problem, int) {
 		// twice for one misunderstanding.
 		"version_conflict":       {"run.status"},
 		"state_version_conflict": {"run.status"},
+		// A runner somebody edited is replaced by moving the edit beside it, or
+		// written afresh once the file is gone. "was not overwritten" with the
+		// generic help behind it sent a cold start looking for a command that
+		// does not exist.
+		"project_runner_conflict": {"project.runners.update", "project.runners.add"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
 	}

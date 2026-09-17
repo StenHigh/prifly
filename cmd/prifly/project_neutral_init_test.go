@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -232,4 +233,91 @@ func TestCLIProjectInitBelowBareUserDirectory(t *testing.T) {
 	if root, err := projectRoot(context.Background(), filepath.Join(repository, ".prifly")); err != nil || root != repository {
 		t.Fatalf("discovery from inside the new profile: %s %v", root, err)
 	}
+}
+
+// A shared profile declares the hosts a team uses; the runners are per-clone,
+// and demanding a foreign one deadlocked the only commands able to write it:
+// project init refused because a Codex runner this machine never had was
+// absent, and project runners add — the command that writes it — refused for
+// the same reason. A cold start spent twenty-five minutes finding a way in.
+func TestCLIProjectCloneJoinsWithoutForeignRunners(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	root := t.TempDir()
+	writeFixtureFile(t, root, ".prifly/project.yaml", projectProfileSource+projectHostsYAML)
+	writeFixtureFile(t, root, ".prifly/.gitignore", "local.yaml\n")
+	writeFixtureFile(t, root, ".claude/skills/prifly-run/SKILL.md", projectRunnerSkill(projectHostByID(t, "claude-code")))
+	authority := filepath.Join(t.TempDir(), "authority")
+	code, out, errout := runCLI(t, "project", "init", "--repository", root, "--state-root", authority)
+	var joined projectProfileInit
+	if code != 0 || json.Unmarshal([]byte(out), &joined) != nil {
+		t.Fatalf("a clone could not join its own profile: %d %s %s", code, out, errout)
+	}
+	if !slices.Equal(joined.MissingHosts, []string{"codex-cli", "codex-app"}) {
+		t.Fatalf("the runners this clone does not hold were not named: %+v", joined.MissingHosts)
+	}
+	for _, host := range []string{"codex-cli", "codex-app"} {
+		if _, err := os.Lstat(filepath.Join(root, ".codex")); host == "codex-cli" && err == nil {
+			t.Fatal("init wrote a runner for a host it was not asked to attach")
+		}
+	}
+	// The command that creates a declared host's runner no longer refuses
+	// because that runner is missing.
+	if code, out, errout = runCLI(t, "project", "runners", "add", "--repository", root, "--host", "codex-cli"); code != 0 || !strings.Contains(out, `"added_hosts":["codex-cli"]`) {
+		t.Fatalf("runners add could not write the declared runner: %d %s %s", code, out, errout)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, ".codex/skills/prifly-run/SKILL.md")); err != nil || string(data) != projectRunnerSkill(projectHostByID(t, "codex-cli")) {
+		t.Fatalf("the written runner is not this build's: %v", err)
+	}
+	// A runner somebody edited is still a conflict, and the refusal now names
+	// the two commands that resolve it instead of the generic help.
+	writeFixtureFile(t, root, ".agents/skills/prifly-run/SKILL.md", "# local edit\n")
+	code, _, errout = runCLI(t, "project", "runners", "update", "--repository", root)
+	var problem prifly.Problem
+	if code == 0 || json.Unmarshal([]byte(errout), &problem) != nil || problem.Code != "project_runner_conflict" {
+		t.Fatalf("an edited runner was not refused by name: %d %s", code, errout)
+	}
+	if !slices.Contains(problem.SafeNextActions, "project.runners.update") || !slices.Contains(problem.SafeNextActions, "project.runners.add") {
+		t.Fatalf("the refusal does not name a way out: %+v", problem.SafeNextActions)
+	}
+}
+
+// --check answers what an update would replace and writes nothing: a launch
+// whose preflight program requires a clean tree is refused after an ordinary
+// update rewrites a tracked runner, and the only way to learn that was to
+// have it happen.
+func TestCLIProjectRunnersUpdateCheckWritesNothing(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	root := t.TempDir()
+	writeFixtureFile(t, root, ".prifly/project.yaml", projectProfileSource+projectHostsYAML)
+	writeFixtureFile(t, root, ".prifly/.gitignore", "local.yaml\n")
+	host := projectHostByID(t, "claude-code")
+	previous := projectKnownRunnerSkills(host)[0]
+	writeFixtureFile(t, root, ".claude/skills/prifly-run/SKILL.md", previous)
+	code, out, errout := runCLI(t, "project", "runners", "update", "--repository", root, "--check")
+	if code != 0 || !strings.Contains(out, `"updated_hosts":["claude-code"]`) || !strings.Contains(out, `"checked":true`) {
+		t.Fatalf("check did not name what it would replace: %d %s %s", code, out, errout)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, ".claude/skills/prifly-run/SKILL.md")); err != nil || string(data) != previous {
+		t.Fatalf("check rewrote the runner it was asked about: %v", err)
+	}
+	if code, out, errout = runCLI(t, "project", "runners", "update", "--repository", root); code != 0 || !strings.Contains(out, `"updated_hosts":["claude-code"]`) {
+		t.Fatalf("the update after a check did nothing: %d %s %s", code, out, errout)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, ".claude/skills/prifly-run/SKILL.md")); err != nil || string(data) != projectRunnerSkill(host) {
+		t.Fatalf("the update did not replace the runner: %v", err)
+	}
+	if code, _, errout = runCLI(t, "project", "runners", "add", "--repository", root, "--host", "codex-cli", "--check"); code == 0 || !strings.Contains(errout, "does not accept --check") {
+		t.Fatalf("add accepted a bound that belongs to update: %d %s", code, errout)
+	}
+}
+
+func projectHostByID(t *testing.T, id string) projectHost {
+	t.Helper()
+	for _, host := range projectHosts {
+		if host.ID == id {
+			return host
+		}
+	}
+	t.Fatalf("unknown host %s", id)
+	return projectHost{}
 }

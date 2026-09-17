@@ -129,18 +129,32 @@ var projectRunnerSkillTemplateBeforeAttemptField = strings.NewReplacer(
    `+"`--workspace worktree|checkout`"+` only to override it for this Run. Legacy /2 keeps`,
 ).Replace(projectRunnerSkillTemplateBeforeWorkspace)
 
-// Current instructions are derived from the frozen previous template, never
-// the reverse: updating current behavior must not change recognized old bytes.
-// The view keys run.attempts by `id`; the text said `attempt_id`, which is
-// what the task calls the same value, and a pilot's host read one against the
-// other.
-var projectRunnerSkillTemplate = strings.NewReplacer(
+// projectRunnerSkillTemplateBeforeEffectsRule is the exact template 0.13.32
+// installed, frozen so a runner from that release stays recognized. The view
+// keys run.attempts by `id`; the text said `attempt_id`, which is what the
+// task calls the same value, and a pilot's host read one against the other.
+var projectRunnerSkillTemplateBeforeEffectsRule = strings.NewReplacer(
 	`   `+"`session task --all`"+` returns them as a list, but a Run keys
    `+"`run.attempts`"+` by `+"`attempt_id`"+`: read one by that ID, never by position.`,
 	`   `+"`session task --all`"+` returns them as a list, but a Run keys
    `+"`run.attempts`"+` by `+"`id`"+` -- the value the task calls `+"`attempt_id`"+`:
    read one by that ID, never by position.`,
 ).Replace(projectRunnerSkillTemplateBeforeAttemptField)
+
+// Current instructions are derived from the frozen previous template, never
+// the reverse. A task names `repository_workspace` wherever its Run holds a
+// workspace, including a read-only gate handed a materialised tree, so the
+// path stopped being a permission the moment v8 existed: what a step may do
+// there is `permitted_effects`, which is where the rule belonged all along.
+var projectRunnerSkillTemplate = strings.NewReplacer(
+	`   `+"`permitted_effects`"+`. Only a task carrying `+"`repository_workspace`"+` may
+   change that repository; otherwise use scratch and declared output slots.`,
+	`   `+"`permitted_effects`"+`: it, and nothing else, says what this step may do.
+   `+"`repository_workspace`"+` names where the Run's workspace is, not what you
+   may do in it -- a read-only gate is handed that path to read a materialised
+   tree. Change that repository only with a workspace-write effect; otherwise
+   use scratch and declared output slots, and leave the tree as you found it.`,
+).Replace(projectRunnerSkillTemplateBeforeEffectsRule)
 
 const projectRunnerSkillTemplateBeforeTiming = `---
 name: prifly-run
@@ -608,6 +622,9 @@ type projectProfileInit struct {
 	Repository    string `json:"repository"`
 	Profile       string `json:"profile"`
 	AuthorityRoot string `json:"authority_root"`
+	// MissingHosts are declared hosts whose runner this clone does not hold.
+	// Named rather than refused: the profile is shared and the runners are not.
+	MissingHosts []string `json:"missing_hosts,omitempty"`
 }
 
 type projectProfile struct {
@@ -780,8 +797,13 @@ func (c *cli) projectRunners(ctx context.Context, args []string) error {
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	var hostIDs stringsFlag
 	f.Var(&hostIDs, "host", "supported host to attach (repeatable, add only)")
+	checked := f.Bool("check", false, "with update: answer what would be replaced and write nothing")
 	if err := parse(f, args[1:]); err != nil {
 		return err
+	}
+	check := *checked
+	if check && args[0] != "update" {
+		return usageError("project runners add does not accept --check")
 	}
 	root, err := projectRoot(ctx, *repository)
 	if err != nil {
@@ -800,6 +822,13 @@ func (c *cli) projectRunners(ctx context.Context, args []string) error {
 	if len(hostIDs) != 0 {
 		return usageError("project runners update does not accept --host; it updates declared hosts only")
 	}
+	if check {
+		updated, missing, err := checkProjectRunnerUpdates(root, profile.hosts()...)
+		if err != nil {
+			return err
+		}
+		return c.emit(map[string]any{"schema_version": "project-runners-update/1", "repository": root, "updated_hosts": updated, "missing_hosts": missing, "checked": true})
+	}
 	updated, missing, err := updateProjectRunners(root, profile.hosts()...)
 	if err != nil {
 		return err
@@ -813,10 +842,19 @@ func (c *cli) projectAddRunners(root string, profile projectProfile, ids []strin
 		return err
 	}
 	missing := make([]projectHost, 0, len(hosts))
+	create := make([]projectHost, 0, len(hosts))
 	for _, host := range hosts {
+		// A host the profile already declares still needs its runner written
+		// when this clone does not hold the file: that is precisely what this
+		// command is for, and refusing over the absence left no command able
+		// to create it.
 		if _, exists := profile.HostSkillsRoots[host.ID]; exists {
-			if err := checkExistingProjectRunners(root, host); err != nil {
+			absent, err := checkExistingProjectRunners(root, host)
+			if err != nil {
 				return err
+			}
+			if len(absent) != 0 {
+				create = append(create, host)
 			}
 		} else {
 			missing = append(missing, host)
@@ -825,7 +863,17 @@ func (c *cli) projectAddRunners(root string, profile projectProfile, ids []strin
 	if err := checkProjectRunners(root, missing...); err != nil {
 		return err
 	}
-	added := make([]string, 0, len(missing))
+	added := make([]string, 0, len(missing)+len(create))
+	// A declared host whose file this clone lacks needs the file and no
+	// profile edit: the declaration is already in the shared YAML.
+	if len(create) != 0 {
+		if err := writeProjectRunners(root, create...); err != nil {
+			return err
+		}
+		for _, host := range create {
+			added = append(added, host.ID)
+		}
+	}
 	if len(missing) != 0 {
 		document, err := readProjectProfileNode(root)
 		if err != nil {
@@ -847,6 +895,7 @@ func (c *cli) projectAddRunners(root string, profile projectProfile, ids []strin
 			return err
 		}
 	}
+	slices.Sort(added)
 	return c.emit(map[string]any{"schema_version": "project-runners-add/1", "repository": root, "added_hosts": added})
 }
 
@@ -970,7 +1019,7 @@ func (c *cli) projectInit(ctx context.Context, args []string) error {
 		return usageError("unsafe_authority_root: local authority data must be outside the repository")
 	}
 	profile := filepath.Join(root, ".prifly")
-	existing, err := existingProjectProfile(root, profile)
+	existing, missingRunners, err := existingProjectProfile(root, profile)
 	if err != nil {
 		return err
 	}
@@ -1004,7 +1053,7 @@ func (c *cli) projectInit(ctx context.Context, args []string) error {
 			return err
 		}
 	}
-	return c.emit(projectProfileInit{SchemaVersion: "project-profile-init/1", Repository: root, Profile: profile, AuthorityRoot: authority})
+	return c.emit(projectProfileInit{SchemaVersion: "project-profile-init/1", Repository: root, Profile: profile, AuthorityRoot: authority, MissingHosts: missingRunners})
 }
 
 func (c *cli) projectWorkflows(ctx context.Context, args []string) error {
@@ -2124,6 +2173,15 @@ func projectRunnerSkill(host projectHost) string {
 	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
 }
 
+func projectRunnerSkillBeforeEffectsRule(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeEffectsRule, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
+}
+
 func projectRunnerSkillBeforeAttemptField(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -2236,7 +2294,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {
@@ -2264,7 +2322,7 @@ func checkProjectRunners(root string, hosts ...projectHost) error {
 		}
 		path := projectRunnerPath(root, host)
 		if _, err := os.Lstat(path); err == nil {
-			return usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+			return projectRunnerConflict(host)
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -2274,69 +2332,87 @@ func checkProjectRunners(root string, hosts ...projectHost) error {
 
 // existingProjectProfile accepts the tracked half of a freshly cloned project
 // without treating it as an instruction to replace the team's workflow rules.
-func existingProjectProfile(root, profile string) (bool, error) {
+func existingProjectProfile(root, profile string) (bool, []string, error) {
 	info, err := os.Lstat(profile)
 	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+		return false, nil, nil
 	}
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return false, usageError("project_profile_invalid: .prifly must be a real directory")
+		return false, nil, usageError("project_profile_invalid: .prifly must be a real directory")
 	}
 	if _, err := os.Lstat(filepath.Join(profile, "project.yaml")); errors.Is(err, os.ErrNotExist) {
 		// Reporting "run project init first" to project init said nothing about
 		// what it found. A half-removed profile is a repository state, and the
 		// two ways out of it are the two the owner has.
-		return false, usageError("project_profile_incomplete: .prifly exists without project.yaml; restore it from version control, or remove .prifly to initialize the repository again")
+		return false, nil, usageError("project_profile_incomplete: .prifly exists without project.yaml; restore it from version control, or remove .prifly to initialize the repository again")
 	} else if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	parsed, err := readProjectProfile(root)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
-	if err := checkExistingProjectRunners(root, parsed.hosts()...); err != nil {
-		return false, err
+	missing, err := checkExistingProjectRunners(root, parsed.hosts()...)
+	if err != nil {
+		return false, nil, err
 	}
 	if _, err := os.Lstat(filepath.Join(profile, "local.yaml")); err == nil {
-		return false, usageError("project_local_conflict: existing .prifly/local.yaml was not overwritten")
+		return false, nil, usageError("project_local_conflict: existing .prifly/local.yaml was not overwritten")
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return false, err
+		return false, nil, err
 	}
 	ignored, err := os.ReadFile(filepath.Join(profile, ".gitignore"))
 	if err != nil || !strings.Contains("\n"+strings.TrimSpace(string(ignored))+"\n", "\nlocal.yaml\n") {
-		return false, usageError("project_local_ignore_missing: .prifly/.gitignore must ignore local.yaml")
+		return false, nil, usageError("project_local_ignore_missing: .prifly/.gitignore must ignore local.yaml")
 	}
-	return true, nil
+	return true, missing, nil
 }
 
-func checkExistingProjectRunners(root string, hosts ...projectHost) error {
+// checkExistingProjectRunners reads the runners a shared profile declares and
+// reports the ones this clone does not hold. Absence is not a refusal: the
+// profile is shared and the runners are not, so a machine that keeps only its
+// own host is the ordinary case, and demanding a foreign runner deadlocked the
+// one command able to write it. A runner that is present but not one this
+// build knows is still a conflict: replacing it is somebody's local work.
+func checkExistingProjectRunners(root string, hosts ...projectHost) (missing []string, err error) {
+	missing = []string{}
 	for _, host := range hosts {
 		if err := checkProjectRunnerRoot(root, host); err != nil {
-			return err
+			return nil, err
 		}
 		path := filepath.Join(projectRunnerPath(root, host), "SKILL.md")
 		info, err := os.Lstat(path)
 		if errors.Is(err, os.ErrNotExist) {
-			return usageError("project_runner_missing: existing project profile requires " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run", "SKILL.md")))
+			missing = append(missing, host.ID)
+			continue
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			return usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+			return nil, projectRunnerConflict(host)
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !projectRunnerSkillAccepted(host, string(data)) {
-			return usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+			return nil, projectRunnerConflict(host)
 		}
 	}
-	return nil
+	return missing, nil
+}
+
+// projectRunnerConflict names the file and the way out. "was not overwritten"
+// alone, with the generic help behind it, sent a cold start looking for a
+// command that does not exist; the refusal code itself now carries the two
+// commands that resolve it.
+func projectRunnerConflict(host projectHost) error {
+	path := filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run"))
+	return &prifly.Fault{Code: "project_runner_conflict", Message: "existing " + path + " was not overwritten; move the local edit into " + path + "/PROJECT.md and let project runners update replace SKILL.md, or remove the file and let project runners add write it"}
 }
 
 // updateProjectRunners validates every tracked runner before replacing any
@@ -2345,6 +2421,43 @@ func checkExistingProjectRunners(root string, hosts ...projectHost) error {
 // not refused: a shared profile may declare a host that only some clones keep,
 // and blocking the live host's update over it left the runner stale for
 // everyone. Only a profile with no runner at all has nothing to update.
+// checkProjectRunnerUpdates answers what an update would do and writes nothing.
+// A launch whose preflight program demands a clean tree is refused after an
+// ordinary update rewrites a tracked runner, and until now the only way to
+// learn that was to have it happen.
+func checkProjectRunnerUpdates(root string, hosts ...projectHost) (updated, missing []string, err error) {
+	updated, missing = []string{}, []string{}
+	for _, host := range hosts {
+		if err := checkProjectRunnerRoot(root, host); err != nil {
+			return nil, nil, err
+		}
+		path := filepath.Join(projectRunnerPath(root, host), "SKILL.md")
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			missing = append(missing, host.ID)
+			continue
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+			return nil, nil, projectRunnerConflict(host)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, nil, err
+		}
+		if string(data) == projectRunnerSkill(host) {
+			continue
+		}
+		if !projectRunnerSkillAccepted(host, string(data)) {
+			return nil, nil, projectRunnerConflict(host)
+		}
+		updated = append(updated, host.ID)
+	}
+	return updated, missing, nil
+}
+
 func updateProjectRunners(root string, hosts ...projectHost) (updated, missing []string, err error) {
 	type runnerUpdate struct {
 		host projectHost
@@ -2366,7 +2479,7 @@ func updateProjectRunners(root string, hosts ...projectHost) (updated, missing [
 			return nil, nil, err
 		}
 		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			return nil, nil, usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+			return nil, nil, projectRunnerConflict(host)
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -2377,7 +2490,7 @@ func updateProjectRunners(root string, hosts ...projectHost) (updated, missing [
 			continue
 		default:
 			if !projectRunnerSkillAccepted(host, string(data)) {
-				return nil, nil, usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+				return nil, nil, projectRunnerConflict(host)
 			}
 			updates = append(updates, runnerUpdate{host: host, path: path})
 		}
@@ -2427,7 +2540,7 @@ func writeProjectRunners(root string, hosts ...projectHost) error {
 		// replacing instructions the team has reviewed.
 		if err := os.Mkdir(runner, 0755); err != nil {
 			if errors.Is(err, os.ErrExist) {
-				return usageError("project_runner_conflict: existing " + filepath.ToSlash(filepath.Join(host.SkillsRoot, "prifly-run")) + " was not overwritten")
+				return projectRunnerConflict(host)
 			}
 			return err
 		}

@@ -30,7 +30,12 @@ type projectStartResult struct {
 	AutonomyUnanswered *[]prifly.UnansweredDecision `json:"autonomy_unanswered,omitempty"`
 	Run                prifly.RunView               `json:"run"`
 	Workspace          *prifly.WorktreeClaim        `json:"workspace,omitempty"`
-	LaunchSummary      *projectLaunchSummary        `json:"launch_summary,omitempty"`
+	// WorkspacePath is where that claim actually is. The record's own path is
+	// relative to the authority that holds it, and beside repository.toplevel
+	// it reads as relative to the repository: a cold start looked for the tree
+	// under the repository, found nothing, and fell back to git worktree list.
+	WorkspacePath string                `json:"workspace_path,omitempty"`
+	LaunchSummary *projectLaunchSummary `json:"launch_summary,omitempty"`
 }
 
 type projectPreflight struct {
@@ -439,6 +444,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return err
 	}
 	result := projectStartResult{SchemaVersion: "project-start/1", Repository: root, Launch: *launchID, Package: compiled.Package, PackageProfile: selectedProfile, Run: view, Workspace: claim}
+	if claim != nil {
+		path, err := engine.ClaimWorkspacePath(*claim)
+		if err != nil {
+			return err
+		}
+		result.WorkspacePath = path
+	}
 	if preflight.Declared {
 		result.SchemaVersion = "project-start/2"
 		result.DecisionSheet = &preflight.Sheet

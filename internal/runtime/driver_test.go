@@ -2238,3 +2238,62 @@ func TestDriveCompilesAWorkflowOncePerRun(t *testing.T) {
 		t.Fatalf("reading a driven Run recompiled it %d times", again)
 	}
 }
+
+// A program runs to completion inside the drive call, and until the boundary
+// existed a host learned that by having its own tool call swallow the run: the
+// visible next stage was control, and the program stood behind it. Bounded,
+// the driver hands control back with nothing admitted, so the caller reads the
+// same ready stage and now knows what it holds.
+func TestDriveStopsBeforeAdmittingAProgram(t *testing.T) {
+	e, options := contextDriverProject(t, nil)
+	ctx := context.Background()
+	started, err := e.Start(ctx, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := started.Receipt.RunID
+	r, _, err := e.load(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invocationID, stageID := r.readyScope()
+	if work := e.stageWork(r, invocationID, stageID); work != StageWorkProgram {
+		t.Fatalf("the fixture no longer offers a program as its next work: %q", work)
+	}
+	if err := e.Drive(ctx, runID, StopBeforeProgram()); err != nil {
+		t.Fatal(err)
+	}
+	bounded, _, err := e.load(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bounded.Attempts) != 0 || len(bounded.Active) != 0 {
+		t.Fatalf("a bounded drive admitted work: attempts=%d active=%d steps=%d", len(bounded.Attempts), len(bounded.Active), len(bounded.Steps))
+	}
+	for id, step := range bounded.Steps {
+		if step.Status != "ready" {
+			t.Fatalf("a bounded drive moved step %s to %s", id, step.Status)
+		}
+	}
+	again, err := e.Next(ctx, runID)
+	if err != nil || again.Action != "stage" {
+		t.Fatalf("the caller cannot read the same ready stage back: %+v %v", again, err)
+	}
+	// This Run predates the read contract that carries the field, so the field
+	// is absent and the boundary still holds: the bound is what the driver
+	// does, not what the answer says.
+	if again.StageWork != "" && again.StageWork != StageWorkProgram {
+		t.Fatalf("the ready stage is named as something other than a program: %+v", again)
+	}
+	// Unbounded, the same call does the work it always did.
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	after, _, err := e.load(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Attempts) == 0 {
+		t.Fatal("an unbounded drive stopped admitting the program")
+	}
+}
