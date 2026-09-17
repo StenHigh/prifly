@@ -9,7 +9,11 @@
 - [ ] 2.1 `cmd/prifly/project_start.go`, `internal/runtime/sessions.go`: путь рабочей копии в ответе запуска и в задаче — абсолютный. Проверка: тест — путь из ответа открывается без доработки; `go test ./cmd/prifly ./internal/runtime -run 'Start|SessionTask'`.
 - [ ] 2.2 `--prepare` печатает имена переменных окружения программ без значений. Проверка: тест — в итоге есть имя, нет значения; `README.md` строка про environment остаётся верной.
 
-## 3. Документы и ворота
+## 3. Обещанный документ задачи
 
-- [ ] 3.1 `examples/troubleshooting.md`: запись «клон не подключается: project_runner_missing у чужого хоста» с новым поведением и обходом для старых сборок (сузить hosts временно). Проверка: `python3 -B test/e2e/test_examples.py`.
-- [ ] 3.2 Защищённая история не тронута; `make ci-check`, `make e2e`, `make race` зелёные, счётчики записаны в change.
+- [ ] 3.1 `cmd/prifly/main.go`, `internal/runtime/sessions.go`: `session task --all` вручает каждую перечисленную попытку и пишет `task.json` в её рабочую папку; справка называет обе формы точно. Проверка: тест — после `--all` в папке каждой выданной попытки лежит `task.json`, равный документу из вывода; монитор (API `SessionTasks`) ничего не пишет; `go test ./cmd/prifly ./internal/runtime -run 'SessionTask'`.
+
+## 4. Документы и ворота
+
+- [ ] 4.1 `examples/troubleshooting.md`: запись «клон не подключается: project_runner_missing у чужого хоста» с новым поведением и обходом для старых сборок (сузить hosts временно). Проверка: `python3 -B test/e2e/test_examples.py`.
+- [ ] 4.2 Защищённая история не тронута; `make ci-check`, `make e2e`, `make race` зелёные, счётчики записаны в change.
