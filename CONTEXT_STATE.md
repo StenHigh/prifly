@@ -1627,6 +1627,26 @@ troubleshooting с выходом руками (`git worktree unlock` → пов
 движок `Dev [2ffd3f]`, сессия захода `Pri-Fly #137 [e63e5e]`, пакетчик
 `prifly-aif-workflows [08b163]`.
 
+**#137 — развязка (17.09 ~02:30).** Заход прошёл warmup → plan → improve →
+implement → verify (rector red на трёх файлах — по составу гейта) → fix →
+verify (green) → review (челленджер: ложный «hardcoded default» в
+TechnicalDesign) → fix → review (чисто) → tests: **хост Claude Code убил
+`run drive` по нехватке памяти** (4 параллельных phpunit + челленджер) —
+движок закрыл чисто (`cancel` «foreground driver interrupted», попытка и Run
+`cancelled`, `has_unresolved_effects=false`, gaps пусто). Доделано руками по
+протоколу (6786 тестов, exit 0, `PHPUNIT_PARALLEL_PROCESSES=2`), MR !1164.
+**Починка 0.13.29 подтверждена боем:** `claim release` прошёл без рук при
+стоящем локе supacode — worktree снят, ветка удалена, origin-ветка цела
+(запушена до release по моему предупреждению — иначе шесть коммитов ушли бы
+с force-delete). По коду подтверждено: `run fork` с шага не продолжает
+(entry; `reuse_refs` — только выходы `done`), записано в troubleshooting
+вместе с «сначала push, потом release» и рычагом против OOM. **Наблюдения
+UI в Claude Code сняты** — 2.3 (AskUserQuestion для `plan_constraints`;
+вопросник не предлагал «без ограничений» рекомендацией — состав каталога
+пакета) и 4.2 (страница подтверждения без замечаний) записаны в задачи как
+половина; Codex-половина — без исполнителя. Проектное: gate.sh без
+`core.quotepath=off` — их #145.
+
 ### Метод: три вещи, которые эти два выпуска доказали
 
 **Красный, окружённый зелёными, требует счётчика, а не повтора.** `e2e` покраснел

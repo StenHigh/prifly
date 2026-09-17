@@ -13,3 +13,15 @@
 
 - [x] 3.1 Run `openspec validate add-native-host-question-ux --strict`, `go test ./cmd/prifly`, and `git diff --check`; verify all exit successfully.
 - [x] 3.2 Run `git diff --name-only -- openspec/changes/archive` and verify it is empty, confirming protected historical planning evidence was not changed.
+
+## 2.3 — наблюдение в Claude Code, 2026-09-17 (половина задачи; Codex — без исполнителя)
+
+Заход пилота #137 (Pri-Fly 0.13.28→0.13.29, aif-classic 1.37.0, хост Claude
+Code): единственный не преднастроенный вопрос — runtime-решение
+`plan_constraints` — задан через AskUserQuestion; хост показал варианты и
+принял выбор владельца, ответ ушёл в Run. Наблюдение хоста: вопросник не
+предлагал «без ограничений» как рекомендованный вариант — владельцу пришлось
+выбирать явно; это состав каталога решений пакета (`recommendation`), не
+движок и не хост. Только наблюдённый результат; квалификации рантайма или
+выпуска не утверждается. Codex-половина открыта: у проекта нет исполнителя на
+Codex.
