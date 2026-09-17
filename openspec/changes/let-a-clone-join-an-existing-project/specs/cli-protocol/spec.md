@@ -1,0 +1,91 @@
+## MODIFIED Requirements
+
+### Requirement: Project entry points select their host mechanically
+`project init` SHALL создавать нейтральный profile `/3` в обычной папке без
+обязательного Git и без AI skills. Host entry points SHALL добавляться только
+явно выбранным поддержанным hosts; каждый передаёт свой identity, не угадывает
+его по directory. Compile `/3` MUST требовать host лишь при чтении host-bound
+source; `/2` сохраняет explicit host. Fresh init MUST отвергать unsafe root или конфликт runner без
+перезаписи. Для valid existing profile после clone/copy init MUST создавать
+только отсутствующую local configuration, сохраняя shared YAML и exact runners.
+Отсутствие runner-файла объявленного host MUST NOT быть отказом такого init:
+профиль общий, а runner держат не все clone. Init MUST требовать присутствия
+только у host, названного `--host`, MUST называть остальных отсутствующих в
+ответе так же, как это делает `project runners update`, и MUST NOT требовать
+их наличия у команд, которые их создают: `project runners add --host NAME`
+MUST отказывать лишь из-за конфликта самого named runner, а не из-за
+отсутствия чужого. Отказ, который всё же случается, MUST называть
+исполнимый выход в `safe_next_actions`, а не только справку.
+Чтение `/2` и распознавание опубликованных frozen runners MUST сохраняться.
+
+#### Scenario: Claude Code запускает общий проект
+- **WHEN** developer вызывает установленный `.claude/skills/prifly-run`
+- **THEN** он передаёт `claude-code` и не читает Codex root
+
+#### Scenario: Existing host runner останавливает init
+- **WHEN** создание выбранного runner конфликтует с существующим файлом
+- **THEN** init возвращает diagnostic без частичной перезаписи profile/runners
+
+#### Scenario: Clone получает только local authority configuration
+- **WHEN** shared profile и его runners уже есть, а local configuration отсутствует
+- **THEN** init создаёт только machine-local configuration
+
+#### Scenario: Пользователь не использует ИИ
+- **WHEN** init выполняется без host в папке без `.git`
+- **THEN** Project готов к managed workflow, AI directories и Git не создаются
+
+#### Scenario: Clone без runner-ов чужих хостов подключается
+- **WHEN** профиль объявляет несколько hosts, а в этом clone лежит runner
+  только одного из них, и разработчик вызывает `project init` с этим host
+- **THEN** init создаёт local configuration и authority, называет отсутствующие
+  runner-ы в ответе и ничего не переписывает
+
+#### Scenario: Команда, создающая runner, не требует его наличия
+- **WHEN** разработчик вызывает `project runners add --host NAME` в clone, где
+  runner другого объявленного host отсутствует
+- **THEN** команда создаёт названный runner; отсутствие чужого отказом не
+  является
+
+### Requirement: Handoff описывает, что требуется от host
+
+Sealed handoff MUST быть самодостаточным описанием ожидаемого от host: каждая
+закреплённая запись контекста MUST быть идентифицируема из самого bundle, без
+опоры на порядок перечисления, а выходные слоты MUST быть разделены на те,
+которые заполняет host, и те, которые движок закрывает сам объявленным
+захватом. Host MUST NOT восстанавливать эту раскладку из содержимого файлов или
+из прошлых прогонов. Рабочая копия, которую держит Run, MUST называться так,
+чтобы её не пришлось искать: путь в ответе запуска и в задаче MUST быть
+абсолютным либо MUST нести имя корня, относительно которого он записан. Host
+MUST NOT определять её перебором каталогов или средствами Git.
+
+Форма, в которой host публикует выход, MUST быть записанной, а не свойством,
+выводимым из устройства хранилища: инструкции сгенерированного host runner и
+authoring reference шага MUST называть, куда пишутся bytes слота и какие поля
+несёт соответствующая запись reported result. Host MUST NOT выводить эту форму
+из content-addressed storage, чужого прогона или чужой попытки. Baseline
+StepResult schema MUST оставаться byte-identical: её digest закреплён в
+sealed packages, поэтому аннотация в ней разорвала бы уже подписанные
+identity.
+
+#### Scenario: Bundle содержит несколько закреплённых записей контекста
+
+- **WHEN** шагу закреплены skill и его bridge
+- **THEN** host определяет, что есть что, по самому bundle, а не по порядку
+  ссылок
+
+#### Scenario: Часть выходов закрывается захватом
+
+- **WHEN** шаг объявляет и обычный выход, и выход с привязкой workspace tree
+- **THEN** handoff называет, какой слот host заполняет сам, а какой движок
+  закрывает захватом
+
+#### Scenario: Host впервые публикует не-древесный выход
+
+- **WHEN** host заполняет слот, который движок не закрывает захватом
+- **THEN** форма публикации читается из published contract, без вывода её из
+  устройства artifact storage
+
+#### Scenario: Хост ищет рабочую копию захода
+- **WHEN** запуск создал claim и вернул его путь
+- **THEN** путь читается однозначно: он абсолютный или сопровождён именем
+  корня, от которого записан, и хост не обращается к `git worktree list`
