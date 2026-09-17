@@ -1971,32 +1971,42 @@ func projectRoot(ctx context.Context, path string) (string, error) {
 				return "", usageError("project_profile_invalid: .prifly must be a real directory")
 			}
 			if _, err := os.Lstat(filepath.Join(parent, ".prifly", "project.yaml")); errors.Is(err, os.ErrNotExist) {
-				return parent, nil
+				// A bare .prifly is a profile only where the command started: an
+				// ancestor's is somebody else's directory, and the one under HOME
+				// is the engine's own user directory, above every repository.
+				if parent == directory {
+					return parent, nil
+				}
 			} else if err != nil {
 				return "", err
+			} else {
+				return projectRootProfile(ctx, parent)
 			}
-			profile, err := readProjectProfile(parent)
-			if err != nil {
-				return "", err
-			}
-			if profile.SchemaVersion == "prifly-project-profile/2" {
-				gitRoot, err := projectRepositoryRoot(ctx, parent)
-				if err != nil {
-					return "", err
-				}
-				if gitRoot != parent {
-					return "", usageError("repository_required: profile /2 must be at the Git repository root")
-				}
-			}
-			return parent, nil
-		}
-		if !errors.Is(err, os.ErrNotExist) {
+		} else if !errors.Is(err, os.ErrNotExist) {
 			return "", err
 		}
 		if filepath.Dir(parent) == parent {
 			return directory, nil
 		}
 	}
+}
+
+// projectRootProfile is the discovered profile at root, after its own checks.
+func projectRootProfile(ctx context.Context, root string) (string, error) {
+	profile, err := readProjectProfile(root)
+	if err != nil {
+		return "", err
+	}
+	if profile.SchemaVersion == "prifly-project-profile/2" {
+		gitRoot, err := projectRepositoryRoot(ctx, root)
+		if err != nil {
+			return "", err
+		}
+		if gitRoot != root {
+			return "", usageError("repository_required: profile /2 must be at the Git repository root")
+		}
+	}
+	return root, nil
 }
 
 func projectRepositoryRoot(ctx context.Context, path string) (string, error) {

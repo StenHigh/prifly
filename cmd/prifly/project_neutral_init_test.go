@@ -199,3 +199,37 @@ func TestProjectNeutralProfileSchemasAndLegacyGitRequirement(t *testing.T) {
 		t.Fatalf("legacy /2 lost its Git requirement: %v", err)
 	}
 }
+
+// The engine's own user directory is a bare .prifly under HOME, and every
+// repository under HOME sits below it. Discovery that accepted any ancestor
+// .prifly took that directory for the profile of a repository that had none
+// yet: on the owner's machine the first project init refused with
+// unsafe_authority_root, and with an explicit --state-root it would have
+// written project.yaml and the runners into HOME. Above the start directory
+// only project.yaml marks a profile.
+func TestCLIProjectInitBelowBareUserDirectory(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	home, err := canonicalProjectPath(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := priflyUserDir
+	priflyUserDir = func() (string, error) { return filepath.Join(home, ".prifly"), nil }
+	t.Cleanup(func() { priflyUserDir = previous })
+	if err := os.MkdirAll(filepath.Join(home, ".prifly", "monitor"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	repository := filepath.Join(home, "work", "repo")
+	if err := os.MkdirAll(repository, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, stderr := runCLI(t, "project", "init", "--repository", repository); code != 0 || !strings.Contains(out, `"profile":"`+filepath.Join(repository, ".prifly")+`"`) {
+		t.Fatalf("init below the user directory: %d %s %s", code, out, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".prifly", "project.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("the user directory became a profile: %v", err)
+	}
+	if root, err := projectRoot(context.Background(), filepath.Join(repository, ".prifly")); err != nil || root != repository {
+		t.Fatalf("discovery from inside the new profile: %s %v", root, err)
+	}
+}
