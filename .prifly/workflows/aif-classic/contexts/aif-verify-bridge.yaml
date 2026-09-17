@@ -1,5 +1,5 @@
 id: aif:context/aif-verify-bridge
-version: 1.10.0
+version: 1.11.0
 media_type: text/markdown; charset=utf-8
 text: |
   # Pri-Fly adapter for the pinned aif-verify skill
@@ -7,6 +7,15 @@ text: |
   The following supporting context is the pinned upstream `aif-verify` skill.
   Verify the implementation against what the plan promised. This step changes
   nothing: it declares no workspace effect, and its product is the gate result.
+
+  The plan the implementation was built from is laid out for you, read-only,
+  in the claimed workspace at the location `workspace-trees.json` names — the
+  place the pinned skill's own discovery looks, chosen by the Run's profile —
+  because the implement step's capture took it out of the tree. It is the
+  Run's doing, not the tree's history: read it, do not edit it, do not declare
+  or report it as an output, and do not treat its presence, or its absence
+  from git, as a finding. The engine takes it back after this step, and a
+  write to it is refused as `effect_not_permitted`.
 
   Report honestly, including that a check you could not run did not run. A gate
   that reports a pass it did not establish is worse than one that says it could

@@ -3,6 +3,9 @@
 profile: full # `fast` and `ultra` use their documented native AIF plan layouts.
 # Standing answers of this repository; a flag on one Run overrides any of them.
 # gate_checks is the whole verify composition (make race stays a release gate).
+# A Run works in a claim worktree, which holds tracked files only, so the
+# toolchain the Makefile defaults to (.tools/go, gitignored) is not there and
+# make stops with Error 127 before a single test. Name it the way CI does.
 answers:
   decision_policy: attended
   preflight:
@@ -11,8 +14,8 @@ answers:
     plan_logging: minimal # the CLI has no logging: one final document on stdout
     gate_warnings: ignore
     gate_checks: |
-      make ci-check
-      make e2e
+      make ci-check GO="$(go env GOROOT)/bin/go"
+      make e2e GO="$(go env GOROOT)/bin/go"
       openspec validate --all --strict
       git diff --check
 settings:

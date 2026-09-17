@@ -1,12 +1,13 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/review-batch
-version: 1.3.0
+version: 1.4.0
 title: Review and fix until nothing blocks or the declared limit is reached
 refs:
   schema_implementation: "{{schema_implementation}}"
   schema_gate-result: "{{schema_gate-result}}"
   schema_warmup-handoff: "{{schema_warmup-handoff}}"
+  schema_plan_manifest: "{{workspace_tree_manifest}}"
   schema_round-limit: "{{schema_round-limit}}"
   schema_feature-enabled: "{{schema_feature-enabled}}"
   workflow_review-once: "{{workflow_review-once}}"
@@ -14,6 +15,7 @@ refs:
 inputs:
   implementation: schema_implementation
   handoff: schema_warmup-handoff
+  plan: schema_plan_manifest
   review_round_limit:
     schema_ref: schema_round-limit
     required: false
@@ -54,8 +56,8 @@ stages:
   round:
     kind: repeat
     body_workflow_ref: workflow_review-once
-    initial_bindings: {implementation: $inputs.implementation, handoff: $inputs.handoff}
-    next_bindings: {implementation: $iteration.implementation, handoff: $inputs.handoff}
+    initial_bindings: {implementation: $inputs.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
+    next_bindings: {implementation: $iteration.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
     continue_on: [partial]
     until: false
     max_iterations: 8

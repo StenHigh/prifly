@@ -1,10 +1,11 @@
 authoring: prifly-step/2
 id: aif:step/review
-version: 1.8.0
+version: 1.9.0
 title: Run read-only aif-review over the implementation
 kind: worker
 inputs:
   implementation: {schema_ref: "{{schema_implementation}}"}
+  plan: {schema_ref: "{{workspace_tree_manifest}}"}
 outputs:
   gate: {schema_ref: "{{schema_gate-result}}", required_for: [pass, needs_revision]}
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
@@ -13,3 +14,8 @@ context_refs: ["{{context_aif-review}}"]
 effects: {class: none, retry_class: never}
 session_limits: {active_timeout_ms: null}
 result_schema_ref: "{{step_result_schema}}"
+# Read-only materialisation, as on verify: the plan the change was built
+# from is what "what the plan promised" is judged against.
+workspace_trees:
+  - input_port: plan
+    capture: "{{plan_capture}}"

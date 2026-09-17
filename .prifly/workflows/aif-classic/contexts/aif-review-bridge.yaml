@@ -1,5 +1,5 @@
 id: aif:context/aif-review-bridge
-version: 1.7.0
+version: 1.8.0
 media_type: text/markdown; charset=utf-8
 text: |
   # Pri-Fly adapter for the pinned aif-review skill
@@ -7,6 +7,14 @@ text: |
   The following supporting context is the pinned upstream `aif-review` skill.
   Review the implementation as written. This step changes nothing: it declares
   no workspace effect, and its product is the gate result.
+
+  The plan the change was built from is laid out for you, read-only, in the
+  claimed workspace at the location `workspace-trees.json` names; "what the
+  plan promised" below is judged against that file. It is the Run's doing,
+  not the tree's history: read it, do not edit it, do not declare or report
+  it as an output, and do not treat its presence, or its absence from git, as
+  a finding. The engine takes it back after this step, and a write to it is
+  refused as `effect_not_permitted`.
 
   Report findings honestly, including that a gate you could not run did not
   run. A gate that reports a pass it did not establish is worse than one that

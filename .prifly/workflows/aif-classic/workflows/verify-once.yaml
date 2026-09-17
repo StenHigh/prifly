@@ -1,18 +1,20 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/verify-once
-version: 1.5.0
+version: 1.6.0
 title: Verify the implementation once and fix what blocks it
 refs:
   schema_implementation: "{{schema_implementation}}"
   schema_gate-result: "{{schema_gate-result}}"
   schema_warmup-handoff: "{{schema_warmup-handoff}}"
+  schema_plan_manifest: "{{workspace_tree_manifest}}"
   step_verify: "{{step_verify}}"
   step_fix: "{{step_fix}}"
   local_policy: "{{local_policy}}"
 inputs:
   implementation: schema_implementation
   handoff: schema_warmup-handoff
+  plan: schema_plan_manifest
 outputs:
   implementation: {schema_ref: schema_implementation, required_for: [succeeded, partial]}
   gate: {schema_ref: schema_gate-result, required_for: [partial, rejected]}
@@ -23,7 +25,7 @@ stages:
   verify:
     kind: step
     step_ref: step_verify
-    input_bindings: {implementation: $inputs.implementation}
+    input_bindings: {implementation: $inputs.implementation, plan: $inputs.plan}
     on: {pass: decide, needs_revision: inconclusive, fail: stopped, no_work: stopped}
   decide:
     kind: choice

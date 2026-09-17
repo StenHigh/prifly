@@ -9,15 +9,25 @@ chat dialog.
 Pinned sources — a record of the bytes this adapter was written against, not a
 guard. The host supplies whatever revision it has, and nothing in this package
 compares the two: the skills are not in this repository, and CI compiles against
-stubs. A hash below that no longer matches a host's skill means the bridges were
-written for a different revision, which is worth knowing but is not an error
-anything here can raise.
-
+stubs. A hash below is the npm tarball's, and an installed copy is not expected
+to match it (see below): the record says which upstream revision the bridges
+were written against, and is re-read when that revision moves.
 
 Upstream is the npm package `ai-factory` (github.com/lee-to/ai-factory); these
-are the bytes of **2.19.0**. Against 2.18.1 the plan, implement, improve and
-verify skills changed and `aif-warmup` appeared; commit, fix, review and the
-security checklist did not move.
+are the bytes of **2.19.0** as published on npm, not as installed. Against
+2.18.1 the plan, implement, improve and verify skills changed and `aif-warmup`
+appeared; commit, fix, review and the security checklist did not move.
+
+The installer rewrites two things once, at install time, and never again until
+the next upgrade: `{{skills_dir}}` becomes the host's skills path
+(`aif-security-checklist/SKILL.md`, line 149, on every host), and on Codex hosts
+(`codex-cli` and `codex-app` share one transformer) every `/aif-*` invocation
+in a skill's text becomes `$aif-*`, which changes every `SKILL.md` below except
+`aif-warmup` and leaves `references/*` untouched. Measured on installed 2.19.0:
+claude-code matches every hash but the checklist, codex-app matches only
+`aif-warmup` and the four references. A mismatch on a host therefore says
+nothing about the revision. Pri-Fly pins what the host has at `project start`,
+and that is what a Run reads.
 
 - `aif-warmup/SKILL.md` — SHA-256 `ad7fd1bdb62d97881b190ed596a175fdf02e9e92b38c2ad7b941a68a84ffb8b2`.
 - `aif-plan/SKILL.md` v1.0.0 — SHA-256 `086d68806b9c8a27d8de51ae6389492715e9b4caa5abb277f9bc02fde047fe9d`.
