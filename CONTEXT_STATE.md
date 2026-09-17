@@ -1743,6 +1743,43 @@ Claude Code кэширует `SKILL.md` на старте, посреди сес
   (`prifly_executable: …/prifly.test`), скрытый прежним ignore; с настоящим
   `project.yaml` он делал бы `cmd/prifly` профилем для команд из этого cwd.
 
+### 2026-09-17 (вечер): 0.13.30 выпущен; ревью модуля; два предложения ждут слова
+
+- **Выпуск 0.13.30** (тег на `a2f0699`, run 35217483068, approve окружения
+  `release` — этой сессией под аккаунтом владельца по его слову «делать всё»):
+  discovery над `~/.prifly`, standing-ответы вне профиля, standing
+  runtime-ответ в мосте, fork без nil-паники, staticcheck/govulncheck в
+  воротах. Запись: `release-0.13.30.md`. Установлено здесь (`prifly update`),
+  `local.yaml` этого клона снова указывает на `~/.local/bin/prifly`.
+  Пакетчик пересобирает стенд на нём (discovery), пилот снимает флаг
+  `--runtime-answer improve_apply`.
+- **Ревью Go-модуля** (по просьбе владельца): 60.7k строк кода / 51.4k
+  тестов, покрытие 72–83 % (runtime 80.1 %), `staticcheck` 11 находок
+  (1 реальный баг — fork), `govulncheck` — одна косвенная; 218 функций
+  сложности > 20 (`Engine.start` 159, `checkCoreGraph` 149, `runCommand`
+  118), 88 функций длиннее 100 строк, 43 % экспорта без doc-комментария.
+  Вердикт владельцу: показывать не стыдно; открыто из ревью — размер функций
+  (резать по касательной) и doc-комментарии `internal/runtime`. Замеры
+  производительности прежние (evidence 04.09); сегодня OpenStore10MB 14.8 мс.
+- **Заход (в) для пакетчика** — см. раздел выше; их обещание по
+  `local-context/3` для `fast` закрыто: деревья приезжают
+  `workspace-trees.json` (`workspace-tree-guide/1`).
+- **Два OpenSpec-предложения написаны, не закоммичены — ждут слова владельца
+  по design:** `add-input-only-workspace-tree-binding` (StepDefinition v8:
+  `workspace_trees[]` с `input_port` + `capture` без `output_port` на
+  `effects: none`; материализация в claim-worktree, отпечаток после неё,
+  снятие после settle, `repository_workspace` у такого шага, guide/2; для
+  verify/review без плана — запрос пакетчика, форму он подтвердил, 1.38.0
+  сделает после тега) и `report-run-failure-in-the-read-envelope`
+  (`core-read/30`: `failure {code, diagnostic_id, attempt_id,
+  step_instance_id}` у `failed`/`cancelled`, из diagnostics, state не
+  меняется; текст runner'а — `run.attempts[].id`). Две заметки пилота
+  (`session_limits: null`, «`claim list` — массив») он снял сам по
+  сохранённому выводу — ошибки чтения, не дефекты.
+- Слово владельца 17.09: «нужно делать всё» — выпуск (сделан), v8 и
+  read-конверт (предложения готовы), решения по контрактам из заметок
+  пилота (в предложении B).
+
 ## Открыто владельцу по итогам окна
 
 Четыре из шести пунктов закрыты выпусками 0.13.10 и 0.13.11, один — состоянием,
