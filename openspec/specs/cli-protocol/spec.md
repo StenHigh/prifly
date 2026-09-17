@@ -574,7 +574,11 @@ workspace MUST давать stable diagnostic до registration, claim или Ru
 Versioned assisted SessionTask MUST сообщать host finite declared Workspace tree
 bindings: manifest input/output port names, typed capture policy, expected input
 manifest ArtifactRef при его наличии и permitted typed location form for
-output-only creation. Host MUST не получать authority handle, artifact-store
+output-only creation. Materialize-only binding MUST сообщаться без output port
+и с declared location materialized entries; guide рядом с манифестом
+(`workspace-tree-guide/2`) MUST говорить, что такой port host не объявляет.
+Read-only step с materialize-only binding MUST получать `repository_workspace`
+и `workspace_mode` той же WorktreeClaim, что и workspace-write step Run. Host MUST не получать authority handle, artifact-store
 path или право выбирать другой Workspace path. Сопоставленный
 SessionSubmission MUST использовать version того SessionTask, который был
 handed Attempt; старые retained session versions остаются читаемыми и не
@@ -623,6 +627,13 @@ version или несовпадение handoff/submission MUST отклонят
   `workspace_trees`, а step объявляет binding с входом и выходом
 - **THEN** runtime capture-ит дерево по declared input location и заполняет
   output port сам, не требуя от host повторить путь
+
+#### Scenario: Read-only step получает materialized план и путь рабочей копии
+- **WHEN** assisted step с `effects.class: none` объявляет materialize-only
+  binding
+- **THEN** SessionTask называет `repository_workspace`, binding без output port
+  и location materialized entries, а submission, объявляющая порт этого
+  binding'а, отказывается named refusal до изменения Run
 
 ### Requirement: Project launch принимает typed per-Run decision selection
 `project start` MUST accept an explicit package-profile selection, typed

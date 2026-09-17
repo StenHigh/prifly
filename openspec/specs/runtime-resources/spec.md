@@ -682,6 +682,14 @@ input entry MUST совпадать с pinned ArtifactRevision; output-only targ
 иное состояние MUST дать stable drift/refusal без автоматической перезаписи
 repository file.
 
+Для materialize-only binding runtime MUST materialize exact entries в
+RepositoryWorkspace той же WorktreeClaim теми же проверками, MUST снять
+отпечаток рабочей копии, по которому измеряется `effect_not_permitted`
+read-only step, только после материализации, и MUST снять materialized
+entries после settle попытки, не создавая output WorkspaceTreeManifest.
+Entry, чьи bytes до handoff уже отличаются от pinned ArtifactRevision,
+MUST дать тот же drift refusal, что и у input/output binding.
+
 Capture MUST enumerate only regular files permitted by declared policy,
 recheck confinement и entrypoint, seal every entry before creating the output
 WorkspaceTreeManifest и сохранить full input provenance. Crash, missing blob,
@@ -702,6 +710,19 @@ MUST не создавать accepted output. Binding не расширяет в
 - **THEN** runtime сохраняет все exact raw bytes как один sealed output
   WorkspaceTreeManifest с provenance prior input manifest, не читая другой
   похожий план
+
+#### Scenario: Read-only step с materialized планом отчитывается без изменений
+- **WHEN** read-only assisted step получил materialized entries и host не
+  изменил рабочую копию
+- **THEN** submission принимается: отпечаток, снятый после материализации,
+  совпадает с состоянием при отчёте, а после settle рабочая копия возвращается
+  к состоянию до материализации
+
+#### Scenario: Read-only step изменил дерево рядом с materialized entries
+- **WHEN** host read-only step записал файл вне materialized entries или
+  изменил materialized entry
+- **THEN** submission отказывает `effect_not_permitted` с именами путей, как у
+  step без binding
 
 ### Requirement: Ожидание решения durable и восстанавливаемо
 Runtime MUST persist decision request, allowed response contract, originating
