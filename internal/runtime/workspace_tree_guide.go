@@ -18,14 +18,14 @@ const WorkspaceTreeGuideFile = "workspace-trees.json"
 
 // WorkspaceTreeGuideVersion is this document's own contract. Nothing else
 // carries it, so it moves without dragging the Run state behind it.
-const WorkspaceTreeGuideVersion = "workspace-tree-guide/1"
+const WorkspaceTreeGuideVersion = "workspace-tree-guide/2"
 
 // workspaceTreeGuideNote says where the result goes. It no longer has to argue
 // with context.json: the captured port is absent from outputs there, so all
 // three documents an executor reads now say the same thing. Reading order stops
 // mattering, and it never could be relied on — slots are the natural place to
 // start, and starting there used to earn a refusal for doing the obvious.
-const workspaceTreeGuideNote = "The engine captures these ports from the workspace itself, so context.json lists no output slot for them and the submission template leaves them out. Produce the result at the capture path below, in the declared shape, and do not declare the port in your submission: declaring it earns workspace_tree_output_host_supplied, and writing into a slot for it earns workspace_tree_capture_conflict."
+const workspaceTreeGuideNote = "The engine captures these ports from the workspace itself, so context.json lists no output slot for them and the submission template leaves them out. Produce the result at the capture path below, in the declared shape, and do not declare the port in your submission: declaring it earns workspace_tree_output_host_supplied, and writing into a slot for it earns workspace_tree_capture_conflict. A port that names input_port and no output_port is materialized for reading only: do not declare it, do not report a location for it, and expect it to be gone once this attempt settles."
 
 // WorkspaceTreeGuide shows an executor the shape of the result it must produce,
 // before it produces it. Until this existed the contract was reachable only by
@@ -42,7 +42,7 @@ type WorkspaceTreeGuide struct {
 // place: a direct_child_tree policy needs its kind and entrypoint too, and an
 // executor given only a path puts a file where a tree is expected.
 type WorkspaceTreeGuidePort struct {
-	OutputPort string                          `json:"output_port"`
+	OutputPort string                          `json:"output_port,omitempty"`
 	InputPort  string                          `json:"input_port,omitempty"`
 	Capture    flow.WorkspaceTreeCapturePolicy `json:"capture"`
 }

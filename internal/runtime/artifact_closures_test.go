@@ -70,7 +70,7 @@ func TestArtifactClosureSealsExactManifestBeforeProducerSettlement(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.SchemaVersion != CoreEffectsStateVersion || len(r.ArtifactClosures) != 1 || len(r.ArtifactPublications) != 2 || after.RunVersion != before.RunVersion {
+	if r.SchemaVersion != CoreMaterializedStateVersion || len(r.ArtifactClosures) != 1 || len(r.ArtifactPublications) != 2 || after.RunVersion != before.RunVersion {
 		t.Fatalf("close changed lifecycle or failed to record one exact cut: state=%s publications=%d closures=%d versions=%d/%d", r.SchemaVersion, len(r.ArtifactPublications), len(r.ArtifactClosures), before.RunVersion, after.RunVersion)
 	}
 	producer := r.Attempts[producerTask.AttemptID]
@@ -93,9 +93,9 @@ func TestArtifactClosureSealsExactManifestBeforeProducerSettlement(t *testing.T)
 		t.Fatalf("manifest duplicated its unbounded item list into bounded ArtifactRevision provenance: %+v", manifestArtifact.Provenance)
 	}
 	for name, value := range map[string]any{
-		"CoreRunStateV29": r, "CoreRunViewV29": after, "CoreNextViewV29": next, "CorePreviewV29": preview,
-		"CoreWorkflowInvocationV29": r.Invocations[r.RootInvocationID], "ArtifactManifest": manifest,
-		"ArtifactClosure": closure, "PublishStepPublicationCommandV3": command, "CoreCapabilitiesV29": Capabilities(),
+		"CoreRunStateV30": r, "CoreRunViewV30": after, "CoreNextViewV30": next, "CorePreviewV30": preview,
+		"CoreWorkflowInvocationV30": r.Invocations[r.RootInvocationID], "ArtifactManifest": manifest,
+		"ArtifactClosure": closure, "PublishStepPublicationCommandV3": command, "CoreCapabilitiesV30": Capabilities(),
 	} {
 		if err := validatePublic(t, name, value); err != nil {
 			t.Fatalf("%s rejects the live closure value: %v", name, err)

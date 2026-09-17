@@ -23,6 +23,11 @@ contract'а закреплён по digest (`effects-session.schema.json` для
 
 ## Decisions
 
+0. **Граница — `core-read/30` вместе с `core-state/30`**, той же, что вводит
+   change `add-input-only-workspace-tree-binding` (state там нужен ради
+   `materialized_entries` handoff'а); `failure` по-прежнему выводится при
+   чтении и в state не пишется, но bundle `materialized-session` описывает
+   обе стороны сразу, чтобы не плодить два номера за один выпуск.
 1. **Поле в read envelope, не в state.** `failure` выводится при `View` из
    diagnostics (последняя blocking-диагностика терминального Run по
    `severity`/порядку), поэтому state и его bundle не меняются — только

@@ -187,11 +187,11 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 		}
 	}
 	if version, exists := source["schema_version"]; exists {
-		if timed && version != "6" && version != "7" {
-			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6 or v7")
+		if timed && version != "6" && version != "7" && version != "8" {
+			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6, v7 or v8")
 		}
-		if !timed && version != "2" && version != "5" {
-			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2 or v5")
+		if !timed && version != "2" && version != "5" && version != "8" {
+			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2, v5 or v8")
 		}
 	}
 	refs, err := authorRefs(source["refs"])
@@ -243,6 +243,17 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 		schemaVersion = "6"
 		if limits["active_timeout_ms"] == nil {
 			schemaVersion = "7"
+		}
+	}
+	// A tree read without being captured exists only in v8: the older
+	// contracts require the output port that this binding leaves out.
+	if trees, ok := source["workspace_trees"].([]any); ok {
+		for _, raw := range trees {
+			if binding, ok := raw.(map[string]any); ok {
+				if _, captured := binding["output_port"]; !captured {
+					schemaVersion = "8"
+				}
+			}
 		}
 	}
 	if value, exists := source["schema_version"]; exists {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -84,17 +85,52 @@ func (e *Engine) effectsBoundaryPaths(ctx context.Context, runID string) (map[st
 	return paths, nil
 }
 
+// runActiveClaim is the workspace a read-only step reads a materialized tree
+// in: the one claim its Run holds. A step that may not write takes no claim
+// of its own, so it cannot create one here either; a Run without a claim, or
+// with more than one, has no single place the tree could go.
+func (e *Engine) runActiveClaim(ctx context.Context, runID string) (WorktreeClaim, error) {
+	record, _, err := e.readClaims(ctx)
+	if err != nil {
+		return WorktreeClaim{}, err
+	}
+	var selected *WorktreeClaim
+	for index := range record.Claims {
+		claim := &record.Claims[index]
+		if claim.Status != "active" || claim.RunID != runID {
+			continue
+		}
+		if selected != nil {
+			return WorktreeClaim{}, fault("workspace_tree_claim_ambiguous", "this Run holds more than one active workspace claim, so a materialized tree has no single place to go")
+		}
+		selected = claim
+	}
+	if selected == nil {
+		return WorktreeClaim{}, fault("workspace_tree_claim_missing", "a read-only step with a materialized tree needs the Run to hold a workspace claim; an earlier workspace_write step takes one")
+	}
+	return *selected, nil
+}
+
 // checkEffectsBoundary refuses a report from a step that was permitted only
 // its output slot and left a workspace of the Run changed. The refusal keeps
 // the handoff awaiting, like a malformed report: the executor can put the
 // workspace back and report again, or the author can declare the effect.
-func (e *Engine) checkEffectsBoundary(ctx context.Context, runID string, attempt *Attempt, step flow.StepDefinition) error {
+func (e *Engine) checkEffectsBoundary(ctx context.Context, r Run, attempt *Attempt, step flow.StepDefinition) error {
 	if attempt.Session == nil || len(attempt.Session.WorkspaceMarks) == 0 || step.Effects.Class == "workspace_write" {
 		return nil
 	}
-	paths, err := e.effectsBoundaryPaths(ctx, runID)
+	paths, err := e.effectsBoundaryPaths(ctx, r.ID)
 	if err != nil {
 		return err
+	}
+	// The mark sees an untracked file's presence, not its bytes: git status
+	// lists a materialized entry the same whether or not the host rewrote it.
+	// The entries the engine placed for this step are therefore compared to
+	// their pinned bytes, and a rewritten one is named like any other change.
+	if changed, err := e.materializedEntriesChanged(r, attempt, paths); err != nil {
+		return err
+	} else if len(changed) != 0 {
+		return local.Reject("effect_not_permitted", "this step may write only inside its declared output slot, and it rewrote a tree materialized for it to read: "+strings.Join(changed, ", "))
 	}
 	for claimID, expected := range attempt.Session.WorkspaceMarks {
 		path, held := paths[claimID]
@@ -172,4 +208,32 @@ func (b processWorkspaceBoundary) changes(ctx context.Context, e *Engine) string
 		named = "HEAD moved"
 	}
 	return "this step may write only inside its declared output slot, and the workspace at " + b.path + " changed while its program ran: " + named + ". Byproducts of a build or a test run belong in .gitignore, which the mark respects; declare effects.class: workspace_write only for a step that is meant to change the tree"
+}
+
+// materializedEntriesChanged names the entries of a materialize-only tree whose
+// bytes no longer equal the pinned ArtifactRevision the engine placed.
+func (e *Engine) materializedEntriesChanged(r Run, attempt *Attempt, paths map[string]string) ([]string, error) {
+	workspace, held := paths[attempt.Session.ClaimID]
+	if !held {
+		return nil, nil
+	}
+	changed := []string{}
+	for _, handoff := range attempt.Session.WorkspaceTrees {
+		if handoff.OutputPort != "" || handoff.InputManifest == nil {
+			continue
+		}
+		manifest, err := e.readWorkspaceTreeManifest(r, *handoff.InputManifest)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range manifest.Files {
+			target := filepath.ToSlash(filepath.Join(manifest.Root, entry.Path))
+			current, err := readLocal(workspace, target, MaxArtifactBytes)
+			if err != nil || rawDigest(current) != entry.Ref.Digest {
+				changed = append(changed, target)
+			}
+		}
+	}
+	sort.Strings(changed)
+	return changed, nil
 }

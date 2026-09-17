@@ -362,7 +362,11 @@ func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 		check.TokenHash = ""
 	}
 	version := readVersionFor(r.SchemaVersion, r.Profile)
-	return RunView{version, read.Snapshot.Version, read.Snapshot.EventSeq, read.Cut, asOf, live, r, timing}, nil
+	view := RunView{SchemaVersion: version, RunVersion: read.Snapshot.Version, EventSequence: read.Snapshot.EventSeq, Cut: read.Cut, AsOf: asOf, DriverLive: live, Run: r, Timing: timing}
+	if isMaterializedState(r.SchemaVersion) {
+		view.Failure = runFailure(r)
+	}
+	return view, nil
 }
 func (e *Engine) Events(ctx context.Context, id string, after int64, limit int) (local.ReadView, error) {
 	if _, err := e.readAccess(ctx); err != nil {
@@ -714,7 +718,9 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		if isPublicationFailureState(r.SchemaVersion) {
 			next.SchemaVersion = CorePublicationFailureNextVersion
 		}
-		if isEffectsState(r.SchemaVersion) {
+		if isMaterializedState(r.SchemaVersion) {
+			next.SchemaVersion = CoreMaterializedNextVersion
+		} else if isEffectsState(r.SchemaVersion) {
 			next.SchemaVersion = CoreEffectsNextVersion
 		} else if isRoutedState(r.SchemaVersion) {
 			next.SchemaVersion = CoreRoutedNextVersion

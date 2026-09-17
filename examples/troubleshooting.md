@@ -75,6 +75,32 @@ location — **не** отказ: runtime берёт объявленный path
 обязанности стороны host — в
 [cli-protocol](../openspec/specs/cli-protocol/spec.md).
 
+### `schema_invalid … workspace_trees/0: the contract requires output_port, capture` на read-only шаге
+
+**Причина.** До StepDefinition v8 дерево можно было объявить только на шаге с
+`workspace_write`, и binding обязан был назвать `output_port`: gate (verify,
+review) после захвата плана оставался без файла, а давать ему право записи
+ради чтения — против измеряемых эффектов.
+
+**Поле.** `workspace_trees[]` с `input_port` и `capture` **без**
+`output_port` на шаге с `effects: {class: none}`; authoring lower-ит его в v8
+сам, пинить `schema_version` не нужно. Runtime materialize-ит entries манифеста
+в claim того же Run до отпечатка, host читает их по `input_location` из
+`session task` (и получает `repository_workspace`), порт не объявляет и не
+сообщает; после settle движок снимает то, что положил сам (не файл, который
+уже лежал). Такой binding на `workspace_write` шаге и binding с `output_port`
+на read-only шаге — отказ компиляции. Нужен движок с `core-state/30`.
+
+### Run `failed`, а `run status` даёт `outcome: null` — где причина
+
+**Причина.** `outcome` — предметный исход workflow, у остановленного Run его
+нет; причина остановки — диагностика.
+
+**Поле.** С `core-read/30` view несёт `failure` (`code`, `diagnostic_id`,
+`attempt_id`, `step_instance_id`) у Run со статусом `failed` или `cancelled` —
+последняя диагностика уровня error, та, что его остановила. На старом бинаре
+— `run.diagnostics[]`, последняя с `severity: error`.
+
 ### Заход ушёл в `uncertain`, и ни одно предложенное действие его не двигает
 
 **Причина.** Неразрешённое исполнение удерживает слот, и слепой повтор

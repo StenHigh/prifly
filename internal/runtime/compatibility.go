@@ -72,6 +72,14 @@ func Capabilities() CapabilityManifest {
 	// it here would refuse the definitions it can in fact seal and run.
 	profile.StepVersions = append(profile.StepVersions, "7")
 	profile.Capabilities = append(profile.Capabilities, "assisted_session_unbounded_work")
+	// A read-only step may have a captured tree materialized for it without
+	// capturing one back: step contract v8, and state/read 30 for the handoff
+	// that records what was placed and the view that names what stopped a Run.
+	profile.StateVersion, profile.ReadVersion = CoreMaterializedStateVersion, CoreMaterializedReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreMaterializedStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreMaterializedReadVersion)
+	profile.StepVersions = append(profile.StepVersions, "8")
+	profile.Capabilities = append(profile.Capabilities, "materialize_only_workspace_tree", "run_failure_named")
 	return manifest
 }
 

@@ -205,11 +205,21 @@ const (
 	CoreEffectsNextVersion     = "core-next/29"
 	CoreEffectsPreviewVersion  = "core-preview/29"
 	CoreEffectsStepReadVersion = "core-step-read/29"
-	CoreConfigVersion          = "core-configuration/1"
-	CoreContextConfigVersion   = "core-configuration/2"
-	MaxDefinitionBytes         = 2 << 20
-	MaxArtifactBytes           = 16 << 20
-	MaxRunPublications         = 1024
+	// A read-only step may have a captured tree materialized for it: the
+	// handoff records which entries the engine placed, so settlement takes
+	// back exactly those, and the read view of a Run that stopped names the
+	// diagnostic that stopped it. Older Runs keep the shapes they were sealed
+	// under; a materialize-only handoff or a failure summary never enters them.
+	CoreMaterializedReadVersion     = "core-read/30"
+	CoreMaterializedStateVersion    = "core-state/30"
+	CoreMaterializedNextVersion     = "core-next/30"
+	CoreMaterializedPreviewVersion  = "core-preview/30"
+	CoreMaterializedStepReadVersion = "core-step-read/30"
+	CoreConfigVersion               = "core-configuration/1"
+	CoreContextConfigVersion        = "core-configuration/2"
+	MaxDefinitionBytes              = 2 << 20
+	MaxArtifactBytes                = 16 << 20
+	MaxRunPublications              = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time
@@ -825,4 +835,36 @@ type RunView struct {
 	DriverLive    bool        `json:"driver_live"`
 	Run           Run         `json:"run"`
 	Timing        TimingTree  `json:"timing"`
+	// Failure names what stopped a failed or cancelled Run, derived from its
+	// diagnostics at read time; a completed or unfinished Run carries none.
+	Failure *RunFailure `json:"failure,omitempty"`
+}
+
+// RunFailure is the one diagnostic a reader of a stopped Run needs first: the
+// reason lived only somewhere in diagnostics[], with outcome null beside it.
+type RunFailure struct {
+	Code           string `json:"code"`
+	DiagnosticID   string `json:"diagnostic_id"`
+	AttemptID      string `json:"attempt_id,omitempty"`
+	StepInstanceID string `json:"step_instance_id,omitempty"`
+}
+
+// runFailure picks the diagnostic that stopped a Run: the last error the
+// engine recorded, which is the settlement or cancellation that ended it.
+func runFailure(r Run) *RunFailure {
+	if r.Status != "failed" && r.Status != "cancelled" {
+		return nil
+	}
+	for index := len(r.Diagnostics) - 1; index >= 0; index-- {
+		d := r.Diagnostics[index]
+		if d.Severity != "error" {
+			continue
+		}
+		failure := &RunFailure{Code: d.Code, DiagnosticID: d.ID, AttemptID: d.AttemptID}
+		if attempt := r.Attempts[d.AttemptID]; attempt != nil {
+			failure.StepInstanceID = attempt.StepID
+		}
+		return failure
+	}
+	return nil
 }

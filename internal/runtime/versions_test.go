@@ -69,6 +69,7 @@ func TestStatePredicatesFollowTheLadder(t *testing.T) {
 		{"timed sessions", CoreTimingStateVersion, isTimingState},
 		{"routed sessions", CoreRoutedStateVersion, isRoutedState},
 		{"enforced effects", CoreEffectsStateVersion, isEffectsState},
+		{"materialized trees", CoreMaterializedStateVersion, isMaterializedState},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			rank := stateRank(c.version)

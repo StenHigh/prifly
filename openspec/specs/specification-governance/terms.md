@@ -445,7 +445,11 @@ RepositoryWorkspace. Capture policy разрешает только exact file, 
 file-child или одну прямую directory-child с прямыми regular files. Это не glob,
 рекурсивная синхронизация, право host читать ArtifactRevision или экспорт всей
 рабочей копии. Runtime materialize-ит вход и seal-ит выход; host сообщает лишь
-разрешённую location output-only дерева.
+разрешённую location output-only дерева. Со StepDefinition v8 binding MAY быть
+materialize-only: входной manifest и capture policy без выходного порта — только
+на assisted step с `effects.class: none`; runtime materialize-ит exact entries в
+claim того же Run до отпечатка рабочей копии, ничего не capture-ит и снимает
+после settle только те entries, которые сам положил.
 
 <a id="step-instance"></a>
 ### StepInstance — Экземпляр шага

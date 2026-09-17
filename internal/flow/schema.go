@@ -131,7 +131,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
-		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7",
+		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8",
 		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4",
 	}
 	for name := range defs {
@@ -226,6 +226,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = stepDefinitionV2Schema
 	case "StepDefinitionV7":
 		extension = stepDefinitionV2Schema
+	case "StepDefinitionV8":
+		extension = stepDefinitionV2Schema
 	case "WorkflowRevisionV2":
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV3":
@@ -243,8 +245,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		// Each step contract is the previous one plus its own change, so the
 		// requested name is reached by running the mutators in order up to it.
 		// A name outside this list is a base contract and runs none of them.
-		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7"}
-		stepMutators := []func(map[string]any){stepDefinitionV3, stepDefinitionV4, stepDefinitionV5, stepDefinitionV6, stepDefinitionV7}
+		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8"}
+		stepMutators := []func(map[string]any){stepDefinitionV3, stepDefinitionV4, stepDefinitionV5, stepDefinitionV6, stepDefinitionV7, stepDefinitionV8}
 		for i := 0; i <= slices.Index(stepContracts, name); i++ {
 			stepMutators[i](root)
 		}
@@ -545,6 +547,28 @@ func stepDefinitionV7(root map[string]any) {
 	properties["schema_version"].(map[string]any)["const"] = "7"
 	limits := properties["session_limits"].(map[string]any)["properties"].(map[string]any)
 	limits["active_timeout_ms"] = map[string]any{"type": []any{"integer", "null"}, "minimum": 1, "maximum": MaxSessionTimeoutMS}
+}
+
+// StepDefinition v8 lets a read-only assisted step read a captured tree: a
+// binding with an input port and a capture policy but no output port is
+// materialized into the claimed workspace before handoff and never captured.
+// The tree lives in the same workspace_trees list, since the absent output
+// port already says everything a second list would; v7 and below keep
+// requiring the output port, so their sealed bytes and meaning do not move.
+// Session limits become optional again: a v8 step is not necessarily timed,
+// and v6 had made them required only because it was the first timed contract.
+func stepDefinitionV8(root map[string]any) {
+	root["$id"] = "urn:prifly:step-definition:8"
+	root["title"] = "Pri-Fly StepDefinition v8: materialize-only workspace tree on a read-only step"
+	properties := root["properties"].(map[string]any)
+	properties["schema_version"].(map[string]any)["const"] = "8"
+	binding := root["$defs"].(map[string]any)["WorkspaceTreeBinding"].(map[string]any)
+	binding["required"] = []any{"capture"}
+	binding["anyOf"] = []any{
+		map[string]any{"required": []any{"output_port"}},
+		map[string]any{"required": []any{"input_port"}},
+	}
+	root["required"] = slices.DeleteFunc(root["required"].([]any), func(value any) bool { return value == "session_limits" })
 }
 
 // ValidateSchema checks data before a Run exists, using the same pinned schema

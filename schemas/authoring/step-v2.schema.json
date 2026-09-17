@@ -62,7 +62,8 @@
     "port": {"anyOf": [{"$ref": "#/$defs/reference"}, {"type": "object", "additionalProperties": true}]},
     "workspace_tree": {
       "type": "object", "additionalProperties": false,
-      "required": ["output_port", "capture"],
+      "required": ["capture"],
+      "anyOf": [{"required": ["output_port"]}, {"required": ["input_port"]}],
       "properties": {
         "input_port": {"type": "string", "minLength": 1},
         "output_port": {"type": "string", "minLength": 1},

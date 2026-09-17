@@ -55,9 +55,9 @@ func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
 // projectKnownRunnerSkills leaves every installed runner unreplaceable.
 func TestProjectRunnerTextIsPinned(t *testing.T) {
 	pinned := map[string]string{
-		"codex-cli":   "sha256:1bc14667af0bd26c522a271ac6d79fc6f7d6a5ea54333b1d5bee57429ee24763",
-		"codex-app":   "sha256:facf29aad4d43b14b35bc1159492f0b9afc6338242abca03ea21d4de8b16926c",
-		"claude-code": "sha256:8c4ef01c9ef0dad259a9d05edb3209044a3ca23b99e0986a201b381869a5178e",
+		"codex-cli":   "sha256:ed9ac14afbb349dcd1d8f8aad6055dd31a1d65d1f5accc25975a56a35aaf5ee5",
+		"codex-app":   "sha256:2c8b583d589dd0a2436db9eb1b113b0c726f3b551fd861a74b1960a43db52dfc",
+		"claude-code": "sha256:8aafd50bee9b8249a50e9a161684553a4ad4fe16934085a6bbea5d9a62bc48e2",
 	}
 	for _, host := range projectHosts {
 		sum := sha256.Sum256([]byte(projectRunnerSkill(host)))
@@ -70,8 +70,8 @@ func TestProjectRunnerTextIsPinned(t *testing.T) {
 
 func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 	// Keep the five pre-neutral forms, the pre-timing, pre-state-id,
-	// pre-attempt-id, pre-effects, pre-overlay and pre-workspace runners
-	// byte-identical.
+	// pre-attempt-id, pre-effects, pre-overlay, pre-workspace and
+	// pre-attempt-field runners byte-identical.
 	pinned := map[string][]string{
 		"codex-cli": {
 			"sha256:ad7b4782ffa2d341350a2ef6890da52ff19d70bb3da05f08f0e4ee52a2ae74dc",
@@ -85,6 +85,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:5c662606a95bd68cce763fd222feb48a8fc79c30efdb5304694131d377f55d7e",
 			"sha256:9a3be36eff25058224021ea95262883135f8322570b6fa0ff71f442e4e5f4d56",
 			"sha256:d8b32fac0d6e70c7ba1a61679401a24ce676d77955f33fcd23b2f5e0483d30d3",
+			"sha256:1bc14667af0bd26c522a271ac6d79fc6f7d6a5ea54333b1d5bee57429ee24763",
 		},
 		"codex-app": {
 			"sha256:0fecbf3f6b3b67b2347896025b6f0e28f64d7cf6002b5151790bcb8352623376",
@@ -98,6 +99,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:f4ead048dc87e09e4dc22b7dd5ef2323814bbe9518af3e7d17c2ed5dc8d0ffb7",
 			"sha256:28347f95c01eb753088f38ac91aad0f6b2711c73dbf1b49d99971415e3365360",
 			"sha256:aff816b527b3baecdbaf1e7bc253c9bdfcf822d94063dce7c4a37b42308d2f95",
+			"sha256:facf29aad4d43b14b35bc1159492f0b9afc6338242abca03ea21d4de8b16926c",
 		},
 		"claude-code": {
 			"sha256:416af8429794e5adef4b7180427c3b74b517404b44f36be226f752aa0f61196d",
@@ -111,6 +113,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:f4b5facdc1888fbd5ff6e9b089648bd7fd58eb4e357020ee8ed03e9ce50be37f",
 			"sha256:9796f27034085259a220bcf1367ec7951bc4071e22a892f3bb33e38a6b383607",
 			"sha256:9cc0bf9ba4c7434124a97fc4ac19e6d4ab1682862528392f829271682b729865",
+			"sha256:8c4ef01c9ef0dad259a9d05edb3209044a3ca23b99e0986a201b381869a5178e",
 		},
 	}
 	for _, host := range projectHosts {
@@ -153,7 +156,7 @@ func TestProjectCurrentRunnerIsWorkflowNeutral(t *testing.T) {
 				"claim\n   list", "No active host means no automatic wakeup", "does not intercept native questions automatically",
 				// A host that read `run.attempts` as a positional list got
 				// `Cannot index object with number` and gave up on the field.
-				"`run.attempts` by `attempt_id`: read one by that ID, never by position",
+				"`run.attempts` by `id` -- the value the task calls `attempt_id`",
 			} {
 				if !strings.Contains(strings.ToLower(skill), strings.ToLower(required)) {
 					t.Errorf("generic runner lost %q", required)

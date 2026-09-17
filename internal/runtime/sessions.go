@@ -763,7 +763,7 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if err := plan.ValidateJSON(step.ResultSchemaRef, canonicalResult); err != nil {
 		return local.ApplyResult{}, err
 	}
-	if err := e.checkEffectsBoundary(ctx, r.ID, attempt, step); err != nil {
+	if err := e.checkEffectsBoundary(ctx, r, attempt, step); err != nil {
 		return local.ApplyResult{}, err
 	}
 	if _, err := e.readResultOutputs(r, attempt, step, plan, reported); err != nil {
@@ -838,7 +838,25 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 // idempotent: its command identity is derived from the attempt.
 func (e *Engine) settleAssisted(ctx context.Context, runID, attemptID string) error {
 	evidence := settlementEvidence{Kind: "host_report", Actor: e.owner, CommandID: derivedID("command", attemptID, "session-settle")}
-	return e.settleWith(ctx, runID, attemptID, evidence, nil)
+	if err := e.settleWith(ctx, runID, attemptID, evidence, nil); err != nil {
+		return err
+	}
+	// The settlement is recorded before the workspace is tidied: a tree the
+	// engine materialized for a read-only step is taken back afterwards, and
+	// a failure to do so is a diagnostic on the Run, not a lost report.
+	r, _, err := e.load(ctx, runID)
+	if err != nil {
+		return err
+	}
+	if err := e.removeMaterializedTrees(ctx, r, r.Attempts[attemptID]); err != nil {
+		commandID := derivedID("command", attemptID, "materialized-tree-cleanup")
+		message := "the tree materialized for this read-only step could not be taken back: " + err.Error()
+		_, applyErr := e.apply(ctx, e.owner, commandID, runID, "diagnostic.recorded", map[string]any{"attempt_id": attemptID, "code": "workspace_tree_cleanup_failed", "message": message}, nil, local.CommandMonotonic, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+			return local.Change{}, diagnostic(r, attemptID, attemptID, "workspace_tree_cleanup_failed", "settlement", message, obs)
+		})
+		return applyErr
+	}
+	return nil
 }
 
 // MarkSessionDisconnected records that a handed attempt passed its deadline

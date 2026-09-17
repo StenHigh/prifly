@@ -39,11 +39,15 @@ type WorkspaceTreeEntry struct {
 // an assisted host receives its claim. It never gives the host artifact access.
 type WorkspaceTreeHandoff struct {
 	InputPort        string                          `json:"input_port,omitempty"`
-	OutputPort       string                          `json:"output_port"`
+	OutputPort       string                          `json:"output_port,omitempty"`
 	Capture          flow.WorkspaceTreeCapturePolicy `json:"capture"`
 	InputManifest    *ArtifactRef                    `json:"input_manifest,omitempty"`
 	InputLocation    string                          `json:"input_location,omitempty"`
 	ExistingChildren []string                        `json:"existing_children,omitempty"`
+	// MaterializedEntries are the workspace-relative files the engine placed
+	// for a materialize-only binding, so settlement takes back those and not
+	// an entry the tree already held. Recorded under state 30 and later.
+	MaterializedEntries []string `json:"materialized_entries,omitempty"`
 }
 
 // WorkspaceTreeLocation is the only tree value an output-only host may report.
@@ -238,7 +242,7 @@ func writeRootExclusive(root *os.Root, path string, data []byte) error {
 	return f.Sync()
 }
 
-func (e *Engine) materializeWorkspaceTree(root *os.Root, manifest WorkspaceTreeManifest) (func(), error) {
+func (e *Engine) materializeWorkspaceTree(root *os.Root, manifest WorkspaceTreeManifest) ([]string, func(), error) {
 	createdFiles, createdDirs := []string{}, []string{}
 	cleanup := func() {
 		for index := len(createdFiles) - 1; index >= 0; index-- {
@@ -252,35 +256,35 @@ func (e *Engine) materializeWorkspaceTree(root *os.Root, manifest WorkspaceTreeM
 		artifact, data, err := e.Artifact(entry.Ref)
 		if err != nil || artifact.Ref() != entry.Ref {
 			cleanup()
-			return nil, fault("workspace_tree_entry_unavailable", "")
+			return nil, nil, fault("workspace_tree_entry_unavailable", "")
 		}
 		target := filepath.ToSlash(filepath.Join(manifest.Root, entry.Path))
 		if existing, err := root.Lstat(target); err == nil {
 			if existing.Mode()&os.ModeSymlink != 0 || !existing.Mode().IsRegular() {
 				cleanup()
-				return nil, local.ErrUnsafePath
+				return nil, nil, local.ErrUnsafePath
 			}
 			current, err := readLocal(root.Name(), target, MaxArtifactBytes)
 			if err != nil || rawDigest(current) != entry.Ref.Digest {
 				cleanup()
-				return nil, fault("workspace_tree_input_drift", "")
+				return nil, nil, fault("workspace_tree_input_drift", "")
 			}
 			continue
 		} else if !errors.Is(err, os.ErrNotExist) {
 			cleanup()
-			return nil, err
+			return nil, nil, err
 		}
 		if err := ensureTreeDirectory(root, filepath.ToSlash(filepath.Dir(target)), &createdDirs); err != nil {
 			cleanup()
-			return nil, err
+			return nil, nil, err
 		}
 		if err := writeRootExclusive(root, target, data); err != nil {
 			cleanup()
-			return nil, err
+			return nil, nil, err
 		}
 		createdFiles = append(createdFiles, target)
 	}
-	return cleanup, nil
+	return createdFiles, cleanup, nil
 }
 
 func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs map[string]ArtifactRef, claim WorktreeClaim) ([]WorkspaceTreeHandoff, func(), error) {
@@ -321,13 +325,16 @@ func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs m
 				cleanup()
 				return nil, nil, err
 			}
-			entryCleanup, err := e.materializeWorkspaceTree(root, manifest)
+			created, entryCleanup, err := e.materializeWorkspaceTree(root, manifest)
 			if err != nil {
 				cleanup()
 				return nil, nil, err
 			}
 			cleanups = append(cleanups, entryCleanup)
 			handoff.InputManifest, handoff.InputLocation = &ref, location
+			if binding.MaterializeOnly() {
+				handoff.MaterializedEntries = created
+			}
 		} else {
 			created := []string{}
 			if err := ensureTreeDirectory(root, treeParent(binding.Capture), &created); err != nil {
@@ -560,6 +567,12 @@ func (e *Engine) captureWorkspaceTreeOutputs(a *Attempt, step flow.StepDefinitio
 	}
 	allowed := map[string]bool{}
 	for _, handoff := range a.Session.WorkspaceTrees {
+		// A tree materialized for reading has no port to fill and nothing to
+		// capture; a location reported for its input port is refused below as
+		// a port this step does not capture.
+		if handoff.OutputPort == "" {
+			continue
+		}
 		allowed[handoff.OutputPort] = true
 		if _, exists := result.Outputs[handoff.OutputPort]; exists {
 			return Result{}, treeProblem("workspace_tree_output_host_supplied", "/result/outputs/"+handoff.OutputPort, "the runtime seals this port's tree itself; a report does not carry its artifact")
@@ -580,6 +593,70 @@ func (e *Engine) captureWorkspaceTreeOutputs(a *Attempt, step flow.StepDefinitio
 		}
 	}
 	return result, nil
+}
+
+// removeMaterializedTrees takes back what the engine placed in a workspace for
+// a read-only step, once the attempt has settled: the entries the handoff
+// recorded as materialized, never one the tree already held. Only bytes that
+// still equal the pinned entry are removed: a changed entry is the host's
+// writing, already named by the refusal that met it, and not the engine's to
+// delete. Parents left empty by the removal go with it.
+func (e *Engine) removeMaterializedTrees(ctx context.Context, r Run, a *Attempt) error {
+	if a == nil || a.Session == nil || a.Session.ClaimID == "" {
+		return nil
+	}
+	var materialized []WorkspaceTreeHandoff
+	for _, handoff := range a.Session.WorkspaceTrees {
+		if handoff.OutputPort == "" && handoff.InputManifest != nil {
+			materialized = append(materialized, handoff)
+		}
+	}
+	if len(materialized) == 0 {
+		return nil
+	}
+	claim, err := e.claim(ctx, a.Session.ClaimID)
+	if err != nil {
+		return err
+	}
+	workspace, err := e.claimWorkspacePath(claim)
+	if err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(workspace)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	for _, handoff := range materialized {
+		manifest, err := e.readWorkspaceTreeManifest(r, *handoff.InputManifest)
+		if err != nil {
+			return err
+		}
+		pinned := map[string]string{}
+		for _, entry := range manifest.Files {
+			pinned[filepath.ToSlash(filepath.Join(manifest.Root, entry.Path))] = entry.Ref.Digest
+		}
+		for index := len(handoff.MaterializedEntries) - 1; index >= 0; index-- {
+			target := handoff.MaterializedEntries[index]
+			info, err := root.Lstat(target)
+			if err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			current, err := readLocal(root.Name(), target, MaxArtifactBytes)
+			if err != nil || rawDigest(current) != pinned[target] {
+				continue
+			}
+			if err := root.Remove(target); err != nil {
+				return err
+			}
+			for dir := filepath.ToSlash(filepath.Dir(target)); dir != "." && dir != "/" && dir != ""; dir = filepath.ToSlash(filepath.Dir(dir)) {
+				if root.Remove(dir) != nil {
+					break
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (e *Engine) sealWorkspaceTreeOutput(r Run, a *Attempt, step flow.StepDefinition, definition flow.OutputPort, port string, ref ArtifactRef, data []byte) (Artifact, error) {

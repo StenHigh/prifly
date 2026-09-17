@@ -508,3 +508,67 @@ executor: {adapter_ref: {id: core:adapter/local-process, version: 2.0.0, digest:
 		t.Fatalf("the refusal does not name the authoring version a program uses: %s %s", p.Path, p.Message)
 	}
 }
+
+// A read-only step reads a captured tree through a binding with no output
+// port. Only v8 carries it, only on effects none, and never beside a captured
+// binding; the older contracts keep refusing the absent port.
+func TestMaterializeOnlyWorkspaceTreeAuthoringAndValidation(t *testing.T) {
+	digest := "sha256:" + string(bytes.Repeat([]byte{'0'}, 64))
+	author := func(effects, version string) []byte {
+		return []byte(fmt.Sprintf(`authoring: prifly-step/1
+id: test:step/verify
+version: 1.0.0
+%srefs:
+  manifest: {id: core:schema/workspace-tree-manifest, version: 1.0.0, digest: %s}
+  adapter: {id: core:adapter/assisted-session, version: 1.0.0, digest: %s}
+  instructions: {id: test:context/instructions, version: 1.0.0, digest: %s}
+  result: {id: test:schema/step-result, version: 1.0.0, digest: %s}
+kind: worker
+inputs: {plan: manifest}
+outputs: {}
+executor: {adapter_ref: adapter, operation: session}
+instructions_ref: instructions
+effects: %s
+result_schema_ref: result
+workspace_trees:
+  - input_port: plan
+    capture: {kind: exact_file, path: .ai-factory/PLAN.md}
+`, version, digest, digest, digest, digest, effects))
+	}
+	data, err := StepJSONBytes(author("{class: none, retry_class: never}", ""), "yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateProtocol("StepDefinitionV8", data); err != nil {
+		t.Fatalf("materialize-only binding rejected by v8: %v", err)
+	}
+	if err := ValidateProtocol("StepDefinitionV7", data); err == nil {
+		t.Fatal("v7 accepted a binding without output_port")
+	}
+	var step StepDefinition
+	if err := json.Unmarshal(data, &step); err != nil || step.SchemaVersion != "8" || len(step.WorkspaceTrees) != 1 || !step.WorkspaceTrees[0].MaterializeOnly() {
+		t.Fatalf("authoring did not lower a materialize-only binding to v8: %+v %v", step, err)
+	}
+	if err := (&Plan{}).checkWorkspaceTrees(step, "/step"); err != nil {
+		t.Fatalf("materialize-only binding on a read-only step was refused: %v", err)
+	}
+	if _, err := StepJSONBytes(author("{class: none, retry_class: never}", "schema_version: \"7\"\n"), "yaml"); err == nil {
+		t.Fatal("an author pinning v7 sealed a binding without output_port")
+	}
+	writing := step
+	writing.Effects.Class = "workspace_write"
+	if err := (&Plan{}).checkWorkspaceTrees(writing, "/step"); err == nil {
+		t.Fatal("materialize-only binding on a writing step was accepted")
+	}
+	pinned := step
+	pinned.SchemaVersion = "7"
+	if err := (&Plan{}).checkWorkspaceTrees(pinned, "/step"); err == nil {
+		t.Fatal("materialize-only binding under v7 was accepted by the compiler")
+	}
+	mixed := step
+	mixed.Outputs = map[string]OutputPort{"plan_out": {Port: step.Inputs["plan"].Port, RequiredFor: []string{"pass"}}}
+	mixed.WorkspaceTrees = append(append([]WorkspaceTreeBinding{}, step.WorkspaceTrees...), WorkspaceTreeBinding{OutputPort: "plan_out", Capture: WorkspaceTreeCapturePolicy{Kind: "direct_child_file", Path: ".ai-factory/plans"}})
+	if err := (&Plan{}).checkWorkspaceTrees(mixed, "/step"); err == nil {
+		t.Fatal("a step mixing materialize-only and captured trees was accepted")
+	}
+}

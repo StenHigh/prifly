@@ -187,7 +187,7 @@ func (e *Engine) MonitorView(ctx context.Context, id string) (MonitorRunView, er
 			break
 		}
 	}
-	return MonitorRunView{RunView: RunView{readVersionFor(r.SchemaVersion, r.Profile), read.Snapshot.Version, read.Snapshot.EventSeq, read.Cut, asOf, live, r, timing}, Choices: choices, SchemaVersion: "local-run-monitor/1", ReadVersion: readVersionFor(r.SchemaVersion, r.Profile)}, nil
+	return MonitorRunView{RunView: RunView{SchemaVersion: readVersionFor(r.SchemaVersion, r.Profile), RunVersion: read.Snapshot.Version, EventSequence: read.Snapshot.EventSeq, Cut: read.Cut, AsOf: asOf, DriverLive: live, Run: r, Timing: timing}, Choices: choices, SchemaVersion: "local-run-monitor/1", ReadVersion: readVersionFor(r.SchemaVersion, r.Profile)}, nil
 }
 
 func (e *Engine) MonitorAccess(ctx context.Context) error {

@@ -52,7 +52,21 @@
    для host, поэтому версия guide поднимается; текст guide говорит: «порт не
    объявлять, дерево прочитать по location». Сам envelope
    `assisted-session/7` не меняет форму.
-6. **Один bundle `step-definition-v8.schema.json`**, сгенерированный
+6. **State/read 30 (`core-state/30`, `core-read/30`) вместо «state не
+   меняется».** Измерено при реализации: опубликованный bundle
+   `effects-session` (/29) закрывает `runtime_WorkspaceTreeHandoff`
+   (`additionalProperties: false`, `output_port` обязателен), а handoff'у
+   нужно поле `materialized_entries` — список того, что положил движок, чтобы
+   снять после settle ровно это, а не файл, который в дереве уже был (для
+   `exact_file` файл после захвата освобождается движком, для bundle —
+   остаётся). Значит новая граница; сохранённые Run /29 читаются как прежде,
+   новые assisted Run пишутся под /30. Ту же границу использует change
+   `report-run-failure-in-the-read-envelope` (`failure` у RunView).
+7. **Отпечаток не видит содержимого untracked-файлов** (`git status` даёт
+   только присутствие), поэтому при отчёте read-only шага байты materialized
+   entries сверяются с pinned digest отдельно; правка — `effect_not_permitted`
+   с путём.
+8. **Один bundle `step-definition-v8.schema.json`**, сгенерированный
    `cmd/schema-gen` из тех же Go-типов с `output_port` как optional только для
    v8; `scripts/check-schema.py` получает новую запись; список digest-pinned
    bundle'ов v5–v7 не трогается.

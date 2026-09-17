@@ -149,9 +149,15 @@ telemetry:
 # claimed Workspace. `path` is exact_file's file path or the parent for a
 # direct-child policy. The host never sends artifact refs; runtime captures and
 # seals the resulting manifest itself. Omit this whole field when no tree is needed.
+# A step with `effects: {class: none}` may instead declare a materialize-only
+# binding: `input_port` and `capture` with no `output_port`. The runtime places
+# the manifest's entries in the claimed Workspace before the handoff, takes the
+# step's effect mark after that, captures nothing, and removes what it placed
+# once the attempt settles. That form lowers to StepDefinition v8; the host
+# reads the tree at the declared path and reports no port for it.
 workspace_trees:
   - input_port: plan_manifest # Optional manifest input; omit when creating a tree.
-    output_port: plan_manifest # Required compatible manifest output.
+    output_port: plan_manifest # Required compatible manifest output (absent only on a read-only v8 binding).
     capture:
       kind: direct_child_tree # exact_file, direct_child_file, direct_child_tree.
       path: plans # Workspace-relative fixed file or declared parent; no AI-specific path.

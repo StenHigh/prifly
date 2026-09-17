@@ -164,3 +164,17 @@ func TestStopAndVersionRefusalsPointAtWhereTheAnswerIsRead(t *testing.T) {
 		}
 	}
 }
+
+// A materialize-only port is listed without an output port, and the note says
+// it is there to be read, not declared or reported.
+func TestGuideShowsAMaterializeOnlyPortWithoutAnOutput(t *testing.T) {
+	step := flow.StepDefinition{WorkspaceTrees: []flow.WorkspaceTreeBinding{{InputPort: "plan", Capture: flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}}}}
+	guide, declared := workspaceTreeGuide(step)
+	if !declared || guide.SchemaVersion != "workspace-tree-guide/2" || len(guide.Ports) != 1 || guide.Ports[0].OutputPort != "" || guide.Ports[0].InputPort != "plan" {
+		t.Fatalf("the guide does not show the materialize-only port as declared: %+v", guide)
+	}
+	data, err := json.Marshal(guide)
+	if err != nil || strings.Contains(string(data), `"output_port"`) || !strings.Contains(guide.Note, "reading only") {
+		t.Fatalf("a materialize-only port was rendered with an output port or without its rule: %s %v", data, err)
+	}
+}

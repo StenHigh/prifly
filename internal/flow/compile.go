@@ -593,6 +593,11 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 				return step, problem("unsupported", path+"/schema_version", "assisted session limits require core-workflow/1")
 			}
 			name = "StepDefinitionV7"
+		case "8":
+			if p.Profile != CoreProfile {
+				return step, problem("unsupported", path+"/schema_version", "workspace trees require core-workflow/1")
+			}
+			name = "StepDefinitionV8"
 		}
 	}
 	if err := validateProtocolValue(name, value, path); err != nil {
@@ -647,28 +652,52 @@ func (p *Plan) checkWorkspaceTrees(step StepDefinition, path string) error {
 	if len(step.WorkspaceTrees) == 0 {
 		return nil
 	}
-	if !slices.Contains([]string{"5", "6", "7"}, step.SchemaVersion) || step.Effects.Class != "workspace_write" {
-		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees require StepDefinition v5, v6 or v7 and workspace_write")
+	if !slices.Contains([]string{"5", "6", "7", "8"}, step.SchemaVersion) {
+		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees require StepDefinition v5, v6, v7 or v8")
 	}
-	seenPaths, seenOutputs := map[string]bool{}, map[string]bool{}
+	// A binding that captures needs a step that may write; a binding that only
+	// materializes needs a step that may not, because a tree read without being
+	// captured on a writing step would leave its changes without a manifest.
+	// The two forms never share a step: one effect class answers for all.
+	materializeOnly := slices.ContainsFunc(step.WorkspaceTrees, WorkspaceTreeBinding.MaterializeOnly)
+	if materializeOnly && step.SchemaVersion != "8" {
+		return problem("invalid_workspace_tree", path+"/workspace_trees", "a workspace tree without output_port requires StepDefinition v8")
+	}
+	if materializeOnly && step.Effects.Class != "none" {
+		return problem("invalid_workspace_tree", path+"/workspace_trees", "a workspace tree without output_port is materialized for a step whose effects class is none; a step that may write captures its trees through output_port")
+	}
+	if !materializeOnly && step.Effects.Class != "workspace_write" {
+		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees with output_port require workspace_write; a read-only step declares input_port only under StepDefinition v8")
+	}
+	seenPaths, seenOutputs, seenInputs := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for index, binding := range step.WorkspaceTrees {
 		bindingPath := fmt.Sprintf("%s/workspace_trees/%d", path, index)
-		if seenPaths[binding.Capture.Path] || seenOutputs[binding.OutputPort] {
-			return problem("invalid_workspace_tree", bindingPath, "workspace tree paths and output ports must be unique")
+		if seenPaths[binding.Capture.Path] || binding.OutputPort != "" && seenOutputs[binding.OutputPort] || binding.MaterializeOnly() && seenInputs[binding.InputPort] {
+			return problem("invalid_workspace_tree", bindingPath, "workspace tree paths and ports must be unique")
 		}
-		seenPaths[binding.Capture.Path], seenOutputs[binding.OutputPort] = true, true
-		output, exists := step.Outputs[binding.OutputPort]
-		if !exists || output.Format != "json" || output.SchemaRef == nil || output.SchemaRef.ID != WorkspaceTreeManifestSchemaID {
-			return problem("invalid_workspace_tree", bindingPath+"/output_port", "workspace tree output names one declared JSON manifest port")
+		seenPaths[binding.Capture.Path], seenOutputs[binding.OutputPort], seenInputs[binding.InputPort] = true, true, true
+		if binding.MaterializeOnly() != materializeOnly {
+			return problem("invalid_workspace_tree", bindingPath, "a step declares either materialize-only trees or captured trees, not both")
 		}
-		if len(output.ContentCheckRefs) != 0 || len(step.ResultCheckRefs) != 0 {
+		if len(step.ResultCheckRefs) != 0 {
 			return problem("unsupported_workspace_tree_check", bindingPath, "workspace-tree results cannot use deferred acceptance checks")
+		}
+		var manifestRef *Ref
+		if !binding.MaterializeOnly() {
+			output, exists := step.Outputs[binding.OutputPort]
+			if !exists || output.Format != "json" || output.SchemaRef == nil || output.SchemaRef.ID != WorkspaceTreeManifestSchemaID {
+				return problem("invalid_workspace_tree", bindingPath+"/output_port", "workspace tree output names one declared JSON manifest port")
+			}
+			if len(output.ContentCheckRefs) != 0 {
+				return problem("unsupported_workspace_tree_check", bindingPath, "workspace-tree results cannot use deferred acceptance checks")
+			}
+			manifestRef = output.SchemaRef
 		}
 		if binding.InputPort == "" {
 			continue
 		}
 		input, exists := step.Inputs[binding.InputPort]
-		if !exists || input.Format != "json" || input.SchemaRef == nil || input.SchemaRef.ID != WorkspaceTreeManifestSchemaID || *input.SchemaRef != *output.SchemaRef {
+		if !exists || input.Format != "json" || input.SchemaRef == nil || input.SchemaRef.ID != WorkspaceTreeManifestSchemaID || manifestRef != nil && *input.SchemaRef != *manifestRef {
 			return problem("invalid_workspace_tree", bindingPath+"/input_port", "workspace tree input names a compatible declared JSON manifest port")
 		}
 	}

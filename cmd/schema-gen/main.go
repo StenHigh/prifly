@@ -49,6 +49,7 @@ type generator struct {
 	timedSessions         bool
 	routedSessions        bool
 	effectsSessions       bool
+	materializedSessions  bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -158,6 +159,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.effectsSessions && effectsSessionField(t, field.Name) {
 						continue
 					}
+					if !g.materializedSessions && materializedSessionField(t, field.Name) {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -178,6 +182,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						}
 					}
 					if !g.routedSessions && routedSessionRequired(t, field.Name) {
+						optional = false
+					}
+					if !g.materializedSessions && materializedSessionRequired(t, field.Name) {
 						optional = false
 					}
 					if !optional {
@@ -274,6 +281,7 @@ var profileContracts = []struct {
 	{"timed-session", "generate assisted timing state/read version 27 contracts", func(g *generator) { g.timedSessions = true }},
 	{"routed-session", "generate routed assisted session state/read version 28 contracts", func(g *generator) { g.routedSessions = true }},
 	{"effects-session", "generate enforced assisted effects state/read version 29 contracts", func(g *generator) { g.effectsSessions = true }},
+	{"materialized-session", "generate materialize-only tree and run failure state/read version 30 contracts", func(g *generator) { g.materializedSessions = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -287,6 +295,7 @@ var documentContracts = []struct {
 	{"step-definition-v5", "generate StepDefinition v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV5") }},
 	{"step-definition-v6", "generate StepDefinition v6 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV6") }},
 	{"step-definition-v7", "generate StepDefinition v7 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV7") }},
+	{"step-definition-v8", "generate StepDefinition v8 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV8") }},
 	{"workflow-revision-v3", "generate WorkflowRevision v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV3") }},
 	{"workflow-revision-v4", "generate WorkflowRevision v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV4") }},
 	{"run-start-v2", "generate RunStart v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("RunStartV2") }},
@@ -786,6 +795,13 @@ func main() {
 			delete(contracts, name+"V28")
 		}
 	}
+	if g.materializedSessions {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V30"] = contracts[name+"V29"]
+			delete(contracts, name+"V29")
+		}
+		contracts["RunFailure"] = reflect.TypeFor[prifly.RunFailure]()
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1011,6 +1027,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-effects-session:29"
 			bundle["title"] = "Pri-Fly enforced assisted effects contracts"
 			bundle["description"] = "State/read 29 records, on the handoff of a step permitted no workspace effect, how each workspace the Run holds stood when the step began, and refuses the step's report with effect_not_permitted if one changed. The boundary that permitted_effects named since state 23 held by the executor's discipline alone; a dependent session paid for theirs with a reverted patch and a second test run. Session 7 tasks and submissions, route targets and every prior bundle remain unchanged."
+		}
+		if g.materializedSessions {
+			materializedSessionConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-materialized-session:30"
+			bundle["title"] = "Pri-Fly materialize-only tree and run failure contracts"
+			bundle["description"] = "State/read 30 lets a read-only assisted step be handed a captured tree: the handoff records the entries the engine materialized so settlement takes back exactly those, and the read view of a failed or cancelled Run names the diagnostic that stopped it. Session 7 tasks and submissions are unchanged."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

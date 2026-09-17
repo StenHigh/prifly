@@ -529,6 +529,22 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 			handoff.Timing = &SessionTiming{Limits: *step.SessionLimits, RemainingMS: step.SessionLimits.ActiveAllowanceMS()}
 			handoff.DeliveryGeneration = 0
 		}
+		// A read-only step may still be handed a captured tree to read: it is
+		// materialized into the Run's own claim before the mark below is
+		// taken, so the mark holds the step to what it may touch and not to
+		// what the engine placed there for it. Nothing is captured back.
+		if step.Effects.Class != "workspace_write" && len(step.WorkspaceTrees) != 0 {
+			claim, err := e.runActiveClaim(ctx, r.ID)
+			if err != nil {
+				return e.failPreparation(ctx, r, v, p, a, err, "workspace_tree_preparation_failed")
+			}
+			trees, rollback, err := e.prepareWorkspaceTrees(r, step, inputs, claim)
+			if err != nil {
+				return e.failPreparation(ctx, r, v, p, a, err, "workspace_tree_preparation_failed")
+			}
+			treeRollback, handoff.WorkspaceTrees = rollback, trees
+			handoff.ClaimID, handoff.ClaimGeneration, handoff.WorkspaceMode = claim.ID, claim.Generation, claimMode(claim)
+		}
 		// A step permitted no workspace effect is handed the Run's workspaces
 		// as they stand, so its report can be refused if it left them changed.
 		// Recorded only under the state that enforces it: an older Run keeps

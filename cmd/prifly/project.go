@@ -116,11 +116,11 @@ text.
 `,
 ).Replace(projectRunnerSkillTemplateBeforeOverlay)
 
-// Current instructions are derived from the frozen previous template, never
-// the reverse: updating current behavior must not change recognized old bytes.
-// 0.13.24 lets a launch declare its standing workspace mode; a host that reads
-// it in the questionnaire has nothing to ask.
-var projectRunnerSkillTemplate = strings.NewReplacer(
+// projectRunnerSkillTemplateBeforeAttemptField is the exact template 0.13.24
+// through 0.13.30 installed, frozen so a runner from those releases stays
+// recognized. 0.13.24 lets a launch declare its standing workspace mode; a host
+// that reads it in the questionnaire has nothing to ask.
+var projectRunnerSkillTemplateBeforeAttemptField = strings.NewReplacer(
 	`in /3 is an ordinary input. Ask worktree or checkout only when Git work
    requires it, then pass `+"`--workspace worktree|checkout`"+`. Legacy /2 keeps`,
 	`in /3 is an ordinary input. Ask worktree or checkout only when Git work
@@ -128,6 +128,19 @@ var projectRunnerSkillTemplate = strings.NewReplacer(
    project's standing choice -- use it without asking. Pass
    `+"`--workspace worktree|checkout`"+` only to override it for this Run. Legacy /2 keeps`,
 ).Replace(projectRunnerSkillTemplateBeforeWorkspace)
+
+// Current instructions are derived from the frozen previous template, never
+// the reverse: updating current behavior must not change recognized old bytes.
+// The view keys run.attempts by `id`; the text said `attempt_id`, which is
+// what the task calls the same value, and a pilot's host read one against the
+// other.
+var projectRunnerSkillTemplate = strings.NewReplacer(
+	`   `+"`session task --all`"+` returns them as a list, but a Run keys
+   `+"`run.attempts`"+` by `+"`attempt_id`"+`: read one by that ID, never by position.`,
+	`   `+"`session task --all`"+` returns them as a list, but a Run keys
+   `+"`run.attempts`"+` by `+"`id`"+` -- the value the task calls `+"`attempt_id`"+`:
+   read one by that ID, never by position.`,
+).Replace(projectRunnerSkillTemplateBeforeAttemptField)
 
 const projectRunnerSkillTemplateBeforeTiming = `---
 name: prifly-run
@@ -2111,6 +2124,15 @@ func projectRunnerSkill(host projectHost) string {
 	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplate, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
 }
 
+func projectRunnerSkillBeforeAttemptField(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	questions := strings.ReplaceAll(projectNeutralQuestionInstructions, "{{question_tool}}", questionTool)
+	return projectRunnerSkillFromTemplate(host, projectRunnerSkillTemplateBeforeAttemptField, questions) + projectTimedDecisionBridgeInstructions + projectNeutralCatalogInstructions
+}
+
 func projectRunnerSkillBeforeWorkspace(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -2214,7 +2236,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

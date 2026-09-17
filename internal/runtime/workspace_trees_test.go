@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -95,16 +96,23 @@ func treeDecisionInputs(t *testing.T) (*DecisionCatalog, *DecisionSheet) {
 
 func treeSessionFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy) (*Engine, string) {
 	t.Helper()
-	return treeFixture(t, policy, nil, nil, "worktree")
+	return treeFixture(t, policy, nil, nil, "worktree", false)
+}
+
+// treeVerifyFixture appends a read-only verify step that is handed the
+// implemented plan through a materialize-only binding (StepDefinition v8).
+func treeVerifyFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy) (*Engine, string) {
+	t.Helper()
+	return treeFixture(t, policy, nil, nil, "worktree", true)
 }
 
 func treeDecisionSessionFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy) (*Engine, string) {
 	t.Helper()
 	catalog, sheet := treeDecisionInputs(t)
-	return treeFixture(t, policy, catalog, sheet, "worktree")
+	return treeFixture(t, policy, catalog, sheet, "worktree", false)
 }
 
-func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *DecisionCatalog, sheet *DecisionSheet, mode string) (*Engine, string) {
+func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *DecisionCatalog, sheet *DecisionSheet, mode string, verify bool) (*Engine, string) {
 	t.Helper()
 	e := contextRegistryRuntime(t)
 	claim, err := e.ClaimWorktree(context.Background(), ClaimRequest{CommandID: "command:tree-claim", Repository: gitRepository(t), OwnerID: "session:pilot", WorkspaceMode: mode})
@@ -140,6 +148,12 @@ func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *
 	_, planRef := step("test:step/tree-plan", "", "plan")
 	_, improveRef := step("test:step/tree-improve", "plan", "improved")
 	_, implementRef := step("test:step/tree-implement", "plan", "final")
+	readOnly := flow.StepDefinition{SchemaVersion: "8", ID: "test:step/tree-verify", Version: "1.0.0", Title: "verify", Kind: "worker", Inputs: map[string]flow.InputPort{"plan": {Port: flow.Port{Format: "json", SchemaRef: &manifestRef}, Required: true}}, Outputs: map[string]flow.OutputPort{}, WorkspaceTrees: []flow.WorkspaceTreeBinding{{InputPort: "plan", Capture: policy}}}
+	readOnly.Executor.AdapterRef, readOnly.Executor.Operation = builtinRef(definitions, "core:adapter/assisted-session"), "session"
+	readOnly.Effects.Class, readOnly.Effects.RetryClass = "none", "never"
+	readOnly.InstructionsRef, readOnly.ContextRefs, readOnly.RequiredCapabilities, readOnly.ResultCheckRefs, readOnly.ResultSchemaRef = &skillRef, []flow.Ref{}, []string{}, []flow.Ref{}, builtinRef(definitions, "core:schema/step-result")
+	verifyData := writeRegistryDocument(t, e, "steps/tree-verify.json", readOnly)
+	verifyRef := flow.Ref{ID: readOnly.ID, Version: readOnly.Version, Digest: rawDigest(verifyData)}
 	workflow := flow.WorkflowRevision{SchemaVersion: "1", ID: "test:workflow/tree", Version: "1.0.0", Title: "Native tree", Inputs: map[string]flow.InputPort{}, Outputs: map[string]flow.OutputPort{}, AllowedOutcomes: []string{"succeeded"}, Limits: flow.Limits{MaxStepInstances: 4, MaxControlTransitions: 32, MaxParallelism: 1}, PolicyRef: builtinVersionRef(definitions, "core:policy/local", "2.0.0")}
 	workflow.Definition.Entry = "plan"
 	workflow.Definition.Stages = map[string]flow.Stage{
@@ -148,8 +162,15 @@ func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *
 		"implement": {Kind: "step", StepRef: implementRef, InputBindings: map[string]flow.Binding{"plan": {From: "stage_output", StageID: "improve", Port: "improved"}}, On: map[string]string{"pass": "done"}},
 		"done":      {Kind: "finish", Outcome: "succeeded", OutputBindings: map[string]flow.Binding{}},
 	}
+	if verify {
+		workflow.Definition.Stages["implement"] = flow.Stage{Kind: "step", StepRef: implementRef, InputBindings: map[string]flow.Binding{"plan": {From: "stage_output", StageID: "improve", Port: "improved"}}, On: map[string]string{"pass": "verify"}}
+		workflow.Definition.Stages["verify"] = flow.Stage{Kind: "step", StepRef: verifyRef, InputBindings: map[string]flow.Binding{"plan": {From: "stage_output", StageID: "implement", Port: "final"}}, On: map[string]string{"pass": "done"}}
+	}
 	writeRuntimeJSON(t, filepath.Join(e.Root, "workflows/tree.json"), workflow)
 	registry := RegistryFile{SchemaVersion: "3", Entries: []Definition{{Ref: skillRef, Kind: "resource", Path: "resources/tree-skill.md", ByteEncoding: "utf8_text", MediaType: "text/markdown; charset=utf-8"}, {Ref: planRef, Kind: "step", Path: "steps/tree-plan.json"}, {Ref: improveRef, Kind: "step", Path: "steps/tree-improve.json"}, {Ref: implementRef, Kind: "step", Path: "steps/tree-implement.json"}}}
+	if verify {
+		registry.Entries = append(registry.Entries, Definition{Ref: verifyRef, Kind: "step", Path: "steps/tree-verify.json"})
+	}
 	writeRuntimeJSON(t, filepath.Join(e.Root, e.Config.Configuration.RegistryFile), registry)
 	e.Config.Configuration.SchemaVersion, e.Config.ConfigurationSchemaRef = CoreContextConfigVersion, builtinVersionRef(definitions, "core:schema/core-configuration", "2.0.0")
 	e.Config.AdapterBindings["local_process"], e.Config.DefaultPolicyRef = builtinVersionRef(definitions, "core:adapter/local-process", "2.0.0"), builtinVersionRef(definitions, "core:policy/local", "2.0.0")
@@ -241,7 +262,7 @@ func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testi
 				t.Fatal(err)
 			}
 			r := driverRun(t, e, runID)
-			if r.SchemaVersion != CoreEffectsStateVersion || r.Status != "completed" {
+			if r.SchemaVersion != CoreMaterializedStateVersion || r.Status != "completed" {
 				t.Fatalf("tree run did not use and settle the v24 contract: %+v", r)
 			}
 			ref := r.Attempts[third.AttemptID].Accepted.Outputs["final"]
@@ -454,7 +475,7 @@ func treeWorkspace(t *testing.T, e *Engine) string {
 // directory, while a borrowed checkout carries the leftover into the next Run.
 func TestSealedExactFileCaptureLeavesItsPathFreeForTheNextRun(t *testing.T) {
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
-	e, runID := treeFixture(t, policy, nil, nil, "checkout")
+	e, runID := treeFixture(t, policy, nil, nil, "checkout", false)
 	ctx := context.Background()
 	workspace := treeWorkspace(t, e)
 	last := ""
@@ -526,5 +547,205 @@ func TestSealedExactFileCaptureKeepsATrackedDocument(t *testing.T) {
 	actual, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(policy.Path)))
 	if err != nil || string(actual) != "# Tracked\n" {
 		t.Fatalf("the runtime removed a tracked document: %q %v", actual, err)
+	}
+}
+
+// A read-only verify step is handed the plan implement captured, through a
+// binding with no output port: materialized into the Run's claim before its
+// mark is taken, readable at the declared location, never captured, and taken
+// back at settlement only where the engine placed it.
+func TestMaterializeOnlyTreeHandsAReadOnlyStepTheCapturedPlan(t *testing.T) {
+	policies := map[string]struct {
+		policy flow.WorkspaceTreeCapturePolicy
+		files  map[string]string
+	}{
+		"fast":  {flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}, map[string]string{".ai-factory/PLAN.md": "# Final\n"}},
+		"ultra": {flow.WorkspaceTreeCapturePolicy{Kind: "direct_child_tree", Path: ".ai-factory/plans", Entrypoint: "index.md"}, map[string]string{".ai-factory/plans/feature/index.md": "# Final\n", ".ai-factory/plans/feature/phase.md": "# Phase\n"}},
+	}
+	for name, test := range policies {
+		for _, kept := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/kept=%t", name, kept), func(t *testing.T) {
+				e, runID := treeVerifyFixture(t, test.policy)
+				location := test.policy.Path
+				if test.policy.Kind == "direct_child_tree" {
+					location = ".ai-factory/plans/feature"
+				}
+				first := handOver(t, e, runID)
+				for path, value := range test.files {
+					writeWorkspaceTreeFile(t, first.RepositoryWorkspace, path, value)
+				}
+				if _, err := e.SubmitSession(context.Background(), treeSubmission(t, first, "plan", []WorkspaceTreeLocation{{OutputPort: "plan", Path: location}})); err != nil {
+					t.Fatal(err)
+				}
+				for _, summary := range []string{"improved", "implement"} {
+					if err := e.Drive(context.Background(), runID); err != nil {
+						t.Fatal(err)
+					}
+					task, err := e.SessionTask(context.Background(), runID, "")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := e.SubmitSession(context.Background(), treeSubmission(t, task, summary, nil)); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if !kept {
+					// The tree implement captured is gone from the workspace: the
+					// engine has to put it back for the read-only step.
+					for path := range test.files {
+						if err := os.RemoveAll(filepath.Join(first.RepositoryWorkspace, filepath.FromSlash(path))); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				if err := e.Drive(context.Background(), runID); err != nil {
+					t.Fatal(err)
+				}
+				verify, err := e.SessionTask(context.Background(), runID, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if verify.RepositoryWorkspace != first.RepositoryWorkspace || len(verify.WorkspaceTrees) != 1 || verify.WorkspaceTrees[0].OutputPort != "" || verify.WorkspaceTrees[0].InputManifest == nil || verify.WorkspaceTrees[0].InputLocation != location {
+					t.Fatalf("the read-only step was not handed the materialized tree in the Run's claim: %+v", verify)
+				}
+				// An exact file is freed from the tree once captured (see
+				// freeSealedExactFile), so the engine places it again whether or
+				// not the test removed it; a bundle stays and is placed only when gone.
+				expectPlaced := !kept || test.policy.Kind == "exact_file"
+				if placed := len(verify.WorkspaceTrees[0].MaterializedEntries); expectPlaced && placed != len(test.files) || !expectPlaced && placed != 0 {
+					t.Fatalf("materialized entries do not say what the engine placed (kept=%t): %v", kept, verify.WorkspaceTrees[0].MaterializedEntries)
+				}
+				for path, value := range test.files {
+					actual, err := os.ReadFile(filepath.Join(verify.RepositoryWorkspace, filepath.FromSlash(path)))
+					if err != nil || string(actual) != value {
+						t.Fatalf("materialized bytes differ for %s: %q %v", path, actual, err)
+					}
+				}
+				var guide WorkspaceTreeGuide
+				if data, err := os.ReadFile(filepath.Join(verify.Workspace, WorkspaceTreeGuideFile)); err != nil || json.Unmarshal(data, &guide) != nil || guide.SchemaVersion != WorkspaceTreeGuideVersion || len(guide.Ports) != 1 || guide.Ports[0].OutputPort != "" || guide.Ports[0].InputPort != "plan" || !strings.Contains(string(data), "reading only") {
+					t.Fatalf("the guide does not describe a materialize-only port: %s %v", data, err)
+				}
+				if _, err := e.SubmitSession(context.Background(), treeSubmission(t, verify, "verified", nil)); err != nil {
+					t.Fatalf("an untouched materialized tree was refused: %v", err)
+				}
+				if err := e.Drive(context.Background(), runID); err != nil {
+					t.Fatal(err)
+				}
+				r := driverRun(t, e, runID)
+				if r.SchemaVersion != CoreMaterializedStateVersion || r.Status != "completed" || len(r.Attempts[verify.AttemptID].Accepted.Outputs) != 0 {
+					t.Fatalf("the read-only step did not settle without an output: %+v", r)
+				}
+				for path := range test.files {
+					_, err := os.Lstat(filepath.Join(verify.RepositoryWorkspace, filepath.FromSlash(path)))
+					if !expectPlaced && err != nil || expectPlaced && !os.IsNotExist(err) {
+						t.Fatalf("after settlement %s should be present=%t: %v", path, !expectPlaced, err)
+					}
+				}
+				if expectPlaced {
+					if _, err := os.Lstat(filepath.Join(verify.RepositoryWorkspace, ".ai-factory")); !os.IsNotExist(err) {
+						t.Fatalf("the parent left empty by the removal was left behind: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+// The mark of a read-only step is taken after the engine materialized its
+// tree, so a host that edits the materialized entry is refused as one that
+// changed the workspace, and putting the bytes back lets it report again.
+func TestMaterializeOnlyTreeRefusesAHostThatEditsIt(t *testing.T) {
+	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
+	e, runID := treeVerifyFixture(t, policy)
+	first := handOver(t, e, runID)
+	writeWorkspaceTreeFile(t, first.RepositoryWorkspace, policy.Path, "# Final\n")
+	if _, err := e.SubmitSession(context.Background(), treeSubmission(t, first, "plan", []WorkspaceTreeLocation{{OutputPort: "plan", Path: policy.Path}})); err != nil {
+		t.Fatal(err)
+	}
+	for _, summary := range []string{"improved", "implement"} {
+		if err := e.Drive(context.Background(), runID); err != nil {
+			t.Fatal(err)
+		}
+		task, err := e.SessionTask(context.Background(), runID, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.SubmitSession(context.Background(), treeSubmission(t, task, summary, nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The captured exact file was freed from the tree, so verify's copy is
+	// the engine's own materialization.
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	verify, err := e.SessionTask(context.Background(), runID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeWorkspaceTreeFile(t, verify.RepositoryWorkspace, policy.Path, "# Edited by the host\n")
+	var rejection *local.Rejection
+	if _, err := e.SubmitSession(context.Background(), treeSubmission(t, verify, "verified", nil)); err == nil || !asRejection(err, &rejection) || rejection.Code != "effect_not_permitted" || !strings.Contains(rejection.Message, policy.Path) {
+		t.Fatalf("an edited materialized entry was not refused by name: %v", err)
+	}
+	writeWorkspaceTreeFile(t, verify.RepositoryWorkspace, policy.Path, "# Final\n")
+	if _, err := e.SubmitSession(context.Background(), treeSubmission(t, verify, "verified", nil)); err != nil {
+		t.Fatalf("the restored tree was still refused: %v", err)
+	}
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	if r := driverRun(t, e, runID); r.Status != "completed" {
+		t.Fatalf("the Run did not complete after the restored report: %+v", r)
+	}
+	if _, err := os.Lstat(filepath.Join(verify.RepositoryWorkspace, filepath.FromSlash(policy.Path))); !os.IsNotExist(err) {
+		t.Fatalf("the materialized entry was not taken back: %v", err)
+	}
+}
+
+// The read view of a stopped Run names what stopped it, and a completed Run
+// names nothing: the reason used to live only somewhere in diagnostics[].
+func TestRunViewNamesTheFailureOfAStoppedRun(t *testing.T) {
+	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
+	e, runID := treeSessionFixture(t, policy)
+	task := handOver(t, e, runID)
+	if _, err := e.Restrict(context.Background(), RestrictCommand{SchemaVersion: "1", CommandID: newID("command"), Scope: "run", ScopeID: runID, Kind: "cancel", Reason: "the owner stops the probe"}); err != nil {
+		t.Fatal(err)
+	}
+	// A cancel that meets an outstanding handoff leaves the Run uncertain:
+	// the handed attempt is an obligation the owner closes, and only then
+	// does the Run settle. The first drive reports that it needs recovery.
+	_ = e.Drive(context.Background(), runID)
+	stopped, err := e.View(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stopped.Run.Status == "uncertain" {
+		if _, err := e.ResolveObligation(context.Background(), runID, newID("command"), task.AttemptID, "", "not_applied", "the host never worked the handoff", stopped.RunVersion); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.Drive(context.Background(), runID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	view, err := e.View(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A resolution of not_applied ends the Run failed rather than cancelled
+	// (see examples/troubleshooting.md); either way the view names the stop.
+	if view.SchemaVersion != CoreMaterializedReadVersion || view.Run.Status != "failed" && view.Run.Status != "cancelled" || view.Failure == nil || view.Failure.DiagnosticID == "" {
+		t.Fatalf("a stopped Run does not name its failure: %+v %+v", view.Run.Status, view.Failure)
+	}
+	last := view.Run.Diagnostics[len(view.Run.Diagnostics)-1]
+	if view.Failure.Code != last.Code || view.Failure.DiagnosticID != last.ID || view.Failure.AttemptID != last.AttemptID {
+		t.Fatalf("failure does not name the diagnostic that stopped the Run: %+v vs %+v", view.Failure, last)
+	}
+	if view.Failure.AttemptID != "" && view.Failure.StepInstanceID != view.Run.Attempts[view.Failure.AttemptID].StepID {
+		t.Fatalf("failure names the wrong step: %+v", view.Failure)
+	}
+	data, err := json.Marshal(view)
+	if err != nil || !strings.Contains(string(data), `"failure":{`) {
+		t.Fatalf("failure is not on the wire: %v", err)
 	}
 }

@@ -352,8 +352,15 @@ const (
 // not a host, materializes and captures the files described by that manifest.
 type WorkspaceTreeBinding struct {
 	InputPort  string                     `json:"input_port,omitempty"`
-	OutputPort string                     `json:"output_port"`
+	OutputPort string                     `json:"output_port,omitempty"`
 	Capture    WorkspaceTreeCapturePolicy `json:"capture"`
+}
+
+// MaterializeOnly reports a binding that reads a captured tree without
+// producing one: an input port and no output port. Only StepDefinition v8 can
+// carry it, and only on a step permitted no workspace effect.
+func (b WorkspaceTreeBinding) MaterializeOnly() bool {
+	return b.OutputPort == "" && b.InputPort != ""
 }
 
 // WorkspaceTreeCapturePolicy deliberately has only the shapes needed for one
