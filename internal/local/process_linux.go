@@ -66,7 +66,7 @@ func readProcess(pid int) (processRecord, error) {
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
-		return processRecord{}, errors.New("Linux process uid unavailable")
+		return processRecord{}, errors.New("process uid unavailable: /proc entry carries no stat")
 	}
 	return processRecord{PID: pid, PPID: ppid, PGID: pgid, UID: int(stat.Uid), StartID: fields[19], Zombie: fields[0] == "Z" || fields[0] == "X"}, nil
 }

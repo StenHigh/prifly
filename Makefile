@@ -1,4 +1,6 @@
 GO ?= $(CURDIR)/.tools/go/bin/go
+# The platforms this build is released for; every reading gate reads both.
+PLATFORMS ?= linux darwin
 GOFMT ?= $(dir $(GO))gofmt
 TEST_TIMEOUT ?= 20m
 RACE_TIMEOUT ?= 60m
@@ -19,7 +21,15 @@ vet:
 # The authority needs cgo to run, but nothing else in this build should need it
 # to be readable: a package that cannot be type-checked without the driver is a
 # package that has the driver's types in its own contracts.
-	CGO_ENABLED=0 $(GO) vet ./...
+# A gate that reads only the platform it runs on cannot see a file built for
+# the other one. staticcheck joined this gate on 2026-09-17 with its findings
+# closed on darwin, and CI was red for eleven hours on a finding in a
+# linux-only file that no darwin run could have read. Both released platforms
+# are read, and each pass says which one it was.
+	@for target in $(PLATFORMS); do \
+		CGO_ENABLED=0 GOOS=$$target $(GO) vet ./... || exit 1; \
+		echo "vet: $$target read"; \
+	done
 check: test race vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check
 ci-check: test vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check
 fmt:
@@ -56,7 +66,13 @@ staticcheck-check:
 	@packages=$$($(GO) list ./... | wc -l | tr -d ' '); \
 	if [ "$$packages" -lt 1 ]; then echo "staticcheck-check listed no packages"; exit 1; fi; \
 	$(GO) run $(STATICCHECK) ./... || exit 1; \
-	echo "staticcheck: $$packages packages read, no findings"
+	bin="$$(mktemp -d)"; \
+	GOBIN="$$bin" $(GO) install $(STATICCHECK) || { rm -rf "$$bin"; exit 1; }; \
+	for target in $(PLATFORMS); do \
+		CGO_ENABLED=0 GOOS=$$target "$$bin/staticcheck" ./... || { rm -rf "$$bin"; exit 1; }; \
+		echo "staticcheck: $$packages packages read for $$target, no findings"; \
+	done; \
+	rm -rf "$$bin"
 vuln-check:
 	@packages=$$($(GO) list ./... | wc -l | tr -d ' '); \
 	if [ "$$packages" -lt 1 ]; then echo "vuln-check listed no packages"; exit 1; fi; \
