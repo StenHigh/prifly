@@ -171,7 +171,7 @@ func TestAProgramStepIsHandedTheWorkspaceAndHeldToItsEffects(t *testing.T) {
 		{"workspace-write", "effect_not_permitted"},
 	} {
 		t.Run(test.mode, func(t *testing.T) {
-			e, runID, claim := programAfterWriteFixture(t, test.mode)
+			e, runID, claim := programAfterWriteFixture(t, test.mode, false)
 			ctx := context.Background()
 			planTask := handOver(t, e, runID)
 			if _, err := e.SubmitSession(ctx, hostResult(t, e, planTask, "planned")); err != nil {
@@ -220,7 +220,10 @@ func TestAProgramStepIsHandedTheWorkspaceAndHeldToItsEffects(t *testing.T) {
 // programAfterWriteFixture rewrites the assisted checkout fixture: the write
 // step hands over to a program step (the test binary in the given helper
 // mode) that declares no workspace effect.
-func programAfterWriteFixture(t *testing.T, mode string) (*Engine, string, WorktreeClaim) {
+// recoverable sends the program stage's error route to another assisted step
+// instead of a finish, so the Run outlives a failed attempt the way a real
+// graph with a repair round does.
+func programAfterWriteFixture(t *testing.T, mode string, recoverable bool) (*Engine, string, WorktreeClaim) {
 	t.Helper()
 	e, _, claim := assistedWorkspaceFixture(t, "checkout")
 	definitions, _, err := Builtins()
@@ -266,6 +269,12 @@ func programAfterWriteFixture(t *testing.T, mode string) (*Engine, string, Workt
 		"check":    {Kind: "step", StepRef: checkRef, InputBindings: map[string]flow.Binding{}, On: map[string]string{"pass": "done"}, OnError: "rejected"},
 		"done":     {Kind: "finish", Outcome: "succeeded", OutputBindings: map[string]flow.Binding{}},
 		"rejected": {Kind: "finish", Outcome: "rejected", OutputBindings: map[string]flow.Binding{}},
+	}
+	if recoverable {
+		check := workflow.Definition.Stages["check"]
+		check.OnError = "repair"
+		workflow.Definition.Stages["check"] = check
+		workflow.Definition.Stages["repair"] = flow.Stage{Kind: "step", StepRef: planRef, InputBindings: map[string]flow.Binding{}, On: map[string]string{"pass": "done", "fail": "rejected"}}
 	}
 	workflow.AllowedOutcomes = []string{"succeeded", "rejected"}
 	writeRuntimeJSON(t, filepath.Join(e.Root, "workflows/pilot-program.json"), workflow)

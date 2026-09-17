@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -1081,6 +1082,16 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	watchDone := make(chan struct{})
 	watchExited := make(chan struct{})
 	var watchErr error
+	// The watcher belongs to this call and must not outlive it. Its job is to
+	// cancel the Run when the caller is interrupted; left running by an early
+	// return it does that later, to a Run that has moved on, naming a driver
+	// that finished long ago. Once, so the ordinary path may still stop it
+	// where it always did — before the settlement reads watchErr.
+	stopWatch := sync.OnceFunc(func() {
+		close(watchDone)
+		<-watchExited
+	})
+	defer stopWatch()
 	go func() {
 		defer close(watchExited)
 		deadline := time.Now().Add(remaining)
@@ -1152,7 +1163,8 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	// report is, so the program cannot change the tree it was shown.
 	boundary, err := e.processWorkspaceBoundary(ctx, r, step)
 	if err != nil {
-		return failBeforeStart(driverFailureCode(err, "workspace_validation_failed"))
+		stopWatch()
+		return errors.Join(watchErr, failBeforeStart(driverFailureCode(err, "workspace_validation_failed")))
 	}
 	if boundary.path != "" {
 		env["PRIFLY_REPOSITORY_WORKSPACE"], env["PRIFLY_CLAIM_ID"] = boundary.path, boundary.claimID
@@ -1183,8 +1195,7 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 		defer observeCancel()
 		return e.observe(observeCtx, r.ID, a.ID, observation)
 	})
-	close(watchDone)
-	<-watchExited
+	stopWatch()
 	if ctx.Err() != nil && watchErr == nil {
 		watchErr = e.requestDriverCancellation(r.ID)
 	}
