@@ -52,6 +52,18 @@
 752 с, гонок нет) — всё на `a2f0699`; CI `verify` на push; run выпуска
 35217483068, все три job'а success.
 
+## Подтверждено в бою (2026-09-17)
+
+Standing runtime-ответ проверен на живом заходе пилота: `decision_policy:
+autonomous`, старт без единого флага ответов, `improve_apply` в листе решений —
+`source: project_default`, `value: all`, `status: answered`; шаг improve прошёл
+без `DecisionRequest` и без `waiting_decision`, адаптер прочитал значение из
+`decision_context` и применил все находки сам. До 0.13.30 такой Run встал бы в
+`waiting_decision` с `automatic_selection_not_allowed`. Остальные источники того
+же листа: `plan_profile`, `plan_tests`, `gate_checks`, `gate_warnings` —
+`project_default`, `plan_constraints` — `autonomous_policy`. Заход шёл на
+0.13.30 и `aif-classic` 1.37.0.
+
 ## Проверено на опубликованном бинаре
 
 После `prifly update` → `0.13.30`: `project init` в свежем репозитории под HOME
