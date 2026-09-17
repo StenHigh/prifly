@@ -1,0 +1,22 @@
+id: aif:schema/gate-result
+version: 1.1.0
+$schema: https://json-schema.org/draft/2020-12/schema
+type: object
+required: [gate, status, blocking, blocking_owner_only, findings, suggested_next]
+additionalProperties: false
+properties:
+  gate: {enum: [verify, security, review]}
+  status: {enum: [passed, warnings, failed]}
+  blocking: {type: boolean}
+  blocking_owner_only:
+    type: boolean
+    description: >-
+      True when everything still blocking is outside what a fix step may change
+      — a decision the developer owns, a rule that is itself wrong, access this
+      Run does not have. False whenever one blocker remains that a fix round
+      could close. Meaningless while `blocking` is false, and then always false.
+  findings:
+    type: array
+    maxItems: 80
+    items: {type: string, minLength: 1, maxLength: 4000}
+  suggested_next: {enum: [continue, "/aif-fix"]}

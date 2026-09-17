@@ -1,0 +1,65 @@
+# Project controls are intentionally small. `exclude` selects a declared
+# bypass; it does not delete a graph stage or pretend that a skipped gate passed.
+profile: full # `fast` and `ultra` use their documented native AIF plan layouts.
+# Standing answers of this repository; a flag on one Run overrides any of them.
+# gate_checks is the whole verify composition (make race stays a release gate).
+answers:
+  decision_policy: attended
+  preflight:
+    plan_tests: true
+    gate_warnings: ignore
+    gate_checks: |
+      make ci-check
+      make e2e
+      openspec validate --all --strict
+      git diff --check
+settings:
+  improve-batch: {improve_round_limit: 3}
+  improve-series: {improve_batch_limit: 3}
+exclude: []
+# `extensions` adds a step of your own; this file is not only for subtracting.
+# `workflow` and `step` are short component names — the file name without its
+# directory — never the full `id:` written inside those files. The insertion
+# names the route it replaces, so the tail of the graph cannot be silently
+# detached: `from` routes to your step and your step routes on to `to`. An
+# inserted step declares no inputs; a step that needs them belongs in a workflow
+# graph you write yourself. Read that literally before you write the step: an
+# insertion receives neither what `warmup` distilled nor the output of the stage
+# in front of it. So whatever your executor has to know stands in its own bridge,
+# and an artifact of an earlier step is something it goes and finds rather than
+# something bound to a name. A bridge that sends the executor elsewhere for the
+# truth inherits every ambiguity of elsewhere. Worked reference: examples/
+# authoring/extension-authoring-reference.yaml in the Pri-Fly repository.
+#
+# An insertion routes forward only. Naming an earlier stage — sending `fail`
+# back into the verify loop, say — is refused as `cycle at /definition/stages:
+# stage graph contains a cycle; repeats require an explicit supported operator`,
+# because a loop is a `repeat` node and an insertion cannot declare one. Nor can
+# you insert into the loop itself: only this package's root workflow can be
+# named, and `workflow: verify-once` is refused as
+# `project_extension_unknown_workflow: verify-once (known: classic)`.
+#
+# So a step of yours that needs a repair round goes in front of the gates, and
+# sends its unhappy verdicts onward to them rather than to a finish. Measured:
+# `between: {from: implement, to: verify}` with
+# `on: {pass: verify, fail: verify, ...}` compiles. A failure then
+# reaches a gate that does loop, the gate reports it as a blocker — a check that
+# fails is one by this package's own definition — and the fix round repairs it.
+# Ending your own step at `abandoned` instead spends the whole Run on the first
+# red result.
+#
+# A stage answers for every verdict its step can return, this one included:
+# the packages are on WorkflowRevision v4, and an insertion that names only
+# `pass` is refused by name (`missing_handler at .../on/fail`). Send the three
+# unhappy verdicts where the Run should end rather than to your `to` stage —
+# `abandoned` finishes the classic route with a stated reason, while `done`
+# would claim success. There is no repair stage after `commit`: the fix step
+# lives inside the verify and review loops, earlier.
+#
+# extensions:
+#   - id: merge-request
+#     workflow: classic
+#     step: merge-request
+#     between: {from: commit, to: done}
+#     on: {pass: done, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+extensions: []

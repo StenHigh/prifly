@@ -1,0 +1,156 @@
+authoring: prifly-project-workflow/1
+package:
+  id: aif:package/classic
+  version: 1.37.0
+  description: Canonical AI Factory development workflow with bounded plan improvement.
+  requires_core_protocol: "1"
+  profiles:
+    default: fast
+    values:
+      fast:
+        plan_capture: {kind: exact_file, path: .ai-factory/PLAN.md}
+      full:
+        plan_capture: {kind: direct_child_file, path: .ai-factory/plans}
+      ultra:
+        plan_capture: {kind: direct_child_tree, path: .ai-factory/plans, entrypoint: index.md}
+  references:
+    assisted_adapter: core:adapter/assisted-session@1.0.0
+    local_policy: core:policy/local@3.0.0
+    step_result_schema: core:schema/step-result@1.0.0
+    workspace_tree_manifest: core:schema/workspace-tree-manifest@1.0.0
+id: aif:workflow/classic
+schema_version: "4"
+version: 1.37.0
+title: AI Factory classic development workflow
+refs:
+  schema_task: "{{schema_task}}"
+  schema_warmup-handoff: "{{schema_warmup-handoff}}"
+  schema_plan_manifest: "{{workspace_tree_manifest}}"
+  schema_implementation: "{{schema_implementation}}"
+  schema_gate-result: "{{schema_gate-result}}"
+  schema_feature-enabled: "{{schema_feature-enabled}}"
+  step_warmup: "{{step_warmup}}"
+  step_plan: "{{step_plan}}"
+  workflow_improve-or-pass: "{{workflow_improve-or-pass}}"
+  step_implement: "{{step_implement}}"
+  step_verify: "{{step_verify}}"
+  workflow_verify-batch: "{{workflow_verify-batch}}"
+  step_security: "{{step_security}}"
+  step_review: "{{step_review}}"
+  workflow_review-batch: "{{workflow_review-batch}}"
+  step_commit: "{{step_commit}}"
+  local_policy: "{{local_policy}}"
+inputs:
+  task: {schema_ref: schema_task}
+  security_enabled:
+    schema_ref: schema_feature-enabled
+    required: false
+    configuration: {scope: project, default: true}
+decision_catalog:
+  - .prifly/workflows/aif-classic/decisions/plan/profile.yaml
+  - .prifly/workflows/aif-classic/decisions/plan/tests.yaml
+  - .prifly/workflows/aif-classic/decisions/plan/logging.yaml
+  - .prifly/workflows/aif-classic/decisions/plan/docs.yaml
+  - .prifly/workflows/aif-classic/decisions/plan/roadmap-linkage.yaml
+  - .prifly/workflows/aif-classic/decisions/plan/roadmap-milestone.yaml
+  - .prifly/workflows/aif-classic/decisions/plan/constraints.yaml
+  - .prifly/workflows/aif-classic/decisions/improve/apply.yaml
+  - .prifly/workflows/aif-classic/decisions/gates/checks.yaml
+  - .prifly/workflows/aif-classic/decisions/gates/warnings.yaml
+outputs:
+  implementation: {schema_ref: schema_implementation, required_for: [succeeded]}
+  plan: {schema_ref: schema_plan_manifest, required_for: [succeeded]}
+  gate: {schema_ref: schema_gate-result, required_for: [partial]}
+limits: {max_step_instances: 200, max_control_transitions: 1000, max_parallelism: 1, max_child_depth: 4}
+policy_ref: local_policy
+features:
+  security: {input: security_enabled}
+entry: warmup
+stages:
+  warmup:
+    kind: step
+    step_ref: step_warmup
+    on: {pass: plan, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+  plan:
+    kind: step
+    step_ref: step_plan
+    input_bindings: {task: $inputs.task, handoff: $stages.warmup.handoff}
+    on: {pass: improve, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+  improve:
+    kind: call
+    workflow_ref: workflow_improve-or-pass
+    input_bindings: {plan: $stages.plan.plan, handoff: $stages.warmup.handoff}
+    on: {succeeded: implement, rejected: abandoned}
+  implement:
+    kind: step
+    step_ref: step_implement
+    input_bindings: {plan: $stages.improve.plan, handoff: $stages.warmup.handoff}
+    on: {pass: verify, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+  # Every stage after a gate reads the implementation the gate returned, not the
+  # one the implement step produced: a fix round commits, and the artifact that
+  # names the head has to follow the tree. The batches are called on every path
+  # and pass the input through when their gate is off, which is what lets these
+  # bindings be guaranteed.
+  verify:
+    kind: call
+    workflow_ref: workflow_verify-batch
+    input_bindings:
+      implementation: $stages.implement.implementation
+      handoff: $stages.warmup.handoff
+    on: {succeeded: choose-security, partial: fix-after-verify}
+  choose-security:
+    kind: choice
+    selection: exclusive
+    branches:
+      - id: enabled
+        predicate: {op: eq, left: $inputs.security_enabled, right: true}
+        next: security
+    default: review
+  security:
+    kind: step
+    step_ref: step_security
+    input_bindings: {implementation: $stages.verify.implementation}
+    on: {pass: security-decision, needs_revision: fix-after-security, fail: abandoned, no_work: abandoned}
+  security-decision:
+    kind: choice
+    selection: exclusive
+    branches:
+      - id: blockers
+        predicate: {op: eq, left: $stages.security.gate#/blocking, right: true}
+        next: fix-after-security
+    default: review
+  review:
+    kind: call
+    workflow_ref: workflow_review-batch
+    input_bindings:
+      implementation: $stages.verify.implementation
+      handoff: $stages.warmup.handoff
+    on: {succeeded: commit, partial: fix-after-review}
+  commit:
+    kind: step
+    step_ref: step_commit
+    input_bindings: {implementation: $stages.review.implementation}
+    on: {pass: done, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {implementation: $stages.commit.implementation, plan: $stages.implement.plan}
+  fix-after-verify:
+    kind: finish
+    outcome: partial
+    output_bindings: {gate: $stages.verify.gate}
+    description: Verify rounds ended with blockers still open; the findings are reported unchanged.
+  fix-after-security:
+    kind: finish
+    outcome: partial
+    output_bindings: {gate: $stages.security.gate}
+    description: The gate proposes /aif-fix; Pri-Fly does not run it automatically.
+  fix-after-review:
+    kind: finish
+    outcome: partial
+    output_bindings: {gate: $stages.review.gate}
+    description: Review rounds ended with blockers still open; the findings are reported unchanged.
+  # A step that cannot finish its work has nowhere to go on this route: there
+  # is no revision loop outside the gates. Ending here reports that plainly,
+  # where an undeclared verdict would end the Run as an engine failure.
+  abandoned: {kind: finish, outcome: rejected}

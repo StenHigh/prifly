@@ -1,0 +1,4 @@
+# Copy this file to local.yaml for machine-only overrides.
+# local.yaml is ignored by Git and must not contain shared workflow rules.
+# authority_root: /absolute/path/to/your/local/Pri-Fly/state
+# prifly_executable: /absolute/path/to/prifly

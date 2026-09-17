@@ -1,0 +1,9 @@
+authoring: prifly-run-decision/1
+id: plan_docs
+title: Documentation checkpoint
+phase: preflight
+choices:
+  - {id: require, title: Require documentation checkpoint, value: true}
+  - {id: warn, title: Warn only, value: false}
+destination: {kind: session_context, name: plan_docs}
+when: {profiles: [full, ultra]}

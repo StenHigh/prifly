@@ -1,0 +1,87 @@
+id: aif:context/aif-plan-bridge
+version: 1.7.0
+media_type: text/markdown; charset=utf-8
+text: |
+  # Pri-Fly adapter for the pinned aif-plan skill
+
+  The following supporting context is the pinned upstream `aif-plan` skill.
+  Apply its planning procedure, but this adapter owns the handoff of already
+  declared Pri-Fly choices.
+
+  `decision_sheet.package_profile` is the selected leading AIF mode: invoke
+  the skill as `aif-plan fast`, `aif-plan full`, or `aif-plan ultra` for that
+  exact value.
+
+  Every value in `decision_context` is a choice already made for this Run. Use
+  them and do not repeat the corresponding native question. Read the whole map
+  rather than a list of names: a value this adapter forgot to name is still the
+  developer's answer, and dropping it loses the answer silently.
+
+  A section that enumerates the diff — how many files it touches, which paths,
+  how many lines each — is stale as soon as this route commits anything, and it
+  commits during the fix rounds. Write such a section as something the reader
+  re-derives from the tree, with the command that derives it, rather than as
+  transcribed numbers that were true once.
+
+  When a number in that section has to be pinned anyway, pin it over a closed
+  range or a fixed set — two named commits, an explicit list of paths — never
+  over `base..HEAD` or anything else whose far end moves. A pin taken over a
+  moving end is wrong as soon as this route commits; a pin over two fixed hashes
+  survives the commit that follows it and can be re-checked by anyone.
+
+  A key that starts with `core:` comes from Pri-Fly itself, not from this
+  package's decision catalog: do not look for a declared decision behind it.
+  `core:package_profile` is the same answer as `decision_sheet.package_profile`
+  rather than a second one, so read either and never treat them as two choices
+  that could disagree.
+
+  A command you write into the plan as an acceptance check must be run once, on
+  the tree you are writing it for, before the plan carries it. Read what it
+  printed and the status it exited with, not only its last line: a check can
+  produce a plausible answer through a broken command — a shell alias turning
+  `ls` into something else, a `grep` counting unchanged context lines as
+  changes, a step's own output making "the tree is clean" unreachable. Three
+  Runs in a row spent their next step repairing commands that were never
+  executed, while the judgements those commands were meant to prove were sound.
+  Write fewer checks rather than unexecuted ones.
+
+  The `handoff` input is what the warmup step distilled about this project:
+  how it is built, where work starts, which rules are not visible in the code,
+  what it could not settle, and the paths it read. Read it before the skill's
+  own discovery and treat it as already established. Open a path it lists only
+  when this step actually needs that file; the handoff exists so the reading
+  warmup already did is not repeated in every later session.
+
+  `decision_sheet.decision_policy` says whether a person is at the keyboard for
+  this Run. When it is `autonomous`, pass the caller values this skill reads —
+  it accepts them as text here rather than from the environment:
+
+      HANDOFF_MODE=1
+      HANDOFF_TASK_ID=
+      HANDOFF_SKIP_REVIEW=0
+
+  It is the truthful value: Pri-Fly records status itself, so the skill must not
+  call the Handoff MCP tools, which this session does not have, and must not ask
+  a question nobody is there to answer. The empty task id keeps its plan
+  annotation off, because there is no Handoff task.
+
+  That mode carries its own defaults for the questions it stops asking. Those
+  defaults never override a declared answer: `decision_context` wins wherever
+  both speak. The mode decides only what happens where this adapter declared
+  nothing.
+
+  When the policy is `attended`, do not set the mode. An undeclared question
+  then stays normal host interaction; never pretend it was a Pri-Fly
+  DecisionRequest.
+
+  The skill's requirements reconciliation gate can end the step before a plan
+  exists: an unresolved conflict between authoritative sources is
+  `ERROR [requirement-conflict]`, and under `HANDOFF_MODE=1` the skill returns
+  `handoff_outcome: blocked_external` and stops without a plan. Report that as
+  `fail`, naming the sources and the conflict. It is the right verdict and the
+  only honest one: `pass` promises a plan that was not written, and every
+  verdict but `pass` ends this Run at `abandoned` with your report as the
+  reason — there is no stage after this one that could resolve the conflict.
+  Do not pick a source to keep going: the skill refuses to choose silently,
+  and so does this route. Under `attended`, the skill asks the person instead,
+  and that stays normal host interaction.

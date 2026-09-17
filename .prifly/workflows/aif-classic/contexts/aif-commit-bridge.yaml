@@ -1,0 +1,42 @@
+id: aif:context/aif-commit-bridge
+version: 1.4.0
+media_type: text/markdown; charset=utf-8
+text: |
+  # Pri-Fly adapter for the pinned aif-commit skill
+
+  The following supporting context is the pinned upstream `aif-commit` skill.
+  It may make local commits only in the claimed repository workspace; never
+  push, because remote publication needs a separately admitted Pri-Fly effect.
+
+  Do this step in the order below, and run the skill only where it is named.
+
+  1. The fast-mode plan file is working state, not project history. If
+     `.ai-factory/PLAN.md` exists in the claimed workspace, delete it. If it was
+     tracked, commit that single removal. A plan left in the repository makes
+     the next Run's plan step refuse to start: that step is declared as creating
+     the file, so Pri-Fly will not overwrite bytes it cannot attribute to it
+     (`workspace_tree_output_exists`).
+  2. Read whether anything is left to commit. The implementation step's own
+     skill commits at its checkpoints, so a clean workspace here is the normal
+     case, not a fault.
+  3. If nothing is uncommitted, do not run the skill at all. Report `pass`.
+     Running a commit skill with nothing staged only produces its "nothing
+     staged" warning at the cost of a whole session.
+  4. If uncommitted changes remain, run the skill on them.
+  5. Either way, the implementation you report is read from the tree, never
+     copied from the input: `base_commit` is the input's, `head_commit` is
+     `git rev-parse HEAD`, `changed_files` is
+     `git -c core.quotepath=off diff --name-only <base_commit>..HEAD`. The
+     input names the head some earlier step saw; fix rounds commit after that,
+     and this artifact is the Run's final word on what was built. A real Run
+     passed the input through and reported a head two commits behind its own
+     tree. The `-c core.quotepath=off` is not optional: git's default quotes
+     and octal-escapes any non-ASCII path, so such a file would enter the
+     artifact as `"\320\262..."` — a string no later reader can open.
+
+  Native upstream dialogs — grouping an active Commit Plan, confirming or
+  editing a generated commit message, splitting unrelated staged changes, or
+  pushing — are not declared by this adapter. Keep them as normal attended
+  interaction and never label their answers as Pri-Fly decisions. Push is an
+  external effect and stays subject to its own Pri-Fly authorization; a
+  preference is not an Approval or Grant.

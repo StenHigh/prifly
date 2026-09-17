@@ -1,0 +1,12 @@
+authoring: prifly-run-decision/1
+id: plan_logging
+title: Logging detail
+phase: preflight
+choices:
+  - {id: verbose, title: Verbose, value: verbose}
+  - {id: standard, title: Standard, value: standard}
+  - {id: minimal, title: Minimal, value: minimal}
+recommendation: verbose
+automatic: true
+destination: {kind: session_context, name: plan_logging}
+when: {profiles: [full, ultra]}

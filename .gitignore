@@ -6,9 +6,4 @@ node_modules/
 .cache/
 bin/
 dist/
-.prifly/
-!test/fixtures/project-authoring/*/repository/.prifly/
-!test/fixtures/project-authoring/*/repository/.prifly/**
-!test/fixtures/project-launch/*/repository/.prifly/
-!test/fixtures/project-launch/*/repository/.prifly/**
 .idea/

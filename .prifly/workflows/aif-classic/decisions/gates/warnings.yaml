@@ -1,0 +1,28 @@
+authoring: prifly-run-decision/1
+id: gate_warnings
+title: Non-blocking gate warnings
+description: >-
+  Decide once, before the Run starts, what an unattended Run does with verify and
+  review findings that do not block. Without a person at the keyboard the choice is
+  not between a human deciding and a machine deciding: it is between a rule
+  declared in advance and work that stands still until morning.
+
+  `fix` is safe only where a gate's warnings are limited to the change being
+  made. A gate that reports a standing project-wide warning would send an
+  unattended Run to work far outside the task it was given.
+
+  `stop` ends an unattended Run whenever any warning exists at all, and on a
+  real project one nearly always does: measured on a pilot, a Run chose `stop`
+  and its review blocked with zero blockers and warnings only. Choose it when a
+  person is at the keyboard and means to look; for an unattended Run it is the
+  answer that guarantees nothing finishes.
+phase: preflight
+required: true
+choices:
+  - {id: fix, title: Fix warnings too, value: fix}
+  - {id: ignore, title: Leave warnings for later, value: ignore}
+  - {id: stop, title: Stop and let me look at them, value: stop}
+recommendation: ignore
+automatic: true
+sensitivity: ordinary
+destination: {kind: session_context, name: gate_warnings}

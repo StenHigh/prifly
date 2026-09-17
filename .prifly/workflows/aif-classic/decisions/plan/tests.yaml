@@ -1,0 +1,10 @@
+authoring: prifly-run-decision/1
+id: plan_tests
+title: Include tests in the plan
+phase: preflight
+choices:
+  - {id: include, title: Include tests, value: true}
+  - {id: skip, title: Skip tests, value: false}
+recommendation: true
+automatic: true
+destination: {kind: session_context, name: plan_tests}

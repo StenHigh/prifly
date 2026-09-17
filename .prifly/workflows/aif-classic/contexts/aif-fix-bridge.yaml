@@ -1,0 +1,69 @@
+id: aif:context/aif-fix-bridge
+version: 1.4.0
+media_type: text/markdown; charset=utf-8
+text: |
+  # Pri-Fly adapter for the pinned aif-fix skill
+
+  The following supporting context is the pinned upstream `aif-fix` skill. It
+  is driven here by a gate, not by a person describing a bug: the `gate` input
+  carries the findings a read-only gate just produced, and they are the subject
+  to fix. Work only in the claimed repository workspace.
+
+  The skill reads three caller values, and it accepts them as text in this
+  prompt rather than from the environment. They are:
+
+      HANDOFF_MODE=1
+      HANDOFF_TASK_ID=
+      HANDOFF_SKIP_REVIEW=0
+
+  `HANDOFF_MODE=1` is the truthful value here whatever
+  `decision_sheet.decision_policy` says, and this step is the one place that
+  does not depend on it: it reports and ends, so a question asked here reaches
+  nobody even when a person is at the keyboard. Pri-Fly records status itself,
+  so the skill must not call the Handoff MCP tools, which this session does not
+  have. The task ID is empty because there is no Handoff task, and the skill's
+  own rule then omits its plan annotation.
+
+  A finding the gate marked `blocking_owner_only` is not yours to close, and the
+  caller will not send you one: those are the developer's decisions, not defects.
+  If you find such a thing among findings that were sent to you, leave it and
+  name it in the summary rather than working around it.
+
+  The skill's own rule about an unreproducible problem is the important one
+  here, and it is not a failure to report it: when investigation finds no
+  plausible root cause that can be fixed safely, it must stop without changing
+  implementation code. Do exactly that, report `needs_revision`, and say in the
+  summary which findings you could not settle. A loop that keeps turning on a
+  problem nobody understands is worse than one that stops and says so.
+
+  `decision_context.gate_warnings` says what this project does with
+  non-blocking warnings: `fix` treats them as work for this step, `ignore`
+  leaves them alone, and `stop` means the developer wants to look at them
+  personally — report `needs_revision` without editing anything and name them.
+
+  Report `pass` when you changed something and `needs_revision` only when no
+  safe change exists. `needs_revision` here ends the whole Run: the caller
+  finishes as `partial` with the gate reported, and every stage after it —
+  security, review, commit, and anything a project inserted after them — does
+  not run. It is the right answer when the problem is not understood, and an
+  expensive one when it merely looks safer.
+
+  What you commit invalidates what the plan says about the diff. A plan section
+  that enumerates the surface — file counts, changed paths, per-file line
+  numbers — was written before your commit existed and is stale the moment you
+  make one, including for the plan file and any note you add. Re-derive those
+  numbers from the tree instead of trusting the section, and say in your summary
+  that you did.
+
+  When a number in that section has to be pinned anyway, pin it over a closed
+  range or a fixed set — two named commits, an explicit list of paths — never
+  over `base..HEAD` or anything else whose far end moves. A pin taken over a
+  moving end is wrong as soon as this route commits; a pin over two fixed hashes
+  survives the commit that follows it and can be re-checked by anyone.
+
+  `.ai-factory/PLAN.md` is Run working state, not project history: the commit
+  step deletes it. Do not commit it to preserve a record — the record is the
+  gate result and your own summary, both of which Pri-Fly keeps.
+
+  Return the implementation result. Pri-Fly, not this skill, decides what runs
+  next: do not invoke a gate, commit, or create a plan.

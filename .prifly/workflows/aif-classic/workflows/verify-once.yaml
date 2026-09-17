@@ -1,0 +1,80 @@
+authoring: prifly-workflow/1
+schema_version: "4"
+id: aif:workflow/verify-once
+version: 1.5.0
+title: Verify the implementation once and fix what blocks it
+refs:
+  schema_implementation: "{{schema_implementation}}"
+  schema_gate-result: "{{schema_gate-result}}"
+  schema_warmup-handoff: "{{schema_warmup-handoff}}"
+  step_verify: "{{step_verify}}"
+  step_fix: "{{step_fix}}"
+  local_policy: "{{local_policy}}"
+inputs:
+  implementation: schema_implementation
+  handoff: schema_warmup-handoff
+outputs:
+  implementation: {schema_ref: schema_implementation, required_for: [succeeded, partial]}
+  gate: {schema_ref: schema_gate-result, required_for: [partial, rejected]}
+limits: {max_step_instances: 2, max_control_transitions: 16, max_parallelism: 1, max_child_depth: 1}
+policy_ref: local_policy
+entry: verify
+stages:
+  verify:
+    kind: step
+    step_ref: step_verify
+    input_bindings: {implementation: $inputs.implementation}
+    on: {pass: decide, needs_revision: inconclusive, fail: stopped, no_work: stopped}
+  decide:
+    kind: choice
+    # `blocking_owner_only` implies `blocking`, so the two branches are true
+    # together and the order is what separates them: `first_match` stops at the
+    # first branch that is not false, so the owner case is asked first and the
+    # blocking branch never answers for it. Under `exclusive` the same pair is
+    # an error rather than a choice, which is what once made `owner-decides`
+    # unreachable and had to be written around by hand.
+    selection: first_match
+    branches:
+      - id: owner
+        predicate: {op: eq, left: $stages.verify.gate#/blocking_owner_only, right: true}
+        next: owner-decides
+      - id: blocking
+        predicate: {op: eq, left: $stages.verify.gate#/blocking, right: true}
+        next: fix
+    default: clean
+  fix:
+    kind: step
+    step_ref: step_fix
+    input_bindings:
+      gate: $stages.verify.gate
+      implementation: $inputs.implementation
+      handoff: $inputs.handoff
+    on: {pass: fixed, needs_revision: unresolved, fail: stopped, no_work: stopped}
+  clean:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {implementation: $inputs.implementation}
+  fixed:
+    kind: finish
+    outcome: partial
+    output_bindings: {implementation: $stages.fix.implementation, gate: $stages.verify.gate}
+    description: Blockers were fixed; the caller reviews the changed implementation again.
+  unresolved:
+    kind: finish
+    outcome: rejected
+    output_bindings: {gate: $stages.verify.gate}
+    description: The fix step found no safe change it could make; the findings stand.
+  inconclusive:
+    kind: finish
+    outcome: rejected
+    output_bindings: {gate: $stages.verify.gate}
+    description: The gate could not establish a result; its findings stand and no fix round runs.
+  owner-decides:
+    kind: finish
+    outcome: rejected
+    output_bindings: {gate: $stages.verify.gate}
+    description: What still blocks is the developer's to decide, so another fix round would spend a turn it cannot win.
+  stopped:
+    kind: finish
+    outcome: no_work
+    description: A step of this round could not do its work, so the round ends without a result to report.

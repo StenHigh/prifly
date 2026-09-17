@@ -1,0 +1,83 @@
+id: aif:context/aif-implement-bridge
+version: 1.6.0
+media_type: text/markdown; charset=utf-8
+text: |
+  # Pri-Fly adapter for the pinned aif-implement skill
+
+  The following supporting context is the pinned upstream `aif-implement`
+  skill. Pri-Fly has already materialized the exact native plan revision in
+  the claimed repository workspace. Implement that plan there and preserve its
+  native progress files.
+
+  Pri-Fly, not this skill, owns the next canonical stage. Do not invoke
+  `aif-verify`, `aif-commit`, `aif-fix`, create a new plan, merge a worktree,
+  or remove the plan bundle. Return the implementation result so the declared
+  workflow selects verify, security, review, and commit.
+
+  That is not a ban on committing, and the difference matters because the
+  skill's own rules for `HANDOFF_MODE` tell it to commit at its checkpoints.
+  Keep doing that: its checkpoint commits in the claimed workspace are expected,
+  and the commit step later treats a clean workspace as the normal case rather
+  than a fault. What the line above forbids is invoking the separate
+  `aif-commit` skill, which is a stage this workflow schedules itself — running
+  it from here would commit outside the sequence Pri-Fly recorded.
+
+  The skill's checkbox rule is not yours. It lives in the branch for a manual
+  session linked to a Handoff task — `HANDOFF_MODE` not `1` and a task id set —
+  where the skill builds synthetic plan content, pushes it, and flips `- [ ]` to
+  `- [x]` in that text. Here the mode is `1` and the task id is empty, so that
+  branch never applies, and the skill's own prohibition holds instead: do not
+  search for or modify plan checkboxes on disk. The captured plan file is not
+  required to contain any.
+
+  The `handoff` input is what the warmup step distilled about this project:
+  how it is built, where work starts, which rules are not visible in the code,
+  what it could not settle, and the paths it read. Read it before the skill's
+  own discovery and treat it as already established. Open a path it lists only
+  when this step actually needs that file; the handoff exists so the reading
+  warmup already did is not repeated in every later session.
+
+  `decision_sheet.decision_policy` says whether a person is at the keyboard for
+  this Run. When it is `autonomous`, pass the caller values this skill reads —
+  it accepts them as text here rather than from the environment:
+
+      HANDOFF_MODE=1
+      HANDOFF_TASK_ID=
+      HANDOFF_SKIP_REVIEW=0
+
+  It is the truthful value: Pri-Fly records status itself, so the skill must not
+  call the Handoff MCP tools, which this session does not have, and must not ask
+  a question nobody is there to answer. The empty task id keeps its plan
+  annotation off, because there is no Handoff task.
+
+  That mode carries its own defaults for the questions it stops asking. Those
+  defaults never override a declared answer: `decision_context` wins wherever
+  both speak. The mode decides only what happens where this adapter declared
+  nothing.
+
+  When the policy is `attended`, do not set the mode. An undeclared question
+  then stays normal host interaction; never pretend it was a Pri-Fly
+  DecisionRequest.
+
+  A key that starts with `core:` comes from Pri-Fly itself, not from this
+  package's decision catalog: do not look for a declared decision behind it.
+  `core:package_profile` is the same answer as `decision_sheet.package_profile`
+  rather than a second one, so read either and never treat them as two choices
+  that could disagree.
+
+  `decision_context` carries applicable declared choices already made for this
+  Run. A native upstream question without an exact runtime decision ID in this
+  adapter remains normal attended host interaction; it is not a Pri-Fly
+  DecisionRequest.
+
+  The skill's requirement consistency gate runs before each behavior-changing
+  task. A clear conflict between the task and a cited requirement is
+  `ERROR [requirement-conflict]`: the skill leaves the task pending and, under
+  `HANDOFF_MODE=1`, returns `handoff_outcome: blocked_external` without
+  signalling completion. Report that as `fail`, naming the task and the
+  requirement it conflicts with, and say which tasks were already done — their
+  checkpoint commits stand in the workspace. Every verdict but `pass` ends this
+  Run at `abandoned` with your report as the reason, which is what a conflict
+  no step here may resolve deserves. Never implement first and rewrite the
+  requirement afterwards, and never report `pass` with the task left pending:
+  verify would then measure a plan against a tree that stopped short of it.

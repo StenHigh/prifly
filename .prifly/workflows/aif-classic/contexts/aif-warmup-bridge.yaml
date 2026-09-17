@@ -1,0 +1,60 @@
+id: aif:context/aif-warmup-bridge
+version: 1.3.0
+media_type: text/markdown; charset=utf-8
+text: |
+  # Pri-Fly adapter for the pinned aif-warmup skill
+
+  The following supporting context is the pinned upstream `aif-warmup` skill.
+  Run it as written: read the core project artifacts, the applicable
+  instructions, and whatever `warmup.paths` names.
+
+  Upstream warmup ends by holding a compact handoff in its own session, which
+  the developer then continues or forks. Here every later step runs in its own
+  session, so a handoff kept only in this one is lost the moment this step
+  reports. Write it to the declared `handoff` output instead: that is the only
+  route by which what you just read reaches planning.
+
+  Distil, do not copy. The handoff carries what a later step could not derive
+  cheaply on its own — how the project is built, where work starts, which rules
+  are not visible in the code, and what you could not settle. Name the paths you
+  read under `sources` so a later step can open one directly; do not paste their
+  contents. A handoff that repeats its sources costs more to carry than reading
+  them again, which would make this step worse than useless.
+
+  Write the handoff as a JSON object matching its declared schema. The port is
+  a JSON port, so bytes that are not that object are refused at intake and the
+  step is reported back to you, not silently accepted.
+
+  Its bounds are part of the contract and are not visible from the task, so they
+  are written here rather than discovered by refusal. `summary` is one prose
+  string of at most 4000 characters. `entry_points`, `conventions`, `sources`
+  and `open_questions` are arrays of strings, **each entry at most 400
+  characters**, with at most 24, 24, 64 and 16 entries. One long sentence per
+  entry, not a paragraph: an entry that needs more than 400 characters is
+  usually two entries, or belongs in `summary`. Only `open_questions` may be
+  omitted; the other four are required.
+
+  Include the project's own skill overlays among the entry points. A repository
+  may carry instructions that override or extend a skill — the AI Factory
+  layout keeps them under `.ai-factory/skill-context/<skill>/` — and a skill
+  can mark its overlay mandatory. A later step that never learns such a file
+  exists produces work that is missing a section its own instructions required.
+
+  The skill's own handoff has sections; this output has fields, and each
+  section has a place. **Configuration** — the resolved paths and the
+  language, git and workflow preferences later commands read, `verify_mode`
+  and `warmup.paths` included — goes under `conventions`, one entry per
+  setting that changes what a later step does. **Project**, **Architecture**
+  and **Direction** are the `summary`; **Architecture**'s boundaries and the
+  places work starts are the `entry_points`. **Rules** are `conventions`.
+  **Gaps** — missing artifacts, contradictions between sources, open research
+  questions — are `open_questions`; name both sides of a contradiction rather
+  than choosing one, exactly as the skill does. **Loaded** is `sources`.
+  **Ready** has no field: reporting this step is what says it.
+
+  The skill declares itself not model-invocable and reads with `Read`, `Glob`
+  and `Grep` alone. Neither is an obstacle here: its text is pinned into this
+  task, so follow it as instructions rather than invoking it as a command, and
+  it needs nothing beyond reading.
+
+  Change no repository file: this step declares no workspace effect.

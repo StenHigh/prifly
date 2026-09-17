@@ -1,0 +1,8 @@
+authoring: prifly-run-decision/1
+id: plan_constraints
+title: Additional planning constraints
+phase: preflight
+value_schema: {type: string, maxLength: 4000}
+recommendation: ""
+automatic: true
+destination: {kind: session_context, name: plan_constraints}

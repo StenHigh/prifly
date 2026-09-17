@@ -1,0 +1,39 @@
+id: aif:context/aif-improve-bridge
+version: 1.3.0
+media_type: text/markdown; charset=utf-8
+text: |
+  # Pri-Fly adapter for the pinned aif-improve skill
+
+  The following supporting context is the pinned upstream `aif-improve` skill,
+  together with the reference files its own steps send you to read. Run it as
+  written: analyse the plan against the codebase and present what you found.
+
+  The upstream skill ends Step 5 with the exact question “Apply these
+  improvements?” and three options — apply all, choose which ones, or keep the
+  plan as it is — and it must not edit anything before that question is
+  answered. A native chat dialog cannot answer it here: this step reports and
+  ends, and nobody would see the question.
+
+  So at that exact point, first use `decision_context.improve_apply` when it
+  exists. Otherwise request the declared `improve_apply` runtime decision
+  through the generated `prifly-run` host instructions, then stop without
+  editing the plan, without applying a single improvement, and without
+  reporting. The request does not always wait for anyone: when the owner sealed
+  an answer for it before the Run started, Pri-Fly applies that answer as the
+  request arrives and redelivers the same Attempt. This is a scope-changing
+  question and no policy answers it for you, so never assume a value and never
+  proceed on the assumption. On the redelivered same Attempt, apply the answer:
+  `all` performs Step 6 for every finding, `none` leaves the plan untouched and
+  reports `pass` with the plan unchanged, and `select` still needs the upstream
+  free-form follow-up about which findings to take.
+
+  The `handoff` input is what the warmup step distilled about this project:
+  how it is built, where work starts, which rules are not visible in the code,
+  what it could not settle, and the paths it read. Read it before the skill's
+  own discovery and treat it as already established. Open a path it lists only
+  when this step actually needs that file; the handoff exists so the reading
+  warmup already did is not repeated in every later session.
+
+  Other native upstream dialogs are not declared by this adapter. Keep them as
+  normal attended interaction and never label their answers as Pri-Fly
+  decisions.

@@ -1,0 +1,37 @@
+id: aif:schema/warmup-handoff
+version: 1.0.0
+$schema: https://json-schema.org/draft/2020-12/schema
+description: >-
+  The compact handoff a warmup session produces for the steps that follow it.
+  Every later step runs in its own context, so what warmup learned reaches them
+  only through this document. Its bounds are deliberate: a handoff that repeats
+  the sources it was distilled from costs more to carry than reading them again.
+type: object
+required: [summary, entry_points, conventions, sources]
+additionalProperties: false
+properties:
+  summary:
+    type: string
+    minLength: 1
+    maxLength: 4000
+    description: What this project is and how it is built, in prose.
+  entry_points:
+    type: array
+    maxItems: 24
+    items: {type: string, minLength: 1, maxLength: 400}
+    description: Where work on this repository usually starts, one per entry.
+  conventions:
+    type: array
+    maxItems: 24
+    items: {type: string, minLength: 1, maxLength: 400}
+    description: Rules a change must follow that are not obvious from the code.
+  sources:
+    type: array
+    maxItems: 64
+    items: {type: string, minLength: 1, maxLength: 400}
+    description: Paths this handoff was distilled from, so a later step can read one directly instead of searching.
+  open_questions:
+    type: array
+    maxItems: 16
+    items: {type: string, minLength: 1, maxLength: 400}
+    description: What warmup could not settle and the next step should not assume.

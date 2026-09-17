@@ -1,0 +1,12 @@
+authoring: prifly-step/2
+id: aif:step/continue-improve
+version: 1.2.0
+title: Ask whether to run another bounded improvement batch
+kind: worker
+outputs:
+  answer: {schema_ref: "{{schema_continue}}", required_for: [pass]}
+executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
+instructions_ref: "{{context_continue-improve}}"
+effects: {class: none, retry_class: never}
+session_limits: {active_timeout_ms: null}
+result_schema_ref: "{{step_result_schema}}"

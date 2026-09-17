@@ -1,0 +1,15 @@
+authoring: prifly-step/2
+id: aif:step/review
+version: 1.8.0
+title: Run read-only aif-review over the implementation
+kind: worker
+inputs:
+  implementation: {schema_ref: "{{schema_implementation}}"}
+outputs:
+  gate: {schema_ref: "{{schema_gate-result}}", required_for: [pass, needs_revision]}
+executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
+instructions_ref: "{{context_aif-review-bridge}}"
+context_refs: ["{{context_aif-review}}"]
+effects: {class: none, retry_class: never}
+session_limits: {active_timeout_ms: null}
+result_schema_ref: "{{step_result_schema}}"

@@ -1,0 +1,17 @@
+authoring: prifly-step/2
+id: aif:step/fix
+version: 1.2.0
+title: Run aif-fix over the findings a gate just reported
+kind: worker
+inputs:
+  gate: {schema_ref: "{{schema_gate-result}}"}
+  implementation: {schema_ref: "{{schema_implementation}}"}
+  handoff: {schema_ref: "{{schema_warmup-handoff}}"}
+outputs:
+  implementation: {schema_ref: "{{schema_implementation}}", required_for: [pass]}
+executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
+instructions_ref: "{{context_aif-fix-bridge}}"
+context_refs: ["{{context_aif-fix}}"]
+effects: {class: workspace_write, retry_class: never}
+session_limits: {active_timeout_ms: null}
+result_schema_ref: "{{step_result_schema}}"

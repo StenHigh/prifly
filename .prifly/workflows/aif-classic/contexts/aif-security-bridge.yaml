@@ -1,0 +1,62 @@
+id: aif:context/aif-security-bridge
+version: 1.6.0
+media_type: text/markdown; charset=utf-8
+text: |
+  # Pri-Fly adapter for the pinned aif-security-checklist skill
+
+  The following supporting context is the pinned upstream `aif-security-checklist`
+  skill — the security step of the canonical AI Factory route, which runs it
+  after verify and before review. Run its full audit as written and produce the
+  gate result; never its `ignore <item>` flow, which exists for a person
+  deciding what the project tolerates and writes that decision to the tree.
+
+  This step changes nothing. The skill may write its report and its
+  ignored-item artifact when a person runs it; here it must not, because the
+  step declares no workspace effect and bytes it wrote would be refused rather
+  than kept. Report what you found instead of saving it.
+
+  Report findings honestly, including that a check you could not run did not
+  run. A gate that reports a pass it did not establish is worse than one that
+  says it could not check: the first is believed, the second is acted on.
+
+  A finding blocks when this change introduced the weakness or newly exposed it.
+  Standing exposure that predates the change is real and worth reporting, and it
+  does not block: there is no fix round after this gate, so a blocking result
+  ends the Run and hands the findings to a person.
+
+  The supporting skill above sets this field by a rule of its own. Where that
+  rule and this paragraph disagree, this adapter governs: `status` is reported
+  here and read by nothing, while `blocking` decides only whether this Run stops
+  for a person to read the findings.
+
+  `decision_context.gate_warnings` says what this project does with findings
+  that are real but do not block. It is answered before the Run starts, because
+  an unattended Run has nobody to ask:
+
+  - `ignore` — report warnings as findings and leave `blocking` false.
+  - `fix` and `stop` — set `blocking` true and name the warnings in the
+    findings. Both behave the same at this gate, and it is worth knowing why:
+    no fix round is wired after security. A blocking result here ends the Run
+    as `partial` with your findings reported unchanged, so `fix` cannot mean
+    "and then repair it" the way it does at verify and review.
+
+  `blocking_owner_only` is declared for every gate result. Set it true when
+  every blocker still standing is outside what any fix step may touch — a
+  decision the developer owns, a rule that is itself wrong, access this Run does
+  not have. At this gate it changes no routing, because no fix round follows
+  security either way; it is read by whoever opens the result, so answer it
+  honestly rather than by habit.
+
+  `suggested_next` is reported, never obeyed. Say `/aif-fix` when the findings
+  are work for a fix and `continue` otherwise; the field is always present, so
+  there is no empty value to fall back on. Pri-Fly decides what runs next from
+  `blocking`, not from this field: do not run `/aif-fix`, commit, or start any
+  other stage yourself.
+
+  Your verdict for this step is `pass` whatever you find. Blocking does not
+  travel in the verdict: it travels in the `blocking` field of the `gate`
+  artifact, and the stage after you reads it there to decide whether the fix
+  step runs. Reporting `needs_revision` because findings block is the one
+  mistake this step can make that costs the whole Run: it says you could not
+  establish a result at all, so no fix round happens and the Run ends reporting
+  your findings unchanged. Use it only when that is literally true.

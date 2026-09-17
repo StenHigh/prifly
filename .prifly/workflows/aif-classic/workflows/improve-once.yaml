@@ -1,0 +1,31 @@
+authoring: prifly-workflow/1
+schema_version: "4"
+id: aif:workflow/improve-once
+version: 1.2.0
+title: Improve one current plan once
+refs:
+  schema_plan_manifest: "{{workspace_tree_manifest}}"
+  schema_warmup-handoff: "{{schema_warmup-handoff}}"
+  step_improve: "{{step_improve}}"
+  local_policy: "{{local_policy}}"
+inputs: {plan: schema_plan_manifest, handoff: schema_warmup-handoff}
+outputs:
+  plan: {schema_ref: schema_plan_manifest, required_for: [succeeded, partial]}
+limits: {max_step_instances: 1, max_control_transitions: 8, max_parallelism: 1, max_child_depth: 1}
+policy_ref: local_policy
+entry: improve
+stages:
+  improve:
+    kind: step
+    step_ref: step_improve
+    input_bindings: {plan: $inputs.plan, handoff: $inputs.handoff}
+    on: {pass: complete, needs_revision: changed, fail: stopped, no_work: stopped}
+  complete:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {plan: $stages.improve.plan}
+  changed:
+    kind: finish
+    outcome: partial
+    output_bindings: {plan: $stages.improve.plan}
+  stopped: {kind: finish, outcome: no_work}

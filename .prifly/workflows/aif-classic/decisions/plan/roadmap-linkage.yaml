@@ -1,0 +1,10 @@
+authoring: prifly-run-decision/1
+id: roadmap_linkage
+title: Link the plan to a roadmap milestone
+description: This is optional because the project may have no roadmap artifact.
+phase: preflight
+required: false
+choices:
+  - {id: link, title: Link a milestone, value: link}
+  - {id: skip, title: Do not link, value: skip}
+destination: {kind: session_context, name: roadmap_linkage}

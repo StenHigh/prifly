@@ -10,3 +10,36 @@
 - Драйвер хранения не протекает в runtime и CLI: `make vet` собирает их с `CGO_ENABLED=0`, поэтому пакет с типами driver в собственных контрактах перестанет проходить проверку.
 - Фазы и приёмку веди по `openspec/specs/delivery-roadmap/`; наличие определения или пройденная проверка документа не означает реализацию F2 либо закрытие продуктового gate.
 - Нормативное изменение начинай с OpenSpec change. Перед правкой сверяйся с [картой источников](openspec/SOURCE-OF-TRUTH.md): до явного переноса capability старый source set остаётся единственной правдой. OpenSpec управляет документацией Pri-Fly, а не входит в его runtime или YAML authoring contract.
+
+## Структура репозитория
+
+Карта для агента; подробности стека и границ — `.ai-factory/DESCRIPTION.md` и
+`.ai-factory/ARCHITECTURE.md`, не дублировать их здесь.
+
+```
+cmd/prifly/        CLI, проектный профиль (project *), host runners, монитор
+internal/flow/     версионная модель workflow, схемы, компиляция YAML
+internal/runtime/  authority: admission, lifecycle, session protocol, claims
+internal/local/    SQLite store, blob'ы, transform guard, процессы
+internal/purity/   guard чистоты transform-команд
+internal/release/  контракт публичной поставки
+schemas/           опубликованные JSON Schema (core, foundation, authoring)
+examples/          справочники YAML-авторинга и troubleshooting.md
+test/              e2e и fixtures для собранного CLI
+scripts/           установка, релиз, проверка схем
+openspec/          спецификации, changes, карта источников
+.prifly/           профиль проекта Pri-Fly: aif-classic установлен из каталога
+.ai-factory/       контекст AI Factory: config, DESCRIPTION, ARCHITECTURE, RULES
+```
+
+| Файл | Назначение |
+|---|---|
+| `cmd/prifly/main.go` | диспетчер команд, Problem-конверт и exit-коды |
+| `internal/flow/protocol.schema.json` | источник истины опубликованного контракта |
+| `Makefile` | ворота: `check`, `ci-check`, `race`, `e2e`, `schemas-check` |
+| `openspec/SOURCE-OF-TRUTH.md` | где сегодня меняется каждое правило |
+
+AI-контекст: `AGENTS.md` (этот файл, Codex) и `CLAUDE.md` (Claude Code, импортирует
+его), `.ai-factory/**` (AI Factory), `.claude/skills/prifly-run/PROJECT.md` и
+`.agents/skills/prifly-run/PROJECT.md` (правила репозитория для runner'а).
+Сценарий разработки — `prifly-run` → launch `aif-classic`.

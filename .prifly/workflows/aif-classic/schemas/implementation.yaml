@@ -1,0 +1,13 @@
+id: aif:schema/implementation
+version: 1.0.0
+$schema: https://json-schema.org/draft/2020-12/schema
+type: object
+required: [base_commit, head_commit, changed_files]
+additionalProperties: false
+properties:
+  base_commit: {type: string, pattern: "^[0-9a-f]{40}$"}
+  head_commit: {type: string, pattern: "^[0-9a-f]{40}$"}
+  changed_files:
+    type: array
+    maxItems: 200
+    items: {type: string, minLength: 1}

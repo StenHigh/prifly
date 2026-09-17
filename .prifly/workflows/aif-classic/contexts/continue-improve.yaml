@@ -1,0 +1,6 @@
+id: aif:context/continue-improve
+version: 1.0.0
+media_type: text/markdown; charset=utf-8
+text: |
+  The current bounded improvement batch has reached its limit.
+  Ask the developer whether to run one more batch, then return only the declared JSON answer.

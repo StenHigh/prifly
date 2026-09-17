@@ -1,0 +1,18 @@
+# AI Factory — настройки этого репозитория. Незаданный ключ берёт умолчание;
+# полный справочник — skills/aif/references/config-template.yaml пакета ai-factory.
+language:
+  ui: ru # commit messages stay English: .ai-factory/skill-context/aif-commit/SKILL.md
+  artifacts: ru # планы и правила — на языке остальной документации
+  technical_terms: keep
+paths:
+  # Единственный roadmap продукта; правится только через OpenSpec change.
+  roadmap: openspec/specs/delivery-roadmap/spec.md
+warmup:
+  paths:
+    - openspec/specs/specification-governance/agent-brief.md
+    - openspec/SOURCE-OF-TRUTH.md
+workflow:
+  architecture_updates_roadmap: false
+git:
+  base_branch: main
+  skip_push_after_commit: true # push — только владелец, руками

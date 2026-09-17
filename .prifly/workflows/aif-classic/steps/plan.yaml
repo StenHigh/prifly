@@ -1,0 +1,19 @@
+authoring: prifly-step/2
+id: aif:step/plan
+version: 1.5.0
+title: Run aif-plan for the declared task
+kind: worker
+inputs:
+  task: {schema_ref: "{{schema_task}}"}
+  handoff: {schema_ref: "{{schema_warmup-handoff}}"}
+outputs:
+  plan: {schema_ref: "{{workspace_tree_manifest}}", required_for: [pass]}
+executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
+instructions_ref: "{{context_aif-plan-bridge}}"
+context_refs: ["{{context_aif-plan}}"]
+effects: {class: workspace_write, retry_class: never}
+session_limits: {active_timeout_ms: null}
+result_schema_ref: "{{step_result_schema}}"
+workspace_trees:
+  - output_port: plan
+    capture: "{{plan_capture}}"

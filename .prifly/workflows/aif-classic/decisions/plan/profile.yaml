@@ -1,0 +1,10 @@
+authoring: prifly-run-decision/1
+id: plan_profile
+title: Planning depth
+description: Selects the native AI Factory plan layout before the package is compiled.
+phase: preflight
+choices:
+  - {id: fast, title: Fast, value: fast}
+  - {id: full, title: Full, value: full}
+  - {id: ultra, title: Ultra, value: ultra}
+destination: {kind: package_profile}

@@ -1,0 +1,82 @@
+id: aif:context/aif-review-bridge
+version: 1.7.0
+media_type: text/markdown; charset=utf-8
+text: |
+  # Pri-Fly adapter for the pinned aif-review skill
+
+  The following supporting context is the pinned upstream `aif-review` skill.
+  Review the implementation as written. This step changes nothing: it declares
+  no workspace effect, and its product is the gate result.
+
+  Report findings honestly, including that a gate you could not run did not
+  run. A gate that reports a pass it did not establish is worse than one that
+  reports it could not check.
+
+  A finding blocks when the change under review is wrong on its own terms: it
+  does not do what the plan promised, it breaks something that worked, or it
+  leaves the tree in a state the next reader cannot rely on. A finding that is
+  real but about something else — debt that was already there, style, work
+  beyond this change — does not block. Calling everything you found a warning is
+  a decision and not a default: `blocking` is the only way this route can reach
+  a repair, so a gate that never sets it turns the fix step off for good.
+
+  The supporting skill above sets this field by a rule of its own. Where that
+  rule and this paragraph disagree, this adapter governs — and the reason is
+  worth more than the authority: `status` is reported here and read by nothing,
+  no route in this workflow branches on it, while `blocking` decides only
+  whether a fix round runs, which is a smaller and cheaper thing than any
+  question about holding a merge. So a result carrying `status: warnings`
+  together with `blocking: true` is correct here, and under `gate_warnings: fix`
+  or `stop` it is required — even where the supporting skill's own rule would
+  never produce such a result, which is a difference to follow rather than a
+  contradiction to repair.
+
+  `decision_context.gate_warnings` says what this project does with findings
+  that are real but do not block. It is answered before the Run starts, because
+  an unattended Run has nobody to ask:
+
+  - `ignore` — report warnings as findings and leave `blocking` false.
+  - `fix` — treat them as work: set `blocking` true so the caller sends them to
+    the fix step with the blockers.
+  - `stop` — set `blocking` true as well, but say in the findings that these are
+    warnings the developer chose to look at personally. The fix step reads the
+    same value and will report them back unchanged instead of editing code.
+
+  Your result is read by a bounded loop: the caller runs you again after a fix,
+  and stops when nothing blocks or the declared number of rounds runs out. Do
+  not run `/aif-fix`, commit, or decide what comes next.
+
+  Your verdict for this step is `pass` whatever you find. Blocking does not
+  travel in the verdict: it travels in the `blocking` field of the `gate`
+  artifact, and the stage after you reads it there to decide whether the fix
+  step runs. Reporting `needs_revision` because findings block is the one
+  mistake this step can make that costs the whole Run: it says you could not
+  establish a result at all, so no fix round happens and the Run ends reporting
+  your findings unchanged. Use it only when that is literally true.
+
+  This is one session. Where the skill reaches for a separate reviewer session,
+  use one only if the host platform actually provides it; where it does not,
+  do the work here. Never report a pass you could not establish because a
+  session you expected was not there.
+
+  `blocking_owner_only` says whether another fix round could change anything.
+  Set it true only when every blocker still standing is outside what any fix
+  step may touch: a decision the developer owns, a rule that is itself wrong,
+  access this Run does not have. One blocker a fix round could close makes it
+  false. Getting this wrong in the safe direction stops the loop and puts the
+  findings in front of a person; getting it wrong the other way spends rounds
+  that cannot succeed, which is what a real Run did — two rounds and forty
+  minutes after the answer was already known.
+
+  Warnings you are reporting because `gate_warnings` said to are not out of
+  reach. `stop` means the developer means to read them, not that no fix step may
+  touch them: the fix step is given them and reports them back unchanged, which
+  is the whole of what `stop` does. A real Run set this field true on three such
+  warnings and ended there, unattended, with nobody to decide. When you do set it
+  true, name in the findings which blocker is out of reach and what puts it out
+  of reach; a `true` nobody can check is how a Run stops for no reason.
+
+  `suggested_next` is reported, never obeyed. Say `/aif-fix` when the findings
+  are work for the fix step and `continue` otherwise. The skill computes a wider
+  set of commands of its own — rules, architecture, roadmap, commit — and none of
+  them name a stage of this route, so they have no value here to report.

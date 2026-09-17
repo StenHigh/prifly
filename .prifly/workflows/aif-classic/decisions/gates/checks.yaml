@@ -1,0 +1,17 @@
+authoring: prifly-run-decision/1
+id: gate_checks
+title: Checks this project's verify gate runs
+description: >-
+  Name the checks the verify gate is expected to run here, one per line, in the
+  project's own words — a command is best, because a command can be executed and
+  a description cannot. Up to 16000 characters. Answered before the Run starts,
+  and read by the gate instead of any document in the tree.
+
+  Leave it empty and the gate follows the pinned skill's own procedure. Fill it
+  and it is the whole composition: a project document naming a different set is
+  then out of date rather than a second opinion.
+phase: preflight
+value_schema: {type: string, maxLength: 16000}
+recommendation: ""
+automatic: true
+destination: {kind: session_context, name: gate_checks}

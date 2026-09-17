@@ -1,0 +1,8 @@
+id: aif:schema/continue
+version: 1.0.0
+$schema: https://json-schema.org/draft/2020-12/schema
+type: object
+required: [continue]
+additionalProperties: false
+properties:
+  continue: {type: boolean}
