@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -190,6 +191,11 @@ func TestStartRefusesADeclaredSourceOutsideTheScopedState(t *testing.T) {
 
 // environmentSourceExecutor declares the sources on the one program the context
 // fixture runs, before the Run pins it.
+// environmentSourceLiteral is written down rather than read from a place, and
+// it is deliberately unmistakable: an assertion that a document does not
+// contain a value proves nothing when the value is "1".
+const environmentSourceLiteral = "written-down-not-read-from-anywhere"
+
 func environmentSourceExecutor(t *testing.T, e *Engine, sources map[string]EnvironmentSource) {
 	t.Helper()
 	config, exists := e.Config.Configuration.Executors["test:step/context"]
@@ -197,6 +203,11 @@ func environmentSourceExecutor(t *testing.T, e *Engine, sources map[string]Envir
 		t.Fatal("fixture must bind the context step to a program")
 	}
 	config.EnvironmentFrom = sources
+	config.Environment = maps.Clone(config.Environment)
+	if config.Environment == nil {
+		config.Environment = map[string]string{}
+	}
+	config.Environment["DRIVER_TEST_LITERAL"] = environmentSourceLiteral
 	e.Config.Configuration.Executors["test:step/context"] = config
 }
 
@@ -228,21 +239,21 @@ func TestNextAnswersWhatTheProgramWouldBeGiven(t *testing.T) {
 	if next.ProgramEnvironment.Sources["DRIVER_TEST_SOURCED"] != "dotenv:"+dotenv+":PASSWORD" {
 		t.Fatalf("the place the value comes from is not named: %+v", next.ProgramEnvironment.Sources)
 	}
-	// A literal of this machine is named, never printed, and the value of a
-	// source never appears at all.
-	literal := ""
-	for name := range e.Config.Configuration.Executors["test:step/context"].Environment {
-		literal = name
-	}
-	if literal == "" || !slices.Contains(next.ProgramEnvironment.Names, literal) {
+	// A literal of this machine is named, never printed. Its value has to be
+	// distinctive for that check to mean anything: the first version of this
+	// test picked a variable by map order and once drew one whose value was
+	// "1", which appears in every version number of the document.
+	if !slices.Contains(next.ProgramEnvironment.Names, "DRIVER_TEST_LITERAL") {
 		t.Fatalf("a literal variable of this machine is not named: %+v", next.ProgramEnvironment)
 	}
 	encoded, err := canonical(next)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(encoded), environmentSourceValue) || strings.Contains(string(encoded), e.Config.Configuration.Executors["test:step/context"].Environment[literal]) {
-		t.Fatalf("the answer printed a value: %s", encoded)
+	for _, value := range []string{environmentSourceValue, environmentSourceLiteral} {
+		if strings.Contains(string(encoded), value) {
+			t.Fatalf("the answer printed a value: %s", encoded)
+		}
 	}
 	// The answer costs the Run nothing: its state is the one it was sealed at,
 	// and 33 mints no state version of its own.

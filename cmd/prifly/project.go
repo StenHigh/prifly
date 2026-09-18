@@ -2181,12 +2181,17 @@ func ensureProjectAuthority(root string) error {
 	return prifly.InitProjectProfile(root)
 }
 
+// checkProjectAuthority refuses an authority that cannot run project launches.
+// Both refusals carry their own code rather than the generic usage one: a cold
+// start met them with the code in the message and "help" in the actions, tried
+// prifly init with a profile flag, and spent the detour finding that the only
+// authority a launch accepts is one project init made.
 func checkProjectAuthority(engine *prifly.Engine) error {
 	if engine.Config.Configuration.SemanticsProfile != flow.CoreProfile {
-		return usageError("authority_profile_incompatible: project workflows require core-workflow/1 authority")
+		return &prifly.Fault{Code: "authority_profile_incompatible", Message: "project workflows require a core-workflow/1 authority; create one with project init --repository DIR --state-root DIR, which is the only command that writes an authority a launch accepts"}
 	}
 	if engine.Config.Configuration.SchemaVersion != prifly.CoreContextConfigVersion {
-		return usageError("authority_configuration_incompatible: project workflow launches require an authority created by project init with this Pri-Fly version")
+		return &prifly.Fault{Code: "authority_configuration_incompatible", Message: "this authority was written by another Pri-Fly version or by another command; create one with project init --repository DIR --state-root DIR, and point .prifly/local.yaml at it"}
 	}
 	return nil
 }

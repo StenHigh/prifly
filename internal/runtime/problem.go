@@ -293,6 +293,19 @@ func ProblemFor(err error) (Problem, int) {
 		// out: attach the host, or create only the local configuration.
 		"project_profile_conflict": {"project.runners.add", "project.init"},
 		"project_runner_missing":   {"project.runners.add", "project.init"},
+		// An authority a launch cannot use is replaced by the one command that
+		// writes a usable one. A cold start read "help" here and went looking
+		// for a profile flag on prifly init, which is not that command.
+		"authority_profile_incompatible":       {"project.init", "doctor"},
+		"authority_configuration_incompatible": {"project.init", "doctor"},
+		// A value read at dispatch was not there. The declaration is machine
+		// local, so the move is to fix it where it was made; the Run says which
+		// attempt died for it.
+		"execution_environment_unavailable": {"project.local.set", "run.status"},
+		// A Run that cannot be reopened still has an answer that names what it
+		// can do, and reading the Run says why it ended.
+		"not_a_broken_run":     {"run.next", "run.status"},
+		"stage_not_reopenable": {"run.next", "run.status"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
 	}

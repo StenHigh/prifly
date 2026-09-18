@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -186,5 +187,34 @@ func TestProjectLocalReceiptDescribesTheFile(t *testing.T) {
 	}
 	if strings.Contains(stdout, environmentSourceSecret) {
 		t.Fatalf("the receipt printed the value: %s", stdout)
+	}
+}
+
+// An authority a launch cannot use is replaced by the one command that writes a
+// usable one. A cold start read the code in the message, "help" in the actions,
+// and went looking for a profile flag on prifly init, which is not it.
+func TestIncompatibleAuthorityNamesTheCommandThatWritesOne(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "authority")
+	if code, _, stderr := runCLI(t, "init", state); code != 0 {
+		t.Fatalf("plain authority: %d %s", code, stderr)
+	}
+	engine, err := prifly.Open(state, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+	err = checkProjectAuthority(engine)
+	if err == nil {
+		t.Fatal("an authority a launch cannot use was accepted")
+	}
+	problem, _ := prifly.ProblemFor(err)
+	if problem.Code != "authority_profile_incompatible" && problem.Code != "authority_configuration_incompatible" {
+		t.Fatalf("the refusal is not named: %+v", problem)
+	}
+	if !slices.Contains(problem.SafeNextActions, "project.init") {
+		t.Fatalf("the refusal does not name the command that writes a usable authority: %+v", problem.SafeNextActions)
+	}
+	if !strings.Contains(problem.Message, "project init") {
+		t.Fatalf("the message does not spell the command: %s", problem.Message)
 	}
 }

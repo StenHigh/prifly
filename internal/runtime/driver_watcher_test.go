@@ -303,3 +303,27 @@ func TestDeclaredRetryIsSpentAndThenTheRunFails(t *testing.T) {
 		t.Fatalf("a budget of one repeat produced %d attempts", attempts)
 	}
 }
+
+// Resume is the first thing a reader tries on a Run that stopped, and on a Run
+// that broke without answering it was a dead end: the command that takes that
+// state is a different one, and the refusal did not name it.
+func TestResumeOfABrokenRunNamesTheCommandThatTakesIt(t *testing.T) {
+	broken := environmentSourceFile(t, "env", "OTHER=ignored\n")
+	e, runID, _ := programAfterWriteFixture(t, "workspace-read", "none", map[string]EnvironmentSource{"DRIVER_TEST_SOURCED": {DotEnv: broken, Key: "PASSWORD"}})
+	ctx := context.Background()
+	planTask := handOver(t, e, runID)
+	if _, err := e.SubmitSession(ctx, hostResult(t, e, planTask, "planned")); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err == nil {
+		t.Fatal("the program started without the value it was told to read")
+	}
+	_, view, err := e.load(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = e.Resume(ctx, runID, newID("command"), "try again", view.Snapshot.Version)
+	if err == nil || !strings.Contains(err.Error(), "run reopen") {
+		t.Fatalf("resume did not name the command that takes this state: %v", err)
+	}
+}

@@ -1138,6 +1138,12 @@ func (e *Engine) Resume(ctx context.Context, runID, commandID, reason string, ex
 	}
 	return e.apply(ctx, e.owner, commandID, runID, "run.resumed", command, &expected, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if r.terminal() || r.CancelRequested {
+			// Resume is the natural first guess for a Run that stopped, and on
+			// a Run that broke without answering it was a dead end: the command
+			// that takes that state is a different one, and nothing said so.
+			if r.reopenable() {
+				return local.Change{}, local.Reject("terminal_run", "resume continues a Run that is still going; this one broke without reaching an outcome, and run reopen takes that state")
+			}
 			return local.Change{}, local.Reject("terminal_run", "resume cannot reopen cancellation or a terminal run")
 		}
 		if r.restricted() {
