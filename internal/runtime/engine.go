@@ -596,6 +596,20 @@ type NextView struct {
 	// graph. Absent when this build cannot tell, which is not the same as
 	// control, and absent for every action but a ready stage.
 	StageWork string `json:"stage_work,omitempty"`
+	// ProgramEnvironment names what the program of a ready program stage will
+	// be given. Never a value: a name and, where the owner declared one, the
+	// place the value is read from at dispatch. Absent for every other action
+	// and for a build that does not carry it.
+	ProgramEnvironment *ProgramEnvironmentView `json:"program_environment,omitempty"`
+}
+
+// ProgramEnvironmentView is the composition of one program's environment, in
+// the two halves a reviewer can act on: what is written down in this machine's
+// settings, and what is read from somewhere else when the program starts. The
+// value of neither half appears here.
+type ProgramEnvironmentView struct {
+	Names   []string          `json:"names"`
+	Sources map[string]string `json:"sources,omitempty"`
 }
 
 // Stage work kinds. A host reads these to choose how it calls the driver: a
@@ -641,6 +655,43 @@ func (e *Engine) stageWork(r Run, invocationID, stageID string) string {
 		return StageWorkProgram
 	}
 	return ""
+}
+
+// programEnvironment answers what the pinned executor of a ready stage would
+// hand its program. It reads the sealed configuration of this Run, not the
+// machine's current settings: a setting changed after the start does not reach
+// a Run that was sealed before it, and this answer is the only place that
+// difference becomes visible before the program runs.
+func (e *Engine) programEnvironment(r Run, invocationID, stageID string) *ProgramEnvironmentView {
+	p, err := r.planFor(invocationID)
+	if err != nil || p == nil {
+		return nil
+	}
+	stage, exists := p.Workflow.Definition.Stages[stageID]
+	if !exists {
+		return nil
+	}
+	step, exists := p.Steps[stageID]
+	if !exists {
+		return nil
+	}
+	executor, exists := r.Executors[executorKey(r, stage.StepRef, step.ID)]
+	if !exists {
+		return nil
+	}
+	view := &ProgramEnvironmentView{Names: make([]string, 0, len(executor.Config.Environment)+len(executor.Config.EnvironmentFrom))}
+	for name := range executor.Config.Environment {
+		view.Names = append(view.Names, name)
+	}
+	if len(executor.Config.EnvironmentFrom) != 0 {
+		view.Sources = make(map[string]string, len(executor.Config.EnvironmentFrom))
+	}
+	for name, source := range executor.Config.EnvironmentFrom {
+		view.Names = append(view.Names, name)
+		view.Sources[name] = source.Place()
+	}
+	slices.Sort(view.Names)
+	return view
 }
 
 func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
@@ -724,6 +775,9 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 			if isStageWorkState(r.SchemaVersion) {
 				next.StageWork = e.stageWork(r, next.InvocationID, next.StageID)
 			}
+			if next.StageWork == StageWorkProgram {
+				next.ProgramEnvironment = e.programEnvironment(r, next.InvocationID, next.StageID)
+			}
 		}
 		if kind == "active" || kind == "session_resume" || kind == "session_expired" {
 			next.InvocationID = r.Activations[r.Attempts[work].ActivationID].InvocationID
@@ -774,7 +828,10 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 			next.SchemaVersion = CorePublicationFailureNextVersion
 		}
 		if isStageWorkState(r.SchemaVersion) {
-			next.SchemaVersion = CoreStageWorkNextVersion
+			// The answer contract moved on while the state did not: a Run that
+			// can describe a program stage answers under 33, whatever version
+			// its own state was sealed at.
+			next.SchemaVersion = CoreProgramEnvironmentNextVersion
 		} else if isMaterializedState(r.SchemaVersion) {
 			next.SchemaVersion = CoreMaterializedNextVersion
 		} else if isEffectsState(r.SchemaVersion) {
@@ -1105,6 +1162,82 @@ func (e *Engine) Resume(ctx context.Context, runID, commandID, reason string, ex
 		}
 		return local.Change{}, nil
 	})
+}
+
+// Reopen runs a stage again in the Run that broke on it. It is not a second
+// opinion about a verdict: an accepted fail or needs_revision ends a Run at a
+// finish stage with an outcome, and this refuses any Run that reached one. A
+// Run whose status is failed with no outcome never produced an answer at all —
+// its program could not start, its environment was missing, its authority
+// could not be read — and repeating six completed stages to retry the seventh
+// is paying twice for work that is already sealed.
+//
+// The completed stages are not re-run: their StepInstances stay as they are,
+// their outputs stay sealed, and the reopened stage gets a new activation and
+// a new StepInstance, which spends the declared step budget like any other.
+// Rights are not restored with the work: the claim is taken again at the next
+// admission, and approvals and grants of the original attempt do not return.
+func (e *Engine) Reopen(ctx context.Context, runID, commandID, reason string, expected int64) (local.ApplyResult, error) {
+	command := map[string]any{"schema_version": "1", "command_id": commandID, "run_id": runID, "expected_run_version": expected, "payload": map[string]any{"reason": reason}}
+	b, err := canonical(command)
+	if err != nil {
+		return local.ApplyResult{}, err
+	}
+	if err := flow.ValidateProtocol("ResumeCommand", b); err != nil {
+		return local.ApplyResult{}, err
+	}
+	return e.apply(ctx, e.owner, commandID, runID, "run.reopened", command, &expected, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+		if r.Status != "failed" || r.Outcome != nil {
+			return local.Change{}, local.Reject("not_a_broken_run", "reopen takes a Run that failed technically and reached no outcome; a Run with an outcome answered its question")
+		}
+		if r.CancelRequested || r.restricted() {
+			return local.Change{}, local.Reject("active_stop", "reopen cannot lift a stop or a cancellation; release each stop first with run release --stop ID:GENERATION")
+		}
+		if r.HasUnresolvedEffects || len(r.Active) != 0 {
+			return local.Change{}, local.Reject("recovery_required", "reopen needs a settled Run; an unresolved effect or an active attempt is recovered first")
+		}
+		activation := r.brokenStage()
+		if activation == nil {
+			return local.Change{}, local.Reject("stage_not_reopenable", "no failed stage of this Run can be run again; read run status for the diagnostics that ended it")
+		}
+		step := r.Steps[activation.StepID]
+		if step == nil {
+			return local.Change{}, local.Reject("stage_not_reopenable", "the failed stage has no step instance to run again")
+		}
+		// The same StepInstance runs again under a new Attempt: that is what a
+		// step instance is for, and it keeps the failed attempt in the record
+		// instead of inventing a second step that did the same work.
+		activation.Status, activation.Settled = "ready", nil
+		step.Status, step.Settled = "ready", nil
+		if err := r.advanceInvocation(activation.InvocationID, activation.StageID); err != nil {
+			return local.Change{}, err
+		}
+		r.Settled = nil
+		if err := r.syncInvocationState(); err != nil {
+			return local.Change{}, err
+		}
+		r.Status = "ready"
+		data, err := canonical(map[string]any{"observation": obs, "stage_id": activation.StageID, "workflow_invocation_id": activation.InvocationID, "stage_activation_id": activation.ID, "reason": reason})
+		return local.Change{Events: []local.EventInput{{Type: "run.reopened", Version: local.EventVersion, Data: data}}}, err
+	})
+}
+
+// brokenStage names the stage this Run broke on: the failed activation that
+// has no successor, in the invocation that failed with it. A Run that failed
+// for another reason — no activation of its own, several open failures —
+// answers nothing rather than guessing which stage the owner meant.
+func (r Run) brokenStage() *Activation {
+	var broken *Activation
+	for _, activation := range r.Activations {
+		if activation == nil || activation.Status != "failed" || activation.Settled == nil {
+			continue
+		}
+		if broken != nil {
+			return nil
+		}
+		broken = activation
+	}
+	return broken
 }
 
 func diagnostic(r *Run, occurrence, attemptID, code, phase, message string, obs Observation) error {

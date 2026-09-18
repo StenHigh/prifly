@@ -62,6 +62,9 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreRoutedStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreRoutedReadVersion)
 	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionVerdictVersion)
+	// A stage may declare how many more attempts a technical failure may take.
+	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionRetryVersion)
+	profile.Capabilities = append(profile.Capabilities, "declared_technical_retries")
 	profile.Capabilities = append(profile.Capabilities, "routed_session_verdicts", "declared_impossible_verdicts")
 	profile.StateVersion, profile.ReadVersion = CoreEffectsStateVersion, CoreEffectsReadVersion
 	profile.StateVersions = append(profile.StateVersions, CoreEffectsStateVersion)
@@ -92,6 +95,11 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreEnvironmentSourceStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreEnvironmentSourceReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "execution_environment_source")
+	// The next-action answer names what a ready program stage would hand its
+	// program. No state or read version is minted for it: nothing new is
+	// recorded, and the published capability document caps state_versions at
+	// 32 entries, which this build already fills.
+	profile.Capabilities = append(profile.Capabilities, "program_environment_named")
 	return manifest
 }
 

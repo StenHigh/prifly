@@ -171,7 +171,7 @@ func TestAProgramStepIsHandedTheWorkspaceAndHeldToItsEffects(t *testing.T) {
 		{"workspace-write", "effect_not_permitted"},
 	} {
 		t.Run(test.mode, func(t *testing.T) {
-			e, runID, claim := programAfterWriteFixture(t, test.mode, false)
+			e, runID, claim := programAfterWriteFixture(t, test.mode, "finish")
 			ctx := context.Background()
 			planTask := handOver(t, e, runID)
 			if _, err := e.SubmitSession(ctx, hostResult(t, e, planTask, "planned")); err != nil {
@@ -220,10 +220,12 @@ func TestAProgramStepIsHandedTheWorkspaceAndHeldToItsEffects(t *testing.T) {
 // programAfterWriteFixture rewrites the assisted checkout fixture: the write
 // step hands over to a program step (the test binary in the given helper
 // mode) that declares no workspace effect.
-// recoverable sends the program stage's error route to another assisted step
-// instead of a finish, so the Run outlives a failed attempt the way a real
-// graph with a repair round does.
-func programAfterWriteFixture(t *testing.T, mode string, recoverable bool) (*Engine, string, WorktreeClaim) {
+// errorRoute chooses what the program stage's technical failure does:
+// "finish" ends the Run at a declared outcome, "repair" sends it to another
+// assisted step so the Run outlives the failed attempt the way a graph with a
+// repair round does, and "none" leaves the failure terminal — the shape a Run
+// has when it breaks on a program and reaches no outcome at all.
+func programAfterWriteFixture(t *testing.T, mode, errorRoute string, sources ...map[string]EnvironmentSource) (*Engine, string, WorktreeClaim) {
 	t.Helper()
 	e, _, claim := assistedWorkspaceFixture(t, "checkout")
 	definitions, _, err := Builtins()
@@ -243,6 +245,12 @@ func programAfterWriteFixture(t *testing.T, mode string, recoverable bool) (*Eng
 	check := planStep
 	check.ID, check.Title = "aif:step/check", "Check the tree with a program"
 	check.Effects.Class = "none"
+	if errorRoute == "retry" {
+		// Repeating a step is the step author's decision, and this one reads
+		// the tree and reports: taking it again is exactly as safe as the
+		// first time.
+		check.Effects.RetryClass = "pure"
+	}
 	check.InstructionsRef = nil
 	check.Outputs = map[string]flow.OutputPort{}
 	check.Executor.AdapterRef = builtinVersionRef(definitions, "core:adapter/local-process", "2.0.0")
@@ -255,7 +263,14 @@ func programAfterWriteFixture(t *testing.T, mode string, recoverable bool) (*Eng
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.Config.Configuration.Executors[check.ID] = ExecutorConfig{Executable: executable, Args: []string{"-test.run=^TestDriverWorkerHelper$", "--", mode}, Files: map[string]string{}, Environment: map[string]string{"DRIVER_TEST_HELPER": "1", "GORACE": "atexit_sleep_ms=0"}, TimeoutMS: 20000, GraceMS: 30, MaxOutputBytes: 1 << 20}
+	program := ExecutorConfig{Executable: executable, Args: []string{"-test.run=^TestDriverWorkerHelper$", "--", mode}, Files: map[string]string{}, Environment: map[string]string{"DRIVER_TEST_HELPER": "1", "GORACE": "atexit_sleep_ms=0"}, TimeoutMS: 20000, GraceMS: 30, MaxOutputBytes: 1 << 20}
+	if errorRoute == "retry" {
+		program.Environment["DRIVER_TEST_MARKER"] = filepath.Join(t.TempDir(), "first-attempt")
+	}
+	for _, declared := range sources {
+		program.EnvironmentFrom = declared
+	}
+	e.Config.Configuration.Executors[check.ID] = program
 	writeRuntimeJSON(t, filepath.Join(e.Root, "prifly.json"), e.Config)
 
 	workflow := flow.WorkflowRevision{
@@ -270,11 +285,36 @@ func programAfterWriteFixture(t *testing.T, mode string, recoverable bool) (*Eng
 		"done":     {Kind: "finish", Outcome: "succeeded", OutputBindings: map[string]flow.Binding{}},
 		"rejected": {Kind: "finish", Outcome: "rejected", OutputBindings: map[string]flow.Binding{}},
 	}
-	if recoverable {
+	switch errorRoute {
+	case "repair":
 		check := workflow.Definition.Stages["check"]
 		check.OnError = "repair"
 		workflow.Definition.Stages["check"] = check
 		workflow.Definition.Stages["repair"] = flow.Stage{Kind: "step", StepRef: planRef, InputBindings: map[string]flow.Binding{}, On: map[string]string{"pass": "done", "fail": "rejected"}}
+	case "none":
+		check := workflow.Definition.Stages["check"]
+		check.OnError = ""
+		workflow.Definition.Stages["check"] = check
+		delete(workflow.Definition.Stages, "rejected")
+		workflow.AllowedOutcomes = []string{"succeeded"}
+	case "retry":
+		workflow.SchemaVersion = flow.WorkflowRevisionRetryVersion
+		for id, stage := range workflow.Definition.Stages {
+			if stage.Kind != "step" {
+				continue
+			}
+			// The revision that carries a retry budget also requires every
+			// verdict to be answered; this graph routes pass and calls the
+			// rest impossible for its own steps.
+			stage.ImpossibleVerdicts = []string{"fail", "needs_revision", "no_work"}
+			if id == "check" {
+				stage.TechnicalRetries = 1
+				stage.OnError = ""
+			}
+			workflow.Definition.Stages[id] = stage
+		}
+		delete(workflow.Definition.Stages, "rejected")
+		workflow.AllowedOutcomes = []string{"succeeded"}
 	}
 	workflow.AllowedOutcomes = []string{"succeeded", "rejected"}
 	writeRuntimeJSON(t, filepath.Join(e.Root, "workflows/pilot-program.json"), workflow)

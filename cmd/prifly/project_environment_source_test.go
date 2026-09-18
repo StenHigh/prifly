@@ -174,6 +174,11 @@ func TestProjectLocalReceiptDescribesTheFile(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("declare a source: %d %s", code, stderr)
 	}
+	// The change reaches the next launch, not a Run already sealed, and the
+	// note says so where it is made — on stderr, so the document is untouched.
+	if !strings.Contains(stderr, "sealed when its Run starts") || strings.Contains(stdout, "sealed when its Run starts") {
+		t.Fatalf("the note is missing or in the document: out=%s err=%s", stdout, stderr)
+	}
 	for _, kept := range []string{`"shell":"/bin/sh"`, `"APP_ENV":"testing"`, `"DB_PASSWORD":"dotenv:` + dotenv + `:PASSWORD"`} {
 		if !strings.Contains(stdout, kept) {
 			t.Fatalf("the receipt reads as dropping %s: %s", kept, stdout)

@@ -767,6 +767,17 @@ func authorSchemaVersion(inputs, stages map[string]any) string {
 		if stage == nil {
 			continue
 		}
+		// A retry budget is the one thing only v5 can express, and v5 carries
+		// the completeness v4 requires, so it answers for both.
+		if _, declared := stage["technical_retries"]; declared {
+			return WorkflowRevisionRetryVersion
+		}
+	}
+	for _, raw := range stages {
+		stage := cloneObject(raw)
+		if stage == nil {
+			continue
+		}
 		if _, declared := stage["impossible_verdicts"]; declared {
 			return WorkflowRevisionVerdictVersion
 		}

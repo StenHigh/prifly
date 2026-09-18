@@ -81,6 +81,8 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 			contract = "WorkflowRevisionV3"
 		case WorkflowRevisionVerdictVersion:
 			contract = "WorkflowRevisionV4"
+		case WorkflowRevisionRetryVersion:
+			contract = "WorkflowRevisionV5"
 		}
 	}
 	if err := validateProtocolValue(contract, value, ""); err != nil {
@@ -216,6 +218,18 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 		plan.Steps[id] = step
 		stepCache[stage.StepRef] = step
 	}
+	for id, stage := range plan.Workflow.Definition.Stages {
+		if stage.TechnicalRetries == 0 {
+			continue
+		}
+		// The author of the step says whether repeating it is safe; the author
+		// of the graph says how many times. A stage that asks to repeat a step
+		// declared never repeatable is refused here rather than accepted and
+		// quietly ignored, which would read as a budget that exists.
+		if !RepeatableRetryClasses[plan.Steps[id].Effects.RetryClass] {
+			return nil, problem("unsupported_retries", "/definition/stages/"+escapePointer(id)+"/technical_retries", "this step declares retry_class "+plan.Steps[id].Effects.RetryClass+": repeating it is the step author's decision, and it says no")
+		}
+	}
 	checkGraph := plan.checkGraph
 	if profile == CoreProfile {
 		checkGraph = plan.checkCoreGraph
@@ -279,7 +293,10 @@ func supportedWorkflowProfile(workflow map[string]any, profile string, shared *c
 		// completeness. A Run sealed under an older contract is recompiled on
 		// every load, so applying the new rule to it would refuse to resume
 		// work that was already accepted.
-		if stage["kind"] == "step" && workflowVersion == WorkflowRevisionVerdictVersion {
+		if _, declared := stage["technical_retries"]; declared && stage["kind"] != "step" {
+			return problem("unsupported_retries", path+"/technical_retries", "only a step stage repeats: a control stage has no attempt to take again")
+		}
+		if stage["kind"] == "step" && (workflowVersion == WorkflowRevisionVerdictVersion || workflowVersion == WorkflowRevisionRetryVersion) {
 			// A document raised to this revision by a project's insertion carries
 			// stages nobody in this project wrote. Requiring completeness of them
 			// asks the project to answer for a package author's routing, which it
@@ -352,6 +369,17 @@ var StepVerdicts = []string{"pass", "fail", "needs_revision", "no_work"}
 // carry the declaration and are not judged by the rule: they keep accepting the
 // report and reporting the routing gap at run time.
 const WorkflowRevisionVerdictVersion = "4"
+
+// RepeatableRetryClasses are the step retry classes a technical failure may be
+// taken again under. "deduplicated" and "reconcile_required" describe external
+// effects that need their own protocol before a second attempt, and "never"
+// speaks for itself.
+var RepeatableRetryClasses = map[string]bool{"pure": true, "idempotent": true}
+
+// WorkflowRevisionRetryVersion is the WorkflowRevision schema_version that
+// introduced technical_retries. An earlier document cannot carry the field, so
+// its stages keep ending the Run on the first technical failure.
+const WorkflowRevisionRetryVersion = "5"
 
 // checkVerdictCoverage refuses a step stage that leaves a verdict its step can
 // return undeclared. An author certain a verdict cannot occur here says so in

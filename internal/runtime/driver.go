@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1221,6 +1222,15 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	return errors.Join(watchErr, e.settleWith(settleCtx, r.ID, a.ID, settlementEvidence{Kind: "process", Outcome: &outcome, Actor: actor, CommandID: newID("command"), EffectDetail: effectDetail}, runErr))
 }
 
+// exitCodeText names an exit code, including the case where the process was
+// settled without one: "unknown" is an answer, an invented zero is not.
+func exitCodeText(code *int) string {
+	if code == nil {
+		return "without a recorded code"
+	}
+	return strconv.Itoa(*code)
+}
+
 // dispatchWindow bounds how long an admitted attempt may sit between its
 // dispatch record and its actual launch. It is not the step's own timeout: it
 // only says how long a launch may take to begin.
@@ -1621,6 +1631,10 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 		}
 	} else if outcome != nil && (outcome.ExitCode == nil || *outcome.ExitCode != 0) {
 		failure = "nonzero_exit"
+		// "inspect recorded evidence" sent a cold start looking for the
+		// program's output, which this engine deliberately does not keep. The
+		// refusal names the code it did record and the boundary of the rest.
+		detail = "the program exited " + exitCodeText(outcome.ExitCode) + "; the engine keeps its exit code, stop reason and timings, not its own output"
 	} else if outcome != nil && outcome.ResultError != "" || a.CandidateConflict {
 		failure = "invalid_result"
 	} else if len(a.Candidate) == 0 {
@@ -1757,6 +1771,12 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 			current.Status = "failed"
 			stepState.Status = "failed"
 			stageState.Status = "failed"
+			if retryTechnicalFailure(r, p, stageState, stepState) {
+				if err := diagnosticDetail(r, commandID, attemptID, failure, "settlement", "Executor or result validation failed; the stage is taking its declared retry", detail, obs); err != nil {
+					return local.Change{}, err
+				}
+				return local.Change{ReleaseSlot: attemptID}, nil
+			}
 			if err := r.failInvocation(activation.InvocationID, obs); err != nil {
 				return local.Change{}, err
 			}
@@ -1797,6 +1817,35 @@ func (e *Engine) settleRecoveredExecutorEnd(ctx context.Context, runID, attemptI
 // settleUnstarted is only for a launch this foreground owner knows never
 // reached cmd.Start. A recovered dispatch cannot supply that knowledge merely
 // by reading the persisted token hash or finding its old PID absent.
+// retryTechnicalFailure takes the stage again when its author declared a
+// budget for exactly this: a failure of the machinery, not a verdict about the
+// work. The attempt that failed stays in the record and is what the budget is
+// counted from, the StepInstance is the same one, and the stage returns to
+// ready as it does after a reopen. It answers false when the stage declared
+// nothing, when the budget is spent, or when this build cannot read the plan —
+// and then the Run fails exactly as it did before.
+func retryTechnicalFailure(r *Run, p *flow.Plan, activation *Activation, stepState *Step) bool {
+	if p == nil || activation == nil || stepState == nil {
+		return false
+	}
+	stage, exists := p.Workflow.Definition.Stages[activation.StageID]
+	if !exists || stage.TechnicalRetries == 0 {
+		return false
+	}
+	spent := int64(0)
+	for _, attempt := range r.Attempts {
+		if attempt != nil && attempt.StepID == stepState.ID && attempt.Settled != nil {
+			spent++
+		}
+	}
+	if spent > stage.TechnicalRetries {
+		return false
+	}
+	activation.Status, activation.Settled = "ready", nil
+	stepState.Status, stepState.Settled = "ready", nil
+	return r.advanceInvocation(activation.InvocationID, activation.StageID) == nil
+}
+
 func (e *Engine) settleUnstarted(ctx context.Context, runID, attemptID, tokenHash, code string) error {
 	loaded, _, err := e.load(ctx, runID)
 	if err != nil {
@@ -1841,6 +1890,9 @@ func (e *Engine) settleUnstarted(ctx context.Context, runID, attemptID, tokenHas
 		if status == "failed" {
 			if err := diagnostic(r, commandID, attemptID, code, "dispatch", "Process was not started; the admission and slot are settled", obs); err != nil {
 				return local.Change{}, err
+			}
+			if planErr == nil && retryTechnicalFailure(r, p, stage, step) {
+				return change, nil
 			}
 			if planErr == nil {
 				event, handled, err := routeKnownError(r, p, a.ActivationID, attemptID, code, obs)

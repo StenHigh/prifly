@@ -151,6 +151,8 @@ func (r *aliasResolver) workflow(data []byte, format string) ([]byte, Ref, bool,
 		contract = "WorkflowRevisionV3"
 	case WorkflowRevisionVerdictVersion:
 		contract = "WorkflowRevisionV4"
+	case WorkflowRevisionRetryVersion:
+		contract = "WorkflowRevisionV5"
 	}
 	if err := validateProtocolValue(contract, value, ""); err != nil {
 		return nil, Ref{}, false, err

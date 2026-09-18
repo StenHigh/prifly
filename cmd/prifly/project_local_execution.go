@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,19 +213,6 @@ func projectParseEnvironmentSource(argument string) (string, prifly.EnvironmentS
 	return name, source, nil
 }
 
-// projectEnvironmentSourcePlace says where a value is read from, in the same
-// words the owner wrote it in. It never reads the source.
-func projectEnvironmentSourcePlace(source prifly.EnvironmentSource) string {
-	switch {
-	case source.Env != "":
-		return "env:" + source.Env
-	case source.File != "":
-		return "file:" + source.File
-	default:
-		return "dotenv:" + source.DotEnv + ":" + source.Key
-	}
-}
-
 func lastCut(value, separator string) (before, after string, found bool) {
 	index := strings.LastIndex(value, separator)
 	if index < 0 {
@@ -343,10 +331,18 @@ func (c *cli) projectLocalAllowExecutables(root string, current []byte, executab
 	// read at start is shown as the source it will be read from.
 	sources := make(map[string]string, len(settings.EnvironmentFrom))
 	for name, source := range settings.EnvironmentFrom {
-		sources[name] = projectEnvironmentSourcePlace(source)
+		sources[name] = source.Place()
 	}
 	// Both halves are read from the file, not from this call's arguments: a
 	// receipt that printed only what was passed read as "the rest is gone"
 	// after a call that touched one of them.
+	// A Run seals the environment of its programs when it starts, so a change
+	// made here reaches the next launch and not one already running. Nothing
+	// said so, and a cold start spent an evening on a password its program
+	// could never have received. On stderr, so a JSON reader's document is
+	// untouched; the Run's own answer is program_environment in run next.
+	if len(selectedEnvironment) != 0 || len(selectedSources) != 0 {
+		fmt.Fprintln(c.errout, "note: a program's environment is sealed when its Run starts; this change applies to the next launch, and run next reports what a started Run will hand its program")
+	}
 	return c.emit(map[string]any{"schema_version": "prifly-project-local/3", "repository": root, "prifly_executable": projectMappingValue(object, "prifly_executable").Value, "allowed_executables": settings.Executables, "environment": settings.Environment, "environment_from": sources})
 }

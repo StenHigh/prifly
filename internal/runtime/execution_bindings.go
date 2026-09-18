@@ -235,6 +235,19 @@ func (s EnvironmentSource) validate() error {
 	return nil
 }
 
+// Place says where a value is read from, in the words the owner declared it
+// in. It reads nothing: the answer is the declaration, never the value.
+func (s EnvironmentSource) Place() string {
+	switch {
+	case s.Env != "":
+		return "env:" + s.Env
+	case s.File != "":
+		return "file:" + s.File
+	default:
+		return "dotenv:" + s.DotEnv + ":" + s.Key
+	}
+}
+
 // maxEnvironmentSourceBytes bounds what is read for one value: a secret is a
 // line, not a payload, and a file handed to a program through the environment
 // has to fit an argument list.

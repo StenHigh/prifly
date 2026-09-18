@@ -112,10 +112,16 @@ type Stage struct {
 	// ImpossibleVerdicts names the verdicts this step cannot return at this
 	// stage. It is the author's statement, not an inference: a verdict that is
 	// neither routed nor listed here is an oversight, and sealing refuses it.
-	ImpossibleVerdicts []string       `json:"impossible_verdicts,omitempty"`
-	OnError            string         `json:"on_error,omitempty"`
-	Selection          string         `json:"selection,omitempty"`
-	Branches           []ChoiceBranch `json:"branches,omitempty"`
+	ImpossibleVerdicts []string `json:"impossible_verdicts,omitempty"`
+	// TechnicalRetries is how many more attempts this stage may take when one
+	// ends in a technical failure: a program that could not start, an
+	// environment that was not there, an authority read that failed. It never
+	// repeats a verdict — an accepted fail is an answer — and it is declared
+	// only where the step's own retry_class says a repeat is safe.
+	TechnicalRetries int64          `json:"technical_retries,omitempty"`
+	OnError          string         `json:"on_error,omitempty"`
+	Selection        string         `json:"selection,omitempty"`
+	Branches         []ChoiceBranch `json:"branches,omitempty"`
 	// The published contracts reuse the name "branches" for two different
 	// shapes, discriminated by kind, so a parallel stage decodes its own.
 	ParallelBranches []ParallelBranch `json:"-"`
@@ -203,6 +209,9 @@ func (s Stage) MarshalJSON() ([]byte, error) {
 		}
 		if s.OnError != "" {
 			value["on_error"] = s.OnError
+		}
+		if s.TechnicalRetries != 0 {
+			value["technical_retries"] = s.TechnicalRetries
 		}
 	case "call":
 		value["workflow_ref"], value["input_bindings"], value["on"] = s.WorkflowRef, s.InputBindings, s.On

@@ -52,6 +52,7 @@ type generator struct {
 	materializedSessions  bool
 	stageWork             bool
 	environmentSources    bool
+	programEnvironment    bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -168,6 +169,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						continue
 					}
 					if !g.environmentSources && environmentSourceField(t, field.Name) {
+						continue
+					}
+					if !g.programEnvironment && programEnvironmentField(t, field.Name) {
 						continue
 					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
@@ -292,6 +296,7 @@ var profileContracts = []struct {
 	{"materialized-session", "generate materialize-only tree and run failure state/read version 30 contracts", func(g *generator) { g.materializedSessions = true }},
 	{"stage-work", "generate named stage work state/read version 31 contracts", func(g *generator) { g.stageWork = true }},
 	{"environment-source", "generate declared execution value source state/read version 32 contracts", func(g *generator) { g.environmentSources = true }},
+	{"program-environment", "generate named program environment read version 33 contracts", func(g *generator) { g.programEnvironment = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -308,6 +313,7 @@ var documentContracts = []struct {
 	{"step-definition-v8", "generate StepDefinition v8 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV8") }},
 	{"workflow-revision-v3", "generate WorkflowRevision v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV3") }},
 	{"workflow-revision-v4", "generate WorkflowRevision v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV4") }},
+	{"workflow-revision-v5", "generate WorkflowRevision v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV5") }},
 	{"run-start-v2", "generate RunStart v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("RunStartV2") }},
 	{"package-manifest-v2", "generate PackageManifest v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("PackageManifestV2") }},
 	{"execution-bindings", "generate explicit execution bindings contract", func() ([]byte, error) { return prifly.PublicSchema("ExecutionBindings") }},
@@ -827,6 +833,12 @@ func main() {
 			delete(contracts, name+"V31")
 		}
 	}
+	if g.programEnvironment {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V33"] = contracts[name+"V32"]
+			delete(contracts, name+"V32")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1070,6 +1082,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-environment-source:32"
 			bundle["title"] = "Pri-Fly declared execution value source contracts"
 			bundle["description"] = "State/read 32 lets a sealed executor config name where a value comes from — an environment variable of the caller, a whole file, or one key of a NAME=value file — instead of carrying the value. The engine reads it at the moment the program starts, so nothing enters the Run, its digests or any document made from them, and a source that is absent or empty refuses the start by name rather than letting the program fail on authentication. A Run whose owner named no source is unchanged, and the next action, the preview and the step read keep their 31 contracts."
+		}
+		if g.programEnvironment {
+			programEnvironmentConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-program-environment:33"
+			bundle["title"] = "Pri-Fly named program environment contracts"
+			bundle["description"] = "Read 33 answers, for a ready stage whose work is a program, what that program would be given: every variable by name and, for a value read at dispatch, the place it comes from. Never a value. The answer is read from the configuration the Run sealed at its start, so a machine-local setting changed afterwards is visibly not part of this Run. It mints no state version: nothing new is recorded, every Run that can describe a program stage answers under it whatever version its state was sealed at, and the published capability document caps state_versions at 32 entries this build already fills. State, read, preview and step read keep the 32 contracts, and session 7 tasks and submissions are unchanged."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

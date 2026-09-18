@@ -307,7 +307,7 @@ func (c *cli) versionView() map[string]any {
 // a chain of string comparisons it was read as logic, and a command added to
 // one place but not the other opened the authority in the wrong mode.
 var mutatingCommands = map[string][]string{
-	"run":      {"start", "fork", "drive", "pause", "cancel", "stop", "release", "resume", "waive", "resolve"},
+	"run":      {"start", "fork", "drive", "pause", "cancel", "stop", "release", "resume", "reopen", "waive", "resolve"},
 	"control":  {"stop", "release"},
 	"package":  {"import", "remove", "quarantine", "revoke", "restore", "trust-root"},
 	"claim":    {"create", "release", "heartbeat"},
@@ -1127,6 +1127,22 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			*version = view.RunVersion
 		}
 		result, err := e.ResolveObligation(ctx, id, *command, *attempt, *check, *outcome, *reason, *version)
+		if err != nil {
+			return err
+		}
+		return c.commandResult(result)
+	case "reopen":
+		version := f.Int64("expected-version", -1, "")
+		if err := parse(f, args[2:]); err != nil {
+			return err
+		}
+		if *version < 0 || *reason == "" {
+			return usageError("reopen requires --expected-version N --reason TEXT")
+		}
+		if *command == "" {
+			*command = commandID()
+		}
+		result, err := e.Reopen(ctx, id, *command, *reason, *version)
 		if err != nil {
 			return err
 		}
@@ -2427,6 +2443,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    stop reads the restriction from --kind pause|cancel; pause and cancel state it in the operation
   run release RUN_ID --expected-epoch N --stop ID:GENERATION --reason TEXT
   run resume RUN_ID --expected-version N --reason TEXT
+  run reopen RUN_ID --expected-version N --reason TEXT
+                                   Run again the stage a technically failed Run broke on; completed stages keep their sealed outputs and are not re-run. Refused for a Run that reached an outcome: an accepted fail is an answer, not a breakage
   run resolve RUN_ID (--attempt ID | --check ID) --outcome not_applied|applied --reason TEXT [--expected-version N]
                                    Close one obligation whose outcome the authority never observed, by owner attestation; it frees the slot and never re-runs anything
   run waive RUN_ID --step STEP --check-id ID --check-version X.Y.Z --check-digest DIGEST --reason TEXT

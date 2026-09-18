@@ -132,7 +132,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
 		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8",
-		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4",
+		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5",
 	}
 	for name := range defs {
 		names = append(names, name)
@@ -234,6 +234,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV4":
 		extension = workflowRevisionV2Schema
+	case "WorkflowRevisionV5":
+		extension = workflowRevisionV2Schema
 	}
 	if extension != nil {
 		value, err := Parse(extension, "json")
@@ -250,11 +252,14 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		for i := 0; i <= slices.Index(stepContracts, name); i++ {
 			stepMutators[i](root)
 		}
-		if name == "WorkflowRevisionV3" || name == "WorkflowRevisionV4" {
+		if name == "WorkflowRevisionV3" || name == "WorkflowRevisionV4" || name == "WorkflowRevisionV5" {
 			workflowRevisionV3(root, defs)
 		}
-		if name == "WorkflowRevisionV4" {
+		if name == "WorkflowRevisionV4" || name == "WorkflowRevisionV5" {
 			workflowRevisionV4(root, defs)
+		}
+		if name == "WorkflowRevisionV5" {
+			workflowRevisionV5(root)
 		}
 	} else if _, exists := defs[name]; !exists {
 		return nil, problem("unsupported_contract", "", "unknown protocol contract")
@@ -382,6 +387,24 @@ func workflowRevisionV4(root map[string]any, baseline map[string]any) {
 		"minItems": json.Number("1"), "maxItems": json.Number(strconv.Itoa(len(StepVerdicts) - 1)), "uniqueItems": true,
 	}
 	defs["StepStage"] = step
+}
+
+// WorkflowRevision v5 adds one number to a step stage: how many more attempts
+// it may take when one ends in a technical failure. Everything else is v4.
+func workflowRevisionV5(root map[string]any) {
+	root["$id"] = "urn:prifly:workflow-revision:5"
+	defs := root["$defs"].(map[string]any)
+	workflow := defs["WorkflowRevisionV4"].(map[string]any)
+	delete(defs, "WorkflowRevisionV4")
+	defs["WorkflowRevisionV5"] = workflow
+	root["$ref"] = "#/$defs/WorkflowRevisionV5"
+	workflow["properties"].(map[string]any)["schema_version"].(map[string]any)["const"] = WorkflowRevisionRetryVersion
+	step := defs["StepStage"].(map[string]any)
+	// A bound, because an unbounded repeat of a failing program is a loop the
+	// declaration cannot stop, and the Run's own step budget is spent by it.
+	step["properties"].(map[string]any)["technical_retries"] = map[string]any{
+		"type": "integer", "minimum": json.Number("1"), "maximum": json.Number("8"),
+	}
 }
 
 // StepDefinition v3 changes only the hook variant. Deriving it from the

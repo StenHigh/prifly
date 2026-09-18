@@ -231,6 +231,18 @@ const (
 	// answering under 31 rather than being reissued unchanged.
 	CoreEnvironmentSourceReadVersion  = "core-read/32"
 	CoreEnvironmentSourceStateVersion = "core-state/32"
+	// A ready program stage says what its program will be given: the names it
+	// will carry and, for a value read at start, the place it comes from. The
+	// owner asks this before the call that runs it, so it stands beside the
+	// answer that already names the kind of work.
+	//
+	// 33 is an answer, not a record: nothing new is stored, so it mints no
+	// state version. That is not only economy. The published capability
+	// document caps state_versions at 32 entries, and this build already lists
+	// 32; a thirty-third would be invalid against every bundle ever published,
+	// including the ones that declared the cap. A read-only addition must
+	// therefore ride an existing state, and this one does.
+	CoreProgramEnvironmentNextVersion = "core-next/33"
 	CoreConfigVersion                 = "core-configuration/1"
 	CoreContextConfigVersion          = "core-configuration/2"
 	MaxDefinitionBytes                = 2 << 20

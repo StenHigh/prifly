@@ -1708,6 +1708,17 @@ func TestDriverWorkerHelper(t *testing.T) {
 		return
 	}
 	mode := os.Args[len(os.Args)-1]
+	// A program that fails once and works the second time: the marker is the
+	// only difference between the two attempts, and it lives outside the
+	// attempt workspace because that is made fresh for each one.
+	if marker := os.Getenv("DRIVER_TEST_MARKER"); marker != "" {
+		if _, err := os.Stat(marker); err != nil {
+			if err := os.WriteFile(marker, nil, 0600); err != nil {
+				os.Exit(94)
+			}
+			os.Exit(7)
+		}
+	}
 	if mode == "wait" {
 		signal.Ignore(syscall.SIGTERM)
 	}

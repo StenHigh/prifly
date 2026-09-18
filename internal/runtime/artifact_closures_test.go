@@ -93,7 +93,7 @@ func TestArtifactClosureSealsExactManifestBeforeProducerSettlement(t *testing.T)
 		t.Fatalf("manifest duplicated its unbounded item list into bounded ArtifactRevision provenance: %+v", manifestArtifact.Provenance)
 	}
 	for name, value := range map[string]any{
-		"CoreRunStateV31": r, "CoreRunViewV31": after, "CoreNextViewV31": next, "CorePreviewV31": preview,
+		"CoreRunStateV31": r, "CoreRunViewV31": after, "CoreNextViewV33": next, "CorePreviewV31": preview,
 		"CoreWorkflowInvocationV31": r.Invocations[r.RootInvocationID], "ArtifactManifest": manifest,
 		"ArtifactClosure": closure, "PublishStepPublicationCommandV3": command, "CoreCapabilitiesV31": Capabilities(),
 	} {

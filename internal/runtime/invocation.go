@@ -472,7 +472,7 @@ func parsePinnedBudgetWorkflow(data []byte, ref flow.Ref) (flow.WorkflowRevision
 	if err := decoder.Decode(&workflow); err != nil {
 		return workflow, wrapFault("invalid_invocation", "invalid pinned budget definition", err)
 	}
-	if workflow.ID != ref.ID || workflow.Version != ref.Version || !slices.Contains([]string{"1", "2", "3", flow.WorkflowRevisionVerdictVersion}, workflow.SchemaVersion) {
+	if workflow.ID != ref.ID || workflow.Version != ref.Version || !slices.Contains([]string{"1", "2", "3", flow.WorkflowRevisionVerdictVersion, flow.WorkflowRevisionRetryVersion}, workflow.SchemaVersion) {
 		return workflow, faultf("invalid_invocation", "pinned budget definition identity changed")
 	}
 	return workflow, nil
