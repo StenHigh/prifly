@@ -55,9 +55,9 @@ func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
 // projectKnownRunnerSkills leaves every installed runner unreplaceable.
 func TestProjectRunnerTextIsPinned(t *testing.T) {
 	pinned := map[string]string{
-		"codex-cli":   "sha256:dd67335b73b82b40da0356c451dd84c0e691c90ea16db79d9f4d69825c621191",
-		"codex-app":   "sha256:cc4c47d50808b932f572127a55329051ca5e8e0d012bd85c2bd22f4fd0078ad7",
-		"claude-code": "sha256:197cd12a5b011376bec9a5f9443b3e1a644e8292498e739afbbe99a6dc1ecc23",
+		"codex-cli":   "sha256:0ea63c7ca0c1ead878f9e05c5d56f18fdc29298e0e8e3b12f1e387bc17aa8273",
+		"codex-app":   "sha256:a91a4adb7676a0b412ab74916739463e9288b0ac222d9397140d621257f904a3",
+		"claude-code": "sha256:f968fa2248c29f9c3e6b8e79f273e004943af6e116157cb9d6a004dcfd9f666b",
 	}
 	for _, host := range projectHosts {
 		sum := sha256.Sum256([]byte(projectRunnerSkill(host)))
@@ -87,6 +87,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:d8b32fac0d6e70c7ba1a61679401a24ce676d77955f33fcd23b2f5e0483d30d3",
 			"sha256:1bc14667af0bd26c522a271ac6d79fc6f7d6a5ea54333b1d5bee57429ee24763",
 			"sha256:ed9ac14afbb349dcd1d8f8aad6055dd31a1d65d1f5accc25975a56a35aaf5ee5",
+			"sha256:dd67335b73b82b40da0356c451dd84c0e691c90ea16db79d9f4d69825c621191",
 		},
 		"codex-app": {
 			"sha256:0fecbf3f6b3b67b2347896025b6f0e28f64d7cf6002b5151790bcb8352623376",
@@ -102,6 +103,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:aff816b527b3baecdbaf1e7bc253c9bdfcf822d94063dce7c4a37b42308d2f95",
 			"sha256:facf29aad4d43b14b35bc1159492f0b9afc6338242abca03ea21d4de8b16926c",
 			"sha256:2c8b583d589dd0a2436db9eb1b113b0c726f3b551fd861a74b1960a43db52dfc",
+			"sha256:cc4c47d50808b932f572127a55329051ca5e8e0d012bd85c2bd22f4fd0078ad7",
 		},
 		"claude-code": {
 			"sha256:416af8429794e5adef4b7180427c3b74b517404b44f36be226f752aa0f61196d",
@@ -117,6 +119,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:9cc0bf9ba4c7434124a97fc4ac19e6d4ab1682862528392f829271682b729865",
 			"sha256:8c4ef01c9ef0dad259a9d05edb3209044a3ca23b99e0986a201b381869a5178e",
 			"sha256:8aafd50bee9b8249a50e9a161684553a4ad4fe16934085a6bbea5d9a62bc48e2",
+			"sha256:197cd12a5b011376bec9a5f9443b3e1a644e8292498e739afbbe99a6dc1ecc23",
 		},
 	}
 	for _, host := range projectHosts {
@@ -156,7 +159,12 @@ func TestProjectCurrentRunnerIsWorkflowNeutral(t *testing.T) {
 				"session_limits for each exact step", "legacy_absolute_timeout_ms", "unbounded waiting",
 				"--yield-execution", "yield_execution:true", "answer\n   saved", "not \"work resumed\"",
 				"run drive RUN_ID", "run next RUN_ID", "do not ask that known answer again",
-				"claim\n   list", "No active host means no automatic wakeup", "does not intercept native questions automatically",
+				// The paragraph that told a host to inspect claim list and
+				// capacity show after a refusal left this file at 0.13.37: the
+				// refusals themselves now carry claim.list, claim.release,
+				// capacity.show and capacity.set in safe_next_actions, and text
+				// that repeats the tool is text a reader learns to skip.
+				"No active host means no automatic wakeup", "does not intercept native questions automatically",
 				// A host that read `run.attempts` as a positional list got
 				// `Cannot index object with number` and gave up on the field.
 				"`run.attempts` by `id` -- the value the task calls `attempt_id`",

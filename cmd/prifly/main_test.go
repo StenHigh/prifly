@@ -3410,7 +3410,10 @@ func TestCLIProjectRunnersUpdateKeepsTheProjectOverlayAndNamesIt(t *testing.T) {
 	if pointer < 0 || !strings.Contains(body, "PROJECT.md wins where the two") || !strings.Contains(body, "replaces this file only, never PROJECT.md") {
 		t.Fatalf("the generated runner does not name the overlay, its precedence and what update replaces")
 	}
-	if firstStep := strings.Index(body, "\n1. Read .prifly/local.yaml"); firstStep < 0 || pointer > firstStep {
+	// The runner stopped being a numbered list at 0.13.37; what this guard is
+	// about is that the overlay is named before the protocol, not which words
+	// the protocol starts with.
+	if firstStep := strings.Index(body, "\n## 1. Start"); firstStep < 0 || pointer > firstStep {
 		t.Fatalf("the overlay is named after the protocol starts, not in the first lines: pointer=%d first_step=%d", pointer, firstStep)
 	}
 }
