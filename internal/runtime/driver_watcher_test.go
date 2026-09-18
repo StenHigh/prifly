@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -121,6 +122,16 @@ func TestReopenRunsTheBrokenStageAgainAndKeepsWhatWasDone(t *testing.T) {
 	}
 	// The Run's own configuration is what a reopened stage reads, so the
 	// sealed binding still names the source; the file it names is fixed here.
+	// The answer that names moves names this one: a dependent session learned
+	// about reopen from a message instead of from the tool, and that is the
+	// same silence this whole window is about.
+	next, err := e.Next(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Action != "terminal" || !slices.Contains(next.SafeNextActions, "run.reopen") {
+		t.Fatalf("the terminal answer does not name the move this Run has: %+v", next)
+	}
 	if err := os.WriteFile(broken, []byte("PASSWORD="+environmentSourceValue+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +177,14 @@ func TestReopenRefusesARunThatReachedAnOutcome(t *testing.T) {
 	}
 	if r.Status != "completed" || r.Outcome == nil {
 		t.Fatalf("the fixture did not reach an outcome: %s", r.Status)
+	}
+	// A Run that answered its question is not offered a move it would refuse.
+	next, err := e.Next(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(next.SafeNextActions, "run.reopen") {
+		t.Fatalf("a completed Run was offered a reopen it refuses: %+v", next.SafeNextActions)
 	}
 	_, err = e.Reopen(ctx, runID, newID("command"), "try again", view.Snapshot.Version)
 	if err == nil || !strings.Contains(err.Error(), "not_a_broken_run") {

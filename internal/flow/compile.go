@@ -226,8 +226,16 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 		// of the graph says how many times. A stage that asks to repeat a step
 		// declared never repeatable is refused here rather than accepted and
 		// quietly ignored, which would read as a budget that exists.
-		if !RepeatableRetryClasses[plan.Steps[id].Effects.RetryClass] {
-			return nil, problem("unsupported_retries", "/definition/stages/"+escapePointer(id)+"/technical_retries", "this step declares retry_class "+plan.Steps[id].Effects.RetryClass+": repeating it is the step author's decision, and it says no")
+		step := plan.Steps[id]
+		if !RepeatableRetryClasses[step.Effects.RetryClass] {
+			return nil, problem("unsupported_retries", "/definition/stages/"+escapePointer(id)+"/technical_retries", "this step declares retry_class "+step.Effects.RetryClass+": repeating it is the step author's decision, and it says no")
+		}
+		// "pure" means the step leaves nothing behind, so a step that claims it
+		// while declaring an effect is contradicting itself, and a budget is
+		// the one place where believing the wrong half repeats a partial write.
+		// A step that really may write and really may repeat says idempotent.
+		if step.Effects.RetryClass == "pure" && step.Effects.Class != "none" {
+			return nil, problem("unsupported_retries", "/definition/stages/"+escapePointer(id)+"/technical_retries", "this step declares retry_class pure and effects.class "+step.Effects.Class+": a step that leaves something behind is not pure, and a budget would repeat that; declare idempotent if repeating it is genuinely safe")
 		}
 	}
 	checkGraph := plan.checkGraph

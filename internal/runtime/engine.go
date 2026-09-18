@@ -729,6 +729,13 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		actions = append(actions, "run.decision.answer", "run.cancel")
 	case "blocked_child":
 		actions = append(actions, "run.cancel")
+	case "terminal":
+		// A Run that broke without answering has one move left, and until now
+		// the answer that names moves did not name it: a dependent session
+		// learned about run reopen from a message instead of from the tool.
+		if r.reopenable() {
+			actions = append(actions, "run.reopen")
+		}
 	case "uncertain":
 		// An unresolved execution keeps its slot and nothing retries it blindly,
 		// so the only move that advances the Run is the owner saying what
@@ -1200,6 +1207,9 @@ func (e *Engine) Reopen(ctx context.Context, runID, commandID, reason string, ex
 		if activation == nil {
 			return local.Change{}, local.Reject("stage_not_reopenable", "no failed stage of this Run can be run again; read run status for the diagnostics that ended it")
 		}
+		if !r.reopenable() {
+			return local.Change{}, local.Reject("stage_not_reopenable", "this Run is not in the state reopen takes; read run next for the moves it does have")
+		}
 		step := r.Steps[activation.StepID]
 		if step == nil {
 			return local.Change{}, local.Reject("stage_not_reopenable", "the failed stage has no step instance to run again")
@@ -1226,6 +1236,20 @@ func (e *Engine) Reopen(ctx context.Context, runID, commandID, reason string, ex
 // has no successor, in the invocation that failed with it. A Run that failed
 // for another reason — no activation of its own, several open failures —
 // answers nothing rather than guessing which stage the owner meant.
+// reopenable is the one answer both the command and the view about it read: a
+// Run that broke technically without reaching an outcome, holds nothing
+// unsettled, and has exactly one failed stage to run again. Two readers of one
+// question is how a tool ends up offering a move it then refuses.
+func (r Run) reopenable() bool {
+	if r.Status != "failed" || r.Outcome != nil || r.CancelRequested || r.restricted() {
+		return false
+	}
+	if r.HasUnresolvedEffects || len(r.Active) != 0 {
+		return false
+	}
+	return r.brokenStage() != nil
+}
+
 func (r Run) brokenStage() *Activation {
 	var broken *Activation
 	for _, activation := range r.Activations {

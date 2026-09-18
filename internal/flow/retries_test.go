@@ -83,6 +83,27 @@ func TestTechnicalRetriesNeedTheStepAuthorsPermission(t *testing.T) {
 			t.Fatalf("a step whose author allows a repeat was refused a budget (%s): %v", class, err)
 		}
 	}
+	// A step that claims to leave nothing behind while declaring an effect
+	// contradicts itself, and a budget is where believing the wrong half
+	// repeats a partial write. The package session found the engine accepting
+	// this pair on 0.13.34; only their own guard held it.
+	effectful := func(class, effect string) (*Plan, error) {
+		repeated := step
+		repeated.Effects.RetryClass, repeated.Effects.Class = class, effect
+		repeated.ID = step.ID + "-" + class + "-" + strings.ReplaceAll(effect, "_", "-")
+		stage := w.Definition.Stages[stageID]
+		stage.StepRef = register(repeated)
+		w.Definition.Stages[stageID] = stage
+		return CompileProfile(encoded(t, w), "json", registry, CoreProfile)
+	}
+	_, err := effectful("pure", "workspace_write")
+	problem := expectProblem(t, err, "unsupported_retries")
+	if !strings.Contains(problem.Message, "workspace_write") {
+		t.Fatalf("the refusal does not name the effect it contradicts: %s", problem.Message)
+	}
+	if _, err := effectful("idempotent", "workspace_write"); err != nil {
+		t.Fatalf("a step that may write and says so was refused a budget: %v", err)
+	}
 }
 
 func mustValue(t *testing.T, data []byte) any {

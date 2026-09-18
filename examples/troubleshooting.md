@@ -326,11 +326,15 @@ stdout оставался разбираемым.
 же шага, а когда бюджет исчерпан — Run падает, как падал раньше. Объявить это
 можно только там, где автор **шага** разрешил повтор: `effects.retry_class`
 должен быть `pure` или `idempotent`; при `never`, `deduplicated` и
-`reconcile_required` компиляция отказывает `unsupported_retries`. Предметный
+`reconcile_required` компиляция отказывает `unsupported_retries`. Пара
+`retry_class: pure` с `effects.class` не `none` тоже отказ: шаг, который
+что-то оставляет за собой, не чист, и бюджет повторил бы частичную запись —
+если повтор действительно безопасен, объявляйте `idempotent`. Предметный
 вердикт повтором не отменяется — повторяется поломка, а не решение.
 
 **Что делать с уже упавшим Run.** Если Run сломался технически и не достиг
-ни одного outcome (`run status`: `status: failed`, `outcome: null`), исправьте
+ни одного outcome (`run status`: `status: failed`, `outcome: null`), `run next`
+назовёт `run.reopen` в `safe_next_actions` — это и есть выход. Исправьте
 причину и верните сломавшуюся стадию в работу:
 `prifly run reopen RUN --expected-version N --reason TEXT`. Завершённые стадии
 остаются завершёнными и заново не исполняются, их выходы запечатаны; стадия
