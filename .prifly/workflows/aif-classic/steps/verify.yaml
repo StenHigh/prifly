@@ -1,6 +1,6 @@
 authoring: prifly-step/2
 id: aif:step/verify
-version: 1.10.0
+version: 1.11.0
 title: Run read-only aif-verify over the implementation
 kind: worker
 inputs:
@@ -11,7 +11,7 @@ outputs:
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
 instructions_ref: "{{context_aif-verify-bridge}}"
 context_refs: ["{{context_aif-verify}}"]
-effects: {class: none, retry_class: never}
+effects: {class: none, retry_class: pure}
 session_limits: {active_timeout_ms: null}
 result_schema_ref: "{{step_result_schema}}"
 # Read-only materialisation: the engine lays the plan out where the pinned

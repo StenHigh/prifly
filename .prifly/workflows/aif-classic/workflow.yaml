@@ -1,7 +1,7 @@
 authoring: prifly-project-workflow/1
 package:
   id: aif:package/classic
-  version: 1.38.0
+  version: 1.39.0
   description: Canonical AI Factory development workflow with bounded plan improvement.
   requires_core_protocol: "1"
   profiles:
@@ -20,7 +20,7 @@ package:
     workspace_tree_manifest: core:schema/workspace-tree-manifest@1.0.0
 id: aif:workflow/classic
 schema_version: "4"
-version: 1.38.0
+version: 1.39.0
 title: AI Factory classic development workflow
 refs:
   schema_task: "{{schema_task}}"

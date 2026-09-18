@@ -1,5 +1,5 @@
 id: aif:context/aif-verify-bridge
-version: 1.11.0
+version: 1.12.0
 media_type: text/markdown; charset=utf-8
 text: |
   # Pri-Fly adapter for the pinned aif-verify skill
@@ -48,7 +48,10 @@ text: |
   22 minutes against a usual 7 because a section still described a script that
   had been deleted, and nobody had lied: the document was simply older than the
   tree. When the value is empty, this project has declared no composition and
-  the pinned skill's own procedure stands.
+  the pinned skill's own procedure stands. A check you run beyond the
+  composition — the pinned skill's own static analysis, for instance — is
+  your judgement, not the project's composition: report what it found as
+  such, and do not read it as the composition being wrong or out of date.
 
   `decision_context.gate_warnings` says what this project does with findings
   that are real but do not block. It is answered before the Run starts, because

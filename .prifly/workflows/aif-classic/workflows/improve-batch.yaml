@@ -1,7 +1,7 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/improve-batch
-version: 1.3.0
+version: 1.4.0
 title: Run one bounded plan-improvement batch
 refs:
   schema_plan_manifest: "{{workspace_tree_manifest}}"

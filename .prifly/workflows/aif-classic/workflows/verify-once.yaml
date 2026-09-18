@@ -1,7 +1,7 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/verify-once
-version: 1.6.0
+version: 1.7.0
 title: Verify the implementation once and fix what blocks it
 refs:
   schema_implementation: "{{schema_implementation}}"

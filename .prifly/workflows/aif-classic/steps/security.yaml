@@ -1,6 +1,6 @@
 authoring: prifly-step/2
 id: aif:step/security
-version: 1.8.0
+version: 1.9.0
 title: Run read-only aif-security-checklist over the implementation
 kind: worker
 inputs:
@@ -10,6 +10,6 @@ outputs:
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
 instructions_ref: "{{context_aif-security-bridge}}"
 context_refs: ["{{context_aif-security}}"]
-effects: {class: none, retry_class: never}
+effects: {class: none, retry_class: pure}
 session_limits: {active_timeout_ms: null}
 result_schema_ref: "{{step_result_schema}}"

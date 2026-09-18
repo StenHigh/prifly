@@ -1,6 +1,6 @@
 authoring: prifly-step/2
 id: aif:step/warmup
-version: 1.5.0
+version: 1.6.0
 title: Run aif-warmup and hand its compact reading forward
 kind: worker
 outputs:
@@ -8,6 +8,6 @@ outputs:
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
 instructions_ref: "{{context_aif-warmup-bridge}}"
 context_refs: ["{{context_aif-warmup}}"]
-effects: {class: none, retry_class: never}
+effects: {class: none, retry_class: pure}
 session_limits: {active_timeout_ms: null}
 result_schema_ref: "{{step_result_schema}}"

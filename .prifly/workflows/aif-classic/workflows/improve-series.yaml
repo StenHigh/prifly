@@ -1,7 +1,7 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/improve-series
-version: 1.3.0
+version: 1.4.0
 title: Continue only developer-approved improvement batches
 refs:
   schema_plan_manifest: "{{workspace_tree_manifest}}"

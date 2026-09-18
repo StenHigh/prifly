@@ -1,7 +1,7 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/review-batch
-version: 1.4.0
+version: 1.5.0
 title: Review and fix until nothing blocks or the declared limit is reached
 refs:
   schema_implementation: "{{schema_implementation}}"

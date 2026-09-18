@@ -1,6 +1,6 @@
 authoring: prifly-step/2
 id: aif:step/review
-version: 1.9.0
+version: 1.10.0
 title: Run read-only aif-review over the implementation
 kind: worker
 inputs:
@@ -11,7 +11,7 @@ outputs:
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
 instructions_ref: "{{context_aif-review-bridge}}"
 context_refs: ["{{context_aif-review}}"]
-effects: {class: none, retry_class: never}
+effects: {class: none, retry_class: pure}
 session_limits: {active_timeout_ms: null}
 result_schema_ref: "{{step_result_schema}}"
 # Read-only materialisation, as on verify: the plan the change was built
