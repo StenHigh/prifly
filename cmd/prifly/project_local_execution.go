@@ -345,5 +345,8 @@ func (c *cli) projectLocalAllowExecutables(root string, current []byte, executab
 	for name, source := range settings.EnvironmentFrom {
 		sources[name] = projectEnvironmentSourcePlace(source)
 	}
-	return c.emit(map[string]any{"schema_version": "prifly-project-local/3", "repository": root, "prifly_executable": projectMappingValue(object, "prifly_executable").Value, "allowed_executables": selected, "environment": settings.Environment, "environment_from": sources})
+	// Both halves are read from the file, not from this call's arguments: a
+	// receipt that printed only what was passed read as "the rest is gone"
+	// after a call that touched one of them.
+	return c.emit(map[string]any{"schema_version": "prifly-project-local/3", "repository": root, "prifly_executable": projectMappingValue(object, "prifly_executable").Value, "allowed_executables": settings.Executables, "environment": settings.Environment, "environment_from": sources})
 }

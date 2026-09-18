@@ -289,6 +289,10 @@ func ProblemFor(err error) (Problem, int) {
 		// generic help behind it sent a cold start looking for a command that
 		// does not exist.
 		"project_runner_conflict": {"project.runners.update", "project.runners.add"},
+		// Both refusals of an init that named a host have the same two ways
+		// out: attach the host, or create only the local configuration.
+		"project_profile_conflict": {"project.runners.add", "project.init"},
+		"project_runner_missing":   {"project.runners.add", "project.init"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
 	}

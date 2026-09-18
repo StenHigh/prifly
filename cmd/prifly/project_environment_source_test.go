@@ -161,3 +161,25 @@ func TestProjectLaunchDigestFollowsTheSourceNotTheValue(t *testing.T) {
 		t.Fatal("a changed source left the reviewed launch valid")
 	}
 }
+
+// The receipt describes the file, not the arguments of this call: printing
+// only what was passed read as "the rest is gone" to a cold start that had
+// just declared a source and saw its allowed programs disappear.
+func TestProjectLocalReceiptDescribesTheFile(t *testing.T) {
+	root, dotenv, _ := environmentSourceProject(t)
+	if code, stdout, stderr := runCLI(t, "project", "local", "set", "--repository", root, "--allow-executable", "shell=/bin/sh", "--env", "APP_ENV=testing"); code != 0 || !strings.Contains(stdout, `"shell":"/bin/sh"`) {
+		t.Fatalf("allow an executable: %d %s %s", code, stdout, stderr)
+	}
+	code, stdout, stderr := runCLI(t, "project", "local", "set", "--repository", root, "--env-from", "DB_PASSWORD=dotenv:"+dotenv+":PASSWORD")
+	if code != 0 {
+		t.Fatalf("declare a source: %d %s", code, stderr)
+	}
+	for _, kept := range []string{`"shell":"/bin/sh"`, `"APP_ENV":"testing"`, `"DB_PASSWORD":"dotenv:` + dotenv + `:PASSWORD"`} {
+		if !strings.Contains(stdout, kept) {
+			t.Fatalf("the receipt reads as dropping %s: %s", kept, stdout)
+		}
+	}
+	if strings.Contains(stdout, environmentSourceSecret) {
+		t.Fatalf("the receipt printed the value: %s", stdout)
+	}
+}

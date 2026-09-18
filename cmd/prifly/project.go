@@ -1026,8 +1026,12 @@ func (c *cli) projectInit(ctx context.Context, args []string) error {
 		return err
 	}
 	if existing {
-		if len(hostIDs) != 0 {
-			return usageError("project_profile_conflict: use project runners add --host NAME to attach a host to an existing profile")
+		// A named host the profile already declares is the developer saying
+		// which machine this is, not an attempt to attach a second one. Only
+		// a host the profile does not declare is a conflict, and only there
+		// does the hint about runners add describe what to do next.
+		if err := checkNamedProfileHosts(root, hostIDs, missingRunners); err != nil {
+			return err
 		}
 	} else {
 		if err := checkProjectRunners(root, hosts...); err != nil {
@@ -1056,6 +1060,38 @@ func (c *cli) projectInit(ctx context.Context, args []string) error {
 		}
 	}
 	return c.emit(projectProfileInit{SchemaVersion: "project-profile-init/1", Repository: root, Profile: profile, AuthorityRoot: authority, MissingHosts: missingRunners})
+}
+
+// checkNamedProfileHosts answers whether an existing profile can be joined
+// under the hosts this call named. A declared host whose runner this clone
+// does not hold is refused by the name of the command that writes it: init
+// never writes runners, so proceeding would report a host that is not there.
+func checkNamedProfileHosts(root string, ids []string, missingRunners []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	profile, err := readProjectProfile(root)
+	if err != nil {
+		return err
+	}
+	undeclared := make([]string, 0, len(ids))
+	absent := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, declared := profile.HostSkillsRoots[id]; !declared {
+			undeclared = append(undeclared, id)
+			continue
+		}
+		if slices.Contains(missingRunners, id) {
+			absent = append(absent, id)
+		}
+	}
+	if len(undeclared) != 0 {
+		return &prifly.Fault{Code: "project_profile_conflict", Message: "this profile does not declare " + strings.Join(undeclared, ", ") + "; attach the host with project runners add --host NAME, or run project init without --host to create only the local configuration"}
+	}
+	if len(absent) != 0 {
+		return &prifly.Fault{Code: "project_runner_missing", Message: "this clone does not hold the runner of " + strings.Join(absent, ", ") + "; write it with project runners add --host NAME, or run project init without --host to create only the local configuration"}
+	}
+	return nil
 }
 
 func (c *cli) projectWorkflows(ctx context.Context, args []string) error {

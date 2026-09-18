@@ -321,3 +321,70 @@ func projectHostByID(t *testing.T, id string) projectHost {
 	t.Fatalf("unknown host %s", id)
 	return projectHost{}
 }
+
+// A developer on a clone names the host they work from. The profile already
+// declares it, its runner is in the tree, and until now init refused anyway
+// and sent them to project runners add, which for a runner already there
+// returns an empty success: a cold start got a green answer and still had no
+// local configuration. The way in was init without --host, and nothing said so.
+func TestCLIProjectInitNamesTheHostItRunsOn(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	clone := func(t *testing.T, hosts string) string {
+		t.Helper()
+		root := t.TempDir()
+		writeFixtureFile(t, root, ".prifly/project.yaml", projectProfileSource+hosts)
+		writeFixtureFile(t, root, ".prifly/.gitignore", "local.yaml\n")
+		writeFixtureFile(t, root, ".claude/skills/prifly-run/SKILL.md", projectRunnerSkill(projectHostByID(t, "claude-code")))
+		return root
+	}
+	t.Run("declared-and-present", func(t *testing.T) {
+		root := clone(t, projectHostsYAML)
+		profile, err := os.ReadFile(filepath.Join(root, ".prifly/project.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		code, out, errout := runCLI(t, "project", "init", "--repository", root, "--state-root", filepath.Join(t.TempDir(), "authority"), "--host", "claude-code")
+		var joined projectProfileInit
+		if code != 0 || json.Unmarshal([]byte(out), &joined) != nil {
+			t.Fatalf("the host this machine runs from was refused: %d %s %s", code, out, errout)
+		}
+		if !slices.Equal(joined.MissingHosts, []string{"codex-cli", "codex-app"}) {
+			t.Fatalf("the runners this clone does not hold were not named: %+v", joined.MissingHosts)
+		}
+		if _, err := os.Stat(filepath.Join(root, ".prifly/local.yaml")); err != nil {
+			t.Fatalf("no local configuration was written: %v", err)
+		}
+		after, err := os.ReadFile(filepath.Join(root, ".prifly/project.yaml"))
+		if err != nil || string(after) != string(profile) {
+			t.Fatalf("init rewrote the shared profile: %v", err)
+		}
+		if _, err := os.Lstat(filepath.Join(root, ".codex")); !os.IsNotExist(err) {
+			t.Fatalf("init wrote a runner for a host it was not asked to attach: %v", err)
+		}
+	})
+	t.Run("declared-and-absent", func(t *testing.T) {
+		root := clone(t, projectHostsYAML)
+		code, _, errout := runCLI(t, "project", "init", "--repository", root, "--state-root", filepath.Join(t.TempDir(), "authority"), "--host", "codex-cli")
+		var problem prifly.Problem
+		if code == 0 || json.Unmarshal([]byte(errout), &problem) != nil || problem.Code != "project_runner_missing" {
+			t.Fatalf("a named host whose runner this clone lacks was not refused by name: %d %s", code, errout)
+		}
+		if !slices.Contains(problem.SafeNextActions, "project.runners.add") {
+			t.Fatalf("the refusal does not name the command that writes it: %+v", problem.SafeNextActions)
+		}
+		if _, err := os.Stat(filepath.Join(root, ".prifly/local.yaml")); !os.IsNotExist(err) {
+			t.Fatalf("a refused init still wrote local configuration: %v", err)
+		}
+	})
+	t.Run("undeclared", func(t *testing.T) {
+		root := clone(t, "hosts:\n  claude-code: .claude/skills\n")
+		code, _, errout := runCLI(t, "project", "init", "--repository", root, "--state-root", filepath.Join(t.TempDir(), "authority"), "--host", "codex-cli")
+		var problem prifly.Problem
+		if code == 0 || json.Unmarshal([]byte(errout), &problem) != nil || problem.Code != "project_profile_conflict" {
+			t.Fatalf("a host the profile does not declare was not refused by name: %d %s", code, errout)
+		}
+		if !strings.Contains(problem.Message, "codex-cli") || !slices.Contains(problem.SafeNextActions, "project.runners.add") {
+			t.Fatalf("the refusal names neither the host nor the way out: %+v", problem)
+		}
+	})
+}
