@@ -325,6 +325,23 @@ type StepDefinition struct {
 	Telemetry       []Mapping              `json:"telemetry,omitempty"`
 	WorkspaceTrees  []WorkspaceTreeBinding `json:"workspace_trees,omitempty"`
 	SessionLimits   *SessionLimits         `json:"session_limits,omitempty"`
+	ModelProfile    *ModelProfile          `json:"model_profile,omitempty"`
+}
+
+// ModelProfile is what this step wants from the model that executes it. It
+// names a profile of work, not a provider or a product: "deep-reasoning"
+// survives a change of platform, "claude-opus-5" is a detail of one and goes
+// stale in the sealed plan that outlives it.
+//
+// Nothing here selects anything. An assisted session exists before the Run and
+// this authority holds no channel to it, so the declaration travels to the host
+// in its task and the host reports what it did with it. The engine checks that
+// the report says something, never that what it says is true.
+type ModelProfile struct {
+	Requested string `json:"requested"`
+	// Reason is required with the request: a profile without one reads as a
+	// preference, and the next author cannot tell whether it may be dropped.
+	Reason string `json:"reason"`
 }
 
 // SessionLimits separates an assisted delivery's finite work allowance from

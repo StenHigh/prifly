@@ -572,3 +572,61 @@ workspace_trees:
 		t.Fatal("a step mixing materialize-only and captured trees was accepted")
 	}
 }
+
+// A step that judges someone else's work and a step that does it want
+// different things from a model, and until now that knowledge lived in the
+// host's head. The declaration is a property of the step, so it is sealed in
+// the plan; what the host did with it is a fact of one execution and belongs
+// in the report, not here.
+func TestStepDeclaresTheModelProfileItWants(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	author := func(extra string) []byte {
+		return []byte(fmt.Sprintf(`authoring: prifly-step/2
+id: test:step/review
+version: 1.0.0
+refs:
+  adapter: {id: core:adapter/assisted-session, version: 1.0.0, digest: %s}
+  instructions: {id: test:context/instructions, version: 1.0.0, digest: %s}
+  result: {id: test:schema/step-result, version: 1.0.0, digest: %s}
+kind: worker
+inputs: {}
+outputs: {}
+executor: {adapter_ref: adapter, operation: session}
+instructions_ref: instructions
+effects: {class: none, retry_class: never}
+result_schema_ref: result
+%s`, digest, digest, digest, extra))
+	}
+	data, err := StepJSONBytes(author("model_profile:\n  requested: deep-reasoning\n  reason: this step judges work it did not do\n"), "yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateProtocol("StepDefinitionV9", data); err != nil {
+		t.Fatalf("a declared model profile was rejected by v9: %v", err)
+	}
+	if err := ValidateProtocol("StepDefinitionV8", data); err == nil {
+		t.Fatal("v8 accepted a field it never declared")
+	}
+	var step StepDefinition
+	if err := json.Unmarshal(data, &step); err != nil {
+		t.Fatal(err)
+	}
+	if step.SchemaVersion != "9" || step.ModelProfile == nil || step.ModelProfile.Requested != "deep-reasoning" {
+		t.Fatalf("the declaration did not reach the plan: %+v", step.ModelProfile)
+	}
+	if step.ModelProfile.Reason == "" {
+		t.Fatal("a declaration without its reason tells the next author nothing")
+	}
+	// Saying nothing new must still seal the bytes it sealed before v9 existed.
+	plain, err := StepJSONBytes(author("session_limits: {active_timeout_ms: null}\n"), "yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var untouched StepDefinition
+	if err := json.Unmarshal(plain, &untouched); err != nil {
+		t.Fatal(err)
+	}
+	if untouched.SchemaVersion != "7" || untouched.ModelProfile != nil {
+		t.Fatalf("a step that declares no profile moved to %s: %+v", untouched.SchemaVersion, untouched.ModelProfile)
+	}
+}

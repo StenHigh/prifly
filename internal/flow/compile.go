@@ -634,6 +634,11 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 				return step, problem("unsupported", path+"/schema_version", "workspace trees require core-workflow/1")
 			}
 			name = "StepDefinitionV8"
+		case "9":
+			if p.Profile != CoreProfile {
+				return step, problem("unsupported", path+"/schema_version", "a declared model profile requires core-workflow/1")
+			}
+			name = "StepDefinitionV9"
 		}
 	}
 	if err := validateProtocolValue(name, value, path); err != nil {

@@ -131,7 +131,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
-		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8",
+		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9",
 		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5",
 	}
 	for name := range defs {
@@ -228,6 +228,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = stepDefinitionV2Schema
 	case "StepDefinitionV8":
 		extension = stepDefinitionV2Schema
+	case "StepDefinitionV9":
+		extension = stepDefinitionV2Schema
 	case "WorkflowRevisionV2":
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV3":
@@ -247,8 +249,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		// Each step contract is the previous one plus its own change, so the
 		// requested name is reached by running the mutators in order up to it.
 		// A name outside this list is a base contract and runs none of them.
-		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8"}
-		stepMutators := []func(map[string]any){stepDefinitionV3, stepDefinitionV4, stepDefinitionV5, stepDefinitionV6, stepDefinitionV7, stepDefinitionV8}
+		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9"}
+		stepMutators := []func(map[string]any){stepDefinitionV3, stepDefinitionV4, stepDefinitionV5, stepDefinitionV6, stepDefinitionV7, stepDefinitionV8, stepDefinitionV9}
 		for i := 0; i <= slices.Index(stepContracts, name); i++ {
 			stepMutators[i](root)
 		}
@@ -592,6 +594,26 @@ func stepDefinitionV8(root map[string]any) {
 		map[string]any{"required": []any{"input_port"}},
 	}
 	root["required"] = slices.DeleteFunc(root["required"].([]any), func(value any) bool { return value == "session_limits" })
+}
+
+// stepDefinitionV9 admits the profile of model a step wants. It is a property
+// of the step, so it is sealed in the plan; what the host did with it is a
+// fact of one execution and is reported, not declared here.
+func stepDefinitionV9(root map[string]any) {
+	root["$id"] = "urn:prifly:step-definition:9"
+	root["title"] = "Pri-Fly StepDefinition v9: a step declares the model profile it wants"
+	properties := root["properties"].(map[string]any)
+	properties["schema_version"].(map[string]any)["const"] = "9"
+	// Both fields are required together: a request without a reason reads as a
+	// preference, and the next author cannot tell whether it may be dropped.
+	properties["model_profile"] = map[string]any{
+		"type": "object", "additionalProperties": false,
+		"required": []any{"requested", "reason"},
+		"properties": map[string]any{
+			"requested": map[string]any{"type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$"},
+			"reason":    map[string]any{"type": "string", "minLength": 1, "maxLength": 512},
+		},
+	}
 }
 
 // ValidateSchema checks data before a Run exists, using the same pinned schema

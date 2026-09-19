@@ -1086,3 +1086,49 @@ func TestListingHandoffsAgreesWithReadingOneByName(t *testing.T) {
 		}
 	}
 }
+
+// The declaration is a property of the step, so the task carries it by
+// projection from the sealed plan rather than by a second copy in the handoff:
+// two places where one fact lives is two places where it can disagree.
+func TestATaskCarriesTheModelProfileItsStepDeclared(t *testing.T) {
+	e, runID, _ := assistedFixture(t)
+	ctx := context.Background()
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := e.SessionTask(ctx, runID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.ModelProfile != nil {
+		t.Fatalf("a step that declared nothing put %+v in its task", plain.ModelProfile)
+	}
+	// Declare it on the sealed plan this Run already holds, which is how a
+	// package that declares one reaches the same projection.
+	r, view, err := e.load(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt := r.Attempts[plain.AttemptID]
+	p, err := r.planFor(r.Activations[attempt.ActivationID].InvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := r.Activations[attempt.ActivationID].StageID
+	step := p.Steps[stage]
+	step.ModelProfile = &flow.ModelProfile{Requested: "deep-reasoning", Reason: "this step judges work it did not do"}
+	p.Steps[stage] = step
+	declared, err := e.sessionTaskFrom(ctx, r, view, plain.AttemptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if declared.ModelProfile == nil || declared.ModelProfile.Requested != "deep-reasoning" || declared.ModelProfile.Reason == "" {
+		t.Fatalf("the task did not carry what the step declared: %+v", declared.ModelProfile)
+	}
+	// The handoff is state; the declaration is not in it.
+	if data, err := json.Marshal(attempt.Session); err != nil {
+		t.Fatal(err)
+	} else if bytes.Contains(data, []byte("model_profile")) || bytes.Contains(data, []byte("deep-reasoning")) {
+		t.Fatalf("the declaration was copied into stored state: %s", data)
+	}
+}

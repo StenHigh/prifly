@@ -160,6 +160,7 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	if timed {
 		marker = StepSessionAuthoringVersion
 		allowed = append(allowed, sessionAuthoringFields...)
+		allowed = append(allowed, "model_profile")
 	}
 	for key := range source {
 		if slices.Contains(allowed, key) {
@@ -187,8 +188,8 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 		}
 	}
 	if version, exists := source["schema_version"]; exists {
-		if timed && version != "6" && version != "7" && version != "8" {
-			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6, v7 or v8")
+		if timed && version != "6" && version != "7" && version != "8" && version != "9" {
+			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6, v7, v8 or v9")
 		}
 		if !timed && version != "2" && version != "5" && version != "8" {
 			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2, v5 or v8")
@@ -256,6 +257,11 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 			}
 		}
 	}
+	// Only a declared profile needs the contract that can carry one; every
+	// other step keeps sealing the bytes it sealed before v9 existed.
+	if _, exists := source["model_profile"]; exists {
+		schemaVersion = "9"
+	}
 	if value, exists := source["schema_version"]; exists {
 		schemaVersion = value.(string)
 	}
@@ -307,6 +313,9 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	}
 	if value, exists := source["workspace_trees"]; exists {
 		result["workspace_trees"] = value
+	}
+	if value, exists := source["model_profile"]; exists {
+		result["model_profile"] = value
 	}
 	if timed {
 		result["session_limits"] = limits

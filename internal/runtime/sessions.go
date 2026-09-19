@@ -326,6 +326,13 @@ type SessionTask struct {
 	// which is how a pilot lost six accepted steps to a truthful answer. The
 	// node owns only its own set; the targets of its routes stay unpublished.
 	RoutedVerdicts []string `json:"routed_verdicts,omitempty"`
+	// ModelProfile is what the step's author asked of the model that executes
+	// it, projected from the sealed plan rather than stored a second time.
+	// This authority cannot select a model: an assisted session exists before
+	// the Run and it holds no channel to it. So the declaration travels here
+	// and the report says what the host did with it; absent means the step
+	// asked nothing, never that the host may decide silently.
+	ModelProfile *flow.ModelProfile `json:"model_profile,omitempty"`
 	// Deadline is the deadline actually in force, whether the step declared it
 	// or inherited the default. Absent means no deadline exists, never an
 	// empty string that reads as false and present at the same time.
@@ -475,6 +482,7 @@ func (e *Engine) sessionTaskFrom(ctx context.Context, r Run, view local.ReadView
 		if a.Session.SchemaVersion == AssistedSessionRoutedVersion {
 			task.RoutedVerdicts = routedVerdicts(p, activation.StageID)
 		}
+		task.ModelProfile = step.ModelProfile
 		if step.Effects.Class == "workspace_write" {
 			if isSessionWorkspaceEdition(a.Session.SchemaVersion) {
 				task.PermittedEffects = []string{"write_inside_claimed_workspace", "local_git_commit_on_claimed_workspace"}

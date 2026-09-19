@@ -112,7 +112,9 @@ func TestSessionLimitsAuthoringRefusesInvalidContracts(t *testing.T) {
 		{"other operation", "operation: session", "operation: execute", "schema_invalid"},
 		{"unknown marker", "prifly-step/2", "prifly-step/3", "unsupported_authoring"},
 		{"wrong machine edition", "kind: worker", "schema_version: '5'\nkind: worker", "schema_invalid"},
-		{"unknown machine edition", "kind: worker", "schema_version: '9'\nkind: worker", "schema_invalid"},
+		// Whatever edition this build does not know yet: 9 stopped being one
+		// when a step gained a declared model profile.
+		{"unknown machine edition", "kind: worker", "schema_version: '10'\nkind: worker", "schema_invalid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := strings.Replace(string(sessionLimitSource(StepSessionAuthoringVersion, "")), test.before, test.after, 1)
