@@ -797,6 +797,62 @@ func TestStoreSampleBudgetAfterActualSQLiteAllocation(t *testing.T) {
 	}
 }
 
+// A reader that names an upper bound is reading history at a cut. Paging only
+// from `after` let a later commit into an earlier report, so the same cut
+// answered differently depending on when it was asked.
+func TestReadEventsOfTypeStopsAtTheNamedBound(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	first := applyChange(t, s, storeCommand("one", "run:bounded", 0), storeChange(`{"value":1}`))
+	applyChange(t, s, storeCommand("two", "run:bounded", 1), storeChange(`{"value":2}`))
+	events, more, err := s.ReadEventsOfType(ctx, "run:bounded", "test.updated", 0, first.Receipt.EventSeq, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if more || len(events) != 1 || events[0].Seq != first.Receipt.EventSeq {
+		t.Fatalf("a read bounded at seq %d returned %d events (more=%v)", first.Receipt.EventSeq, len(events), more)
+	}
+}
+
+// An over-allowance batch is measured only after its rows are written, so
+// dropping it has to undo them. Without that the command commits carrying
+// exactly the diagnostics the allowance refused, and the next command is
+// measured against storage the budget believes it rejected.
+func TestOverBudgetCommandSamplesDoNotCommitWithTheirCommand(t *testing.T) {
+	opts := storeTestOptions
+	opts.SoftLimitBytes = 256 << 10
+	s, err := OpenStore(filepath.Join(t.TempDir(), "authority"), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	data, err := json.Marshal(map[string]string{"payload": strings.Repeat("z", 60<<10)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch := make([]SampleInput, 0, 10)
+	for index := 0; index < 10; index++ {
+		batch = append(batch, SampleInput{ID: fmt.Sprintf("sample:over-%d", index), Data: data})
+	}
+	cmd := storeCommand("measured", "run:measured", 0)
+	cmd.Samples = func(SampleTimings) []SampleInput { return batch }
+	result, err := s.Apply(ctx, cmd, func(Snapshot) (Change, error) { return storeChange(`{"value":1}`), nil })
+	if err != nil {
+		t.Fatalf("telemetry must not fail its command: %v", err)
+	}
+	if result.Receipt.Rejection != nil || result.Receipt.Version != 1 {
+		t.Fatalf("the command itself must commit: version %d rejection %v", result.Receipt.Version, result.Receipt.Rejection)
+	}
+	page, err := s.ReadSamples(ctx, -1, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Records) != 0 {
+		t.Fatalf("an over-allowance batch committed with its command: %d samples kept", len(page.Records))
+	}
+}
+
 func TestStoreReceiptPopulationIsNotLimitedToOnePage(t *testing.T) {
 	s, _ := testStore(t)
 	for i := 0; i < 1005; i++ {

@@ -532,6 +532,12 @@ func (c timingCalculator) stateIntervals(node *TimingNode, created Observation, 
 		}
 	}
 	if len(changes) == 0 {
+		// "Not recorded" is a claim about the Run; the read may simply have
+		// stopped short of this entity's changes.
+		if c.r.TransitionsPartial {
+			node.Reasons = append(node.Reasons, "state_history_partially_read")
+			return
+		}
 		node.Reasons = append(node.Reasons, "state_history_not_recorded")
 		return
 	}

@@ -736,6 +736,11 @@ type Run struct {
 	CoreBuild                  string                              `json:"core_build"`
 	Gaps                       []TimingGap                         `json:"gaps"`
 	Transitions                []StateChange                       `json:"transitions"`
+	// TransitionsPartial reports that a read stopped at maxRecordedTransitions
+	// with history still unread. It never leaves this process: it describes one
+	// read, not the Run, and a reader that treated the two as the same said a
+	// recorded interval was never recorded at all.
+	TransitionsPartial bool `json:"-"`
 }
 
 // ForkProvenance names only the exact source cut and the artifacts explicitly

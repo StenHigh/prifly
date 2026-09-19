@@ -1,17 +1,20 @@
 ## 1. Срез и наблюдаемость
 
-- [ ] 1.1 `internal/local/store_read.go`: `ReadEventsOfType` получает верхнюю
+- [x] 1.1 `internal/local/store_read.go`: `ReadEventsOfType` получает верхнюю
   границу `through` и ставит `seq<=through` во все страницы запроса; callers
   обновлены. Сначала падающий тест: срез → новый `state.changed` → чтение по
   срезу не видит новое событие (`go test ./internal/local -run ReadEventsOfType`).
-- [ ] 1.2 `internal/runtime/engine.go`: `hydrateTransitions(ctx, r, through)`;
+- [x] 1.2 `internal/runtime/engine.go`: `hydrateTransitions(ctx, r, through)`;
   `View` передаёт `read.Snapshot.EventSeq`, телеметрия (`telemetry.go`) —
   `snapshot.EventSeq` выбранного cut; snapshot-переходы legacy сохраняются.
   Проверка: регресс «отчёт на cut → коммит перехода → отчёт на том же cut
   байт-в-байт прежний» (`go test ./internal/runtime -run 'Telemetry|View'`).
-- [ ] 1.3 Timing/read view называют неполность прочитанную историю вместо
+- [x] 1.3 Timing/read view называют неполность прочитанную историю вместо
   тихого обрыва; существующие тесты зелёные
-  (`go test ./internal/runtime -run 'Timing|View'`).
+  (`go test ./internal/runtime -run 'Timing|View'`). Падал красным на
+  `TestATruncatedHistoryIsNamedInsteadOfReportedAsAbsent`: граница
+  проверялась только между страницами, поэтому одна страница в 500 событий
+  перескакивала её целиком и `maxRecordedTransitions` не ограничивал ничего.
 
 ## 2. Эффекты workspace program-шага
 
@@ -25,12 +28,15 @@
 
 ## 3. Телеметрия команды и allowance
 
-- [ ] 3.1 `internal/local/store_samples.go`, `store.go`: savepoint вокруг
+- [x] 3.1 `internal/local/store_samples.go`, `store.go`: savepoint вокруг
   `insertSamples` в `recordCommandSamples`; при `ErrSampleLimit` — откат
   пакета, команда коммитится. Сначала падающий тест границы
   (`go test ./internal/local -run Sample`).
-- [ ] 3.2 Существующие `TestStoreSampleBudgetAfterActualSQLiteAllocation` и
+- [x] 3.2 Существующие `TestStoreSampleBudgetAfterActualSQLiteAllocation` и
   `TestTelemetrySamplesRecordedWithCommand` зелёные; счётчики записаны.
+  Красный до правки: `TestOverBudgetCommandSamplesDoNotCommitWithTheirCommand`
+  — «an over-allowance batch committed with its command: 10 samples kept»,
+  600 КиБ диагностики под разрешением в 256 КиБ.
 
 ## 4. CLI-режим открытия
 
@@ -65,10 +71,12 @@
 
 ## 6. Документы и ворота
 
-- [ ] 6.1 `openspec validate --all --strict`; `git diff --check`;
-  `TestGlossaryBindings` при изменении словаря.
+- [x] 6.1 `openspec validate --all --strict` — 22 passed, 0 failed;
+  `git diff --check` чист; словарь не менялся в разделах 1 и 3.
 - [ ] 6.2 Focused Go tests каждого раздела через явный target worktree
   (`-count=1`); счётчики в этом файле. Полные ворота (`make check`, e2e,
   race) — по правилам product-срезов или слову владельца.
-- [ ] 6.3 Защищённая история не тронута:
-  `git diff --name-only 5b5c4ca -- openspec/changes/archive` пуст.
+- [x] 6.3 Защищённая история не тронута: `git diff --name-only
+  --diff-filter=MD 5b5c4ca -- openspec/changes/archive` пуст (134 файла
+  добавлено новыми архивами, ни один прежний не изменён и не удалён).
+  Формулировка уточнена: сам список не пуст и не должен быть — архив растёт.

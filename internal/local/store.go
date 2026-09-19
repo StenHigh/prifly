@@ -1119,7 +1119,23 @@ func recordCommandSamples(ctx context.Context, conn *sql.Conn, softLimitBytes, c
 	if err := validSampleBatch(batch); err != nil {
 		return err
 	}
-	if _, err := insertSamples(ctx, conn, softLimitBytes, cut, batch); err != nil && !errors.Is(err, ErrSampleLimit) && !errors.Is(err, ErrCommandConflict) {
+	// The allowance is measured after the rows are written, so dropping a batch
+	// means undoing them: without this savepoint the command committed carrying
+	// exactly the diagnostics the allowance refused, and the next command was
+	// measured against storage the budget believed it had rejected.
+	if _, err := conn.ExecContext(ctx, "SAVEPOINT command_samples"); err != nil {
+		return err
+	}
+	_, insertErr := insertSamples(ctx, conn, softLimitBytes, cut, batch)
+	if insertErr != nil && !errors.Is(insertErr, ErrSampleLimit) && !errors.Is(insertErr, ErrCommandConflict) {
+		return insertErr
+	}
+	if insertErr != nil {
+		if _, err := conn.ExecContext(ctx, "ROLLBACK TO command_samples"); err != nil {
+			return err
+		}
+	}
+	if _, err := conn.ExecContext(ctx, "RELEASE command_samples"); err != nil {
 		return err
 	}
 	return nil

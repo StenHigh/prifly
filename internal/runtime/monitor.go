@@ -153,7 +153,7 @@ func (e *Engine) MonitorView(ctx context.Context, id string) (MonitorRunView, er
 	if err != nil {
 		return MonitorRunView{}, err
 	}
-	if err = e.hydrateTransitions(ctx, &r); err != nil {
+	if err = e.hydrateTransitions(ctx, &r, read.Snapshot.EventSeq); err != nil {
 		return MonitorRunView{}, err
 	}
 	asOf, live := e.clock.now(), e.driverLiveFor(id)
@@ -168,7 +168,7 @@ func (e *Engine) MonitorView(ctx context.Context, id string) (MonitorRunView, er
 	choices := []ChoiceDecision{}
 	after := int64(0)
 	for {
-		events, more, err := e.Store.ReadEventsOfType(ctx, id, "stage.choice_decided", after, 200)
+		events, more, err := e.Store.ReadEventsOfType(ctx, id, "stage.choice_decided", after, read.Snapshot.EventSeq, 200)
 		if err != nil {
 			return MonitorRunView{}, err
 		}

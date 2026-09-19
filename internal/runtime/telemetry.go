@@ -724,7 +724,7 @@ func (e *Engine) Telemetry(ctx context.Context, query TelemetryQuery) (Telemetry
 		foundIDs[r.ID] = true
 		// The Run's recorded state changes live in its journal; a report that
 		// reads a snapshot alone would see a Run with no history at all.
-		if err := e.hydrateTransitions(ctx, &r); err != nil {
+		if err := e.hydrateTransitions(ctx, &r, snapshot.EventSeq); err != nil {
 			return TelemetryResponse{}, err
 		}
 		if !telemetryIn(r.ID, q.RunIDs) || !telemetryIn(r.Status, q.Filters.RunStatus) || !telemetryIn(telemetryOutcome(r.Outcome), q.Filters.RunOutcome) || !telemetryIn(r.WorkflowRef.ID, q.Filters.WorkflowID) {

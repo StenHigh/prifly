@@ -301,21 +301,28 @@ func (e *Engine) applyControlledWithControlMutation(ctx context.Context, control
 }
 
 // maxRecordedTransitions bounds how much recorded history one read restores.
-// A Run with more changes than this is read up to the bound; timing already
-// reports what it could not measure rather than inventing the rest.
-const maxRecordedTransitions = 1 << 16
+// A Run with more changes than this is read up to the bound and says so: the
+// read stopping here is not the Run having no more history, and timing must not
+// report the second when it measured the first. A var, so a test can reach the
+// bound without writing sixty-five thousand transitions.
+var maxRecordedTransitions = 1 << 16
 
 // hydrateTransitions restores a Run's recorded state changes from the journal.
 // A Run written before this build keeps them in its snapshot, a Run written now
-// keeps them as events, and one that spans both is the two in order.
-func (e *Engine) hydrateTransitions(ctx context.Context, r *Run) error {
+// keeps them as events, and one that spans both is the two in order. It reads up
+// to one exact point of the journal: the bound is the caller's cut, because a
+// view or a report that named a cut and then mixed in transitions committed
+// after it contradicted itself, and the contradiction was invisible because both
+// numbers looked plausible.
+func (e *Engine) hydrateTransitions(ctx context.Context, r *Run, through int64) error {
 	after := int64(0)
-	for len(r.Transitions) < maxRecordedTransitions {
-		events, more, err := e.Store.ReadEventsOfType(ctx, r.ID, "state.changed", after, 500)
+	r.TransitionsPartial = false
+	for {
+		events, more, err := e.Store.ReadEventsOfType(ctx, r.ID, "state.changed", after, through, 500)
 		if err != nil {
 			return err
 		}
-		for _, event := range events {
+		for index, event := range events {
 			var recorded struct {
 				Transitions []StateChange `json:"transitions"`
 				Observation Observation   `json:"observation"`
@@ -325,12 +332,23 @@ func (e *Engine) hydrateTransitions(ctx context.Context, r *Run) error {
 			}
 			r.Transitions = append(r.Transitions, recorded.Transitions...)
 			after = event.Seq
+			if len(r.Transitions) < maxRecordedTransitions {
+				continue
+			}
+			// The bound was checked only between pages, so one page of five
+			// hundred events overshot it by as much as it liked and the bound
+			// bounded nothing. Stopping inside the page means saying whether
+			// anything was actually left behind: landing exactly on the bound
+			// with nothing further to read is a complete history.
+			unread := len(r.Transitions) > maxRecordedTransitions || index+1 < len(events) || more
+			r.Transitions = r.Transitions[:maxRecordedTransitions]
+			r.TransitionsPartial = unread
+			return nil
 		}
 		if !more {
 			return nil
 		}
 	}
-	return nil
 }
 
 func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
@@ -338,7 +356,7 @@ func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 	if err != nil {
 		return RunView{}, err
 	}
-	if err := e.hydrateTransitions(ctx, &r); err != nil {
+	if err := e.hydrateTransitions(ctx, &r, read.Snapshot.EventSeq); err != nil {
 		return RunView{}, err
 	}
 	asOf, live := e.clock.now(), e.driverLiveFor(id)

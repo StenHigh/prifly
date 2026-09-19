@@ -125,7 +125,12 @@ func (s *Store) RevisionPage(ctx context.Context, after string, limit int) ([]Sn
 	return page, "", rows.Err()
 }
 
-func (s *Store) ReadEventsOfType(ctx context.Context, runID, eventType string, after int64, limit int) ([]Event, bool, error) {
+// ReadEventsOfType pages the events of one type between two sequence numbers.
+// The upper bound is not optional: a reader that asked for a historical cut and
+// got events committed after it produced a report whose intervals contradicted
+// the cut it printed. Pass the snapshot's EventSeq; there is no "everything"
+// value, because every caller here reads as of something.
+func (s *Store) ReadEventsOfType(ctx context.Context, runID, eventType string, after, through int64, limit int) ([]Event, bool, error) {
 	limit, err := readLimit(limit)
 	if err != nil {
 		return nil, false, err
@@ -135,7 +140,7 @@ func (s *Store) ReadEventsOfType(ctx context.Context, runID, eventType string, a
 		return nil, false, err
 	}
 	defer rollbackClose(conn)
-	rows, err := conn.QueryContext(ctx, "SELECT seq,run_version,cut,type,schema_version,actor,command_id,data,digest FROM events WHERE run_id=? AND type=? AND seq>? ORDER BY seq LIMIT ?", runID, eventType, after, limit+1)
+	rows, err := conn.QueryContext(ctx, "SELECT seq,run_version,cut,type,schema_version,actor,command_id,data,digest FROM events WHERE run_id=? AND type=? AND seq>? AND seq<=? ORDER BY seq LIMIT ?", runID, eventType, after, through, limit+1)
 	if err != nil {
 		return nil, false, err
 	}

@@ -69,3 +69,95 @@ func TestUnreadableWorkspaceMarkAfterTheProgramIsNotSilence(t *testing.T) {
 		t.Fatalf("the error does not name the tree it could not read: %v", err)
 	}
 }
+
+// A view names the cut it was taken at. Until 0.13.38 it then read the Run's
+// recorded state changes without any upper bound, so a transition committed
+// after that cut appeared inside a report that claimed to describe the Run
+// before it — and both numbers in the report looked plausible.
+func TestAViewAtACutDoesNotSeeTransitionsCommittedAfterIt(t *testing.T) {
+	e, runID := driverProject(t, "pass", 5000)
+	ctx := context.Background()
+	before, err := e.View(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before.Run.Transitions) == 0 {
+		t.Fatal("the fixture recorded no transitions to read")
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	after, err := e.View(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Run.Transitions) <= len(before.Run.Transitions) {
+		t.Fatalf("driving the Run recorded no further transitions: %d then %d", len(before.Run.Transitions), len(after.Run.Transitions))
+	}
+	// The same Run, read again at the earlier cut, must answer what it
+	// answered then.
+	r, read, err := e.load(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Transitions = nil
+	if err := e.hydrateTransitions(ctx, &r, before.EventSequence); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Transitions) != len(before.Run.Transitions) {
+		t.Fatalf("a read bounded by the earlier cut saw %d transitions, the view at that cut saw %d", len(r.Transitions), len(before.Run.Transitions))
+	}
+	if read.Snapshot.EventSeq <= before.EventSequence {
+		t.Fatal("the fixture did not advance the journal, so the bound was never exercised")
+	}
+}
+
+// A read that stops at its own bound has not learned that the Run's history
+// ended. Reporting "state_history_not_recorded" for an entity whose changes
+// were simply never reached states as a fact about the Run what is a fact
+// about the read.
+func TestATruncatedHistoryIsNamedInsteadOfReportedAsAbsent(t *testing.T) {
+	e, runID := driverProject(t, "pass", 5000)
+	ctx := context.Background()
+	full, err := e.View(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(full.Run.Transitions) < 2 {
+		t.Fatalf("the fixture recorded %d transitions, too few to truncate", len(full.Run.Transitions))
+	}
+	restore := maxRecordedTransitions
+	maxRecordedTransitions = 1
+	t.Cleanup(func() { maxRecordedTransitions = restore })
+	partial, err := e.View(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !partial.Run.TransitionsPartial {
+		t.Fatal("a read that stopped at its bound did not say so")
+	}
+	if len(partial.Run.Transitions) >= len(full.Run.Transitions) {
+		t.Fatalf("the bound read %d of %d transitions", len(partial.Run.Transitions), len(full.Run.Transitions))
+	}
+	if reason := timingReasons(partial.Timing); !reason["state_history_partially_read"] {
+		t.Fatalf("a truncated read reported %v", reason)
+	} else if reason["state_history_not_recorded"] {
+		t.Fatal("a truncated read still claims the Run recorded no history")
+	}
+}
+
+// timingReasons collects every reason the tree names, at any depth.
+func timingReasons(tree TimingTree) map[string]bool {
+	found := map[string]bool{}
+	var walk func(TimingNode)
+	walk = func(node TimingNode) {
+		for _, reason := range node.Reasons {
+			found[reason] = true
+		}
+		for _, child := range node.Children {
+			walk(child)
+		}
+	}
+	walk(tree.Root)
+	return found
+}
