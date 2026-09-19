@@ -68,6 +68,7 @@ def check(args, generator):
 		("stage-work", ["--stage-work"], ("internal/runtime/stage-work.schema.json", "schemas/core/stage-work.schema.json")),
 		("environment-source", ["--environment-source"], ("internal/runtime/environment-source.schema.json", "schemas/core/environment-source.schema.json")),
 		("program-environment", ["--program-environment"], ("internal/runtime/program-environment.schema.json", "schemas/core/program-environment.schema.json")),
+		("model-profile", ["--model-profile"], ("internal/runtime/model-profile.schema.json", "schemas/core/model-profile.schema.json")),
 		("run-start-v2", ["--run-start-v2"], ("schemas/core/run-start-v2.schema.json",)),
 		("package-manifest-v2", ["--package-manifest-v2"], ("schemas/core/package-manifest-v2.schema.json",)),
 		("execution-bindings", ["--execution-bindings"], ("schemas/core/execution-bindings.schema.json",)),

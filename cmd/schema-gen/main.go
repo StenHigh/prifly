@@ -53,6 +53,7 @@ type generator struct {
 	stageWork             bool
 	environmentSources    bool
 	programEnvironment    bool
+	modelProfiles         bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -169,6 +170,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						continue
 					}
 					if !g.environmentSources && environmentSourceField(t, field.Name) {
+						continue
+					}
+					if !g.modelProfiles && modelProfileField(t, field.Name) {
 						continue
 					}
 					if !g.programEnvironment && programEnvironmentField(t, field.Name) {
@@ -297,6 +301,7 @@ var profileContracts = []struct {
 	{"stage-work", "generate named stage work state/read version 31 contracts", func(g *generator) { g.stageWork = true }},
 	{"environment-source", "generate declared execution value source state/read version 32 contracts", func(g *generator) { g.environmentSources = true }},
 	{"program-environment", "generate named program environment read version 33 contracts", func(g *generator) { g.programEnvironment = true }},
+	{"model-profile", "generate declared model profile session contracts", func(g *generator) { g.modelProfiles = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -1082,6 +1087,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-environment-source:32"
 			bundle["title"] = "Pri-Fly declared execution value source contracts"
 			bundle["description"] = "State/read 32 lets a sealed executor config name where a value comes from — an environment variable of the caller, a whole file, or one key of a NAME=value file — instead of carrying the value. The engine reads it at the moment the program starts, so nothing enters the Run, its digests or any document made from them, and a source that is absent or empty refuses the start by name rather than letting the program fail on authentication. A Run whose owner named no source is unchanged, and the next action, the preview and the step read keep their 31 contracts."
+		}
+		if g.modelProfiles {
+			modelProfileConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-model-profile:34"
+			bundle["title"] = "Pri-Fly declared model profile contracts"
+			bundle["description"] = "A task names the profile of model its step's author asked for, read from the sealed plan rather than stored a second time: two places for one fact are two places it can disagree. The declaration is a property of the step, so the handoff is unchanged and no Run records it. Nothing here selects a model -- an assisted session exists before the Run and this authority holds no channel to it -- so the declaration travels to the host and what the host did with it is reported, never inferred. Every prior bundle describes the task without this field, byte for byte."
 		}
 		if g.programEnvironment {
 			programEnvironmentConstraints(&g)

@@ -64,11 +64,23 @@
 
 ## 4. Контракты
 
-- [ ] 4.1 Новое семейство опубликовано рядом со старым, а не вписано в него:
-  пять digest-пиннутых бандлов не меняются. `make schemas-check` сходится
-  прежними sha256 на всех прежних бандлах. Измерено заранее: правка `maxItems`
-  на месте даёт «Immutable invocations schema hash changed; version the new
-  contract separately» — guard работает и должен остаться.
+- [x] 4.1 Семейство `model-profile` опубликовано рядом со старыми:
+  `urn:prifly:core-model-profile:34`, 237323 байт,
+  `sha256:2f090ec6ffe30a0802e05009161137b688f3e5c420652465a16201d2d96d88d4`.
+  Ни один прежний бандл не сдвинулся — `git diff` по всем `*.schema.json` и
+  `schemas/**` пуст, появились только два новых файла. `modelProfileField`
+  прячет поле от каждого бандла, опубликованного до него.
+
+  **Найдено тем, что я этого не сделал сразу.** Поле `SessionTask.ModelProfile`
+  было закоммичено и запушено до семейства: `make schemas-check` ответил
+  «Schema drift: internal/runtime/sessions.schema.json», CI покраснел на
+  `19fc08e`. Перед коммитом были прогнаны только точечные тесты, а не ворота.
+  Урок ценой одного красного CI: новое поле опубликованного DTO и его
+  семейство — один коммит, не два.
+
+  Измерено заранее (остаётся в силе): правка `maxItems` на месте даёт
+  «Immutable invocations schema hash changed; version the new contract
+  separately» — guard работает и должен остаться.
 
 - [ ] 4.2 Потолок `state_versions`/`read_versions` поднят **в новом
   семействе**; старые бандлы байт-в-байт прежние. Проверка: новый бандл

@@ -30,8 +30,13 @@ const (
 	AssistedSessionDecisionVersion  = "assisted-session/5"
 	AssistedSessionTimingVersion    = "assisted-session/6"
 	AssistedSessionRoutedVersion    = "assisted-session/7"
-	ReportedCostVersion             = "reported-cost/1"
-	MaxReportedCosts                = 8
+	// AssistedSessionModelProfileVersion is the task contract that can name the
+	// model profile a step declared. It is the answer moving, not the state:
+	// the declaration is sealed in the plan, so no handoff records it and every
+	// stored session stays on the edition it was written under.
+	AssistedSessionModelProfileVersion = "assisted-session/8"
+	ReportedCostVersion                = "reported-cost/1"
+	MaxReportedCosts                   = 8
 
 	SessionAwaiting         = "awaiting_host"
 	SessionReported         = "reported"
