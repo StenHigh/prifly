@@ -66,3 +66,39 @@ func TestEveryStateNamesItsNextContract(t *testing.T) {
 		t.Errorf("an unknown state answered under %s", answered)
 	}
 }
+
+// The exit table calls 2 "the form, the input, an object that does not exist"
+// and 3 "the version, epoch, claim, slot, admission or access this command
+// assumed is not the one held". A project refusal is a declaration that does
+// not hold together, which is the first, but exitForCode sorts by substring
+// and eight project codes carry "conflict" in their names. Until the project
+// surface stopped hiding behind invalid_usage the question never arose,
+// because invalid_usage carries neither word.
+func TestAProjectRefusalIsNotAnAuthorityStateConflict(t *testing.T) {
+	for _, code := range []string{
+		"project_profile_conflict",
+		"project_runner_conflict",
+		"project_option_conflict",
+		"project_local_conflict",
+		"project_compile_profile_value_conflict",
+		"project_extension_stage_conflict",
+		"project_start_package_identity_conflict",
+		"project_workflow_package_conflict",
+		"project_root_invalid",
+	} {
+		if exit := exitForCode(code); exit != 2 {
+			t.Errorf("%s exits %d; a declaration that does not hold together is the form class", code, exit)
+		}
+	}
+	// The substring rules still sort the authority's own codes.
+	for code, want := range map[string]int{
+		"version_conflict":            3,
+		"capacity_exhausted":          5,
+		"unsupported_storage_version": 5,
+		"recovery_required":           6,
+	} {
+		if exit := exitForCode(code); exit != want {
+			t.Errorf("%s exits %d, expected %d", code, exit, want)
+		}
+	}
+}

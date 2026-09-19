@@ -79,3 +79,30 @@ refusal-check 162 файла, staticcheck 9 пакетов × 2 платформ
   старой цепочки на 32 состояниях и трёх неизвестных версиях, и только потом
   цепочка удалена;
 - гейт схем — 8.70 / 8.61 с → 3.38 / 3.37 с при тех же байтах.
+
+## Проверка на чужом стенде
+
+`~/.prifly/stands/0.13.39`, опубликованный darwin-arm64; архив сошёлся с
+манифестом (`sha256:5f0a12b9…`). Рядом 0.13.38 для сравнения — один и тот же
+отказ на обоих:
+
+| Бинарь | `code` | `message` |
+|---|---|---|
+| 0.13.38 | `invalid_usage` | `project_root_invalid: project path must be an existing directory` |
+| 0.13.39 | `project_root_invalid` | `project path must be an existing directory` |
+
+То же на втором отказе: 0.13.38 → `invalid_usage` + `project_local_missing: run
+project init before using .prifly/local.yaml`; 0.13.39 → код
+`project_local_missing`, сообщение без префикса. Exit-класс 2 и
+`safe_next_actions: ["help"]` одинаковы на обоих.
+
+**Слепое место стенда.** Смену exit-класса с 3 на 2 у
+`project_profile_conflict` и `project_runner_conflict` на стенде
+воспроизвести не удалось: до этих кодов на собранном бинаре добраться не
+получилось, отказ приходил раньше (`project_profile_missing`). Поэтому
+утверждение держит не стенд, а тест
+`TestAProjectRefusalIsNotAnAuthorityStateConflict`: он проверен красным на
+снятом правиле — без `case strings.HasPrefix(code, "project_")` шесть кодов
+выходят классом 3 — и одновременно держит, что подстрочные правила
+по-прежнему сортируют коды самого authority (`version_conflict` 3,
+`capacity_exhausted` 5, `recovery_required` 6).
