@@ -65,7 +65,7 @@ func projectBuildPackageVersion(buildKey string) (string, error) {
 	encoded, ok := strings.CutPrefix(buildKey, "sha256:")
 	key, err := hex.DecodeString(encoded)
 	if !ok || err != nil || len(key) != sha256.Size {
-		return "", usageError("project_compile_invalid_provenance: invalid build key")
+		return "", refusal("project_compile_invalid_provenance", "invalid build key")
 	}
 	return projectBuildVersionFor([32]byte(key)), nil
 }
@@ -86,7 +86,7 @@ func projectResolvedDependencies(source projectPackageSource, packages prifly.Pa
 	for _, logical := range source.Dependencies {
 		ref, err := projectLogicalPackageRef(packages, logical)
 		if err != nil {
-			return nil, usageError("project_compile_dependency: " + err.Error())
+			return nil, refusal("project_compile_dependency", err.Error())
 		}
 		refs = append(refs, ref)
 	}
@@ -108,11 +108,11 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	if !variant {
 		object, _ := source.RootValue.(map[string]any)
 		if _, exists := object["execution_bindings"]; exists {
-			return projectCompileResult{}, usageError("project_compile_profile_required: execution bindings require profile /3")
+			return projectCompileResult{}, refusal("project_compile_profile_required", "execution bindings require profile /3")
 		}
 		for _, document := range source.Documents {
 			if document.Kind == "check" {
-				return projectCompileResult{}, usageError("project_compile_profile_required: checks require profile /3")
+				return projectCompileResult{}, refusal("project_compile_profile_required", "checks require profile /3")
 			}
 		}
 	}
@@ -286,7 +286,7 @@ func projectBuildVariant(source projectPackageSource, components []projectCompil
 			return result[index].Ref, nil
 		}
 		if active[index] || len(active) >= flow.MaxDepth {
-			return flow.Ref{}, usageError("project_compile_dependency_cycle: owned definitions cannot be sealed recursively")
+			return flow.Ref{}, refusal("project_compile_dependency_cycle", "owned definitions cannot be sealed recursively")
 		}
 		active[index] = true
 		component := components[index]
@@ -339,7 +339,7 @@ func projectBuildVariant(source projectPackageSource, components []projectCompil
 		provenance.Components = append(provenance.Components, projectBuildMapping{Kind: original.Kind, AuthorRef: original.Ref, CompiledRef: ref, Path: result[index].Path})
 		if original.Root {
 			if provenance.RootRef.ID != "" {
-				return nil, nil, usageError("project_compile_invalid_root: package has multiple roots")
+				return nil, nil, refusal("project_compile_invalid_root", "package has multiple roots")
 			}
 			provenance.RootRef = ref
 		}
@@ -358,26 +358,26 @@ func validateProjectBuild(data []byte, components []projectCompileComponent) err
 	}
 	ref := flow.Ref{ID: "compiler:schema/build-provenance", Version: "1.0.0", Digest: digest}
 	if err := flow.ValidateSchema(flow.Registry{ref: schema}, ref, data); err != nil {
-		return usageError("project_compile_invalid_provenance: " + err.Error())
+		return refusal("project_compile_invalid_provenance", err.Error())
 	}
 	var build projectBuildProvenance
 	if err := json.Unmarshal(data, &build); err != nil {
 		return err
 	}
 	if len(build.Components) != len(components) {
-		return usageError("project_compile_invalid_provenance: component inventory differs")
+		return refusal("project_compile_invalid_provenance", "component inventory differs")
 	}
 	seen, roots := map[flow.Ref]bool{}, 0
 	for _, mapping := range build.Components {
 		if seen[mapping.CompiledRef] || mapping.AuthorRef.ID != mapping.CompiledRef.ID {
-			return usageError("project_compile_invalid_provenance: duplicate or mismatched identity")
+			return refusal("project_compile_invalid_provenance", "duplicate or mismatched identity")
 		}
 		version, err := projectBuildComponentVersion(build.BuildKey, mapping.Kind, mapping.AuthorRef)
 		if err != nil {
 			return err
 		}
 		if mapping.CompiledRef.Version != version {
-			return usageError("project_compile_invalid_provenance: component version differs from build identity")
+			return refusal("project_compile_invalid_provenance", "component version differs from build identity")
 		}
 		seen[mapping.CompiledRef] = true
 		matched := false
@@ -392,11 +392,11 @@ func validateProjectBuild(data []byte, components []projectCompileComponent) err
 			}
 		}
 		if !matched {
-			return usageError("project_compile_invalid_provenance: mapping is not an exported component")
+			return refusal("project_compile_invalid_provenance", "mapping is not an exported component")
 		}
 	}
 	if roots != 1 {
-		return usageError("project_compile_invalid_provenance: root is not the compiled folder root")
+		return refusal("project_compile_invalid_provenance", "root is not the compiled folder root")
 	}
 	return nil
 }
@@ -417,19 +417,19 @@ func projectCompiledLaunchPath(root string, launch projectLaunch, compiled proje
 		return "", err
 	}
 	if compiled.AuthorPackage == nil || build.AuthorPackage != *compiled.AuthorPackage || build.BuildKey != compiled.BuildKey {
-		return "", usageError("project_compile_invalid_provenance: build identity differs")
+		return "", refusal("project_compile_invalid_provenance", "build identity differs")
 	}
 	version, err := projectBuildPackageVersion(build.BuildKey)
 	if err != nil {
 		return "", err
 	}
 	if compiled.Package.ID != build.AuthorPackage.ID || compiled.Package.Version != version {
-		return "", usageError("project_compile_invalid_provenance: package version differs from build identity")
+		return "", refusal("project_compile_invalid_provenance", "package version differs from build identity")
 	}
 	for _, component := range compiled.Components {
 		if component.Ref == build.RootRef {
 			return component.Path, nil
 		}
 	}
-	return "", usageError("project_compile_invalid_provenance: root is absent")
+	return "", refusal("project_compile_invalid_provenance", "root is absent")
 }

@@ -414,6 +414,15 @@ func (e *Engine) SessionTask(ctx context.Context, runID, attemptID string) (Sess
 	if err != nil {
 		return SessionTask{}, err
 	}
+	return e.sessionTaskFrom(ctx, r, view, attemptID)
+}
+
+// sessionTaskFrom projects one handoff from a Run that has already been read.
+// Listing the handoffs called SessionTask once per awaiting attempt, and each
+// of those read and decoded the whole Run again: answering one question about a
+// Run holding n handoffs cost n+1 reads of it, and the answers could disagree
+// with each other because each read took its own cut.
+func (e *Engine) sessionTaskFrom(ctx context.Context, r Run, view local.ReadView, attemptID string) (SessionTask, error) {
 	for _, id := range r.Active {
 		a := r.Attempts[id]
 		if a == nil || a.Session == nil || a.Session.HostState != SessionAwaiting {
@@ -583,7 +592,7 @@ func (e *Engine) HandOverSessionTasks(ctx context.Context, runID string) ([]Sess
 }
 
 func (e *Engine) sessionTasks(ctx context.Context, runID string, handOver bool) ([]SessionTask, error) {
-	r, _, err := e.load(ctx, runID)
+	r, view, err := e.load(ctx, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -593,7 +602,7 @@ func (e *Engine) sessionTasks(ctx context.Context, runID string, handOver bool) 
 		if a == nil || a.Session == nil || a.Session.HostState != SessionAwaiting {
 			continue
 		}
-		task, err := e.SessionTask(ctx, runID, id)
+		task, err := e.sessionTaskFrom(ctx, r, view, id)
 		if err != nil {
 			return nil, err
 		}

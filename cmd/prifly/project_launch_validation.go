@@ -43,7 +43,7 @@ func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root stri
 		definitions = append(definitions, prifly.PinnedDefinition{Ref: component.Ref, Kind: component.Kind, RawDigest: fmt.Sprintf("sha256:%x", sha256.Sum256(component.Bytes)), Bytes: component.Bytes})
 	}
 	if workflow == nil {
-		return nil, requirements, usageError("project_start_invalid_root: compiled root not found")
+		return nil, requirements, refusal("project_start_invalid_root", "compiled root not found")
 	}
 	plan, err := flow.CompileCore(workflow, "json", registry, resources)
 	if err != nil {
@@ -97,13 +97,13 @@ func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root stri
 		closure[ref] = true
 	}
 	if needsHost && host == "" {
-		return nil, requirements, usageError("project_start_host_required: selected workflow contains an assisted step; select a declared --host")
+		return nil, requirements, refusal("project_start_host_required", "selected workflow contains an assisted step; select a declared --host")
 	}
 	if needsWorkspace && workspace == "" {
-		return nil, requirements, usageError("project_start_workspace_required: choose --workspace worktree or --workspace checkout before repository changes")
+		return nil, requirements, refusal("project_start_workspace_required", "choose --workspace worktree or --workspace checkout before repository changes")
 	}
 	if !needsWorkspace && workspace != "" {
-		return nil, requirements, usageError("project_start_workspace_unused: selected workflow does not need a Git workspace")
+		return nil, requirements, refusal("project_start_workspace_unused", "selected workflow does not need a Git workspace")
 	}
 	if needsWorkspace {
 		gitRoot, err := projectRepositoryRoot(ctx, root)
@@ -111,7 +111,7 @@ func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root stri
 			return nil, requirements, err
 		}
 		if gitRoot != root {
-			return nil, requirements, usageError("project_start_git_root: assisted writes require the Project to be the Git root")
+			return nil, requirements, refusal("project_start_git_root", "assisted writes require the Project to be the Git root")
 		}
 	}
 	payload, err := projectExecutionPayload(root, compiled, closure, allow)

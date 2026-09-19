@@ -67,23 +67,23 @@ type projectWorkflowOrigin struct {
 func parseProjectWorkflowOrigin(name string, raw any) (projectWorkflowOrigin, error) {
 	object, ok := raw.(map[string]any)
 	if !ok {
-		return projectWorkflowOrigin{}, usageError("project_profile_invalid: package " + name + " origin must be an object")
+		return projectWorkflowOrigin{}, refusal("project_profile_invalid", "package "+name+" origin must be an object")
 	}
 	origin := projectWorkflowOrigin{}
 	fields := map[string]*string{"repository": &origin.Repository, "path": &origin.Path, "ref": &origin.Ref, "commit": &origin.Commit, "digest": &origin.Digest, "extend_digest": &origin.ExtendDigest, "catalog": &origin.Catalog}
 	for key, value := range object {
 		target, known := fields[key]
 		if !known {
-			return projectWorkflowOrigin{}, usageError("project_profile_invalid: package " + name + " origin has unknown field " + key)
+			return projectWorkflowOrigin{}, refusal("project_profile_invalid", "package "+name+" origin has unknown field "+key)
 		}
 		text, ok := value.(string)
 		if !ok || text == "" {
-			return projectWorkflowOrigin{}, usageError("project_profile_invalid: package " + name + " origin " + key + " must be a non-empty string")
+			return projectWorkflowOrigin{}, refusal("project_profile_invalid", "package "+name+" origin "+key+" must be a non-empty string")
 		}
 		*target = text
 	}
 	if err := origin.validate(); err != nil {
-		return projectWorkflowOrigin{}, usageError("project_profile_invalid: package " + name + " origin " + err.Error())
+		return projectWorkflowOrigin{}, refusal("project_profile_invalid", "package "+name+" origin "+err.Error())
 	}
 	return origin, nil
 }
@@ -208,7 +208,7 @@ func parseProjectWorkflowSource(value string) (projectWorkflowSource, error) {
 	}
 	repository, err := projectWorkflowRepositoryURL(value)
 	if err != nil {
-		return projectWorkflowSource{}, usageError("project_workflow_source_invalid: " + err.Error())
+		return projectWorkflowSource{}, refusal("project_workflow_source_invalid", err.Error())
 	}
 	return projectWorkflowSource{repository: repository}, nil
 }
@@ -272,7 +272,7 @@ func fetchProjectWorkflowRepository(ctx context.Context, repository, ref string)
 
 func fetchProjectWorkflowInto(ctx context.Context, directory, repository, ref string) (projectWorkflowCheckout, error) {
 	unreachable := func(err error) error {
-		return usageError("project_workflow_repository_unreachable: " + err.Error())
+		return refusal("project_workflow_repository_unreachable", err.Error())
 	}
 	if _, err := projectGit(ctx, directory, projectGitListTimeout, "init", "-q", "--template="); err != nil {
 		return projectWorkflowCheckout{}, unreachable(err)
@@ -325,7 +325,7 @@ func projectRemoteCommit(ctx context.Context, repository, ref string) (string, e
 	}
 	output, err := projectGit(ctx, "", projectGitListTimeout, "ls-remote", "--", repository, ref, ref+"^{}")
 	if err != nil {
-		return "", usageError("project_workflow_repository_unreachable: " + err.Error())
+		return "", refusal("project_workflow_repository_unreachable", err.Error())
 	}
 	commit := ""
 	for _, line := range strings.Split(output, "\n") {
@@ -341,7 +341,7 @@ func projectRemoteCommit(ctx context.Context, repository, ref string) (string, e
 		}
 	}
 	if commit == "" {
-		return "", usageError("project_workflow_repository_unreachable: " + ref + " is not on the remote")
+		return "", refusal("project_workflow_repository_unreachable", ref+" is not on the remote")
 	}
 	return commit, nil
 }
@@ -399,7 +399,7 @@ func selectProjectWorkflowFolder(root, requested string) (string, error) {
 		target := filepath.Join(root, filepath.FromSlash(requested))
 		info, err := os.Lstat(target)
 		if err != nil || !info.IsDir() || !projectWorkflowFolderMarker(filepath.Join(target, "workflow.yaml")) {
-			return "", usageError("project_workflow_folder_invalid: --path " + requested + " does not name a " + projectWorkflowFolderVersion + " folder")
+			return "", refusal("project_workflow_folder_invalid", "--path "+requested+" does not name a "+projectWorkflowFolderVersion+" folder")
 		}
 		return requested, nil
 	}
@@ -409,11 +409,11 @@ func selectProjectWorkflowFolder(root, requested string) (string, error) {
 	}
 	switch len(folders) {
 	case 0:
-		return "", usageError("project_workflow_repository_empty: no workflow.yaml with authoring " + projectWorkflowFolderVersion + " was found")
+		return "", refusal("project_workflow_repository_empty", "no workflow.yaml with authoring "+projectWorkflowFolderVersion+" was found")
 	case 1:
 		return folders[0], nil
 	}
-	return "", usageError("project_workflow_repository_ambiguous: choose --path from " + strings.Join(folders, ", "))
+	return "", refusal("project_workflow_repository_ambiguous", "choose --path from "+strings.Join(folders, ", "))
 }
 
 // projectWorkflowTreeCheck refuses symlinks and submodules from the index
@@ -422,7 +422,7 @@ func selectProjectWorkflowFolder(root, requested string) (string, error) {
 func projectWorkflowTreeCheck(ctx context.Context, checkout projectWorkflowCheckout, folder string) error {
 	output, err := projectGit(ctx, checkout.root, projectGitListTimeout, "ls-files", "--stage", "--", folder)
 	if err != nil {
-		return usageError("project_workflow_repository_unreachable: " + err.Error())
+		return refusal("project_workflow_repository_unreachable", err.Error())
 	}
 	prefix := strings.TrimSuffix(folder, "/") + "/" + projectOwnedFolder + "/"
 	for _, line := range strings.Split(output, "\n") {
@@ -430,15 +430,15 @@ func projectWorkflowTreeCheck(ctx context.Context, checkout projectWorkflowCheck
 		_, name, _ := strings.Cut(rest, "\t")
 		switch mode {
 		case "120000":
-			return usageError("project_workflow_folder_invalid: symlinks are not allowed: " + name)
+			return refusal("project_workflow_folder_invalid", "symlinks are not allowed: "+name)
 		case "160000":
-			return usageError("project_workflow_folder_invalid: submodules are not allowed: " + name)
+			return refusal("project_workflow_folder_invalid", "submodules are not allowed: "+name)
 		}
 		// project/ inside an installed folder is the team's; an upstream that
 		// ships one would be installed as the team's own files and never
 		// updated, so it is refused at add and update alike.
 		if strings.HasPrefix(name, prefix) {
-			return usageError("project_workflow_folder_invalid: upstream ships a " + projectOwnedFolder + "/ folder, which is reserved for the team's own files: " + name)
+			return refusal("project_workflow_folder_invalid", "upstream ships a "+projectOwnedFolder+"/ folder, which is reserved for the team's own files: "+name)
 		}
 	}
 	return nil
@@ -485,14 +485,14 @@ func copyProjectWorkflowFolder(source, target string) error {
 		destination := filepath.Join(target, relative)
 		switch {
 		case entry.Type()&fs.ModeSymlink != 0:
-			return usageError("project_workflow_folder_invalid: symlinks are not allowed: " + name)
+			return refusal("project_workflow_folder_invalid", "symlinks are not allowed: "+name)
 		case entry.IsDir():
 			if entry.Name() == ".git" {
-				return usageError("project_workflow_folder_invalid: nested Git repository is not allowed: " + name)
+				return refusal("project_workflow_folder_invalid", "nested Git repository is not allowed: "+name)
 			}
 			return os.MkdirAll(destination, 0755)
 		case !entry.Type().IsRegular():
-			return usageError("project_workflow_folder_invalid: unsupported file type: " + name)
+			return refusal("project_workflow_folder_invalid", "unsupported file type: "+name)
 		}
 		info, err := entry.Info()
 		if err != nil {
@@ -501,7 +501,7 @@ func copyProjectWorkflowFolder(source, target string) error {
 		files++
 		total += info.Size()
 		if files > projectWorkflowMaxFiles || info.Size() > projectWorkflowMaxFileBytes || total > projectWorkflowMaxTotalBytes {
-			return usageError("project_workflow_limit: workflow folder exceeds the file count or size limits")
+			return refusal("project_workflow_limit", "workflow folder exceeds the file count or size limits")
 		}
 		data, err := readFile(current, projectWorkflowMaxFileBytes)
 		if err != nil {
@@ -523,11 +523,11 @@ func inspectProjectWorkflowFolder(root, folder string) (projectWorkflowInspectio
 	}
 	value, err := projectYAMLDocument(filepath.Join(folder, "workflow.yaml"))
 	if err != nil {
-		return projectWorkflowInspection{}, usageError("project_workflow_folder_invalid: " + err.Error())
+		return projectWorkflowInspection{}, refusal("project_workflow_folder_invalid", err.Error())
 	}
 	workflow, err := projectFolderWorkflowDefinition(value)
 	if err != nil {
-		return projectWorkflowInspection{}, usageError("project_workflow_folder_invalid: " + err.Error())
+		return projectWorkflowInspection{}, refusal("project_workflow_folder_invalid", err.Error())
 	}
 	title, _ := workflow["title"].(string)
 	return projectWorkflowInspection{source: source, title: title}, nil
@@ -577,7 +577,7 @@ func projectWorkflowFileDigests(folder string) (map[string]string, error) {
 			return walkErr
 		}
 		if entry.Type()&fs.ModeSymlink != 0 {
-			return usageError("project_workflow_folder_invalid: symlinks are not allowed")
+			return refusal("project_workflow_folder_invalid", "symlinks are not allowed")
 		}
 		if entry.IsDir() {
 			return nil
@@ -616,14 +616,14 @@ func carryProjectOwnedFolder(installed, staged string) error {
 		return err
 	}
 	if !info.IsDir() {
-		return usageError("project_workflow_folder_invalid: " + projectOwnedFolder + " must be a directory")
+		return refusal("project_workflow_folder_invalid", projectOwnedFolder+" must be a directory")
 	}
 	return filepath.WalkDir(source, func(current string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if entry.Type()&fs.ModeSymlink != 0 {
-			return usageError("project_workflow_folder_invalid: symlinks are not allowed")
+			return refusal("project_workflow_folder_invalid", "symlinks are not allowed")
 		}
 		relative, err := filepath.Rel(installed, current)
 		if err != nil {
@@ -676,10 +676,10 @@ func readProjectProfileNode(root string) (*yaml.Node, error) {
 	}
 	var document yaml.Node
 	if err := yaml.Unmarshal(data, &document); err != nil {
-		return nil, usageError("project_profile_invalid: " + err.Error())
+		return nil, refusal("project_profile_invalid", err.Error())
 	}
 	if document.Kind != yaml.DocumentNode || len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
-		return nil, usageError("project_profile_invalid: profile must be an object")
+		return nil, refusal("project_profile_invalid", "profile must be an object")
 	}
 	return &document, nil
 }
@@ -687,7 +687,7 @@ func readProjectProfileNode(root string) (*yaml.Node, error) {
 func projectProfileSection(document *yaml.Node, key string) (*yaml.Node, error) {
 	section := projectMappingValue(document.Content[0], key)
 	if section == nil || section.Kind != yaml.MappingNode {
-		return nil, usageError("project_profile_invalid: " + key + " must be an object")
+		return nil, refusal("project_profile_invalid", key+" must be an object")
 	}
 	return section, nil
 }
@@ -790,7 +790,7 @@ func updateProjectWorkflowOrigin(root, name string, origin projectWorkflowOrigin
 	}
 	entry := projectMappingValue(packages, name)
 	if entry == nil || entry.Kind != yaml.MappingNode {
-		return usageError("project_profile_invalid: package " + name + " must be an object")
+		return refusal("project_profile_invalid", "package "+name+" must be an object")
 	}
 	projectMappingSet(entry, "origin", projectOriginNode(origin))
 	return writeProjectProfileNode(root, document)
@@ -825,7 +825,7 @@ func projectDeclaredPackageIDs(root string, profile projectProfile) (map[string]
 		}
 		value, err := projectYAMLDocument(filepath.Join(folder, "workflow.yaml"))
 		if err != nil {
-			return nil, usageError("project_profile_invalid: package " + name + ": " + err.Error())
+			return nil, refusal("project_profile_invalid", "package "+name+": "+err.Error())
 		}
 		object, _ := value.(map[string]any)
 		packageValue, _ := object["package"].(map[string]any)
@@ -838,13 +838,13 @@ func projectDeclaredPackageIDs(root string, profile projectProfile) (map[string]
 
 func projectWorkflowNameAvailable(root string, profile projectProfile, name string) error {
 	if _, exists := profile.Packages[name]; exists {
-		return usageError("project_workflow_exists: package " + name + " is already declared")
+		return refusal("project_workflow_exists", "package "+name+" is already declared")
 	}
 	if _, exists := profile.Launches[name]; exists {
-		return usageError("project_workflow_exists: launch " + name + " is already declared")
+		return refusal("project_workflow_exists", "launch "+name+" is already declared")
 	}
 	if _, err := os.Lstat(projectWorkflowFolderPath(root, name)); err == nil {
-		return usageError("project_workflow_exists: " + projectWorkflowFolderSource(name) + " already exists")
+		return refusal("project_workflow_exists", projectWorkflowFolderSource(name)+" already exists")
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -912,16 +912,16 @@ func (c *cli) projectWorkflowsAdd(ctx context.Context, args []string) error {
 	}
 	if *ref != "" {
 		if err := projectWorkflowRefValid(*ref); err != nil {
-			return usageError("project_workflow_source_invalid: " + err.Error())
+			return refusal("project_workflow_source_invalid", err.Error())
 		}
 	}
 	if *subdir != "" {
 		if err := projectWorkflowPathValid(*subdir); err != nil {
-			return usageError("project_workflow_source_invalid: " + err.Error())
+			return refusal("project_workflow_source_invalid", err.Error())
 		}
 	}
 	if *name != "" && !projectLaunchID(*name) {
-		return usageError("project_workflow_source_invalid: --name must contain lowercase letters, digits, - or _")
+		return refusal("project_workflow_source_invalid", "--name must contain lowercase letters, digits, - or _")
 	}
 	root, err := projectRoot(ctx, *repository)
 	if err != nil {
@@ -934,11 +934,11 @@ func (c *cli) projectWorkflowsAdd(ctx context.Context, args []string) error {
 	request := projectWorkflowInstall{repository: parsed.repository, ref: *ref, path: *subdir, name: *name}
 	if parsed.catalogEntry != "" {
 		if *subdir != "" {
-			return usageError("project_workflow_source_invalid: a catalog entry already names its path; --path applies to repositories only")
+			return refusal("project_workflow_source_invalid", "a catalog entry already names its path; --path applies to repositories only")
 		}
 		catalogURL, err := projectWorkflowRepositoryURL(*catalog)
 		if err != nil {
-			return usageError("project_workflow_source_invalid: catalog " + err.Error())
+			return refusal("project_workflow_source_invalid", "catalog "+err.Error())
 		}
 		entry, err := lookupProjectWorkflowCatalogEntry(ctx, catalogURL, parsed.catalogEntry)
 		if err != nil {
@@ -968,7 +968,7 @@ func installProjectWorkflow(ctx context.Context, root string, profile projectPro
 	}
 	defer cleanup()
 	if request.pinnedCommit != "" && checkout.commit != request.pinnedCommit {
-		return projectWorkflowAddResult{}, usageError("project_workflow_commit_mismatch: the catalog pins " + request.pinnedCommit + " but " + checkout.ref + " resolved to " + checkout.commit)
+		return projectWorkflowAddResult{}, refusal("project_workflow_commit_mismatch", "the catalog pins "+request.pinnedCommit+" but "+checkout.ref+" resolved to "+checkout.commit)
 	}
 	folder, err := selectProjectWorkflowFolder(checkout.root, request.path)
 	if err != nil {
@@ -981,7 +981,7 @@ func installProjectWorkflow(ctx context.Context, root string, profile projectPro
 			name = strings.TrimSuffix(path.Base(request.repository), ".git")
 		}
 		if !projectLaunchID(name) {
-			return projectWorkflowAddResult{}, usageError("project_workflow_source_invalid: " + name + " is not a valid folder name; choose --name")
+			return projectWorkflowAddResult{}, refusal("project_workflow_source_invalid", name+" is not a valid folder name; choose --name")
 		}
 	}
 	if err := projectWorkflowNameAvailable(root, profile, name); err != nil {
@@ -1006,7 +1006,7 @@ func installProjectWorkflow(ctx context.Context, root string, profile projectPro
 	}
 	if other, exists := ids[inspection.source.ID]; exists {
 		staging.discard()
-		return projectWorkflowAddResult{}, usageError("project_workflow_package_conflict: package " + inspection.source.ID + " is already declared by " + other)
+		return projectWorkflowAddResult{}, refusal("project_workflow_package_conflict", "package "+inspection.source.ID+" is already declared by "+other)
 	}
 	origin, err := projectWorkflowOriginFor(staging.folder, request, checkout, folder)
 	if err != nil {
@@ -1017,7 +1017,7 @@ func installProjectWorkflow(ctx context.Context, root string, profile projectPro
 	if err := os.Rename(staging.folder, final); err != nil {
 		staging.discard()
 		if errors.Is(err, fs.ErrExist) || errors.Is(err, syscall.ENOTEMPTY) {
-			return projectWorkflowAddResult{}, usageError("project_workflow_exists: " + projectWorkflowFolderSource(name) + " already exists")
+			return projectWorkflowAddResult{}, refusal("project_workflow_exists", projectWorkflowFolderSource(name)+" already exists")
 		}
 		return projectWorkflowAddResult{}, err
 	}
@@ -1099,7 +1099,7 @@ type projectWorkflowCatalog struct {
 // unknown field is an error, not a hint, because a pointer that is misread
 // sends bytes from the wrong place into a project.
 func parseProjectWorkflowCatalog(data []byte) (projectWorkflowCatalog, error) {
-	invalid := func(message string) error { return usageError("project_workflow_catalog_invalid: " + message) }
+	invalid := func(message string) error { return refusal("project_workflow_catalog_invalid", message) }
 	if len(data) > projectWorkflowCatalogMaxBytes {
 		return projectWorkflowCatalog{}, invalid(projectWorkflowCatalogFile + " exceeds 1 MiB")
 	}
@@ -1260,10 +1260,10 @@ func fetchProjectWorkflowCatalog(ctx context.Context, repository string) (projec
 	defer cleanup()
 	data, err := readFile(filepath.Join(checkout.root, projectWorkflowCatalogFile), projectWorkflowCatalogMaxBytes)
 	if errors.Is(err, local.ErrBlobLimit) {
-		return projectWorkflowCatalog{}, "", usageError("project_workflow_catalog_invalid: " + projectWorkflowCatalogFile + " exceeds 1 MiB")
+		return projectWorkflowCatalog{}, "", refusal("project_workflow_catalog_invalid", projectWorkflowCatalogFile+" exceeds 1 MiB")
 	}
 	if err != nil {
-		return projectWorkflowCatalog{}, "", usageError("project_workflow_catalog_invalid: " + repository + " has no readable " + projectWorkflowCatalogFile + " at its root")
+		return projectWorkflowCatalog{}, "", refusal("project_workflow_catalog_invalid", repository+" has no readable "+projectWorkflowCatalogFile+" at its root")
 	}
 	catalog, err := parseProjectWorkflowCatalog(data)
 	if err != nil {
@@ -1282,7 +1282,7 @@ func lookupProjectWorkflowCatalogEntry(ctx context.Context, repository, name str
 			return entry, nil
 		}
 	}
-	return projectCatalogEntry{}, usageError("project_workflow_catalog_entry_unknown: " + name + " is not listed in " + repository)
+	return projectCatalogEntry{}, refusal("project_workflow_catalog_entry_unknown", name+" is not listed in "+repository)
 }
 
 type projectCatalogIdentity struct {
@@ -1311,10 +1311,10 @@ func (c *cli) projectWorkflowsSearch(ctx context.Context, args []string) error {
 	}
 	repository, err := projectWorkflowRepositoryURL(*catalog)
 	if err != nil {
-		return usageError("project_workflow_source_invalid: catalog " + err.Error())
+		return refusal("project_workflow_source_invalid", "catalog "+err.Error())
 	}
 	if *category != "" && !projectLaunchID(*category) {
-		return usageError("project_workflow_source_invalid: --category must be a catalog category name")
+		return refusal("project_workflow_source_invalid", "--category must be a catalog category name")
 	}
 	parsed, commit, err := fetchProjectWorkflowCatalog(ctx, repository)
 	if err != nil {
@@ -1363,11 +1363,11 @@ func (c *cli) projectWorkflowsUpdate(ctx context.Context, args []string) error {
 		return err
 	}
 	if !projectLaunchID(name) {
-		return usageError("project_workflow_not_installed: " + name + " is not a declared package name")
+		return refusal("project_workflow_not_installed", name+" is not a declared package name")
 	}
 	if *ref != "" {
 		if err := projectWorkflowRefValid(*ref); err != nil {
-			return usageError("project_workflow_source_invalid: " + err.Error())
+			return refusal("project_workflow_source_invalid", err.Error())
 		}
 	}
 	root, err := projectRoot(ctx, *repository)
@@ -1380,10 +1380,10 @@ func (c *cli) projectWorkflowsUpdate(ctx context.Context, args []string) error {
 	}
 	pkg, exists := profile.Packages[name]
 	if !exists {
-		return usageError("project_workflow_not_installed: " + name + " is not a declared package")
+		return refusal("project_workflow_not_installed", name+" is not a declared package")
 	}
 	if pkg.Origin == nil {
-		return usageError("project_workflow_origin_missing: " + name + " was not installed by project workflows add; maintain it by hand")
+		return refusal("project_workflow_origin_missing", name+" was not installed by project workflows add; maintain it by hand")
 	}
 	origin := *pkg.Origin
 	folder, err := projectPackageSourceLocation(root, pkg.Source)
@@ -1399,7 +1399,7 @@ func (c *cli) projectWorkflowsUpdate(ctx context.Context, args []string) error {
 		return err
 	}
 	if digest != origin.Digest {
-		return usageError("project_workflow_modified: local changes in " + strings.Join(projectWorkflowDriftPaths(ctx, origin, folder), ", ") + "; remove and add the folder again, or keep maintaining it by hand")
+		return refusal("project_workflow_modified", "local changes in "+strings.Join(projectWorkflowDriftPaths(ctx, origin, folder), ", ")+"; remove and add the folder again, or keep maintaining it by hand")
 	}
 	targetRef := origin.Ref
 	if *ref != "" {
@@ -1428,7 +1428,7 @@ func (c *cli) projectWorkflowsUpdate(ctx context.Context, args []string) error {
 	}
 	target := filepath.Join(checkout.root, filepath.FromSlash(origin.Path))
 	if info, err := os.Lstat(target); err != nil || !info.IsDir() || !projectWorkflowFolderMarker(filepath.Join(target, "workflow.yaml")) {
-		return usageError("project_workflow_folder_invalid: " + origin.Path + " is no longer a workflow folder at " + checkout.commit)
+		return refusal("project_workflow_folder_invalid", origin.Path+" is no longer a workflow folder at "+checkout.commit)
 	}
 	if err := projectWorkflowTreeCheck(ctx, checkout, origin.Path); err != nil {
 		return err
@@ -1568,7 +1568,7 @@ func (c *cli) projectWorkflowsRemove(ctx context.Context, args []string) error {
 		return err
 	}
 	if !projectLaunchID(name) {
-		return usageError("project_workflow_not_installed: " + name + " is not a declared package name")
+		return refusal("project_workflow_not_installed", name+" is not a declared package name")
 	}
 	root, err := projectRoot(ctx, *repository)
 	if err != nil {
@@ -1580,10 +1580,10 @@ func (c *cli) projectWorkflowsRemove(ctx context.Context, args []string) error {
 	}
 	pkg, exists := profile.Packages[name]
 	if !exists {
-		return usageError("project_workflow_not_installed: " + name + " is not a declared package")
+		return refusal("project_workflow_not_installed", name+" is not a declared package")
 	}
 	if pkg.Source != projectWorkflowFolderSource(name) {
-		return usageError("project_workflow_not_installed: remove handles only " + projectWorkflowFolderSource(name) + "; " + name + " points at " + pkg.Source)
+		return refusal("project_workflow_not_installed", "remove handles only "+projectWorkflowFolderSource(name)+"; "+name+" points at "+pkg.Source)
 	}
 	folder, err := projectPackageSourceLocation(root, pkg.Source)
 	if err != nil {

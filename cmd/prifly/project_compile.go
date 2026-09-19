@@ -138,7 +138,7 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 	}
 	pkg, exists := profile.Packages[*name]
 	if !exists {
-		return usageError("project_compile_unknown_package: " + *name)
+		return refusal("project_compile_unknown_package", *name)
 	}
 	skillsRoot, err := projectCompileSkillsRoot(root, profile, *host)
 	if err != nil {
@@ -149,13 +149,13 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 		return err
 	}
 	if projectPathsOverlap(root, outputRoot) || projectPathsOverlap(c.project, outputRoot) {
-		return usageError("project_compile_unsafe_output: output must stay outside the repository and local authority")
+		return refusal("project_compile_unsafe_output", "output must stay outside the repository and local authority")
 	}
 	if _, err := os.Lstat(outputRoot); err == nil {
 		// Saying only that nothing was overwritten answers the wrong question:
 		// the reader wants to know what to do, and there is no flag that would
 		// have allowed it.
-		return usageError("project_compile_output_exists: " + outputRoot + " already exists; --output names a directory this command creates, so pass a path that does not exist or remove that one yourself")
+		return refusal("project_compile_output_exists", outputRoot+" already exists; --output names a directory this command creates, so pass a path that does not exist or remove that one yourself")
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -194,7 +194,7 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 			return usageError("project_compile_reference " + alias + ": " + err.Error())
 		}
 		if _, exists := compiledValues[alias]; exists {
-			return usageError("project_compile_duplicate_value: " + alias)
+			return refusal("project_compile_duplicate_value", alias)
 		}
 		compiledValues[alias] = projectRefValue(ref)
 	}
@@ -227,14 +227,14 @@ func parseProjectCompileValues(values []string) (map[string]any, error) {
 	for _, raw := range values {
 		name, value, ok := strings.Cut(raw, "=")
 		if !ok || !projectValueName.MatchString(name) || value == "" {
-			return nil, usageError("project_compile_invalid_value: expected unique NAME=JSON")
+			return nil, refusal("project_compile_invalid_value", "expected unique NAME=JSON")
 		}
 		if _, exists := result[name]; exists {
-			return nil, usageError("project_compile_invalid_value: expected unique NAME=JSON")
+			return nil, refusal("project_compile_invalid_value", "expected unique NAME=JSON")
 		}
 		parsed, err := flow.Parse([]byte(value), "json")
 		if err != nil {
-			return nil, usageError("project_compile_invalid_value: " + err.Error())
+			return nil, refusal("project_compile_invalid_value", err.Error())
 		}
 		result[name] = parsed
 	}
@@ -244,12 +244,12 @@ func parseProjectCompileValues(values []string) (map[string]any, error) {
 func parseProjectPackageSource(value any) (projectPackageSource, error) {
 	object, ok := value.(map[string]any)
 	if !ok {
-		return projectPackageSource{}, usageError("project_package_invalid: package source must be an object")
+		return projectPackageSource{}, refusal("project_package_invalid", "package source must be an object")
 	}
 	allowed := map[string]bool{"schema_version": true, "id": true, "version": true, "description": true, "license": true, "requires_core_protocol": true, "requested_capabilities": true, "dependencies": true, "references": true, "profiles": true, "documents": true}
 	for key := range object {
 		if !allowed[key] {
-			return projectPackageSource{}, usageError("project_package_invalid: unknown field " + key)
+			return projectPackageSource{}, refusal("project_package_invalid", "unknown field "+key)
 		}
 	}
 	text := func(name string, required bool) (string, error) {
@@ -259,7 +259,7 @@ func parseProjectPackageSource(value any) (projectPackageSource, error) {
 		}
 		result, ok := value.(string)
 		if !ok || result == "" {
-			return "", usageError("project_package_invalid: " + name + " must be a non-empty string")
+			return "", refusal("project_package_invalid", name+" must be a non-empty string")
 		}
 		return result, nil
 	}
@@ -279,22 +279,22 @@ func parseProjectPackageSource(value any) (projectPackageSource, error) {
 		result.License = "MIT"
 	}
 	if version, _ := object["schema_version"].(string); version != projectPackageSourceVersion {
-		return projectPackageSource{}, usageError("project_package_invalid: schema_version must be " + projectPackageSourceVersion)
+		return projectPackageSource{}, refusal("project_package_invalid", "schema_version must be "+projectPackageSourceVersion)
 	}
 	if _, err := projectIdentity(result.ID, result.Version); err != nil {
-		return projectPackageSource{}, usageError("project_package_invalid: " + err.Error())
+		return projectPackageSource{}, refusal("project_package_invalid", err.Error())
 	}
 	for _, field := range []string{"requested_capabilities", "dependencies"} {
 		if raw, exists := object[field]; exists {
 			items, ok := raw.([]any)
 			if !ok {
-				return projectPackageSource{}, usageError("project_package_invalid: " + field + " must be a list")
+				return projectPackageSource{}, refusal("project_package_invalid", field+" must be a list")
 			}
 			values := make([]string, 0, len(items))
 			for _, item := range items {
 				value, ok := item.(string)
 				if !ok || value == "" {
-					return projectPackageSource{}, usageError("project_package_invalid: " + field + " values must be non-empty strings")
+					return projectPackageSource{}, refusal("project_package_invalid", field+" values must be non-empty strings")
 				}
 				values = append(values, value)
 			}
@@ -308,12 +308,12 @@ func parseProjectPackageSource(value any) (projectPackageSource, error) {
 	if raw, exists := object["references"]; exists {
 		references, ok := raw.(map[string]any)
 		if !ok {
-			return projectPackageSource{}, usageError("project_package_invalid: references must be an object")
+			return projectPackageSource{}, refusal("project_package_invalid", "references must be an object")
 		}
 		for name, raw := range references {
 			logical, ok := raw.(string)
 			if !projectValueName.MatchString(name) || !ok || logical == "" {
-				return projectPackageSource{}, usageError("project_package_invalid: references require valid names and logical refs")
+				return projectPackageSource{}, refusal("project_package_invalid", "references require valid names and logical refs")
 			}
 			result.References[name] = logical
 		}
@@ -321,40 +321,40 @@ func parseProjectPackageSource(value any) (projectPackageSource, error) {
 	if raw, exists := object["profiles"]; exists {
 		profiles, ok := raw.(map[string]any)
 		if !ok || len(profiles) != 2 {
-			return projectPackageSource{}, usageError("project_package_invalid: profiles requires default and values")
+			return projectPackageSource{}, refusal("project_package_invalid", "profiles requires default and values")
 		}
 		defaultName, ok := profiles["default"].(string)
 		if !ok || !projectValueName.MatchString(defaultName) {
-			return projectPackageSource{}, usageError("project_package_invalid: profiles default must be a valid name")
+			return projectPackageSource{}, refusal("project_package_invalid", "profiles default must be a valid name")
 		}
 		values, ok := profiles["values"].(map[string]any)
 		if !ok || len(values) == 0 {
-			return projectPackageSource{}, usageError("project_package_invalid: profiles values must be a non-empty object")
+			return projectPackageSource{}, refusal("project_package_invalid", "profiles values must be a non-empty object")
 		}
 		for name, rawValues := range values {
 			fields, ok := rawValues.(map[string]any)
 			if !ok || len(fields) == 0 || !projectValueName.MatchString(name) {
-				return projectPackageSource{}, usageError("project_package_invalid: each profile requires a valid name and non-empty values")
+				return projectPackageSource{}, refusal("project_package_invalid", "each profile requires a valid name and non-empty values")
 			}
 			for field := range fields {
 				if !projectValueName.MatchString(field) {
-					return projectPackageSource{}, usageError("project_package_invalid: profile values require valid names")
+					return projectPackageSource{}, refusal("project_package_invalid", "profile values require valid names")
 				}
 			}
 			result.Profiles[name] = fields
 		}
 		if _, exists := result.Profiles[defaultName]; !exists {
-			return projectPackageSource{}, usageError("project_package_invalid: profiles default must name a declared profile")
+			return projectPackageSource{}, refusal("project_package_invalid", "profiles default must name a declared profile")
 		}
 		result.DefaultProfile = defaultName
 	}
 	rawDocuments, exists := object["documents"]
 	if !exists {
-		return projectPackageSource{}, usageError("project_package_invalid: documents is required")
+		return projectPackageSource{}, refusal("project_package_invalid", "documents is required")
 	}
 	documents, ok := rawDocuments.([]any)
 	if !ok || len(documents) == 0 {
-		return projectPackageSource{}, usageError("project_package_invalid: documents must be a non-empty list")
+		return projectPackageSource{}, refusal("project_package_invalid", "documents must be a non-empty list")
 	}
 	for index, raw := range documents {
 		object, ok := raw.(map[string]any)
@@ -446,7 +446,7 @@ func projectRefValue(ref flow.Ref) map[string]any {
 
 func projectPackageSourcePath(root, source string) (string, error) {
 	if source == "" || filepath.IsAbs(source) {
-		return "", usageError("project_package_invalid: document source must be a relative .prifly path")
+		return "", refusal("project_package_invalid", "document source must be a relative .prifly path")
 	}
 	profileRoot, err := canonicalProjectPath(filepath.Join(root, ".prifly"))
 	if err != nil {
@@ -458,21 +458,21 @@ func projectPackageSourcePath(root, source string) (string, error) {
 	}
 	relative, err := filepath.Rel(profileRoot, path)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", usageError("project_package_invalid: document source must stay inside .prifly")
+		return "", refusal("project_package_invalid", "document source must stay inside .prifly")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", usageError("project_package_invalid: document source does not exist: " + source)
+		return "", refusal("project_package_invalid", "document source does not exist: "+source)
 	}
 	if !info.Mode().IsRegular() {
-		return "", usageError("project_package_invalid: document source must be a regular file: " + source)
+		return "", refusal("project_package_invalid", "document source must be a regular file: "+source)
 	}
 	return path, nil
 }
 
 func projectContextSourcePath(root, skillsRoot, source string) (string, error) {
 	if source == "" || filepath.IsAbs(source) {
-		return "", usageError("project_package_invalid: context source must be a relative project path")
+		return "", refusal("project_package_invalid", "context source must be a relative project path")
 	}
 	path, err := canonicalProjectPath(filepath.Join(root, source))
 	if err != nil {
@@ -494,24 +494,24 @@ func projectContextSourcePath(root, skillsRoot, source string) (string, error) {
 		}
 	}
 	if !allowed {
-		return "", usageError("project_package_invalid: context source must stay inside .prifly or the selected host skills root")
+		return "", refusal("project_package_invalid", "context source must stay inside .prifly or the selected host skills root")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", usageError("project_package_invalid: context source does not exist: " + source)
+		return "", refusal("project_package_invalid", "context source does not exist: "+source)
 	}
 	if !info.Mode().IsRegular() {
-		return "", usageError("project_package_invalid: context source must be a regular file: " + source)
+		return "", refusal("project_package_invalid", "context source must be a regular file: "+source)
 	}
 	return path, nil
 }
 
 func projectHostContextSourcePath(skillsRoot, source string) (string, error) {
 	if skillsRoot == "" {
-		return "", usageError("project_compile_host_required: this context reads host_skills; select a declared --host")
+		return "", refusal("project_compile_host_required", "this context reads host_skills; select a declared --host")
 	}
 	if source == "" || filepath.IsAbs(source) {
-		return "", usageError("project_package_invalid: host context source must be a relative skills path")
+		return "", refusal("project_package_invalid", "host context source must be a relative skills path")
 	}
 	path, err := canonicalProjectPath(filepath.Join(skillsRoot, source))
 	if err != nil {
@@ -519,14 +519,14 @@ func projectHostContextSourcePath(skillsRoot, source string) (string, error) {
 	}
 	relative, err := filepath.Rel(skillsRoot, path)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", usageError("project_package_invalid: host context source must stay inside the selected host skills root")
+		return "", refusal("project_package_invalid", "host context source must stay inside the selected host skills root")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", usageError("project_package_invalid: host context source does not exist: " + source)
+		return "", refusal("project_package_invalid", "host context source does not exist: "+source)
 	}
 	if !info.Mode().IsRegular() {
-		return "", usageError("project_package_invalid: host context source must be a regular file: " + source)
+		return "", refusal("project_package_invalid", "host context source must be a regular file: "+source)
 	}
 	return path, nil
 }
@@ -547,7 +547,7 @@ func projectCompileSkillsRoot(root string, profile projectProfile, host string) 
 		return "", err
 	}
 	if relative, err := filepath.Rel(root, resolved); err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", usageError("project_compile_invalid_host_root: selected host skills root must stay inside the project")
+		return "", refusal("project_compile_invalid_host_root", "selected host skills root must stay inside the project")
 	}
 	return resolved, nil
 }
@@ -556,14 +556,14 @@ func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error
 	workflowPath := filepath.Join(folder, "workflow.yaml")
 	workflowValue, err := projectYAMLDocument(workflowPath)
 	if err != nil {
-		return projectPackageSource{}, usageError("project_workflow_folder_invalid: " + err.Error())
+		return projectPackageSource{}, refusal("project_workflow_folder_invalid", err.Error())
 	}
 	if _, err := projectFolderWorkflowDefinition(workflowValue); err != nil {
-		return projectPackageSource{}, usageError("project_workflow_folder_invalid: " + err.Error())
+		return projectPackageSource{}, refusal("project_workflow_folder_invalid", err.Error())
 	}
 	packageValue, ok := workflowValue.(map[string]any)["package"]
 	if !ok {
-		return projectPackageSource{}, usageError("project_workflow_folder_invalid: workflow.yaml requires package")
+		return projectPackageSource{}, refusal("project_workflow_folder_invalid", "workflow.yaml requires package")
 	}
 	documents := []projectPackageDocument{}
 	for _, declaration := range []struct {
@@ -597,7 +597,7 @@ func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error
 	extensionsPath := filepath.Join(folder, "extend.yaml")
 	if info, err := os.Stat(extensionsPath); err == nil {
 		if !info.Mode().IsRegular() {
-			return projectPackageSource{}, usageError("project_workflow_folder_invalid: extend.yaml must be a regular file")
+			return projectPackageSource{}, refusal("project_workflow_folder_invalid", "extend.yaml must be a regular file")
 		}
 		rootDocument.Extensions, err = projectRelativePath(root, extensionsPath)
 		if err != nil {
@@ -643,7 +643,7 @@ func projectWorkflowFolderDecisionCatalog(root, folder string, workflowValue any
 	}
 	paths, ok := rawCatalog.([]any)
 	if !ok {
-		return nil, nil, usageError("project_workflow_folder_invalid: decision_catalog must be a list")
+		return nil, nil, refusal("project_workflow_folder_invalid", "decision_catalog must be a list")
 	}
 	canonicalFolder, err := canonicalProjectPath(folder)
 	if err != nil {
@@ -664,13 +664,13 @@ func projectWorkflowFolderDecisionCatalog(root, folder string, workflowValue any
 		}
 		relative, err := filepath.Rel(canonicalFolder, path)
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return nil, nil, usageError("project_workflow_folder_invalid: decision catalog source must stay inside its workflow folder")
+			return nil, nil, refusal("project_workflow_folder_invalid", "decision catalog source must stay inside its workflow folder")
 		}
 		if filepath.Ext(path) != ".yaml" && filepath.Ext(path) != ".yml" {
-			return nil, nil, usageError("project_workflow_folder_invalid: decision catalog source must be YAML")
+			return nil, nil, refusal("project_workflow_folder_invalid", "decision catalog source must be YAML")
 		}
 		if seenPaths[path] {
-			return nil, nil, usageError("project_workflow_folder_invalid: decision_catalog must not repeat an exact source")
+			return nil, nil, refusal("project_workflow_folder_invalid", "decision_catalog must not repeat an exact source")
 		}
 		seenPaths[path] = true
 		// The declared path, not the canonical one: canonicalizing resolves
@@ -680,20 +680,20 @@ func projectWorkflowFolderDecisionCatalog(root, folder string, workflowValue any
 		sources = append(sources, filepath.ToSlash(sourcePath))
 		documents, err := projectYAMLDocuments(path)
 		if err != nil {
-			return nil, nil, usageError("project_workflow_folder_invalid: " + err.Error())
+			return nil, nil, refusal("project_workflow_folder_invalid", err.Error())
 		}
 		if len(documents) != 1 {
-			return nil, nil, usageError("project_workflow_folder_invalid: decision catalog source requires exactly one YAML document")
+			return nil, nil, refusal("project_workflow_folder_invalid", "decision catalog source requires exactly one YAML document")
 		}
 		definition, err := projectDecisionDefinition(documents[0])
 		if err != nil {
-			return nil, nil, usageError("project_workflow_folder_invalid: " + err.Error())
+			return nil, nil, refusal("project_workflow_folder_invalid", err.Error())
 		}
 		if seenIDs[definition.ID] {
-			return nil, nil, usageError("project_workflow_folder_invalid: duplicate decision ID " + definition.ID)
+			return nil, nil, refusal("project_workflow_folder_invalid", "duplicate decision ID "+definition.ID)
 		}
 		if err := projectValidateDecisionDefinition(definition, workflow, source, result); err != nil {
-			return nil, nil, usageError("project_workflow_folder_invalid: " + err.Error())
+			return nil, nil, refusal("project_workflow_folder_invalid", err.Error())
 		}
 		seenIDs[definition.ID] = true
 		result = append(result, definition)
@@ -799,12 +799,12 @@ func projectValidateDecisionDefinition(definition prifly.DecisionDefinition, wor
 func projectWorkflowFolderPackage(raw any, documents []projectPackageDocument) (projectPackageSource, error) {
 	packageFields, ok := raw.(map[string]any)
 	if !ok {
-		return projectPackageSource{}, usageError("project_workflow_folder_invalid: package must be an object")
+		return projectPackageSource{}, refusal("project_workflow_folder_invalid", "package must be an object")
 	}
 	value := make(map[string]any, len(packageFields)+2)
 	for key, field := range packageFields {
 		if key == "schema_version" || key == "documents" {
-			return projectPackageSource{}, usageError("project_workflow_folder_invalid: package does not declare " + key)
+			return projectPackageSource{}, refusal("project_workflow_folder_invalid", "package does not declare "+key)
 		}
 		value[key] = field
 	}
@@ -839,7 +839,7 @@ func projectWorkflowFolderDocuments(root, folder, directory, kind, prefix string
 		return nil, err
 	}
 	if !info.IsDir() {
-		return nil, usageError("project_workflow_folder_invalid: " + directory + " must be a directory")
+		return nil, refusal("project_workflow_folder_invalid", directory+" must be a directory")
 	}
 	result := []projectPackageDocument{}
 	err = filepath.Walk(path, func(current string, info os.FileInfo, walkErr error) error {
@@ -847,7 +847,7 @@ func projectWorkflowFolderDocuments(root, folder, directory, kind, prefix string
 			return walkErr
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return usageError("project_workflow_folder_invalid: symlinks are not allowed")
+			return refusal("project_workflow_folder_invalid", "symlinks are not allowed")
 		}
 		if info.IsDir() {
 			return nil
@@ -873,7 +873,7 @@ func projectWorkflowFolderDocuments(root, folder, directory, kind, prefix string
 func projectRelativePath(root, path string) (string, error) {
 	relative, err := filepath.Rel(root, path)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", usageError("project_workflow_folder_invalid: source must stay inside the repository")
+		return "", refusal("project_workflow_folder_invalid", "source must stay inside the repository")
 	}
 	return filepath.ToSlash(relative), nil
 }
@@ -929,7 +929,7 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 		}
 		if declaration.Kind == "context" && filepath.Ext(path) != ".yaml" && filepath.Ext(path) != ".yml" {
 			if declaration.ID == "" || declaration.Version == "" || declaration.MediaType == "" {
-				return nil, usageError("project_package_invalid: raw context requires id, version and media_type")
+				return nil, refusal("project_package_invalid", "raw context requires id, version and media_type")
 			}
 			data, err := readFile(path, flow.MaxDocumentBytes)
 			if err != nil {
@@ -945,10 +945,10 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 			continue
 		}
 		if declaration.Kind == "context" && (declaration.ID != "" || declaration.Version != "" || declaration.MediaType != "") {
-			return nil, usageError("project_package_invalid: YAML context declares id, version and media_type in its own document")
+			return nil, refusal("project_package_invalid", "YAML context declares id, version and media_type in its own document")
 		}
 		if filepath.Ext(path) != ".yaml" && filepath.Ext(path) != ".yml" {
-			return nil, usageError("project_package_invalid: document sources must be .yaml")
+			return nil, refusal("project_package_invalid", "document sources must be .yaml")
 		}
 		var documents []any
 		if declaration.FolderRoot && source.RootValue != nil {
@@ -965,13 +965,13 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 				if declaration.FolderRoot {
 					name = "workflow.yaml"
 				}
-				return nil, usageError("project_workflow_folder_invalid: " + name + " requires exactly one YAML document")
+				return nil, refusal("project_workflow_folder_invalid", name+" requires exactly one YAML document")
 			}
 		}
 		if declaration.FolderRoot {
 			documents[0], err = projectFolderWorkflowDefinition(documents[0])
 			if err != nil {
-				return nil, usageError("project_workflow_folder_invalid: " + err.Error())
+				return nil, refusal("project_workflow_folder_invalid", err.Error())
 			}
 		}
 		for index, value := range documents {
@@ -1020,7 +1020,7 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 				names = append(names, name)
 			}
 			sort.Strings(names)
-			return nil, usageError("project_compile_unresolved_values: " + strings.Join(names, ", "))
+			return nil, refusal("project_compile_unresolved_values", strings.Join(names, ", "))
 		}
 		pending = next
 	}
@@ -1032,12 +1032,12 @@ func projectSourceValue(source string, values map[string]any) (string, error) {
 		value, exists := values[name[1]]
 		path, stringValue := value.(string)
 		if !exists || !stringValue || path == "" {
-			return "", usageError("project_compile_unresolved_values: " + name[1])
+			return "", refusal("project_compile_unresolved_values", name[1])
 		}
 		return path, nil
 	}
 	if strings.Contains(source, "{{") || strings.Contains(source, "}}") {
-		return "", usageError("project_package_invalid: document source substitution must occupy the full string")
+		return "", refusal("project_package_invalid", "document source substitution must occupy the full string")
 	}
 	return source, nil
 }
@@ -1256,12 +1256,12 @@ func projectAddComponent(output string, document projectPackageDocument, compone
 	name := component.Ref.ID[strings.LastIndex(component.Ref.ID, "/")+1:]
 	for _, existing := range *components {
 		if existing.Ref.ID == component.Ref.ID && existing.Ref.Version == component.Ref.Version {
-			return usageError("project_compile_duplicate_component: " + component.Ref.ID + "@" + component.Ref.Version)
+			return refusal("project_compile_duplicate_component", component.Ref.ID+"@"+component.Ref.Version)
 		}
 	}
 	alias := document.AliasPrefix + "_" + name
 	if _, exists := values[alias]; exists {
-		return usageError("project_compile_duplicate_value: " + alias)
+		return refusal("project_compile_duplicate_value", alias)
 	}
 	index := len(*components)
 	directory, suffix := component.Kind+"s", ".json"
@@ -1304,11 +1304,11 @@ func projectReadWorkflowOptions(root string, source projectPackageSource, values
 		}
 		for name := range options.References {
 			if _, taken := source.References[name]; taken {
-				return projectWorkflowOptions{}, usageError("project_extension_invalid: references." + name + " is already a reference of the package")
+				return projectWorkflowOptions{}, refusal("project_extension_invalid", "references."+name+" is already a reference of the package")
 			}
 		}
 		if len(result.Extensions) != 0 || len(result.Settings) != 0 || len(result.Exclude) != 0 {
-			return projectWorkflowOptions{}, usageError("project_extension_invalid: only one extend.yaml is allowed per workflow folder")
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", "only one extend.yaml is allowed per workflow folder")
 		}
 		result = options
 	}
@@ -1317,7 +1317,7 @@ func projectReadWorkflowOptions(root string, source projectPackageSource, values
 
 func projectApplyPackageProfile(source projectPackageSource, requested string, values map[string]any) error {
 	if requested != "" && len(source.Profiles) == 0 {
-		return usageError("project_compile_unknown_profile: package declares no profiles")
+		return refusal("project_compile_unknown_profile", "package declares no profiles")
 	}
 	if len(source.Profiles) == 0 {
 		return nil
@@ -1328,11 +1328,11 @@ func projectApplyPackageProfile(source projectPackageSource, requested string, v
 	}
 	profile, exists := source.Profiles[selected]
 	if !exists {
-		return usageError("project_compile_unknown_profile: " + selected)
+		return refusal("project_compile_unknown_profile", selected)
 	}
 	for name, value := range profile {
 		if _, exists := values[name]; exists {
-			return usageError("project_compile_profile_value_conflict: " + name)
+			return refusal("project_compile_profile_value_conflict", name)
 		}
 		values[name] = value
 	}
@@ -1354,13 +1354,13 @@ func projectApplyWorkflowOptions(pending []projectPendingDocument, options proje
 		id, ok := source["id"].(string)
 		if !ok || id == "" {
 			if len(options.Settings) != 0 || len(options.Exclude) != 0 || source["features"] != nil {
-				return usageError("project_option_invalid_workflow: workflow id must be a non-empty string")
+				return refusal("project_option_invalid_workflow", "workflow id must be a non-empty string")
 			}
 			continue
 		}
 		workflow := projectExtensionWorkflowName(id)
 		if _, exists := authors[workflow]; exists {
-			return usageError("project_option_duplicate_workflow: " + workflow)
+			return refusal("project_option_duplicate_workflow", workflow)
 		}
 		authors[workflow] = source
 		raw, exists := source["features"]
@@ -1370,25 +1370,25 @@ func projectApplyWorkflowOptions(pending []projectPendingDocument, options proje
 		delete(source, "features")
 		declared, ok := raw.(map[string]any)
 		if !ok {
-			return usageError("project_feature_invalid: features must be an object")
+			return refusal("project_feature_invalid", "features must be an object")
 		}
 		for name, rawFeature := range declared {
 			if !projectValueName.MatchString(name) {
-				return usageError("project_feature_invalid: feature must be a valid name")
+				return refusal("project_feature_invalid", "feature must be a valid name")
 			}
 			feature, ok := rawFeature.(map[string]any)
 			if !ok || len(feature) != 1 {
-				return usageError("project_feature_invalid: " + name + " requires input only")
+				return refusal("project_feature_invalid", name+" requires input only")
 			}
 			input, ok := feature["input"].(string)
 			if !ok || input == "" {
-				return usageError("project_feature_invalid: " + name + " input must be non-empty")
+				return refusal("project_feature_invalid", name+" input must be non-empty")
 			}
 			if !projectFeatureHasChoiceBypass(source, input) {
-				return usageError("project_feature_invalid: " + name + " requires a Choice bypass for " + input)
+				return refusal("project_feature_invalid", name+" requires a Choice bypass for "+input)
 			}
 			if _, exists := features[name]; exists {
-				return usageError("project_feature_duplicate: " + name)
+				return refusal("project_feature_duplicate", name)
 			}
 			features[name] = projectWorkflowFeature{Workflow: workflow, Input: input}
 		}
@@ -1397,7 +1397,7 @@ func projectApplyWorkflowOptions(pending []projectPendingDocument, options proje
 	for workflow, settings := range options.Settings {
 		source, exists := authors[workflow]
 		if !exists {
-			return usageError("project_option_unknown_workflow: " + workflow)
+			return refusal("project_option_unknown_workflow", workflow)
 		}
 		for input, value := range settings {
 			if err := projectSetWorkflowSetting(source, workflow, input, value); err != nil {
@@ -1409,16 +1409,16 @@ func projectApplyWorkflowOptions(pending []projectPendingDocument, options proje
 	for _, name := range options.Exclude {
 		feature, exists := features[name]
 		if !exists {
-			return usageError("project_option_unknown_feature: " + name)
+			return refusal("project_option_unknown_feature", name)
 		}
 		key := feature.Workflow + "\x00" + feature.Input
 		if value, exists := assigned[key]; exists {
 			if enabled, ok := value.(bool); !ok || enabled {
-				return usageError("project_option_conflict: exclude " + name + " conflicts with setting " + feature.Workflow + "." + feature.Input)
+				return refusal("project_option_conflict", "exclude "+name+" conflicts with setting "+feature.Workflow+"."+feature.Input)
 			}
 		}
 		if err := projectSetWorkflowSetting(authors[feature.Workflow], feature.Workflow, feature.Input, false); err != nil {
-			return usageError("project_feature_invalid: " + name + ": " + err.Error())
+			return refusal("project_feature_invalid", name+": "+err.Error())
 		}
 	}
 	return nil
@@ -1475,19 +1475,19 @@ func projectValueContains(value any, needle string) bool {
 func projectSetWorkflowSetting(source map[string]any, workflow, input string, value any) error {
 	inputs, ok := source["inputs"].(map[string]any)
 	if !ok {
-		return usageError("project_option_unknown_input: " + workflow + "." + input)
+		return refusal("project_option_unknown_input", workflow+"."+input)
 	}
 	raw, exists := inputs[input]
 	if !exists {
-		return usageError("project_option_unknown_input: " + workflow + "." + input)
+		return refusal("project_option_unknown_input", workflow+"."+input)
 	}
 	port, ok := raw.(map[string]any)
 	if !ok {
-		return usageError("project_option_not_project_scoped: " + workflow + "." + input)
+		return refusal("project_option_not_project_scoped", workflow+"."+input)
 	}
 	configuration, ok := port["configuration"].(map[string]any)
 	if !ok || configuration["scope"] != "project" {
-		return usageError("project_option_not_project_scoped: " + workflow + "." + input)
+		return refusal("project_option_not_project_scoped", workflow+"."+input)
 	}
 	configuration["default"] = value
 	return nil
@@ -1517,15 +1517,15 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 	slices.Sort(known)
 	for _, extension := range extensions {
 		if workflowName := projectExtensionWorkflowName(component.Ref.ID); extension.Workflow != workflowName {
-			return usageError("project_extension_unknown_workflow: " + extension.Workflow + " (known: " + workflowName + ")")
+			return refusal("project_extension_unknown_workflow", extension.Workflow+" (known: "+workflowName+")")
 		}
 		step, exists := steps[extension.Step]
 		if !exists {
-			return usageError("project_extension_unknown_step: " + extension.Step + " (known: " + strings.Join(known, ", ") + ")")
+			return refusal("project_extension_unknown_step", extension.Step+" (known: "+strings.Join(known, ", ")+")")
 		}
 		var definition flow.StepDefinition
 		if err := json.Unmarshal(step.Bytes, &definition); err != nil {
-			return usageError("project_extension_invalid_step_source: " + extension.Step + " is not a StepDefinition")
+			return refusal("project_extension_invalid_step_source", extension.Step+" is not a StepDefinition")
 		}
 		if err := projectExtensionInputs(definition, extension.Input); err != nil {
 			return err
@@ -1569,7 +1569,7 @@ func projectValidatePackageWorkflows(components []projectCompileComponent, base 
 			// insertion authored, and the rest are named here instead.
 			_, unclosed, err := flow.CompileCoreExtended(component.Bytes, "json", registry, resources, raisedByInsertion)
 			if err != nil {
-				return usageError("project_compile_invalid_workflow: " + err.Error())
+				return refusal("project_compile_invalid_workflow", err.Error())
 			}
 			if len(unclosed) != 0 {
 				sort.Strings(unclosed)

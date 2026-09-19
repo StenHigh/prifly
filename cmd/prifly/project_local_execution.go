@@ -54,33 +54,33 @@ func readProjectLocalExecutionAll(root string) ([]byte, projectLocalSettings, er
 	profile := filepath.Join(root, ".prifly")
 	info, err := os.Lstat(profile)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, projectLocalSettings{}, usageError("project_local_missing: run project init before using .prifly/local.yaml")
+		return nil, projectLocalSettings{}, refusal("project_local_missing", "run project init before using .prifly/local.yaml")
 	}
 	if err != nil {
 		return nil, projectLocalSettings{}, err
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, projectLocalSettings{}, usageError("project_local_invalid: .prifly must be a real directory")
+		return nil, projectLocalSettings{}, refusal("project_local_invalid", ".prifly must be a real directory")
 	}
 	data, err := readFile(filepath.Join(profile, "local.yaml"), flow.MaxDocumentBytes)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, projectLocalSettings{}, usageError("project_local_missing: run project init before using .prifly/local.yaml")
+		return nil, projectLocalSettings{}, refusal("project_local_missing", "run project init before using .prifly/local.yaml")
 	}
 	if err != nil {
-		return nil, projectLocalSettings{}, usageError("project_local_invalid: local.yaml must be a bounded regular file, not a symlink")
+		return nil, projectLocalSettings{}, refusal("project_local_invalid", "local.yaml must be a bounded regular file, not a symlink")
 	}
 	value, err := flow.Parse(data, "yaml")
 	if err != nil {
-		return nil, projectLocalSettings{}, usageError("project_local_invalid: " + err.Error())
+		return nil, projectLocalSettings{}, refusal("project_local_invalid", err.Error())
 	}
 	object, ok := value.(map[string]any)
 	if !ok {
-		return nil, projectLocalSettings{}, usageError("project_local_invalid: local.yaml must be an object")
+		return nil, projectLocalSettings{}, refusal("project_local_invalid", "local.yaml must be an object")
 	}
 	for _, key := range []string{"authority_root", "prifly_executable"} {
 		path, ok := object[key].(string)
 		if !ok || !filepath.IsAbs(path) {
-			return nil, projectLocalSettings{}, usageError("project_local_invalid: " + key + " must be an absolute path")
+			return nil, projectLocalSettings{}, refusal("project_local_invalid", key+" must be an absolute path")
 		}
 	}
 	authority, err := canonicalProjectPath(object["authority_root"].(string))
@@ -92,18 +92,18 @@ func readProjectLocalExecutionAll(root string) ([]byte, projectLocalSettings, er
 		return nil, projectLocalSettings{}, err
 	}
 	if projectPathsOverlap(project, authority) {
-		return nil, projectLocalSettings{}, usageError("unsafe_authority_root: local authority data must be outside the project")
+		return nil, projectLocalSettings{}, refusal("unsafe_authority_root", "local authority data must be outside the project")
 	}
 	executables := make(map[string]string)
 	if raw, exists := object["executables"]; exists {
 		mapping, ok := raw.(map[string]any)
 		if !ok {
-			return nil, projectLocalSettings{}, usageError("project_local_invalid: executables must be an object")
+			return nil, projectLocalSettings{}, refusal("project_local_invalid", "executables must be an object")
 		}
 		for name, rawPath := range mapping {
 			path, ok := rawPath.(string)
 			if !projectLaunchID(name) || !ok || !filepath.IsAbs(path) {
-				return nil, projectLocalSettings{}, usageError("project_local_invalid: executables must map simple names to absolute paths")
+				return nil, projectLocalSettings{}, refusal("project_local_invalid", "executables must map simple names to absolute paths")
 			}
 			executables[name] = path
 		}
@@ -112,12 +112,12 @@ func readProjectLocalExecutionAll(root string) ([]byte, projectLocalSettings, er
 	if raw, exists := object["environment"]; exists {
 		mapping, ok := raw.(map[string]any)
 		if !ok {
-			return nil, projectLocalSettings{}, usageError("project_local_invalid: environment must be an object")
+			return nil, projectLocalSettings{}, refusal("project_local_invalid", "environment must be an object")
 		}
 		for name, rawValue := range mapping {
 			value, ok := rawValue.(string)
 			if !ok || name == "" || strings.ContainsAny(name, "=\x00") || strings.HasPrefix(name, "PRIFLY_") {
-				return nil, projectLocalSettings{}, usageError("project_local_invalid: environment must map names to strings; PRIFLY_ names are the engine's")
+				return nil, projectLocalSettings{}, refusal("project_local_invalid", "environment must map names to strings; PRIFLY_ names are the engine's")
 			}
 			environment[name] = value
 		}
@@ -126,21 +126,21 @@ func readProjectLocalExecutionAll(root string) ([]byte, projectLocalSettings, er
 	if raw, exists := object["environment_from"]; exists {
 		mapping, ok := raw.(map[string]any)
 		if !ok {
-			return nil, projectLocalSettings{}, usageError("project_local_invalid: environment_from must be an object")
+			return nil, projectLocalSettings{}, refusal("project_local_invalid", "environment_from must be an object")
 		}
 		for name, rawSource := range mapping {
 			fields, ok := rawSource.(map[string]any)
 			if !ok || name == "" || strings.ContainsAny(name, "=\x00") || strings.HasPrefix(name, "PRIFLY_") {
-				return nil, projectLocalSettings{}, usageError("project_local_invalid: environment_from maps a name to one source object; PRIFLY_ names are the engine's")
+				return nil, projectLocalSettings{}, refusal("project_local_invalid", "environment_from maps a name to one source object; PRIFLY_ names are the engine's")
 			}
 			if _, literal := environment[name]; literal {
-				return nil, projectLocalSettings{}, usageError("project_local_invalid: " + name + " is given both a value and a source; keep one")
+				return nil, projectLocalSettings{}, refusal("project_local_invalid", name+" is given both a value and a source; keep one")
 			}
 			source := prifly.EnvironmentSource{}
 			for key, rawValue := range fields {
 				text, ok := rawValue.(string)
 				if !ok {
-					return nil, projectLocalSettings{}, usageError("project_local_invalid: environment_from fields are strings")
+					return nil, projectLocalSettings{}, refusal("project_local_invalid", "environment_from fields are strings")
 				}
 				switch key {
 				case "env":
@@ -152,13 +152,13 @@ func readProjectLocalExecutionAll(root string) ([]byte, projectLocalSettings, er
 				case "key":
 					source.Key = text
 				default:
-					return nil, projectLocalSettings{}, usageError("project_local_invalid: environment_from has unknown field " + key)
+					return nil, projectLocalSettings{}, refusal("project_local_invalid", "environment_from has unknown field "+key)
 				}
 			}
 			// A hand-edited file is checked here, once, rather than at the
 			// start of a Run that has already claimed a workspace.
 			if err := prifly.ValidateEnvironmentSource(source); err != nil {
-				return nil, projectLocalSettings{}, usageError("project_local_invalid: environment_from " + name + ": " + err.Error())
+				return nil, projectLocalSettings{}, refusal("project_local_invalid", "environment_from "+name+": "+err.Error())
 			}
 			sources[name] = source
 		}
@@ -172,11 +172,11 @@ func readProjectLocalExecutionAll(root string) ([]byte, projectLocalSettings, er
 func projectParseEnvironmentSource(argument string) (string, prifly.EnvironmentSource, error) {
 	name, spec, ok := strings.Cut(argument, "=")
 	if !ok || name == "" || strings.ContainsAny(name, "=\x00") || strings.HasPrefix(name, "PRIFLY_") {
-		return "", prifly.EnvironmentSource{}, usageError("project_local_invalid_environment: use NAME=env:VAR, NAME=file:/path or NAME=dotenv:/path:KEY; PRIFLY_ names are the engine's")
+		return "", prifly.EnvironmentSource{}, refusal("project_local_invalid_environment", "use NAME=env:VAR, NAME=file:/path or NAME=dotenv:/path:KEY; PRIFLY_ names are the engine's")
 	}
 	kind, rest, ok := strings.Cut(spec, ":")
 	if !ok || rest == "" {
-		return "", prifly.EnvironmentSource{}, usageError("project_local_invalid_environment: " + name + " names no source: use env:VAR, file:/path or dotenv:/path:KEY")
+		return "", prifly.EnvironmentSource{}, refusal("project_local_invalid_environment", name+" names no source: use env:VAR, file:/path or dotenv:/path:KEY")
 	}
 	source := prifly.EnvironmentSource{}
 	switch kind {
@@ -187,18 +187,18 @@ func projectParseEnvironmentSource(argument string) (string, prifly.EnvironmentS
 	case "dotenv":
 		path, key, found := lastCut(rest, ":")
 		if !found || key == "" {
-			return "", prifly.EnvironmentSource{}, usageError("project_local_invalid_environment: " + name + " needs the key to read: dotenv:/path:KEY")
+			return "", prifly.EnvironmentSource{}, refusal("project_local_invalid_environment", name+" needs the key to read: dotenv:/path:KEY")
 		}
 		source.DotEnv, source.Key = path, key
 	default:
-		return "", prifly.EnvironmentSource{}, usageError("project_local_invalid_environment: " + name + " names an unknown source " + kind)
+		return "", prifly.EnvironmentSource{}, refusal("project_local_invalid_environment", name+" names an unknown source "+kind)
 	}
 	if source.File != "" || source.DotEnv != "" {
 		// A relative path would be resolved against whatever directory the
 		// tool happened to run in, which is not where the owner thinks the
 		// file is. The path is named absolutely or not at all.
 		if !filepath.IsAbs(source.File + source.DotEnv) {
-			return "", prifly.EnvironmentSource{}, usageError("project_local_invalid_environment: " + name + " names a file by an absolute path")
+			return "", prifly.EnvironmentSource{}, refusal("project_local_invalid_environment", name+" names a file by an absolute path")
 		}
 		absolute, err := canonicalProjectPath(source.File + source.DotEnv)
 		if err != nil {
@@ -234,10 +234,10 @@ func (c *cli) projectLocalAllowExecutables(root string, current []byte, executab
 			return err
 		}
 		if _, exists := selectedSources[name]; exists {
-			return usageError("project_local_invalid_environment: duplicate name " + name)
+			return refusal("project_local_invalid_environment", "duplicate name "+name)
 		}
 		if err := prifly.ValidateEnvironmentSource(source); err != nil {
-			return usageError("project_local_invalid_environment: " + name + ": " + err.Error())
+			return refusal("project_local_invalid_environment", name+": "+err.Error())
 		}
 		selectedSources[name] = source
 	}
@@ -245,10 +245,10 @@ func (c *cli) projectLocalAllowExecutables(root string, current []byte, executab
 	for _, argument := range environment {
 		name, value, ok := strings.Cut(argument, "=")
 		if !ok || name == "" || strings.ContainsAny(name, "=\x00") || strings.HasPrefix(name, "PRIFLY_") || strings.ContainsRune(value, 0) {
-			return usageError("project_local_invalid_environment: use NAME=VALUE; PRIFLY_ names are the engine's")
+			return refusal("project_local_invalid_environment", "use NAME=VALUE; PRIFLY_ names are the engine's")
 		}
 		if _, exists := selectedEnvironment[name]; exists {
-			return usageError("project_local_invalid_environment: duplicate name " + name)
+			return refusal("project_local_invalid_environment", "duplicate name "+name)
 		}
 		selectedEnvironment[name] = value
 	}
@@ -256,14 +256,14 @@ func (c *cli) projectLocalAllowExecutables(root string, current []byte, executab
 	for _, argument := range allowed {
 		name, path, ok := strings.Cut(argument, "=")
 		if !ok || !projectLaunchID(name) || !filepath.IsAbs(path) {
-			return usageError("project_local_invalid_executable: use a simple name and absolute path: NAME=/path/to/program")
+			return refusal("project_local_invalid_executable", "use a simple name and absolute path: NAME=/path/to/program")
 		}
 		if _, exists := selected[name]; exists {
-			return usageError("project_local_invalid_executable: duplicate executable name " + name)
+			return refusal("project_local_invalid_executable", "duplicate executable name "+name)
 		}
 		info, err := os.Stat(path)
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
-			return usageError("project_local_invalid_executable: " + name + " must name an existing executable regular file")
+			return refusal("project_local_invalid_executable", name+" must name an existing executable regular file")
 		}
 		selected[name] = path
 	}

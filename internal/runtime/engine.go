@@ -772,28 +772,12 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 			break
 		}
 	}
-	next := NextView{SchemaVersion: "foundation-next/1", RunID: id, RunVersion: v.Snapshot.Version, Cut: v.Cut, Action: kind, WorkID: work, ReadOnly: true, Admission: false, DriverLive: e.driverLiveFor(id), ControlEpoch: r.ControlEpoch, ResumeRequired: r.ResumeRequired, SafeNextActions: actions}
+	next := NextView{SchemaVersion: nextVersionFor(r.SchemaVersion), RunID: id, RunVersion: v.Snapshot.Version, Cut: v.Cut, Action: kind, WorkID: work, ReadOnly: true, Admission: false, DriverLive: e.driverLiveFor(id), ControlEpoch: r.ControlEpoch, ResumeRequired: r.ResumeRequired, SafeNextActions: actions}
 	next.ReasonCode = reason
 	if reason != "" {
 		next.SafeNextActions = append(next.SafeNextActions, "doctor")
 	}
 	if isInvocationState(r.SchemaVersion) {
-		next.SchemaVersion = CoreInvocationNextVersion
-		if r.SchemaVersion == CoreRepeatStateVersion {
-			next.SchemaVersion = CoreRepeatNextVersion
-		}
-		if isContextState(r.SchemaVersion) {
-			next.SchemaVersion = CoreContextNextVersion
-		}
-		if isSessionState(r.SchemaVersion) {
-			next.SchemaVersion = CoreSessionNextVersion
-		}
-		if isWaiverState(r.SchemaVersion) {
-			next.SchemaVersion = CoreWaiverNextVersion
-		}
-		if isParallelState(r.SchemaVersion) {
-			next.SchemaVersion = CoreParallelNextVersion
-		}
 		if kind == "stage" {
 			next.InvocationID, next.StageID = r.readyScope()
 			// What the driver would do here, read before it is asked to do it.
@@ -818,71 +802,6 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		}
 		if kind == "publication_checks" {
 			next.InvocationID = r.Activations[r.PendingArtifactPublication.ActivationID].InvocationID
-		}
-		// The chain stopped at parallel, so a map or wait Run reported a next
-		// version its own published bundle pins to a different constant. That
-		// is corrected here rather than left for the guard bundle to inherit.
-		if isMapState(r.SchemaVersion) {
-			next.SchemaVersion = CoreMapNextVersion
-		}
-		if isWaitState(r.SchemaVersion) {
-			next.SchemaVersion = CoreWaitNextVersion
-		}
-		if isGuardState(r.SchemaVersion) {
-			next.SchemaVersion = CoreGuardNextVersion
-		}
-		if isReportedCostState(r.SchemaVersion) {
-			next.SchemaVersion = CoreReportedCostNextVersion
-		}
-		if isArtifactPublicationState(r.SchemaVersion) {
-			next.SchemaVersion = CoreArtifactPublicationNextVersion
-		}
-		if isArtifactClosureState(r.SchemaVersion) {
-			next.SchemaVersion = CoreArtifactClosureNextVersion
-		}
-		if isPublicationSubscriptionState(r.SchemaVersion) {
-			next.SchemaVersion = CorePublicationSubscriptionNextVersion
-		}
-		if isPublicationChecksState(r.SchemaVersion) {
-			next.SchemaVersion = CorePublicationChecksNextVersion
-		}
-		if isPublicationNewOnlyState(r.SchemaVersion) {
-			next.SchemaVersion = CorePublicationNewOnlyNextVersion
-		}
-		if isPublicationFailureState(r.SchemaVersion) {
-			next.SchemaVersion = CorePublicationFailureNextVersion
-		}
-		if isStageWorkState(r.SchemaVersion) {
-			// The answer contract moved on while the state did not: a Run that
-			// can describe a program stage answers under 33, whatever version
-			// its own state was sealed at.
-			next.SchemaVersion = CoreProgramEnvironmentNextVersion
-		} else if isMaterializedState(r.SchemaVersion) {
-			next.SchemaVersion = CoreMaterializedNextVersion
-		} else if isEffectsState(r.SchemaVersion) {
-			next.SchemaVersion = CoreEffectsNextVersion
-		} else if isRoutedState(r.SchemaVersion) {
-			next.SchemaVersion = CoreRoutedNextVersion
-		} else if isTimingState(r.SchemaVersion) {
-			next.SchemaVersion = CoreTimingNextVersion
-		} else if isNeutralState(r.SchemaVersion) {
-			next.SchemaVersion = CoreNeutralNextVersion
-		} else if isDecisionState(r.SchemaVersion) {
-			next.SchemaVersion = CoreDecisionNextVersion
-		} else if isWorkspaceTreeState(r.SchemaVersion) {
-			next.SchemaVersion = CoreWorkspaceTreeNextVersion
-		} else if isWorkspaceState(r.SchemaVersion) {
-			next.SchemaVersion = CoreWorkspaceNextVersion
-		} else if isForkState(r.SchemaVersion) {
-			next.SchemaVersion = CoreForkNextVersion
-		} else if isActionDeliveryState(r.SchemaVersion) {
-			next.SchemaVersion = CoreActionDeliveryNextVersion
-		} else if isActionGrantAdmissionState(r.SchemaVersion) {
-			next.SchemaVersion = CoreActionGrantAdmissionNextVersion
-		} else if isActionAdmissionState(r.SchemaVersion) {
-			next.SchemaVersion = CoreActionAdmissionNextVersion
-		} else if isActionIntentState(r.SchemaVersion) {
-			next.SchemaVersion = CoreActionIntentNextVersion
 		}
 		if slices.Contains([]string{"cancel", "restricted", "resume_required", "blocked_child", "guarded"}, kind) {
 			next.InvocationID = work

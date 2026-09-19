@@ -724,32 +724,32 @@ source: {root: host_skills, path: quality/SKILL.md}
 	write(".prifly/workflows/cycle/steps/quality/qa.yaml", step("qa", "Run QA")+"---\n"+step("qa-second", "Run second QA"))
 	out.Reset()
 	errout.Reset()
-	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "rejected"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "project_workflow_folder_invalid: .prifly/workflows/cycle/steps/quality/qa.yaml requires exactly one YAML document") {
+	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "rejected"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), `"code":"project_workflow_folder_invalid"`) || !strings.Contains(errout.String(), ".prifly/workflows/cycle/steps/quality/qa.yaml requires exactly one YAML document") {
 		t.Fatalf("workflow folder accepted a multi-document YAML source: %d: %s", code, errout.String())
 	}
 	write(".prifly/workflows/cycle/steps/quality/qa.yaml", step("qa", "Run QA"))
 	write(".prifly/workflows/cycle/extend.yaml", "settings: {cycle: {missing: 1}}\n")
 	out.Reset()
 	errout.Reset()
-	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "unknown-setting"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "project_option_unknown_input: cycle.missing") {
+	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "unknown-setting"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), `"code":"project_option_unknown_input"`) || !strings.Contains(errout.String(), "cycle.missing") {
 		t.Fatalf("workflow folder accepted unknown setting: %d: %s", code, errout.String())
 	}
 	write(".prifly/workflows/cycle/extend.yaml", "settings: {cycle: {batch_limit: 4}}\n")
 	out.Reset()
 	errout.Reset()
-	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "invalid-setting"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "project_compile_invalid_workflow: invalid_default") {
+	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "invalid-setting"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), `"code":"project_compile_invalid_workflow"`) || !strings.Contains(errout.String(), "invalid_default") {
 		t.Fatalf("workflow folder accepted setting outside its declared schema: %d: %s", code, errout.String())
 	}
 	write(".prifly/workflows/cycle/extend.yaml", "exclude: [missing]\n")
 	out.Reset()
 	errout.Reset()
-	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "unknown-feature"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "project_option_unknown_feature: missing") {
+	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "unknown-feature"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), `"code":"project_option_unknown_feature"`) || !strings.Contains(errout.String(), "missing") {
 		t.Fatalf("workflow folder accepted unknown feature: %d: %s", code, errout.String())
 	}
 	write(".prifly/workflows/cycle/extend.yaml", "settings: {cycle: {quality_enabled: true}}\nexclude: [quality]\n")
 	out.Reset()
 	errout.Reset()
-	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "conflicting-option"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), "project_option_conflict: exclude quality conflicts with setting cycle.quality_enabled") {
+	if code := execute(context.Background(), []string{"--project", authority, "project", "compile", "--repository", repository, "--package", "cycle", "--host", "codex-cli", "--output", filepath.Join(t.TempDir(), "conflicting-option"), "--json"}, &out, &errout); code == 0 || !strings.Contains(errout.String(), `"code":"project_option_conflict"`) || !strings.Contains(errout.String(), "exclude quality conflicts with setting cycle.quality_enabled") {
 		t.Fatalf("workflow folder accepted contradictory feature setting: %d: %s", code, errout.String())
 	}
 	write(".prifly/workflows/cycle/extend.yaml", "extensions: []\n")
@@ -3283,7 +3283,7 @@ func TestValidateSaysWhichRootItSearched(t *testing.T) {
 		says             []string
 	}{
 		{"missing file", "no-such.json", "not_found", []string{"under the authority at", "resolved from the authority root"}},
-		{"absolute path", elsewhere, "invalid_usage", []string{"resolved from the authority root", "copy the sealed workflow into the authority"}},
+		{"absolute path", elsewhere, "unsafe_path", []string{"resolved from the authority root", "copy the sealed workflow into the authority"}},
 	} {
 		out.Reset()
 		errout.Reset()

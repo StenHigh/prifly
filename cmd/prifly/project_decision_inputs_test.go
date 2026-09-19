@@ -184,7 +184,7 @@ func TestCLIProjectStartReTrustsARemovedEditionOfItsOwnBuild(t *testing.T) {
 	if code, _, stderr := runCLI(t, "--project", authority, "package", "quarantine", "--id", edition.ID, "--version", edition.Version, "--reason", "suspect bytes"); code != 0 {
 		t.Fatalf("quarantine: %d %s", code, stderr)
 	}
-	if code, _, stderr := runCLI(t, start...); code == 0 || !strings.Contains(stderr, "project_start_package_unavailable: declared package is quarantined, not trusted; package restore") {
+	if code, _, stderr := runCLI(t, start...); code == 0 || !strings.Contains(stderr, `"code":"project_start_package_unavailable"`) || !strings.Contains(stderr, "declared package is quarantined, not trusted; package restore") {
 		t.Fatalf("a quarantined edition was started or refused without the way out: %d %s", code, stderr)
 	}
 }

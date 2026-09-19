@@ -1031,3 +1031,58 @@ func TestReadingAHandoffLeavesTheWorkspaceUntouched(t *testing.T) {
 		t.Fatalf("handing over did not leave the envelope where the host stands: %v", err)
 	}
 }
+
+// Listing a Run's handoffs called SessionTask once per awaiting attempt, and
+// each of those read and decoded the whole Run again. A Run holding n handoffs
+// was therefore read n+1 times to answer one question, and because each read
+// took its own cut, the listing could disagree with itself. The listing now
+// projects every task from one read; what it must keep is that a task in the
+// list is the same task a host gets when it asks for that attempt by name.
+func TestListingHandoffsAgreesWithReadingOneByName(t *testing.T) {
+	e, options := publicationStreamRuntime(t, 60)
+	ctx := context.Background()
+	started, err := e.Start(ctx, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := started.Receipt.RunID
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	// Publishing the producer's document wakes both durable subscribers, so the
+	// Run then holds more than one handoff at the same moment.
+	producer := streamTasks(t, e, runID)["producer"]
+	data := []byte(`{"value":1}`)
+	slot := producer.Context.Outputs["document"]
+	if err := os.WriteFile(filepath.Join(producer.Workspace, slot.Path), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	size := int64(len(data))
+	if _, err := e.PublishSessionPublication(ctx, PublishCommand{SchemaVersion: "3", CommandID: "command:two-handoffs", RunID: runID, StepID: producer.StepInstanceID, AttemptID: producer.AttemptID, EnvelopeDigest: producer.EnvelopeDigest, Hook: "document_created", Kind: "artifact", ItemKey: "document-1", CandidatePath: slot.Path, ExpectedDigest: rawDigest(data), ExpectedSizeBytes: &size}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := e.SessionTasks(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) < 2 {
+		t.Fatalf("the fixture holds %d handoffs, too few to list", len(tasks))
+	}
+	seen := map[string]bool{}
+	for _, task := range tasks {
+		if seen[task.AttemptID] {
+			t.Fatalf("the listing returned attempt %s twice", task.AttemptID)
+		}
+		seen[task.AttemptID] = true
+		named, err := e.SessionTask(ctx, runID, task.AttemptID)
+		if err != nil {
+			t.Fatalf("attempt %s is in the listing but not readable by name: %v", task.AttemptID, err)
+		}
+		if !reflect.DeepEqual(named, task) {
+			t.Fatalf("attempt %s reads differently in the listing than by name:\n listed: %+v\n named:  %+v", task.AttemptID, task, named)
+		}
+	}
+}

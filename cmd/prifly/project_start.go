@@ -80,7 +80,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return usageError("project start requires --launch")
 	}
 	if *workspace != "" && *workspace != "worktree" && *workspace != "checkout" {
-		return usageError("project_start_invalid_workspace: use worktree or checkout")
+		return refusal("project_start_invalid_workspace", "use worktree or checkout")
 	}
 	if *command == "" {
 		*command = commandID()
@@ -96,7 +96,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	neutral := profile.SchemaVersion == projectVariantProfileVersion
 	if !neutral {
 		if prepare || *expectedLaunch != "" {
-			return usageError("project_questionnaire_prepare_requires_profile_3: exact launch review requires an explicit Project profile /3 migration; legacy start remains supported")
+			return refusal("project_questionnaire_prepare_requires_profile_3", "exact launch review requires an explicit Project profile /3 migration; legacy start remains supported")
 		}
 		if *host == "" || *brief == "" {
 			return usageError("project start requires --launch, --host and --brief for profile /2")
@@ -110,7 +110,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	launch, exists := profile.Launches[*launchID]
 	if !exists || launch.Kind != "workflow" {
-		return usageError("project_start_unknown_launch: " + *launchID)
+		return refusal("project_start_unknown_launch", *launchID)
 	}
 	// An unnamed workspace mode is the launch's standing one, applied only
 	// where the workflow needs a workspace at all: a standing choice is the
@@ -152,7 +152,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return err
 	}
 	if *expectedCatalog != "" && *expectedCatalog != preflight.Sheet.CatalogDigest {
-		return usageError("project_start_stale_decision_catalog: questionnaire differs from the current project catalog")
+		return refusal("project_start_stale_decision_catalog", "questionnaire differs from the current project catalog")
 	}
 	selectedProfile := preflight.PackageProfile
 	// Project launch is the only route that needs a context-capable authority;
@@ -184,7 +184,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 		var confirmed prifly.Brief
 		if err := json.Unmarshal(briefBytes, &confirmed); err != nil || confirmed.Confirmation != "explicit" {
-			return usageError("project_start_invalid_brief: RunBrief requires explicit owner confirmation")
+			return refusal("project_start_invalid_brief", "RunBrief requires explicit owner confirmation")
 		}
 	}
 	refs := map[string]prifly.ArtifactRef{}
@@ -274,7 +274,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return err
 		}
 		if *expectedLaunch != "" && *expectedLaunch != summary.ReviewDigest {
-			return usageError("project_start_stale_launch: sources, inputs, bindings or decisions changed; repeat project questionnaire --prepare and review the new summary")
+			return refusal("project_start_stale_launch", "sources, inputs, bindings or decisions changed; repeat project questionnaire --prepare and review the new summary")
 		}
 		if prepare {
 			// Read after the digest, never into it.
@@ -339,7 +339,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return err
 		}
 		if currentDigest != summary.ReviewDigest {
-			return usageError("project_start_stale_launch: local execution configuration changed after the summary; prepare and review again")
+			return refusal("project_start_stale_launch", "local execution configuration changed after the summary; prepare and review again")
 		}
 		// Keep the resolved reviewed path in the request. A later retarget of a
 		// machine-local symlink must not select a different installed program.
@@ -481,15 +481,15 @@ func projectStartInputs(launch projectLaunchDetail, inputs, refs bindings, requi
 	}
 	for port := range inputs {
 		if _, ok := declared[port]; !ok {
-			return usageError("project_start_unknown_input: " + port)
+			return refusal("project_start_unknown_input", port)
 		}
 		if _, ok := refs[port]; ok {
-			return usageError("project_start_duplicate_input: " + port)
+			return refusal("project_start_duplicate_input", port)
 		}
 	}
 	for port := range refs {
 		if _, ok := declared[port]; !ok {
-			return usageError("project_start_unknown_input: " + port)
+			return refusal("project_start_unknown_input", port)
 		}
 	}
 	// Profile /3 resolves defaults and project settings against the compiled
@@ -501,7 +501,7 @@ func projectStartInputs(launch projectLaunchDetail, inputs, refs bindings, requi
 		if input.Required {
 			if _, file := inputs[port]; !file {
 				if _, ref := refs[port]; !ref {
-					return usageError("project_start_missing_input: " + port)
+					return refusal("project_start_missing_input", port)
 				}
 			}
 		}
@@ -517,11 +517,11 @@ func projectStartPreflight(root string, profile projectProfile, packageName, req
 // missing required answers while the owner is still filling out the form.
 func projectDecisionPreflight(root string, profile projectProfile, packageName, requestedProfile, decisionPolicy string, rawAnswers, rawRuntimeAnswers []string, complete bool) (projectPreflight, error) {
 	if decisionPolicy != "" && decisionPolicy != "attended" && decisionPolicy != "autonomous" {
-		return projectPreflight{}, usageError("project_start_invalid_decision_policy: use attended or autonomous")
+		return projectPreflight{}, refusal("project_start_invalid_decision_policy", "use attended or autonomous")
 	}
 	pkg, exists := profile.Packages[packageName]
 	if !exists {
-		return projectPreflight{}, usageError("project_compile_unknown_package: " + packageName)
+		return projectPreflight{}, refusal("project_compile_unknown_package", packageName)
 	}
 	folder, err := projectPackageSourceLocation(root, pkg.Source)
 	if err != nil {
@@ -588,10 +588,10 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 			return projectPreflight{}, unknownDecision(definition, exists, id, origin[id])
 		}
 		if definition.Destination.Kind == "package_profile" {
-			return projectPreflight{}, usageError("project_start_profile_is_selected_with_package_profile: " + id)
+			return projectPreflight{}, refusal("project_start_profile_is_selected_with_package_profile", id)
 		}
 		if err := projectValidateDecisionValue(definition, value); err != nil {
-			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + answerOriginNote(origin[id]) + ": " + err.Error())
+			return projectPreflight{}, refusal("project_start_invalid_decision_answer", id+answerOriginNote(origin[id])+": "+err.Error())
 		}
 	}
 	runtime, err := projectParseDecisionAnswers(rawRuntimeAnswers)
@@ -633,7 +633,7 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 			}
 			value, err := flow.Canonical(definition.Recommendation)
 			if err != nil || projectValidateDecisionValue(definition, value) != nil {
-				return projectPreflight{}, usageError("project_start_invalid_decision_default: " + definition.ID)
+				return projectPreflight{}, refusal("project_start_invalid_decision_default", definition.ID)
 			}
 			answers[definition.ID], answerSources[definition.ID] = value, "autonomous_policy"
 		}
@@ -669,7 +669,7 @@ func projectDecisionPreflight(root string, profile projectProfile, packageName, 
 			return projectPreflight{}, unknownDecision(definition, exists, id, origin[id])
 		}
 		if err := projectValidateDecisionValue(definition, value); err != nil {
-			return projectPreflight{}, usageError("project_start_invalid_decision_answer: " + id + answerOriginNote(origin[id]) + ": " + err.Error())
+			return projectPreflight{}, refusal("project_start_invalid_decision_answer", id+answerOriginNote(origin[id])+": "+err.Error())
 		}
 	}
 	catalog := prifly.DecisionCatalog{SchemaVersion: prifly.DecisionCatalogVersion, Decisions: source.DecisionCatalog}
@@ -732,7 +732,7 @@ func projectVerifySealedDecisionCatalog(packageDirectory string, preflight proje
 	}
 	digest, err := prifly.DecisionCatalogDigest(sealed)
 	if err != nil || digest != preflight.Sheet.CatalogDigest {
-		return usageError("project_start_stale_decision_catalog: sealed package differs from the reviewed questionnaire")
+		return refusal("project_start_stale_decision_catalog", "sealed package differs from the reviewed questionnaire")
 	}
 	return nil
 }
@@ -742,14 +742,14 @@ func projectParseDecisionAnswers(values []string) (map[string]json.RawMessage, e
 	for _, raw := range values {
 		id, value, found := strings.Cut(raw, "=")
 		if !found || !projectValueName.MatchString(id) || value == "" {
-			return nil, usageError("project_start_invalid_decision_answer: expected unique ID=JSON")
+			return nil, refusal("project_start_invalid_decision_answer", "expected unique ID=JSON")
 		}
 		if _, duplicate := answers[id]; duplicate {
-			return nil, usageError("project_start_invalid_decision_answer: expected unique ID=JSON")
+			return nil, refusal("project_start_invalid_decision_answer", "expected unique ID=JSON")
 		}
 		canonical, err := flow.Canonical([]byte(value))
 		if err != nil {
-			return nil, usageError("project_start_invalid_decision_answer: " + err.Error())
+			return nil, refusal("project_start_invalid_decision_answer", err.Error())
 		}
 		answers[id] = canonical
 	}
@@ -791,16 +791,16 @@ func projectDecisionApplies(definition prifly.DecisionDefinition, profile string
 // of extend.yaml -- and the place of the right phase in the same form.
 func unknownDecision(definition prifly.DecisionDefinition, exists bool, id, origin string) error {
 	if !exists {
-		return usageError("project_start_unknown_decision: " + id + answerOriginNote(origin) + " is not declared by this package; project questionnaire lists the decisions it declares")
+		return refusal("project_start_unknown_decision", id+answerOriginNote(origin)+" is not declared by this package; project questionnaire lists the decisions it declares")
 	}
 	other := "--" + definition.Phase + "-answer"
 	if strings.HasPrefix(origin, projectExtensionAnswersSource) {
 		other = projectExtensionAnswersSource + "." + definition.Phase
 	}
 	if definition.Phase != "" && other != origin {
-		return usageError("project_start_unknown_decision: " + id + " is a " + definition.Phase + " decision; pass it with " + other + ", not " + origin)
+		return refusal("project_start_unknown_decision", id+" is a "+definition.Phase+" decision; pass it with "+other+", not "+origin)
 	}
-	return usageError("project_start_unknown_decision: " + id + answerOriginNote(origin) + " does not apply to this launch; project questionnaire reports its applicability for these arguments")
+	return refusal("project_start_unknown_decision", id+answerOriginNote(origin)+" does not apply to this launch; project questionnaire reports its applicability for these arguments")
 }
 
 // answerOriginNote marks an answer that came from extend.yaml; a flag's origin
@@ -830,13 +830,13 @@ func (profile projectProfile) packageForLaunch(root string, launch projectLaunch
 		}
 		if source == folder {
 			if name != "" {
-				return "", usageError("project_start_ambiguous_package: launch workflow belongs to multiple packages")
+				return "", refusal("project_start_ambiguous_package", "launch workflow belongs to multiple packages")
 			}
 			name = candidate
 		}
 	}
 	if name == "" {
-		return "", usageError("project_start_missing_package: launch workflow has no declared package")
+		return "", refusal("project_start_missing_package", "launch workflow has no declared package")
 	}
 	return name, nil
 }
@@ -844,14 +844,14 @@ func (profile projectProfile) packageForLaunch(root string, launch projectLaunch
 func (c *cli) compileDeclaredProjectPackage(ctx context.Context, root string, profile projectProfile, name, host, packageProfile, output string) (projectCompileResult, error) {
 	pkg, exists := profile.Packages[name]
 	if !exists {
-		return projectCompileResult{}, usageError("project_compile_unknown_package: " + name)
+		return projectCompileResult{}, refusal("project_compile_unknown_package", name)
 	}
 	skillsRoot, err := projectCompileSkillsRoot(root, profile, host)
 	if err != nil {
 		return projectCompileResult{}, err
 	}
 	if projectPathsOverlap(root, output) || projectPathsOverlap(c.project, output) {
-		return projectCompileResult{}, usageError("project_compile_unsafe_output: output must stay outside the repository and local authority")
+		return projectCompileResult{}, refusal("project_compile_unsafe_output", "output must stay outside the repository and local authority")
 	}
 	engine, err := prifly.Open(c.project, true)
 	if err != nil {
@@ -973,7 +973,7 @@ func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flo
 			continue
 		}
 		if entry.Ref != ref {
-			return usageError("project_start_package_identity_conflict: declared package ID and version already name different bytes")
+			return refusal("project_start_package_identity_conflict", "declared package ID and version already name different bytes")
 		}
 		if entry.Status == prifly.PackageRemoved {
 			if _, err := engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: commandID + ":restore-package", ID: ref.ID, Version: ref.Version, Status: prifly.PackageTrusted, Reason: "project start declares this edition again"}); err != nil {
@@ -982,7 +982,7 @@ func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flo
 			return nil
 		}
 		if entry.Status != "" && entry.Status != prifly.PackageTrusted {
-			return usageError("project_start_package_unavailable: declared package is " + entry.Status + ", not trusted; package restore --id " + ref.ID + " --version " + ref.Version + " --reason TEXT re-trusts it")
+			return refusal("project_start_package_unavailable", "declared package is "+entry.Status+", not trusted; package restore --id "+ref.ID+" --version "+ref.Version+" --reason TEXT re-trusts it")
 		}
 		return nil
 	}
@@ -1013,7 +1013,7 @@ func projectInstalledWorkflowPath(ctx context.Context, engine *prifly.Engine, re
 	if installed != "" {
 		reason = "the installed one has " + installed
 	}
-	return "", usageError("project_start_package_not_installed: the sealed package " + ref.ID + "@" + ref.Version + " was not found among trusted packages: " + reason + "; read package list")
+	return "", refusal("project_start_package_not_installed", "the sealed package "+ref.ID+"@"+ref.Version+" was not found among trusted packages: "+reason+"; read package list")
 }
 
 // projectPolicyCanAnswer reports whether an autonomous policy may answer this

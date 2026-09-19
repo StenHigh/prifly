@@ -940,7 +940,7 @@ func (c *cli) projectLocal(args []string) error {
 		return usageError("project local set requires --executable PATH, --allow-executable NAME=PATH, --env NAME=VALUE or --env-from NAME=SOURCE")
 	}
 	if *executable != "" && !filepath.IsAbs(*executable) {
-		return usageError("project_local_executable_relative: --executable needs an absolute path; received " + strconv.Quote(*executable))
+		return refusal("project_local_executable_relative", "--executable needs an absolute path; received "+strconv.Quote(*executable))
 	}
 	root, err := projectRoot(context.Background(), *repository)
 	if err != nil {
@@ -960,12 +960,12 @@ func (c *cli) projectLocal(args []string) error {
 			continue
 		}
 		if replaced {
-			return usageError("project_local_invalid: .prifly/local.yaml names prifly_executable more than once")
+			return refusal("project_local_invalid", ".prifly/local.yaml names prifly_executable more than once")
 		}
 		lines[i], replaced = "prifly_executable: "+strconv.Quote(*executable), true
 	}
 	if !replaced {
-		return usageError("project_local_invalid: .prifly/local.yaml does not name prifly_executable")
+		return refusal("project_local_invalid", ".prifly/local.yaml does not name prifly_executable")
 	}
 	updated := strings.Join(lines, "\n")
 	if err := replaceProjectRunner(filepath.Join(root, ".prifly", "local.yaml"), updated); err != nil {
@@ -1119,7 +1119,7 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	if *launchID != "" {
 		launch, exists := profile.Launches[*launchID]
 		if !exists || launch.Kind != "workflow" {
-			return usageError("project_start_unknown_launch: " + *launchID)
+			return refusal("project_start_unknown_launch", *launchID)
 		}
 		*name, err = profile.packageForLaunch(root, launch)
 		if err != nil {
@@ -1128,7 +1128,7 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	}
 	pkg, exists := profile.Packages[*name]
 	if !exists {
-		return usageError("project_compile_unknown_package: " + *name)
+		return refusal("project_compile_unknown_package", *name)
 	}
 	folder, err := projectPackageSourceLocation(root, pkg.Source)
 	if err != nil {
@@ -1148,7 +1148,7 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 		return err
 	}
 	if *expectedCatalog != "" && *expectedCatalog != selection.Sheet.CatalogDigest {
-		return usageError("project_start_stale_decision_catalog: questionnaire differs from the current project catalog")
+		return refusal("project_start_stale_decision_catalog", "questionnaire differs from the current project catalog")
 	}
 	result := projectQuestionnaire{SchemaVersion: "project-questionnaire/4", Repository: root, Package: flow.Ref{ID: source.ID, Version: source.Version}, Profiles: profiles, Preflight: []prifly.DecisionDefinition{}, Runtime: []prifly.DecisionDefinition{}, CatalogDigest: selection.Sheet.CatalogDigest, DecisionSheet: selection.Sheet, DecisionStates: projectDecisionStates(selection), KnownQuestionsOnly: true}
 	if *launchID != "" {
@@ -1201,7 +1201,7 @@ func (c *cli) projectInit(ctx context.Context, args []string) error {
 		return err
 	}
 	if projectPathsOverlap(root, authority) {
-		return usageError("unsafe_authority_root: local authority data must be outside the repository")
+		return refusal("unsafe_authority_root", "local authority data must be outside the repository")
 	}
 	profile := filepath.Join(root, ".prifly")
 	existing, missingRunners, err := existingProjectProfile(root, profile)
@@ -1365,20 +1365,20 @@ const projectExtensionAnswersSource = "extend.yaml answers"
 func projectReadWorkflowAnswers(raw any) (projectWorkflowAnswers, error) {
 	block, ok := raw.(map[string]any)
 	if !ok || len(block) == 0 {
-		return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers must be a non-empty object")
+		return projectWorkflowAnswers{}, refusal("project_extension_invalid", "answers must be a non-empty object")
 	}
 	result := projectWorkflowAnswers{Preflight: map[string]json.RawMessage{}, Runtime: map[string]json.RawMessage{}}
 	for key := range block {
 		switch key {
 		case "decision_policy", "preflight", "runtime":
 		default:
-			return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers has unknown field " + key + "; use decision_policy, preflight or runtime")
+			return projectWorkflowAnswers{}, refusal("project_extension_invalid", "answers has unknown field "+key+"; use decision_policy, preflight or runtime")
 		}
 	}
 	if raw, exists := block["decision_policy"]; exists {
 		policy, ok := raw.(string)
 		if !ok || policy != "attended" && policy != "autonomous" {
-			return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers.decision_policy must be attended or autonomous")
+			return projectWorkflowAnswers{}, refusal("project_extension_invalid", "answers.decision_policy must be attended or autonomous")
 		}
 		result.DecisionPolicy = policy
 	}
@@ -1392,19 +1392,19 @@ func projectReadWorkflowAnswers(raw any) (projectWorkflowAnswers, error) {
 		}
 		entries, ok := raw.(map[string]any)
 		if !ok || len(entries) == 0 {
-			return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers." + phase.name + " must be a non-empty object of ID: value")
+			return projectWorkflowAnswers{}, refusal("project_extension_invalid", "answers."+phase.name+" must be a non-empty object of ID: value")
 		}
 		for id, value := range entries {
 			if !projectValueName.MatchString(id) || value == nil {
-				return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers." + phase.name + " entries need a valid decision ID and a non-null value; got " + id)
+				return projectWorkflowAnswers{}, refusal("project_extension_invalid", "answers."+phase.name+" entries need a valid decision ID and a non-null value; got "+id)
 			}
 			encoded, err := json.Marshal(value)
 			if err != nil {
-				return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers." + phase.name + "." + id + ": " + err.Error())
+				return projectWorkflowAnswers{}, refusal("project_extension_invalid", "answers."+phase.name+"."+id+": "+err.Error())
 			}
 			canonical, err := flow.Canonical(encoded)
 			if err != nil {
-				return projectWorkflowAnswers{}, usageError("project_extension_invalid: answers." + phase.name + "." + id + ": " + err.Error())
+				return projectWorkflowAnswers{}, refusal("project_extension_invalid", "answers."+phase.name+"."+id+": "+err.Error())
 			}
 			phase.target[id] = canonical
 		}
@@ -1435,14 +1435,14 @@ func (c *cli) projectExtend(_ context.Context, args []string) error {
 	format := strings.TrimPrefix(strings.ToLower(filepath.Ext(*workflowPath)), ".")
 	machine, err := flow.WorkflowJSONBytes(workflowBytes, format)
 	if err != nil {
-		return usageError("project_extension_invalid_workflow: " + err.Error())
+		return refusal("project_extension_invalid_workflow", err.Error())
 	}
 	var workflow map[string]any
 	if err := json.Unmarshal(machine, &workflow); err != nil {
-		return usageError("project_extension_invalid_workflow: workflow is not an object")
+		return refusal("project_extension_invalid_workflow", "workflow is not an object")
 	}
 	if id, _ := workflow["id"].(string); id != *workflowID {
-		return usageError("project_extension_invalid_workflow: --workflow-id does not match source")
+		return refusal("project_extension_invalid_workflow", "--workflow-id does not match source")
 	}
 	extensionBytes, err := readFile(*extensionsPath, flow.MaxDocumentBytes)
 	if err != nil {
@@ -1470,7 +1470,7 @@ func (c *cli) projectExtend(_ context.Context, args []string) error {
 	slices.Sort(known)
 	for _, extension := range extensions {
 		if workflowName := projectExtensionWorkflowName(*workflowID); extension.Workflow != workflowName {
-			return usageError("project_extension_unknown_workflow: " + extension.Workflow + " (known: " + workflowName + ")")
+			return refusal("project_extension_unknown_workflow", extension.Workflow+" (known: "+workflowName+")")
 		}
 		if _, exists := refs[extension.Step]; !exists {
 			// An empty known list means no --step-ref reached the command at
@@ -1479,12 +1479,12 @@ func (c *cli) projectExtend(_ context.Context, args []string) error {
 			// pair: the ref is written into the workflow, the source is the
 			// file that ref is checked against.
 			if len(refs) == 0 {
-				return usageError("project_extension_missing_step_ref: no --step-ref was supplied; every inserted step needs both --step-ref NAME=JSON, the sealed reference written into the workflow, and --step-source NAME=FILE, the file it is checked against")
+				return refusal("project_extension_missing_step_ref", "no --step-ref was supplied; every inserted step needs both --step-ref NAME=JSON, the sealed reference written into the workflow, and --step-source NAME=FILE, the file it is checked against")
 			}
-			return usageError("project_extension_unknown_step: " + extension.Step + " (known: " + strings.Join(known, ", ") + ")")
+			return refusal("project_extension_unknown_step", extension.Step+" (known: "+strings.Join(known, ", ")+")")
 		}
 		if source, exists := sources[extension.Step]; !exists {
-			return usageError("project_extension_missing_step_source: " + extension.Step)
+			return refusal("project_extension_missing_step_source", extension.Step)
 		} else if err := projectExtensionStepInputs(source, extension.Input); err != nil {
 			return err
 		}
@@ -1511,7 +1511,7 @@ func parseProjectExtensions(data []byte) ([]projectWorkflowExtension, error) {
 		return nil, err
 	}
 	if len(options.Settings) != 0 || len(options.Exclude) != 0 || options.Profile != "" {
-		return nil, usageError("project_extension_invalid: settings, exclude and profile require project compile")
+		return nil, refusal("project_extension_invalid", "settings, exclude and profile require project compile")
 	}
 	return options.Extensions, nil
 }
@@ -1519,17 +1519,17 @@ func parseProjectExtensions(data []byte) ([]projectWorkflowExtension, error) {
 func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	value, err := flow.Parse(data, "yaml")
 	if err != nil {
-		return projectWorkflowOptions{}, usageError("project_extension_invalid: " + err.Error())
+		return projectWorkflowOptions{}, refusal("project_extension_invalid", err.Error())
 	}
 	root, ok := value.(map[string]any)
 	if !ok || len(root) == 0 {
-		return projectWorkflowOptions{}, usageError("project_extension_invalid: extend.yaml must be a non-empty object")
+		return projectWorkflowOptions{}, refusal("project_extension_invalid", "extend.yaml must be a non-empty object")
 	}
 	for key := range root {
 		switch key {
 		case "extensions", "settings", "exclude", "profile", "answers", "execution_bindings", "references":
 		default:
-			return projectWorkflowOptions{}, usageError("project_extension_invalid: unknown field " + key)
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", "unknown field "+key)
 		}
 	}
 	result := projectWorkflowOptions{Extensions: []projectWorkflowExtension{}, Settings: map[string]map[string]any{}, Exclude: []string{}}
@@ -1543,22 +1543,22 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	if raw, exists := root["profile"]; exists {
 		profile, ok := raw.(string)
 		if !ok || !projectValueName.MatchString(profile) {
-			return projectWorkflowOptions{}, usageError("project_extension_invalid: profile must be a valid name")
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", "profile must be a valid name")
 		}
 		result.Profile = profile
 	}
 	if raw, exists := root["settings"]; exists {
 		settings, ok := raw.(map[string]any)
 		if !ok {
-			return projectWorkflowOptions{}, usageError("project_extension_invalid: settings must be an object")
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", "settings must be an object")
 		}
 		for workflow, rawInputs := range settings {
 			if !projectValueName.MatchString(workflow) {
-				return projectWorkflowOptions{}, usageError("project_extension_invalid: settings workflow must be a valid name")
+				return projectWorkflowOptions{}, refusal("project_extension_invalid", "settings workflow must be a valid name")
 			}
 			inputs, ok := rawInputs.(map[string]any)
 			if !ok || len(inputs) == 0 {
-				return projectWorkflowOptions{}, usageError("project_extension_invalid: settings " + workflow + " must be a non-empty object")
+				return projectWorkflowOptions{}, refusal("project_extension_invalid", "settings "+workflow+" must be a non-empty object")
 			}
 			result.Settings[workflow] = inputs
 		}
@@ -1566,7 +1566,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	if raw, exists := root["exclude"]; exists {
 		items, ok := raw.([]any)
 		if !ok {
-			return projectWorkflowOptions{}, usageError("project_extension_invalid: exclude must be a list")
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", "exclude must be a list")
 		}
 		seen := map[string]bool{}
 		for index, item := range items {
@@ -1584,7 +1584,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	items, ok := raw.([]any)
 	if !ok {
-		return projectWorkflowOptions{}, usageError("project_extension_invalid: extensions must be a list")
+		return projectWorkflowOptions{}, refusal("project_extension_invalid", "extensions must be a list")
 	}
 	extensions := make([]projectWorkflowExtension, 0, len(items))
 	seen := map[string]bool{}
@@ -1685,13 +1685,13 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	if raw, exists := root["references"]; exists {
 		references, ok := raw.(map[string]any)
 		if !ok || len(references) == 0 {
-			return projectWorkflowOptions{}, usageError("project_extension_invalid: references must be a non-empty object of NAME: logical ref")
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", "references must be a non-empty object of NAME: logical ref")
 		}
 		result.References = map[string]string{}
 		for name, rawLogical := range references {
 			logical, ok := rawLogical.(string)
 			if !projectValueName.MatchString(name) || !ok || logical == "" {
-				return projectWorkflowOptions{}, usageError("project_extension_invalid: references require valid names and logical refs such as core:adapter/local-process@2.0.0")
+				return projectWorkflowOptions{}, refusal("project_extension_invalid", "references require valid names and logical refs such as core:adapter/local-process@2.0.0")
 			}
 			result.References[name] = logical
 		}
@@ -1709,16 +1709,16 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 func projectReadExtensionBindings(raw any, extensions []projectWorkflowExtension) (map[string]any, error) {
 	block, ok := raw.(map[string]any)
 	if !ok || len(block) == 0 {
-		return nil, usageError("project_extension_invalid: execution_bindings must be a non-empty object")
+		return nil, refusal("project_extension_invalid", "execution_bindings must be a non-empty object")
 	}
 	for key := range block {
 		if key != "steps" {
-			return nil, usageError("project_extension_invalid: execution_bindings has unknown group " + key + "; only inserted steps are bound here")
+			return nil, refusal("project_extension_invalid", "execution_bindings has unknown group "+key+"; only inserted steps are bound here")
 		}
 	}
 	steps, ok := block["steps"].(map[string]any)
 	if !ok || len(steps) == 0 {
-		return nil, usageError("project_extension_invalid: execution_bindings.steps must be a non-empty object keyed by the inserted step's short name")
+		return nil, refusal("project_extension_invalid", "execution_bindings.steps must be a non-empty object keyed by the inserted step's short name")
 	}
 	inserted := map[string]bool{}
 	for _, extension := range extensions {
@@ -1726,10 +1726,10 @@ func projectReadExtensionBindings(raw any, extensions []projectWorkflowExtension
 	}
 	for name, config := range steps {
 		if !inserted[name] {
-			return nil, usageError("project_extension_invalid: execution_bindings.steps." + name + " names a step no extension in this file inserts; a package's own program is bound in its workflow.yaml")
+			return nil, refusal("project_extension_invalid", "execution_bindings.steps."+name+" names a step no extension in this file inserts; a package's own program is bound in its workflow.yaml")
 		}
 		if _, ok := config.(map[string]any); !ok {
-			return nil, usageError("project_extension_invalid: execution_bindings.steps." + name + " must be an object")
+			return nil, refusal("project_extension_invalid", "execution_bindings.steps."+name+" must be an object")
 		}
 	}
 	return steps, nil
@@ -1740,15 +1740,15 @@ func parseProjectExtensionRefs(values []string) (map[string]any, error) {
 	for _, value := range values {
 		name, raw, ok := strings.Cut(value, "=")
 		if !ok || name == "" || raw == "" || refs[name] != nil {
-			return nil, usageError("project_extension_invalid_step_ref: expected unique NAME=JSON")
+			return nil, refusal("project_extension_invalid_step_ref", "expected unique NAME=JSON")
 		}
 		var ref any
 		if err := json.Unmarshal([]byte(raw), &ref); err != nil {
-			return nil, usageError("project_extension_invalid_step_ref: " + err.Error())
+			return nil, refusal("project_extension_invalid_step_ref", err.Error())
 		}
 		data, _ := json.Marshal(ref)
 		if err := flow.ValidateProtocol("ImmutableRef", data); err != nil {
-			return nil, usageError("project_extension_invalid_step_ref: " + err.Error())
+			return nil, refusal("project_extension_invalid_step_ref", err.Error())
 		}
 		refs[name] = ref
 	}
@@ -1760,7 +1760,7 @@ func parseProjectExtensionSources(values []string) (map[string]string, error) {
 	for _, value := range values {
 		name, source, ok := strings.Cut(value, "=")
 		if !ok || name == "" || source == "" || sources[name] != "" {
-			return nil, usageError("project_extension_invalid_step_source: expected unique NAME=FILE")
+			return nil, refusal("project_extension_invalid_step_source", "expected unique NAME=FILE")
 		}
 		sources[name] = source
 	}
@@ -1775,7 +1775,7 @@ func projectExtensionStepInputs(path, bound string) error {
 	format := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
 	value, err := flow.Parse(data, format)
 	if err != nil {
-		return usageError("project_extension_invalid_step_source: " + err.Error())
+		return refusal("project_extension_invalid_step_source", err.Error())
 	}
 	machine, err := json.Marshal(value)
 	if err != nil {
@@ -1783,7 +1783,7 @@ func projectExtensionStepInputs(path, bound string) error {
 	}
 	var step flow.StepDefinition
 	if err := json.Unmarshal(machine, &step); err != nil {
-		return usageError("project_extension_invalid_step_source: step is not a StepDefinition")
+		return refusal("project_extension_invalid_step_source", "step is not a StepDefinition")
 	}
 	return projectExtensionInputs(step, bound)
 }
@@ -1796,12 +1796,12 @@ func projectExtensionStepInputs(path, bound string) error {
 func projectExtensionInputs(step flow.StepDefinition, bound string) error {
 	if bound != "" {
 		if _, declared := step.Inputs[bound]; !declared {
-			return usageError("project_extension_unknown_input: " + bound + " is not an input of the inserted step")
+			return refusal("project_extension_unknown_input", bound+" is not an input of the inserted step")
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(step.Inputs)) {
 		if name != bound && step.Inputs[name].Required {
-			return usageError("project_extension_requires_full_yaml: the inserted step requires input " + name + " and an extension binds at most one; a step that needs more belongs in a workflow graph you write yourself, not in extend.yaml")
+			return refusal("project_extension_requires_full_yaml", "the inserted step requires input "+name+" and an extension binds at most one; a step that needs more belongs in a workflow graph you write yourself, not in extend.yaml")
 		}
 	}
 	return nil
@@ -1814,25 +1814,25 @@ func projectExtensionWorkflowName(id string) string {
 func applyProjectExtension(workflow map[string]any, extension projectWorkflowExtension, ref any) error {
 	definition, ok := workflow["definition"].(map[string]any)
 	if !ok {
-		return usageError("project_extension_invalid_workflow: definition must be an object")
+		return refusal("project_extension_invalid_workflow", "definition must be an object")
 	}
 	stages, ok := definition["stages"].(map[string]any)
 	if !ok {
-		return usageError("project_extension_invalid_workflow: definition.stages must be an object")
+		return refusal("project_extension_invalid_workflow", "definition.stages must be an object")
 	}
 	if _, exists := stages[extension.Step]; exists {
-		return usageError("project_extension_stage_conflict: " + extension.Step)
+		return refusal("project_extension_stage_conflict", extension.Step)
 	}
 	rawFrom, exists := stages[extension.From]
 	if !exists {
-		return usageError("project_extension_unknown_stage: " + extension.From)
+		return refusal("project_extension_unknown_stage", extension.From)
 	}
 	if _, exists := stages[extension.To]; !exists {
-		return usageError("project_extension_unknown_stage: " + extension.To)
+		return refusal("project_extension_unknown_stage", extension.To)
 	}
 	from, ok := rawFrom.(map[string]any)
 	if !ok {
-		return usageError("project_extension_invalid_workflow: source stage must be an object")
+		return refusal("project_extension_invalid_workflow", "source stage must be an object")
 	}
 	type route struct{ group, verdict string }
 	routes := []route{}
@@ -1853,14 +1853,14 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 		}
 	}
 	if len(routes) == 0 {
-		return usageError("project_extension_route_missing: " + extension.From + " → " + extension.To)
+		return refusal("project_extension_route_missing", extension.From+" → "+extension.To)
 	}
 	if len(routes) != 1 {
-		return usageError("project_extension_route_ambiguous: " + extension.From + " → " + extension.To)
+		return refusal("project_extension_route_ambiguous", extension.From+" → "+extension.To)
 	}
 	for _, target := range extension.On {
 		if _, exists := stages[target]; !exists {
-			return usageError("project_extension_unknown_stage: " + target)
+			return refusal("project_extension_unknown_stage", target)
 		}
 	}
 	// Every other stage name an extension writes is checked against the graph
@@ -1868,7 +1868,7 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 	bindings := map[string]any{}
 	if extension.Input != "" {
 		if _, exists := stages[extension.InputStage]; !exists {
-			return usageError("project_extension_unknown_stage: " + extension.InputStage)
+			return refusal("project_extension_unknown_stage", extension.InputStage)
 		}
 		bindings[extension.Input] = map[string]any{"from": "stage_output", "stage_id": extension.InputStage, "port": extension.InputPort}
 	}
@@ -1902,51 +1902,51 @@ func readProjectProfile(root string) (projectProfile, error) {
 	data, err := os.ReadFile(profilePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return projectProfile{}, usageError("project_profile_missing: initialize the repository with project init first")
+			return projectProfile{}, refusal("project_profile_missing", "initialize the repository with project init first")
 		}
 		return projectProfile{}, err
 	}
 	value, err := flow.Parse(data, "yaml")
 	if err != nil {
-		return projectProfile{}, usageError("project_profile_invalid: " + err.Error())
+		return projectProfile{}, refusal("project_profile_invalid", err.Error())
 	}
 	object, ok := value.(map[string]any)
 	if !ok {
-		return projectProfile{}, usageError("project_profile_invalid: profile must be an object")
+		return projectProfile{}, refusal("project_profile_invalid", "profile must be an object")
 	}
 	schema, _ := object["schema_version"].(string)
 	if schema != "prifly-project-profile/2" && schema != projectVariantProfileVersion {
-		return projectProfile{}, usageError("project_profile_invalid: schema_version must be prifly-project-profile/2 or prifly-project-profile/3")
+		return projectProfile{}, refusal("project_profile_invalid", "schema_version must be prifly-project-profile/2 or prifly-project-profile/3")
 	}
 	for key := range object {
 		switch key {
 		case "schema_version", "hosts", "packages", "launches":
 		default:
-			return projectProfile{}, usageError("project_profile_invalid: unknown field " + key)
+			return projectProfile{}, refusal("project_profile_invalid", "unknown field "+key)
 		}
 	}
 	rawLaunches, exists := object["launches"]
 	if !exists {
-		return projectProfile{}, usageError("project_profile_invalid: launches is required")
+		return projectProfile{}, refusal("project_profile_invalid", "launches is required")
 	}
 	launches, ok := rawLaunches.(map[string]any)
 	if !ok {
-		return projectProfile{}, usageError("project_profile_invalid: launches must be an object")
+		return projectProfile{}, refusal("project_profile_invalid", "launches must be an object")
 	}
 	profile := projectProfile{SchemaVersion: schema, HostSkillsRoots: make(map[string]string, len(projectHosts)), Launches: make(map[string]projectLaunch, len(launches))}
 	rawHosts, exists := object["hosts"]
 	if !exists && schema == "prifly-project-profile/2" {
-		return projectProfile{}, usageError("project_profile_invalid: hosts is required by prifly-project-profile/2")
+		return projectProfile{}, refusal("project_profile_invalid", "hosts is required by prifly-project-profile/2")
 	}
 	hosts := map[string]any{}
 	if exists {
 		hosts, ok = rawHosts.(map[string]any)
 		if !ok {
-			return projectProfile{}, usageError("project_profile_invalid: hosts must be an object")
+			return projectProfile{}, refusal("project_profile_invalid", "hosts must be an object")
 		}
 	}
 	if schema == "prifly-project-profile/2" && len(hosts) != len(projectHosts) {
-		return projectProfile{}, usageError("project_profile_invalid: hosts must declare every supported host")
+		return projectProfile{}, refusal("project_profile_invalid", "hosts must declare every supported host")
 	}
 	for _, host := range projectHosts {
 		if _, exists := hosts[host.ID]; !exists && schema == projectVariantProfileVersion {
@@ -1954,40 +1954,40 @@ func readProjectProfile(root string) (projectProfile, error) {
 		}
 		root, ok := hosts[host.ID].(string)
 		if !ok || root != host.SkillsRoot {
-			return projectProfile{}, usageError("project_profile_invalid: host " + host.ID + " must use " + host.SkillsRoot)
+			return projectProfile{}, refusal("project_profile_invalid", "host "+host.ID+" must use "+host.SkillsRoot)
 		}
 		profile.HostSkillsRoots[host.ID] = root
 	}
 	if len(profile.HostSkillsRoots) != len(hosts) {
-		return projectProfile{}, usageError("project_profile_invalid: hosts contains an unsupported host")
+		return projectProfile{}, refusal("project_profile_invalid", "hosts contains an unsupported host")
 	}
 	rawPackages, exists := object["packages"]
 	if !exists {
-		return projectProfile{}, usageError("project_profile_invalid: packages is required by prifly-project-profile/2")
+		return projectProfile{}, refusal("project_profile_invalid", "packages is required by prifly-project-profile/2")
 	}
 	packages, ok := rawPackages.(map[string]any)
 	if !ok {
-		return projectProfile{}, usageError("project_profile_invalid: packages must be an object")
+		return projectProfile{}, refusal("project_profile_invalid", "packages must be an object")
 	}
 	profile.Packages = make(map[string]projectPackage, len(packages))
 	for name, raw := range packages {
 		if !projectLaunchID(name) {
-			return projectProfile{}, usageError("project_profile_invalid: package name must contain lowercase letters, digits, - or _")
+			return projectProfile{}, refusal("project_profile_invalid", "package name must contain lowercase letters, digits, - or _")
 		}
 		entry, ok := raw.(map[string]any)
 		if !ok {
-			return projectProfile{}, usageError("project_profile_invalid: package " + name + " must be an object")
+			return projectProfile{}, refusal("project_profile_invalid", "package "+name+" must be an object")
 		}
 		for key := range entry {
 			switch key {
 			case "source", "origin":
 			default:
-				return projectProfile{}, usageError("project_profile_invalid: package " + name + " has unknown field " + key)
+				return projectProfile{}, refusal("project_profile_invalid", "package "+name+" has unknown field "+key)
 			}
 		}
 		source, ok := entry["source"].(string)
 		if !ok || source == "" {
-			return projectProfile{}, usageError("project_profile_invalid: package " + name + " source must be a non-empty string")
+			return projectProfile{}, refusal("project_profile_invalid", "package "+name+" source must be a non-empty string")
 		}
 		if _, err := projectPackageSourceLocation(root, source); err != nil {
 			return projectProfile{}, err
@@ -2004,17 +2004,17 @@ func readProjectProfile(root string) (projectProfile, error) {
 	}
 	for id, raw := range launches {
 		if !projectLaunchID(id) {
-			return projectProfile{}, usageError("project_profile_invalid: launch ID must contain lowercase letters, digits, - or _")
+			return projectProfile{}, refusal("project_profile_invalid", "launch ID must contain lowercase letters, digits, - or _")
 		}
 		object, ok := raw.(map[string]any)
 		if !ok {
-			return projectProfile{}, usageError("project_profile_invalid: launch " + id + " must be an object")
+			return projectProfile{}, refusal("project_profile_invalid", "launch "+id+" must be an object")
 		}
 		for key := range object {
 			switch key {
 			case "title", "description", "kind", "workflow", "workspace", "preflight":
 			default:
-				return projectProfile{}, usageError("project_profile_invalid: unknown field in launch " + id + ": " + key)
+				return projectProfile{}, refusal("project_profile_invalid", "unknown field in launch "+id+": "+key)
 			}
 		}
 		launch := projectLaunch{}
@@ -2027,19 +2027,19 @@ func readProjectProfile(root string) (projectProfile, error) {
 			if value, exists := object[field.name]; exists {
 				text, ok := value.(string)
 				if !ok {
-					return projectProfile{}, usageError("project_profile_invalid: launch " + id + " field " + field.name + " must be a string")
+					return projectProfile{}, refusal("project_profile_invalid", "launch "+id+" field "+field.name+" must be a string")
 				}
 				*field.target = text
 			}
 		}
 		if launch.Title == "" || launch.Description == "" {
-			return projectProfile{}, usageError("project_profile_invalid: launch " + id + " requires title and description")
+			return projectProfile{}, refusal("project_profile_invalid", "launch "+id+" requires title and description")
 		}
 		if launch.Kind != "workflow" || launch.Workflow == "" {
-			return projectProfile{}, usageError("project_profile_invalid: launch " + id + " kind must be workflow with workflow source")
+			return projectProfile{}, refusal("project_profile_invalid", "launch "+id+" kind must be workflow with workflow source")
 		}
 		if launch.Workspace != "" && launch.Workspace != "worktree" && launch.Workspace != "checkout" {
-			return projectProfile{}, usageError("project_profile_invalid: launch " + id + " workspace must be worktree or checkout")
+			return projectProfile{}, refusal("project_profile_invalid", "launch "+id+" workspace must be worktree or checkout")
 		}
 		if raw, exists := object["preflight"]; exists {
 			preflight, err := readProjectLaunchPreflight(id, raw)
@@ -2056,7 +2056,7 @@ func readProjectProfile(root string) (projectProfile, error) {
 func (profile projectProfile) skillsRoot(hostID string) (string, error) {
 	root, ok := profile.HostSkillsRoots[hostID]
 	if !ok {
-		return "", usageError("project_compile_unknown_host: " + hostID)
+		return "", refusal("project_compile_unknown_host", hostID)
 	}
 	return root, nil
 }
@@ -2075,7 +2075,7 @@ func projectSelectedHosts(ids []string) ([]projectHost, error) {
 	selected := make(map[string]bool, len(ids))
 	for _, id := range ids {
 		if selected[id] {
-			return nil, usageError("project_runner_invalid_host: duplicate host " + id)
+			return nil, refusal("project_runner_invalid_host", "duplicate host "+id)
 		}
 		selected[id] = true
 	}
@@ -2086,7 +2086,7 @@ func projectSelectedHosts(ids []string) ([]projectHost, error) {
 		}
 	}
 	if len(hosts) != len(ids) {
-		return nil, usageError("project_runner_invalid_host: supported hosts are codex-cli, codex-app and claude-code")
+		return nil, refusal("project_runner_invalid_host", "supported hosts are codex-cli, codex-app and claude-code")
 	}
 	return hosts, nil
 }
@@ -2106,7 +2106,7 @@ func (profile projectProfile) launchDetails(root string) ([]projectLaunchDetail,
 			return nil, err
 		}
 		if filepath.Base(path) != "workflow.yaml" {
-			return nil, usageError("project_profile_invalid: workflow " + id + " must name a workflow folder root")
+			return nil, refusal("project_profile_invalid", "workflow "+id+" must name a workflow folder root")
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -2114,15 +2114,15 @@ func (profile projectProfile) launchDetails(root string) ([]projectLaunchDetail,
 		}
 		value, err := flow.Parse(data, "yaml")
 		if err != nil {
-			return nil, usageError("project_profile_invalid: workflow " + id + ": " + err.Error())
+			return nil, refusal("project_profile_invalid", "workflow "+id+": "+err.Error())
 		}
 		object, ok := value.(map[string]any)
 		if !ok || object["authoring"] != projectWorkflowFolderVersion {
-			return nil, usageError("project_profile_invalid: workflow " + id + " must be a prifly-project-workflow/1 folder root")
+			return nil, refusal("project_profile_invalid", "workflow "+id+" must be a prifly-project-workflow/1 folder root")
 		}
 		inputs, err := projectFolderLaunchInputs(value)
 		if err != nil {
-			return nil, usageError("project_profile_invalid: workflow " + id + ": " + err.Error())
+			return nil, refusal("project_profile_invalid", "workflow "+id+": "+err.Error())
 		}
 		detail.Source, detail.Inputs = launch.Workflow, inputs
 		result = append(result, detail)
@@ -2174,7 +2174,7 @@ func projectFolderLaunchInputs(value any) ([]projectLaunchInput, error) {
 
 func projectLaunchSource(root, source string) (string, error) {
 	if source == "" || filepath.IsAbs(source) {
-		return "", usageError("project_profile_invalid: launch source must be a relative .prifly path")
+		return "", refusal("project_profile_invalid", "launch source must be a relative .prifly path")
 	}
 	profileRoot, err := canonicalProjectPath(filepath.Join(root, ".prifly"))
 	if err != nil {
@@ -2186,21 +2186,21 @@ func projectLaunchSource(root, source string) (string, error) {
 	}
 	relative, err := filepath.Rel(profileRoot, path)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", usageError("project_profile_invalid: launch source must stay inside .prifly")
+		return "", refusal("project_profile_invalid", "launch source must stay inside .prifly")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", usageError("project_profile_invalid: launch source does not exist: " + source)
+		return "", refusal("project_profile_invalid", "launch source does not exist: "+source)
 	}
 	if !info.Mode().IsRegular() {
-		return "", usageError("project_profile_invalid: launch source must be a regular file: " + source)
+		return "", refusal("project_profile_invalid", "launch source must be a regular file: "+source)
 	}
 	return path, nil
 }
 
 func projectPackageSourceLocation(root, source string) (string, error) {
 	if source == "" || filepath.IsAbs(source) {
-		return "", usageError("project_profile_invalid: package source must be a relative .prifly path")
+		return "", refusal("project_profile_invalid", "package source must be a relative .prifly path")
 	}
 	profileRoot, err := canonicalProjectPath(filepath.Join(root, ".prifly"))
 	if err != nil {
@@ -2212,14 +2212,14 @@ func projectPackageSourceLocation(root, source string) (string, error) {
 	}
 	relative, err := filepath.Rel(profileRoot, path)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", usageError("project_profile_invalid: package source must stay inside .prifly")
+		return "", refusal("project_profile_invalid", "package source must stay inside .prifly")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", usageError("project_profile_invalid: package source does not exist: " + source)
+		return "", refusal("project_profile_invalid", "package source does not exist: "+source)
 	}
 	if !info.IsDir() {
-		return "", usageError("project_profile_invalid: package source must be a workflow folder: " + source)
+		return "", refusal("project_profile_invalid", "package source must be a workflow folder: "+source)
 	}
 	return path, nil
 }
@@ -2245,13 +2245,13 @@ func projectRoot(ctx context.Context, path string) (string, error) {
 	}
 	info, err := os.Stat(directory)
 	if err != nil || !info.IsDir() {
-		return "", usageError("project_root_invalid: project path must be an existing directory")
+		return "", refusal("project_root_invalid", "project path must be an existing directory")
 	}
 	for parent := directory; ; parent = filepath.Dir(parent) {
 		info, err := os.Lstat(filepath.Join(parent, ".prifly"))
 		if err == nil {
 			if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-				return "", usageError("project_profile_invalid: .prifly must be a real directory")
+				return "", refusal("project_profile_invalid", ".prifly must be a real directory")
 			}
 			if _, err := os.Lstat(filepath.Join(parent, ".prifly", "project.yaml")); errors.Is(err, os.ErrNotExist) {
 				// A bare .prifly is a profile only where the command started: an
@@ -2286,7 +2286,7 @@ func projectRootProfile(ctx context.Context, root string) (string, error) {
 			return "", err
 		}
 		if gitRoot != root {
-			return "", usageError("repository_required: profile /2 must be at the Git repository root")
+			return "", refusal("repository_required", "profile /2 must be at the Git repository root")
 		}
 	}
 	return root, nil
@@ -2300,7 +2300,7 @@ func projectRepositoryRoot(ctx context.Context, path string) (string, error) {
 	command := exec.CommandContext(ctx, "git", "-C", directory, "rev-parse", "--show-toplevel")
 	output, err := command.Output()
 	if err != nil {
-		return "", usageError("repository_required: project init requires an existing Git repository")
+		return "", refusal("repository_required", "project init requires an existing Git repository")
 	}
 	return canonicalProjectPath(strings.TrimSpace(string(output)))
 }
@@ -2548,7 +2548,7 @@ func checkProjectRunnerRoot(root string, host projectHost) error {
 			return err
 		}
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return usageError("project_runner_conflict: host skills roots must use real directories inside the project")
+			return refusal("project_runner_conflict", "host skills roots must use real directories inside the project")
 		}
 	}
 	return nil
@@ -2580,13 +2580,13 @@ func existingProjectProfile(root, profile string) (bool, []string, error) {
 		return false, nil, err
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return false, nil, usageError("project_profile_invalid: .prifly must be a real directory")
+		return false, nil, refusal("project_profile_invalid", ".prifly must be a real directory")
 	}
 	if _, err := os.Lstat(filepath.Join(profile, "project.yaml")); errors.Is(err, os.ErrNotExist) {
 		// Reporting "run project init first" to project init said nothing about
 		// what it found. A half-removed profile is a repository state, and the
 		// two ways out of it are the two the owner has.
-		return false, nil, usageError("project_profile_incomplete: .prifly exists without project.yaml; restore it from version control, or remove .prifly to initialize the repository again")
+		return false, nil, refusal("project_profile_incomplete", ".prifly exists without project.yaml; restore it from version control, or remove .prifly to initialize the repository again")
 	} else if err != nil {
 		return false, nil, err
 	}
@@ -2599,13 +2599,13 @@ func existingProjectProfile(root, profile string) (bool, []string, error) {
 		return false, nil, err
 	}
 	if _, err := os.Lstat(filepath.Join(profile, "local.yaml")); err == nil {
-		return false, nil, usageError("project_local_conflict: existing .prifly/local.yaml was not overwritten")
+		return false, nil, refusal("project_local_conflict", "existing .prifly/local.yaml was not overwritten")
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, nil, err
 	}
 	ignored, err := os.ReadFile(filepath.Join(profile, ".gitignore"))
 	if err != nil || !strings.Contains("\n"+strings.TrimSpace(string(ignored))+"\n", "\nlocal.yaml\n") {
-		return false, nil, usageError("project_local_ignore_missing: .prifly/.gitignore must ignore local.yaml")
+		return false, nil, refusal("project_local_ignore_missing", ".prifly/.gitignore must ignore local.yaml")
 	}
 	return true, missing, nil
 }
@@ -2735,7 +2735,7 @@ func updateProjectRunners(root string, hosts ...projectHost) (updated, missing [
 		}
 	}
 	if len(hosts) != 0 && len(missing) == len(hosts) {
-		return nil, nil, usageError("project_runner_missing: project runners update requires " + filepath.ToSlash(filepath.Join(hosts[0].SkillsRoot, "prifly-run", "SKILL.md")))
+		return nil, nil, refusal("project_runner_missing", "project runners update requires "+filepath.ToSlash(filepath.Join(hosts[0].SkillsRoot, "prifly-run", "SKILL.md")))
 	}
 	updated = make([]string, 0, len(updates))
 	for _, update := range updates {
@@ -2821,7 +2821,7 @@ func writeProjectProfile(profile, authority, executable string, hosts ...project
 	// profile directory another developer or process created after validation.
 	if err := os.Mkdir(profile, 0755); err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return usageError("project_profile_conflict: existing .prifly profile was not overwritten")
+			return refusal("project_profile_conflict", "existing .prifly profile was not overwritten")
 		}
 		return err
 	}
@@ -2841,7 +2841,7 @@ func writeProjectLocal(profile, authority, executable string) error {
 	path := filepath.Join(profile, "local.yaml")
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if errors.Is(err, os.ErrExist) {
-		return usageError("project_local_conflict: existing .prifly/local.yaml was not overwritten")
+		return refusal("project_local_conflict", "existing .prifly/local.yaml was not overwritten")
 	}
 	if err != nil {
 		return err

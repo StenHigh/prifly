@@ -22,6 +22,16 @@ def main():
     parser.add_argument("--go", default=str(ROOT / ".tools/go/bin/go"))
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args()
+    # One build, then one exec per bundle. `go run` per bundle rebuilt the
+    # dependency graph twenty-eight times for twenty-eight identical binaries,
+    # and the gate paid for it on every run.
+    with tempfile.TemporaryDirectory() as workspace:
+        generator = os.path.join(workspace, "schema-gen")
+        subprocess.check_call([args.go, "build", "-o", generator, "./cmd/schema-gen"], cwd=ROOT)
+        check(args, generator)
+
+
+def check(args, generator):
     for profile, options, paths in (
         ("foundation", [], ("internal/runtime/public.schema.json", "schemas/foundation/public.schema.json")),
         ("core", ["--core"], ("internal/runtime/core-public.schema.json", "schemas/core/public.schema.json")),
@@ -81,7 +91,7 @@ def main():
 		("publication-source-v7", ["--publication-source-v7"], ("schemas/core/publication-source-v7.schema.json",)),
 		("publication-source-v8", ["--publication-source-v8"], ("schemas/core/publication-source-v8.schema.json",)),
     ):
-        content = subprocess.check_output([args.go, "run", "./cmd/schema-gen", *options], cwd=ROOT)
+        content = subprocess.check_output([generator, *options], cwd=ROOT)
         if profile in IMMUTABLE and hashlib.sha256(content).hexdigest() != IMMUTABLE[profile]:
             raise SystemExit(f"Immutable {profile} schema hash changed; version the new contract separately")
         for path in paths:

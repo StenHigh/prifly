@@ -60,6 +60,20 @@ var updateBinary = func(ctx context.Context, version string) (release.Result, er
 type usageError string
 
 func (e usageError) Error() string { return string(e) }
+
+// refusal is a refusal of the project surface whose code travels in the
+// envelope rather than inside its own sentence. These used to be usageError
+// values beginning "project_compile_unknown_host: ", which put every one of a
+// hundred and three distinct refusals on the wire as code "invalid_usage" with
+// the real code buried in prose a reader had to parse. refusal-check forbade
+// exactly this for errors.New and fmt.Errorf and never looked at usageError,
+// so the rule held everywhere except the surface with the most codes.
+//
+// Nothing a reader sees is lost: a refusal is always a JSON envelope on
+// stderr, so `code` and `message` arrive together either way.
+func refusal(code, detail string) error {
+	return &prifly.Fault{Code: code, Message: detail}
+}
 func commandID() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -647,7 +661,7 @@ func (c *cli) run(ctx context.Context, args []string) error {
 			// which refuses to write inside an authority, while this command
 			// refuses to read outside one: the two requirements never meet, so
 			// the advice was a dead end nobody could leave except by trial.
-			return usageError("unsafe_path: " + args[0] + " reads a workflow inside the selected authority, and --workflow is resolved from the authority root, not the working directory; absolute paths, traversal and symlinks are refused. Seal an authoring folder with project compile --repository DIR --package NAME --host HOST --output DIR, then copy the sealed workflow into the authority to read it here")
+			return refusal("unsafe_path", args[0]+" reads a workflow inside the selected authority, and --workflow is resolved from the authority root, not the working directory; absolute paths, traversal and symlinks are refused. Seal an authoring folder with project compile --repository DIR --package NAME --host HOST --output DIR, then copy the sealed workflow into the authority to read it here")
 		}
 		// The shared not_found says "run, definition, artifact or file", which
 		// lists what the subject might have been instead of naming it. Here the

@@ -51,11 +51,11 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 	if present {
 		rendered, missing, err := projectSubstituteValue(raw, values)
 		if err != nil || len(missing) != 0 {
-			return nil, usageError("project_execution_invalid: unresolved binding values")
+			return nil, refusal("project_execution_invalid", "unresolved binding values")
 		}
 		var ok bool
 		if object, ok = rendered.(map[string]any); !ok {
-			return nil, usageError("project_execution_invalid: execution_bindings must be an object")
+			return nil, refusal("project_execution_invalid", "execution_bindings must be an object")
 		}
 	}
 	result := &projectPackageExecution{SchemaVersion: projectExecutionVersion, Bindings: []prifly.ExecutionBinding{}}
@@ -64,14 +64,14 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 	readBinding := func(kind string, ref flow.Ref, rawConfig any) error {
 		fields, ok := rawConfig.(map[string]any)
 		if !ok {
-			return usageError("project_execution_invalid: binding must be an object")
+			return refusal("project_execution_invalid", "binding must be an object")
 		}
 		for key := range fields {
 			if fields[key] == nil {
-				return usageError("project_execution_invalid: omit optional fields instead of null: " + key)
+				return refusal("project_execution_invalid", "omit optional fields instead of null: "+key)
 			}
 			if key != "executable" && key != "args" && key != "files" && key != "timeout_ms" && key != "grace_ms" && key != "max_output_bytes" && key != "context_profile_ref" {
-				return usageError("project_execution_invalid: unknown binding field " + key)
+				return refusal("project_execution_invalid", "unknown binding field "+key)
 			}
 		}
 		data, err := json.Marshal(fields)
@@ -80,10 +80,10 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 		}
 		var config prifly.ExecutorConfig
 		if err := json.Unmarshal(data, &config); err != nil {
-			return usageError("project_execution_invalid: " + err.Error())
+			return refusal("project_execution_invalid", err.Error())
 		}
 		if !projectLaunchID(config.Executable) {
-			return usageError("project_execution_invalid: executable must be a logical name")
+			return refusal("project_execution_invalid", "executable must be a logical name")
 		}
 		if config.Args == nil {
 			config.Args = []string{}
@@ -103,7 +103,7 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 			}
 			total += len(data)
 			if total > prifly.MaxArtifactBytes {
-				return usageError("project_execution_invalid: supporting files exceed the byte limit")
+				return refusal("project_execution_invalid", "supporting files exceed the byte limit")
 			}
 			binding.Files[name] = data
 		}
@@ -114,24 +114,24 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 	for group, rawBindings := range object {
 		kind := strings.TrimSuffix(group, "s")
 		if group != "steps" && group != "checks" {
-			return nil, usageError("project_execution_invalid: unknown binding group " + group)
+			return nil, refusal("project_execution_invalid", "unknown binding group "+group)
 		}
 		bindings, ok := rawBindings.(map[string]any)
 		if !ok {
-			return nil, usageError("project_execution_invalid: binding group must be an object")
+			return nil, refusal("project_execution_invalid", "binding group must be an object")
 		}
 		for id, rawConfig := range bindings {
 			var ref flow.Ref
 			for _, component := range components {
 				if component.Kind == kind && component.Ref.ID == id {
 					if ref.ID != "" {
-						return nil, usageError("project_execution_invalid: ambiguous component " + id)
+						return nil, refusal("project_execution_invalid", "ambiguous component "+id)
 					}
 					ref = component.Ref
 				}
 			}
 			if ref.ID == "" {
-				return nil, usageError("project_execution_invalid: unknown owned component " + id)
+				return nil, refusal("project_execution_invalid", "unknown owned component "+id)
 			}
 			if err := readBinding(kind, ref, rawConfig); err != nil {
 				return nil, err
@@ -143,16 +143,16 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 		for _, component := range components {
 			if component.Kind == "step" && component.Ref.ID[strings.LastIndex(component.Ref.ID, "/")+1:] == name {
 				if ref.ID != "" {
-					return nil, usageError("project_execution_invalid: ambiguous inserted step " + name)
+					return nil, refusal("project_execution_invalid", "ambiguous inserted step "+name)
 				}
 				ref = component.Ref
 			}
 		}
 		if ref.ID == "" {
-			return nil, usageError("project_execution_invalid: extend.yaml binds " + name + ", which is not a step of this package")
+			return nil, refusal("project_execution_invalid", "extend.yaml binds "+name+", which is not a step of this package")
 		}
 		if bound["step "+ref.ID] {
-			return nil, usageError("project_execution_invalid: " + ref.ID + " is bound by the package's workflow.yaml and by extend.yaml; the package's program is not overridden")
+			return nil, refusal("project_execution_invalid", ref.ID+" is bound by the package's workflow.yaml and by extend.yaml; the package's program is not overridden")
 		}
 		if err := readBinding("step", ref, rawConfig); err != nil {
 			return nil, err
@@ -169,7 +169,7 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 
 func projectExecutionSource(projectRoot, folder, source string) ([]byte, error) {
 	if !fs.ValidPath(source) || source == "." || strings.Contains(source, "\\") {
-		return nil, usageError("project_execution_invalid: supporting source must be a confined relative file")
+		return nil, refusal("project_execution_invalid", "supporting source must be a confined relative file")
 	}
 	base, err := os.OpenRoot(projectRoot)
 	if err != nil {
@@ -178,7 +178,7 @@ func projectExecutionSource(projectRoot, folder, source string) ([]byte, error) 
 	defer base.Close()
 	relative, err := filepath.Rel(projectRoot, folder)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return nil, usageError("project_execution_invalid: workflow folder escapes project")
+		return nil, refusal("project_execution_invalid", "workflow folder escapes project")
 	}
 	// Open each directory without following links. Descriptor-relative traversal
 	// keeps the same boundary even if a path is replaced while reading.
@@ -193,7 +193,7 @@ func projectExecutionSource(projectRoot, folder, source string) ([]byte, error) 
 			return nil, err
 		}
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return nil, usageError("project_execution_invalid: supporting directories must not contain symlinks")
+			return nil, refusal("project_execution_invalid", "supporting directories must not contain symlinks")
 		}
 		next, err := current.OpenRoot(part)
 		if err != nil {
@@ -202,7 +202,7 @@ func projectExecutionSource(projectRoot, folder, source string) ([]byte, error) 
 		defer next.Close()
 		opened, err := next.Stat(".")
 		if err != nil || !os.SameFile(info, opened) {
-			return nil, usageError("project_execution_invalid: supporting directory changed while opening")
+			return nil, refusal("project_execution_invalid", "supporting directory changed while opening")
 		}
 		current = next
 	}
@@ -216,14 +216,14 @@ func projectExecutionSource(projectRoot, folder, source string) ([]byte, error) 
 		return nil, err
 	}
 	if !info.Mode().IsRegular() || info.Size() > prifly.MaxArtifactBytes {
-		return nil, usageError("project_execution_invalid: supporting source must be a bounded regular file")
+		return nil, refusal("project_execution_invalid", "supporting source must be a bounded regular file")
 	}
 	data, err := io.ReadAll(io.LimitReader(file, prifly.MaxArtifactBytes+1))
 	if err != nil {
 		return nil, err
 	}
 	if len(data) > prifly.MaxArtifactBytes {
-		return nil, usageError("project_execution_invalid: supporting source exceeds byte limit")
+		return nil, refusal("project_execution_invalid", "supporting source exceeds byte limit")
 	}
 	return data, nil
 }
@@ -232,18 +232,18 @@ func projectExecutionSource(projectRoot, folder, source string) ([]byte, error) 
 // synthetic absolute path; portable packages contain logical names only.
 func projectValidateExecution(payload *projectPackageExecution) error {
 	if payload.SchemaVersion != projectExecutionVersion {
-		return usageError("project_execution_invalid: unsupported package execution version")
+		return refusal("project_execution_invalid", "unsupported package execution version")
 	}
 	copy := prifly.ExecutionBindings{SchemaVersion: prifly.ExecutionBindingsVersion, Bindings: append([]prifly.ExecutionBinding{}, payload.Bindings...)}
 	for i := range copy.Bindings {
 		if !projectLaunchID(copy.Bindings[i].Config.Executable) {
-			return usageError("project_execution_invalid: executable must be a logical name")
+			return refusal("project_execution_invalid", "executable must be a logical name")
 		}
 		if len(copy.Bindings[i].Config.Environment) != 0 {
-			return usageError("project_execution_invalid: package execution must not contain machine environment")
+			return refusal("project_execution_invalid", "package execution must not contain machine environment")
 		}
 		if len(copy.Bindings[i].Config.EnvironmentFrom) != 0 {
-			return usageError("project_execution_invalid: where a value comes from is the local owner's choice, not the package's")
+			return refusal("project_execution_invalid", "where a value comes from is the local owner's choice, not the package's")
 		}
 		copy.Bindings[i].Config.Executable = "/" + copy.Bindings[i].Config.Executable
 	}
@@ -298,15 +298,15 @@ func projectExecutionPayload(root string, compiled projectCompileResult, closure
 			continue
 		}
 		if !allow {
-			return nil, usageError("project_execution_approval_required: review the workflow programs, arguments and files, then pass --allow-execution")
+			return nil, refusal("project_execution_approval_required", "review the workflow programs, arguments and files, then pass --allow-execution")
 		}
 		path, allowed := executables[binding.Config.Executable]
 		if !allowed {
-			return nil, usageError("project_execution_not_allowed: use project local set --allow-executable " + binding.Config.Executable + "=/absolute/path")
+			return nil, refusal("project_execution_not_allowed", "use project local set --allow-executable "+binding.Config.Executable+"=/absolute/path")
 		}
 		info, err := os.Stat(path)
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
-			return nil, usageError("project_execution_unavailable: selected executable is unavailable: " + binding.Config.Executable)
+			return nil, refusal("project_execution_unavailable", "selected executable is unavailable: "+binding.Config.Executable)
 		}
 		binding.Config.Executable = path
 		binding.Config.Environment = maps.Clone(environment)
@@ -325,7 +325,7 @@ func projectExecutionPayload(root string, compiled projectCompileResult, closure
 
 func projectDecodeExecution(data []byte) (*projectPackageExecution, error) {
 	if len(data) > prifly.MaxExecutionBindingsBytes {
-		return nil, usageError("project_execution_invalid: metadata exceeds byte limit")
+		return nil, refusal("project_execution_invalid", "metadata exceeds byte limit")
 	}
 	canonical, err := flow.Canonical(data)
 	if err != nil {

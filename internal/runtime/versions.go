@@ -15,44 +15,58 @@ import (
 // contract describes it" reads this table. Those questions used to be answered
 // by two dozen mutually recursive predicates and by the same ladder written out
 // in seven places, which is how the copies drifted apart from each other.
-type versionContract struct{ State, Read, StepRead string }
+type versionContract struct{ State, Read, StepRead, Next string }
 
 var versionContracts = []versionContract{
-	{CoreStateVersion, CoreReadVersion, ""},
-	{CoreInvocationStateVersion, CoreInvocationReadVersion, ""},
-	{CoreRepeatStateVersion, CoreRepeatReadVersion, ""},
-	{CoreContextStateVersion, CoreContextReadVersion, ""},
-	{CoreSessionStateVersion, CoreSessionReadVersion, ""},
-	{CoreWaiverStateVersion, CoreWaiverReadVersion, ""},
-	{CoreParallelStateVersion, CoreParallelReadVersion, ""},
-	{CoreMapStateVersion, CoreMapReadVersion, ""},
-	{CoreWaitStateVersion, CoreWaitReadVersion, ""},
-	{CoreGuardStateVersion, CoreGuardReadVersion, ""},
-	{CoreReportedCostStateVersion, CoreReportedCostReadVersion, ""},
-	{CoreArtifactPublicationStateVersion, CoreArtifactPublicationReadVersion, CoreArtifactPublicationStepReadVersion},
-	{CoreArtifactClosureStateVersion, CoreArtifactClosureReadVersion, CoreArtifactClosureStepReadVersion},
-	{CorePublicationSubscriptionStateVersion, CorePublicationSubscriptionReadVersion, CorePublicationSubscriptionStepReadVersion},
-	{CorePublicationChecksStateVersion, CorePublicationChecksReadVersion, CorePublicationChecksStepReadVersion},
-	{CorePublicationNewOnlyStateVersion, CorePublicationNewOnlyReadVersion, CorePublicationNewOnlyStepReadVersion},
-	{CorePublicationFailureStateVersion, CorePublicationFailureReadVersion, CorePublicationFailureStepReadVersion},
-	{CoreActionIntentStateVersion, CoreActionIntentReadVersion, CoreActionIntentStepReadVersion},
-	{CoreActionAdmissionStateVersion, CoreActionAdmissionReadVersion, CoreActionAdmissionStepReadVersion},
-	{CoreActionGrantAdmissionStateVersion, CoreActionGrantAdmissionReadVersion, CoreActionGrantAdmissionStepReadVersion},
-	{CoreActionDeliveryStateVersion, CoreActionDeliveryReadVersion, CoreActionDeliveryStepReadVersion},
-	{CoreForkStateVersion, CoreForkReadVersion, CoreForkStepReadVersion},
-	{CoreWorkspaceStateVersion, CoreWorkspaceReadVersion, CoreWorkspaceStepReadVersion},
-	{CoreWorkspaceTreeStateVersion, CoreWorkspaceTreeReadVersion, CoreWorkspaceTreeStepReadVersion},
-	{CoreDecisionStateVersion, CoreDecisionReadVersion, CoreDecisionStepReadVersion},
-	{CoreNeutralStateVersion, CoreNeutralReadVersion, CoreNeutralStepReadVersion},
-	{CoreTimingStateVersion, CoreTimingReadVersion, CoreTimingStepReadVersion},
-	{CoreRoutedStateVersion, CoreRoutedReadVersion, CoreRoutedStepReadVersion},
-	{CoreEffectsStateVersion, CoreEffectsReadVersion, CoreEffectsStepReadVersion},
-	{CoreMaterializedStateVersion, CoreMaterializedReadVersion, CoreMaterializedStepReadVersion},
-	{CoreStageWorkStateVersion, CoreStageWorkReadVersion, CoreStageWorkStepReadVersion},
+	{CoreStateVersion, CoreReadVersion, "", "foundation-next/1"},
+	{CoreInvocationStateVersion, CoreInvocationReadVersion, "", CoreInvocationNextVersion},
+	{CoreRepeatStateVersion, CoreRepeatReadVersion, "", CoreRepeatNextVersion},
+	{CoreContextStateVersion, CoreContextReadVersion, "", CoreContextNextVersion},
+	{CoreSessionStateVersion, CoreSessionReadVersion, "", CoreSessionNextVersion},
+	{CoreWaiverStateVersion, CoreWaiverReadVersion, "", CoreWaiverNextVersion},
+	{CoreParallelStateVersion, CoreParallelReadVersion, "", CoreParallelNextVersion},
+	{CoreMapStateVersion, CoreMapReadVersion, "", CoreMapNextVersion},
+	{CoreWaitStateVersion, CoreWaitReadVersion, "", CoreWaitNextVersion},
+	{CoreGuardStateVersion, CoreGuardReadVersion, "", CoreGuardNextVersion},
+	{CoreReportedCostStateVersion, CoreReportedCostReadVersion, "", CoreReportedCostNextVersion},
+	{CoreArtifactPublicationStateVersion, CoreArtifactPublicationReadVersion, CoreArtifactPublicationStepReadVersion, CoreArtifactPublicationNextVersion},
+	{CoreArtifactClosureStateVersion, CoreArtifactClosureReadVersion, CoreArtifactClosureStepReadVersion, CoreArtifactClosureNextVersion},
+	{CorePublicationSubscriptionStateVersion, CorePublicationSubscriptionReadVersion, CorePublicationSubscriptionStepReadVersion, CorePublicationSubscriptionNextVersion},
+	{CorePublicationChecksStateVersion, CorePublicationChecksReadVersion, CorePublicationChecksStepReadVersion, CorePublicationChecksNextVersion},
+	{CorePublicationNewOnlyStateVersion, CorePublicationNewOnlyReadVersion, CorePublicationNewOnlyStepReadVersion, CorePublicationNewOnlyNextVersion},
+	{CorePublicationFailureStateVersion, CorePublicationFailureReadVersion, CorePublicationFailureStepReadVersion, CorePublicationFailureNextVersion},
+	{CoreActionIntentStateVersion, CoreActionIntentReadVersion, CoreActionIntentStepReadVersion, CoreActionIntentNextVersion},
+	{CoreActionAdmissionStateVersion, CoreActionAdmissionReadVersion, CoreActionAdmissionStepReadVersion, CoreActionAdmissionNextVersion},
+	{CoreActionGrantAdmissionStateVersion, CoreActionGrantAdmissionReadVersion, CoreActionGrantAdmissionStepReadVersion, CoreActionGrantAdmissionNextVersion},
+	{CoreActionDeliveryStateVersion, CoreActionDeliveryReadVersion, CoreActionDeliveryStepReadVersion, CoreActionDeliveryNextVersion},
+	{CoreForkStateVersion, CoreForkReadVersion, CoreForkStepReadVersion, CoreForkNextVersion},
+	{CoreWorkspaceStateVersion, CoreWorkspaceReadVersion, CoreWorkspaceStepReadVersion, CoreWorkspaceNextVersion},
+	{CoreWorkspaceTreeStateVersion, CoreWorkspaceTreeReadVersion, CoreWorkspaceTreeStepReadVersion, CoreWorkspaceTreeNextVersion},
+	{CoreDecisionStateVersion, CoreDecisionReadVersion, CoreDecisionStepReadVersion, CoreDecisionNextVersion},
+	{CoreNeutralStateVersion, CoreNeutralReadVersion, CoreNeutralStepReadVersion, CoreNeutralNextVersion},
+	{CoreTimingStateVersion, CoreTimingReadVersion, CoreTimingStepReadVersion, CoreTimingNextVersion},
+	{CoreRoutedStateVersion, CoreRoutedReadVersion, CoreRoutedStepReadVersion, CoreRoutedNextVersion},
+	{CoreEffectsStateVersion, CoreEffectsReadVersion, CoreEffectsStepReadVersion, CoreEffectsNextVersion},
+	{CoreMaterializedStateVersion, CoreMaterializedReadVersion, CoreMaterializedStepReadVersion, CoreMaterializedNextVersion},
+	{CoreStageWorkStateVersion, CoreStageWorkReadVersion, CoreStageWorkStepReadVersion, CoreProgramEnvironmentNextVersion},
 	// 32 adds a field to the sealed executor config alone. The step read is
 	// left empty on purpose: nothing about it changed, so a Run at 32 answers
 	// step reads under the contract 31 already published.
-	{CoreEnvironmentSourceStateVersion, CoreEnvironmentSourceReadVersion, ""},
+	{CoreEnvironmentSourceStateVersion, CoreEnvironmentSourceReadVersion, "", CoreProgramEnvironmentNextVersion},
+}
+
+// nextVersionFor is the contract a next-action answer is written under for a
+// Run at this state. Next used to compute it from a second copy of the ladder
+// above: sixteen sequential ifs that each overwrote the last, then a fourteen-
+// branch else-if chain running the other way. Both halves said the same thing
+// -- the highest row this state reaches -- in two shapes that could drift, and
+// the earlier copies of this ladder did exactly that.
+func nextVersionFor(version string) string {
+	rank := stateRank(version)
+	if rank < 0 || versionContracts[rank].Next == "" {
+		return "foundation-next/1"
+	}
+	return versionContracts[rank].Next
 }
 
 func isNeutralState(version string) bool { return atLeast(version, CoreNeutralStateVersion) }

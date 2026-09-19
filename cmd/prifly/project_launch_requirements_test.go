@@ -228,7 +228,7 @@ func TestCLIProjectLaunchPreflightRunsBeforeAnythingIsTaken(t *testing.T) {
 	// The binary is the owner's to allow; until then the launch is refused for
 	// that, not run.
 	code, _, stderr := runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "inspect", "--host", "codex-cli")
-	if code == 0 || !strings.Contains(stderr, "project_execution_not_allowed: use project local set --allow-executable shell=") {
+	if code == 0 || !strings.Contains(stderr, `"code":"project_execution_not_allowed"`) || !strings.Contains(stderr, "use project local set --allow-executable shell=") {
 		t.Fatalf("an unallowed preflight binary was run or passed: %d %s", code, stderr)
 	}
 	if _, err := os.Lstat(marker); !os.IsNotExist(err) {
@@ -238,7 +238,7 @@ func TestCLIProjectLaunchPreflightRunsBeforeAnythingIsTaken(t *testing.T) {
 		t.Fatalf("allow: %d %s", code, stderr)
 	}
 	code, _, stderr = runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "inspect", "--host", "codex-cli")
-	if code == 0 || !strings.Contains(stderr, "project_start_preflight_failed: launch inspect preflight shell exited 3; nothing was started; output: base is not clean") {
+	if code == 0 || !strings.Contains(stderr, `"code":"project_start_preflight_failed"`) || !strings.Contains(stderr, "launch inspect preflight shell exited 3; nothing was started; output: base is not clean") {
 		t.Fatalf("a failing preflight did not refuse the launch with its output: %d %s", code, stderr)
 	}
 	if _, err := os.Stat(marker); err != nil {
@@ -282,7 +282,7 @@ func TestCLIProjectLaunchPreflightRunsBeforeAnythingIsTaken(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, _, stderr = runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "inspect", "--host", "codex-cli")
-	if code == 0 || !strings.Contains(stderr, "project_start_preflight_timeout: launch inspect preflight shell did not finish within 300ms") {
+	if code == 0 || !strings.Contains(stderr, `"code":"project_start_preflight_timeout"`) || !strings.Contains(stderr, "launch inspect preflight shell did not finish within 300ms") {
 		t.Fatalf("a hanging preflight was not bounded: %d %s", code, stderr)
 	}
 }

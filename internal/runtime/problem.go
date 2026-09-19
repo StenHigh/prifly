@@ -58,6 +58,15 @@ func persistenceFailure(err error) bool { return local.IsPersistenceFailure(err)
 // and only allows inspection.
 func exitForCode(code string) int {
 	switch {
+	// The project surface validates declarations, not authority state. A
+	// "conflict" there is two lines of project.yaml disagreeing with each
+	// other, which is the form-and-input class the exit table calls 2, not the
+	// "the version, epoch, claim or access is not the one held" class it calls
+	// 3. The substring rules below were written for authority codes, and when
+	// a hundred and three project refusals stopped hiding behind invalid_usage
+	// they read eight of them as state conflicts.
+	case strings.HasPrefix(code, "project_"):
+		return 2
 	// An exhausted allowance is the same refusal whether the engine wrote it as
 	// a fault or the store rejected it: budget_exhausted exited 2 through here
 	// and 5 through the rejection branch, so one code named two classes.
@@ -308,6 +317,13 @@ func ProblemFor(err error) (Problem, int) {
 		"stage_not_reopenable": {"run.next", "run.status"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
+	} else if strings.HasPrefix(p.Code, "project_") || p.Code == "unsafe_path" {
+		// The project surface carries a hundred and three refusals that were
+		// all invalid_usage until their codes moved out of their own sentences.
+		// Nothing is wrong with the authority's state when a declaration is
+		// mistyped, so a state diagnostic leads away from the file that has to
+		// be fixed; the ones with a better answer than "help" are named above.
+		p.SafeNextActions = []string{"help"}
 	}
 	var occurrence *DiagnosticError
 	if errors.As(err, &occurrence) && occurrence.ID != "" {

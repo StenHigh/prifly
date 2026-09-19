@@ -21,21 +21,21 @@ func projectDecisionInputs(preflight projectPreflight, inputs map[string]json.Ra
 			continue
 		}
 		if definition.Phase != "preflight" {
-			return usageError("project_start_unsupported_decision_input: launch_input requires a preflight decision")
+			return refusal("project_start_unsupported_decision_input", "launch_input requires a preflight decision")
 		}
 		value, answered := answers[definition.ID]
 		if !answered || !projectDecisionApplies(definition, preflight.PackageProfile, answers) {
 			continue
 		}
 		if !neutral {
-			return usageError("project_start_unsupported_decision_input: launch_input answers require Project profile /3")
+			return refusal("project_start_unsupported_decision_input", "launch_input answers require Project profile /3")
 		}
 		port := definition.Destination.Name
 		_, explicitValue := inputs[port]
 		_, explicitRef := refs[port]
 		_, anotherDecision := selected[port]
 		if explicitValue || explicitRef || anotherDecision {
-			return usageError("project_start_duplicate_input: decision and another source both bind " + port)
+			return refusal("project_start_duplicate_input", "decision and another source both bind "+port)
 		}
 		selected[port] = append(json.RawMessage(nil), value...)
 	}

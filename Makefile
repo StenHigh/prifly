@@ -51,7 +51,7 @@ fmt-check:
 refusal-check:
 	@files=$$(find internal cmd -name '*.go' -type f ! -name '*_test.go' | wc -l | tr -d ' '); \
 	if [ "$$files" -lt 1 ]; then echo "refusal-check read no Go files under internal cmd"; exit 1; fi; \
-	sites=$$(grep -rEn --include='*.go' --exclude='*_test.go' 'errors\.New\("[a-z_]+:|fmt\.Errorf\("[a-z_]+:' internal cmd); status=$$?; \
+	sites=$$(grep -rEn --include='*.go' --exclude='*_test.go' 'errors\.New\("[a-z_]+:|fmt\.Errorf\("[a-z_]+:|usageError\("[a-z][a-z0-9_]*_[a-z0-9_]*:' internal cmd); status=$$?; \
 	if [ $$status -ge 2 ]; then echo "refusal-check could not search: grep exited $$status"; exit 1; fi; \
 	if [ -n "$$sites" ]; then echo "refusal code inside error text:"; echo "$$sites"; exit 1; fi; \
 	echo "refusal-check: $$files files read, no refusal code inside error text"

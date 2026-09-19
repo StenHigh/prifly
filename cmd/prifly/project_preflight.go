@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -31,52 +32,56 @@ const (
 	// carries: enough to read the reason, not the whole log.
 	projectPreflightOutputTail = 2000
 	projectPreflightMaxOutput  = 1 << 20
+	// projectPreflightDrainLimit bounds how long reading a killed program's
+	// output may outlive it. The write end of that pipe belongs to whoever
+	// holds it, which after a kill is whatever the program left behind.
+	projectPreflightDrainLimit = 2 * time.Second
 )
 
 func readProjectLaunchPreflight(id string, raw any) (*projectLaunchPreflight, error) {
 	object, ok := raw.(map[string]any)
 	if !ok || len(object) == 0 {
-		return nil, usageError("project_profile_invalid: launch " + id + " preflight must be an object with executable and timeout_ms")
+		return nil, refusal("project_profile_invalid", "launch "+id+" preflight must be an object with executable and timeout_ms")
 	}
 	for key := range object {
 		switch key {
 		case "executable", "args", "timeout_ms":
 		default:
-			return nil, usageError("project_profile_invalid: unknown field in launch " + id + " preflight: " + key)
+			return nil, refusal("project_profile_invalid", "unknown field in launch "+id+" preflight: "+key)
 		}
 	}
 	result := &projectLaunchPreflight{Args: []string{}}
 	executable, ok := object["executable"].(string)
 	if !ok || !projectLaunchID(executable) {
-		return nil, usageError("project_profile_invalid: launch " + id + " preflight executable must be a logical name allowed with project local set --allow-executable")
+		return nil, refusal("project_profile_invalid", "launch "+id+" preflight executable must be a logical name allowed with project local set --allow-executable")
 	}
 	result.Executable = executable
 	if raw, exists := object["args"]; exists {
 		items, ok := raw.([]any)
 		if !ok {
-			return nil, usageError("project_profile_invalid: launch " + id + " preflight args must be a list of strings")
+			return nil, refusal("project_profile_invalid", "launch "+id+" preflight args must be a list of strings")
 		}
 		for _, item := range items {
 			text, ok := item.(string)
 			if !ok {
-				return nil, usageError("project_profile_invalid: launch " + id + " preflight args must be a list of strings")
+				return nil, refusal("project_profile_invalid", "launch "+id+" preflight args must be a list of strings")
 			}
 			result.Args = append(result.Args, text)
 		}
 	}
 	timeout, ok := object["timeout_ms"]
 	if !ok {
-		return nil, usageError("project_profile_invalid: launch " + id + " preflight requires timeout_ms")
+		return nil, refusal("project_profile_invalid", "launch "+id+" preflight requires timeout_ms")
 	}
 	// Parsed YAML carries numbers as json.Number; an integer written as a
 	// float is refused rather than rounded.
 	number, ok := timeout.(json.Number)
 	if !ok {
-		return nil, usageError("project_profile_invalid: launch " + id + " preflight timeout_ms must be an integer 1.." + strconv.Itoa(projectPreflightMaxTimeoutMS))
+		return nil, refusal("project_profile_invalid", "launch "+id+" preflight timeout_ms must be an integer 1.."+strconv.Itoa(projectPreflightMaxTimeoutMS))
 	}
 	ms, err := number.Int64()
 	if err != nil || ms < 1 || ms > projectPreflightMaxTimeoutMS {
-		return nil, usageError("project_profile_invalid: launch " + id + " preflight timeout_ms must be an integer 1.." + strconv.Itoa(projectPreflightMaxTimeoutMS))
+		return nil, refusal("project_profile_invalid", "launch "+id+" preflight timeout_ms must be an integer 1.."+strconv.Itoa(projectPreflightMaxTimeoutMS))
 	}
 	result.TimeoutMS = ms
 	return result, nil
@@ -95,11 +100,11 @@ func runProjectLaunchPreflight(ctx context.Context, root, launchID string, prefl
 	}
 	path, allowed := executables[preflight.Executable]
 	if !allowed {
-		return usageError("project_execution_not_allowed: use project local set --allow-executable " + preflight.Executable + "=/absolute/path")
+		return refusal("project_execution_not_allowed", "use project local set --allow-executable "+preflight.Executable+"=/absolute/path")
 	}
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
-		return usageError("project_execution_unavailable: selected executable is unavailable: " + preflight.Executable)
+		return refusal("project_execution_unavailable", "selected executable is unavailable: "+preflight.Executable)
 	}
 	timeout := time.Duration(preflight.TimeoutMS) * time.Millisecond
 	deadline, cancel := context.WithTimeout(ctx, timeout)
@@ -107,6 +112,17 @@ func runProjectLaunchPreflight(ctx context.Context, root, launchID string, prefl
 	command := exec.CommandContext(deadline, path, preflight.Args...)
 	command.Dir = root
 	command.Env = os.Environ()
+	// A declared timeout is the promise that a preflight cannot hold a launch
+	// open. exec.CommandContext kills the program it started and nothing else,
+	// and Run then waits on the output pipe, which anything the program left
+	// running still holds: a launch declaring half a second stayed open for the
+	// thirty seconds its grandchild slept. So the program gets its own process
+	// group, cancellation kills the group, and the drain is bounded too --
+	// because a process that ignores SIGKILL is impossible, but one that has
+	// passed the pipe somewhere unreachable is not.
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.Cancel = func() error { return syscall.Kill(-command.Process.Pid, syscall.SIGKILL) }
+	command.WaitDelay = projectPreflightDrainLimit
 	output := &boundedBuffer{limit: projectPreflightMaxOutput}
 	command.Stdout, command.Stderr = output, output
 	err = command.Run()
@@ -115,13 +131,13 @@ func runProjectLaunchPreflight(ctx context.Context, root, launchID string, prefl
 	}
 	tail := output.tail(projectPreflightOutputTail)
 	if errors.Is(deadline.Err(), context.DeadlineExceeded) {
-		return usageError("project_start_preflight_timeout: launch " + launchID + " preflight " + preflight.Executable + " did not finish within " + timeout.String() + "; nothing was started" + tail)
+		return refusal("project_start_preflight_timeout", "launch "+launchID+" preflight "+preflight.Executable+" did not finish within "+timeout.String()+"; nothing was started"+tail)
 	}
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
-		return usageError("project_start_preflight_failed: launch " + launchID + " preflight " + preflight.Executable + " exited " + strconv.Itoa(exit.ExitCode()) + "; nothing was started" + tail)
+		return refusal("project_start_preflight_failed", "launch "+launchID+" preflight "+preflight.Executable+" exited "+strconv.Itoa(exit.ExitCode())+"; nothing was started"+tail)
 	}
-	return usageError("project_start_preflight_failed: launch " + launchID + " preflight " + preflight.Executable + ": " + err.Error() + "; nothing was started" + tail)
+	return refusal("project_start_preflight_failed", "launch "+launchID+" preflight "+preflight.Executable+": "+err.Error()+"; nothing was started"+tail)
 }
 
 // boundedBuffer keeps at most limit bytes of what a program printed and
