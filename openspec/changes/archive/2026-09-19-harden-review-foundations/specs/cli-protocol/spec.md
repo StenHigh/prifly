@@ -103,3 +103,81 @@ declared ID командой чтения package, без обращения к 
   операцию
 - **THEN** каждая мутирующая операция присутствует в списке записи, и
   отсутствие операции в нём — отказ проверки, а не read-only выполнение
+
+### Requirement: Problem и exit code сохраняют safe meaning
+
+Problem MUST include stable code, message, correlation, violations and safe
+next action without secrets or foreign-object detail. `retryable` describes
+command/check retry only. CLI exit zero means read or command commit, not Run
+success; typed result carries workflow state. Runtime refusal, поднятый со
+stable code, MUST доходить до клиента под этим code независимо от того,
+сопровождён ли он message; engine-authored detail такого отказа (port, path,
+version) MUST сообщаться в `violations`. Только текст без stable code MUST
+схлопываться в `invalid_input`, и такой текст MUST NOT попадать в ответ.
+
+Stable code MUST жить в поле `code`, а не внутри собственного предложения
+отказа. Отказ, чей код читается только разбором `message`, MUST считаться
+отказом без stable code: он называет один и тот же код для всей поверхности и
+лишает читателя различения, ради которого код объявлен. Машинная проверка
+MUST покрывать каждый конструктор ошибок, которым отказы создаются, а не
+выбранное подмножество.
+
+Exit class MUST следовать смыслу отказа, а не написанию его имени. Отказ,
+означающий, что два объявления автора не сходятся между собой, относится к
+классу формы и входных данных; класс состояния authority MUST оставаться за
+отказами, где не совпали version, epoch, claim, slot, admission или access.
+
+Отказ MUST различать классы отсутствия: отсутствующая authority по выбранному
+пути, отсутствующий объект внутри существующей authority и существующий объект
+без запрошенного состояния MUST иметь разные stable codes. Отказ MUST NOT
+утверждать отсутствие объекта, который движок держит. Usage refusal
+глобального аргумента MUST повторять полученное значение, чтобы обрезанный
+shell-ом путь отличался от дефекта инструмента.
+
+#### Scenario: External effect is unknown
+
+- **WHEN** command reports unknown effect
+- **THEN** safe next action is exact reconciliation, not blind retry
+
+#### Scenario: Refusal поднят без сопроводительного message
+
+- **WHEN** runtime отказывает stable code без detail
+- **THEN** Problem несёт этот code, а не `invalid_input`
+
+#### Scenario: Refusal несёт engine-authored detail
+
+- **WHEN** runtime отказывает stable code с detail о предмете отказа
+- **THEN** Problem несёт этот code и detail в `violations`, без raw parser
+  input, argv, environment или foreign payload
+
+#### Scenario: Выбранный путь не содержит authority
+
+- **WHEN** команда выполняется с `--project`, указывающим на каталог без
+  authority
+- **THEN** отказ называет отсутствие authority по этому пути и отличается от
+  отказа про ненайденный Run, definition или artifact
+
+#### Scenario: Run существует, но передачи нет
+
+- **WHEN** host запрашивает удерживаемую передачу Run, который существует и
+  не держит ни одной
+- **THEN** отказ называет отсутствие активной передачи и предлагает чтение
+  состояния и drive, а не поиск Run
+
+#### Scenario: Аргумент обрезан вызывающей стороной
+
+- **WHEN** глобальный аргумент получен в непригодной форме
+- **THEN** usage refusal показывает полученное значение
+
+#### Scenario: Отказ проектной поверхности называет свой код
+
+- **WHEN** объявленная операция проекта отказывает по объявленной причине
+- **THEN** `code` несёт именно этот код, `message` несёт причину без него, и
+  машинная проверка конструкторов отказа валит сборку, если код снова оказался
+  внутри текста
+
+#### Scenario: Расхождение двух объявлений не выдаётся за состояние authority
+
+- **WHEN** отказ означает, что две строки авторского объявления противоречат
+  друг другу, и его имя содержит слово, которым назван класс состояния
+- **THEN** exit class остаётся классом формы и входных данных

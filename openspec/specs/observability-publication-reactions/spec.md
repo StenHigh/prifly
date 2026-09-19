@@ -181,8 +181,13 @@ credentials MUST NOT попадать в read view. Поскольку reported 
 пересылки: telemetry и export сохраняют собственные границы и MUST NOT
 включать reported text.
 
+История состояний, восстановленная для read view, historical query или
+timing-отчёта, MUST приходить из того же cut, что и сам снапшот: переходы,
+совершённые после среза отчёта, MUST NOT попадать в его интервалы и
+агрегаты. Read view MUST называть, если recorded history неполна, вместо
+тихого продолжения.
+
 #### Scenario: Cross-run cut и независимая authority
-- **Этап:** `P2-12`; **Статус:** `specified_not_executed`; **Вид проверки:** `runtime_integration`.
 - **WHEN** Выполнить query и guard decision.
 - **THEN** Первые читаются согласованно; внешний имеет отдельную версию/freshness, права проверены; global atomic snapshot не заявлен.
 - **Контекст:** Два subjects одной authority и третий внешний.
@@ -195,6 +200,12 @@ credentials MUST NOT попадать в read view. Поскольку reported 
 #### Scenario: Telemetry не повторяет reported text
 - **WHEN** тот же Run попадает в telemetry report
 - **THEN** reported summary и limitations в него не входят
+
+#### Scenario: Отчёт по историческому срезу не видит будущих переходов
+- **WHEN** отчёт зафиксирован на cut, затем Run совершил ещё один переход
+  состояния, затем отчёт прочитан снова по тому же cut
+- **THEN** интервалы состояний и агрегаты отчёта байт-в-байт совпадают с
+  первым чтением; переход после среза в них не входит
 
 ### Requirement: Чтение не является управлением
 Query, watch и cursor MUST проверять current access при каждом ответе и MUST
