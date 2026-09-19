@@ -52,10 +52,18 @@ func TestPreflightTimeoutEndsTheProgramGroupAndDoesNotWaitOnIt(t *testing.T) {
 	if convErr != nil || pid <= 0 {
 		t.Fatalf("the fixture recorded %q as a pid: %v", raw, convErr)
 	}
-	// Signal 0 asks only whether the process is still there.
-	if alive := syscall.Kill(pid, 0); alive == nil {
-		_ = syscall.Kill(-pid, syscall.SIGKILL)
-		_ = syscall.Kill(pid, syscall.SIGKILL)
-		t.Fatalf("the preflight's grandchild %d outlived the launch that started it", pid)
+	// Signal 0 asks only whether a process entry is still there, and a killed
+	// grandchild keeps one until whoever adopts it reaps it. On Linux that is
+	// init, a moment after its own parent died, so the first read of this found
+	// a corpse and called it a survivor. The wait is for the reaping, not for
+	// the kill: a process that is genuinely still running outlives it.
+	deadline := time.Now().Add(5 * time.Second)
+	for syscall.Kill(pid, 0) == nil {
+		if time.Now().After(deadline) {
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+			t.Fatalf("the preflight's grandchild %d outlived the launch that started it by more than 5s", pid)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
