@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,7 +31,9 @@ func assistedWorkspaceFixture(t *testing.T, workspace string) (*Engine, string, 
 	return assistedWorkspaceFixtureWithDecisions(t, workspace, nil, nil)
 }
 
-func assistedWorkspaceFixtureWithDecisions(t *testing.T, workspace string, catalog *DecisionCatalog, sheet *DecisionSheet) (*Engine, string, WorktreeClaim) {
+// shapeAssistedStep lets one test seal a step the standard fixture does not
+// describe, without a second copy of the forty lines that build it.
+func assistedWorkspaceFixtureWithDecisions(t *testing.T, workspace string, catalog *DecisionCatalog, sheet *DecisionSheet, shapeAssistedStep ...func(*flow.StepDefinition)) (*Engine, string, WorktreeClaim) {
 	t.Helper()
 	e := contextRegistryRuntime(t)
 	repository := gitRepository(t)
@@ -65,6 +68,9 @@ func assistedWorkspaceFixtureWithDecisions(t *testing.T, workspace string, catal
 	step.InstructionsRef = &skillRef
 	step.Effects.Class = "workspace_write"
 	step.Effects.RetryClass = "never"
+	for _, shape := range shapeAssistedStep {
+		shape(&step)
+	}
 	stepBytes := writeRegistryDocument(t, e, "steps/plan.json", step)
 	stepRef := flow.Ref{ID: step.ID, Version: step.Version, Digest: rawDigest(stepBytes)}
 
@@ -1130,5 +1136,100 @@ func TestATaskCarriesTheModelProfileItsStepDeclared(t *testing.T) {
 		t.Fatal(err)
 	} else if bytes.Contains(data, []byte("model_profile")) || bytes.Contains(data, []byte("deep-reasoning")) {
 		t.Fatalf("the declaration was copied into stored state: %s", data)
+	}
+}
+
+// A step that declares a profile must get an answer, and the answer must be
+// one a reader can act on. Whether it is true is beyond this authority: it
+// holds no channel to a session that existed before the Run. So the report is
+// held to having an answer and to its shape, never to its truth.
+func TestADeclaredModelProfileIsAnsweredOrTheReportIsRefused(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		statement *ModelProfileStatement
+		code      string
+	}{
+		{"honoured", &ModelProfileStatement{Outcome: "honoured", Named: "claude-opus-5"}, ""},
+		{"unavailable", &ModelProfileStatement{Outcome: "unavailable", Reason: "this host does not choose models"}, ""},
+		{"declined", &ModelProfileStatement{Outcome: "declined", Reason: "the task was small enough that the cheaper model was honest"}, ""},
+		{"silent", nil, "model_profile_unanswered"},
+		{"unknown outcome", &ModelProfileStatement{Outcome: "maybe", Named: "x"}, "model_profile_outcome_invalid"},
+		{"honoured without a model", &ModelProfileStatement{Outcome: "honoured"}, "model_profile_model_unnamed"},
+		{"honoured with an excuse", &ModelProfileStatement{Outcome: "honoured", Named: "m", Reason: "why"}, "model_profile_reason_unexpected"},
+		{"declined naming a model", &ModelProfileStatement{Outcome: "declined", Named: "m", Reason: "why"}, "model_profile_model_unexpected"},
+		{"declined without a reason", &ModelProfileStatement{Outcome: "declined"}, "model_profile_reason_missing"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			declared := &flow.ModelProfile{Requested: "deep-reasoning", Reason: "judges work it did not do"}
+			err := checkModelProfileStatement(declared, c.statement)
+			if c.code == "" {
+				if err != nil {
+					t.Fatalf("a usable answer was refused: %v", err)
+				}
+				return
+			}
+			var problem *flow.Problem
+			if !errors.As(err, &problem) || problem.Code != c.code {
+				t.Fatalf("expected %s, got %v", c.code, err)
+			}
+		})
+	}
+	// A step that asked nothing has nothing to answer, and answering anyway is
+	// a report about a declaration that does not exist.
+	if err := checkModelProfileStatement(nil, nil); err != nil {
+		t.Fatalf("a step without a profile was held to one: %v", err)
+	}
+	var problem *flow.Problem
+	err := checkModelProfileStatement(nil, &ModelProfileStatement{Outcome: "honoured", Named: "m"})
+	if !errors.As(err, &problem) || problem.Code != "model_profile_not_declared" {
+		t.Fatalf("an answer to nothing was accepted: %v", err)
+	}
+}
+
+// The point of storing the answer typed rather than as prose: three attempts
+// that answered differently are three countable outcomes, not three sentences
+// somebody has to read.
+func TestWhatTheHostSaidAboutTheProfileIsStoredAndCountable(t *testing.T) {
+	counted := map[string]int{}
+	for _, statement := range []*ModelProfileStatement{
+		{Outcome: "honoured", Named: "claude-opus-5"},
+		{Outcome: "unavailable", Reason: "this host does not choose models"},
+		{Outcome: "declined", Reason: "the task was small enough that the cheaper model was honest"},
+	} {
+		e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", nil, nil, func(step *flow.StepDefinition) {
+			step.SchemaVersion = "9"
+			step.ModelProfile = &flow.ModelProfile{Requested: "deep-reasoning", Reason: "judges work it did not do"}
+		})
+		ctx := context.Background()
+		if err := e.Drive(ctx, runID); err != nil {
+			t.Fatal(err)
+		}
+		task, err := e.SessionTask(ctx, runID, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if task.ModelProfile == nil || task.ModelProfile.Requested != "deep-reasoning" {
+			t.Fatalf("the sealed declaration did not reach the task: %+v", task.ModelProfile)
+		}
+		submission := hostResult(t, e, task, "planned")
+		submission.ModelProfile = statement
+		if _, err := e.SubmitSession(ctx, submission); err != nil {
+			t.Fatalf("%s was refused: %v", statement.Outcome, err)
+		}
+		r := driverRun(t, e, runID)
+		report := r.Attempts[task.AttemptID].ModelProfileReport
+		if report == nil {
+			t.Fatalf("%s was accepted and not recorded", statement.Outcome)
+		}
+		if report.SchemaVersion != ModelProfileReportVersion || report.Requested != "deep-reasoning" {
+			t.Fatalf("the record does not say what it answered: %+v", report)
+		}
+		if report.Outcome != statement.Outcome || report.Named != statement.Named || report.Reason != statement.Reason {
+			t.Fatalf("the record differs from the statement: %+v vs %+v", report, statement)
+		}
+		counted[report.Outcome]++
+	}
+	if len(counted) != 3 || counted["honoured"] != 1 || counted["unavailable"] != 1 || counted["declined"] != 1 {
+		t.Fatalf("three different answers did not count as three: %v", counted)
 	}
 }

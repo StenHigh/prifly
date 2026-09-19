@@ -844,6 +844,12 @@ func main() {
 			delete(contracts, name+"V32")
 		}
 	}
+	if g.modelProfiles {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V34"] = contracts[name+"V33"]
+			delete(contracts, name+"V33")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)

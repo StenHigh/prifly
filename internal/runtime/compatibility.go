@@ -100,6 +100,19 @@ func Capabilities() CapabilityManifest {
 	// recorded, and the published capability document caps state_versions at
 	// 32 entries, which this build already fills.
 	profile.Capabilities = append(profile.Capabilities, "program_environment_named")
+	// A step may declare the profile of model it wants and the host reports
+	// what it did with that declaration. The report is recorded, so this one
+	// mints a state version -- the thirty-third, one past the cap every bundle
+	// published before model-profile:34 sets on these lists. The owner
+	// withdrew that compatibility on 2026-09-19; the new bundle allows more,
+	// the old ones are untouched, and a reader pinned to one of them can no
+	// longer validate this document. That is the price, and it is named here
+	// rather than discovered.
+	profile.StateVersion, profile.ReadVersion = CoreModelProfileStateVersion, CoreModelProfileReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreModelProfileStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreModelProfileReadVersion)
+	profile.StepVersions = append(profile.StepVersions, "9")
+	profile.Capabilities = append(profile.Capabilities, "model_profile_declared")
 	return manifest
 }
 

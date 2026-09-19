@@ -53,6 +53,11 @@ var versionContracts = []versionContract{
 	// left empty on purpose: nothing about it changed, so a Run at 32 answers
 	// step reads under the contract 31 already published.
 	{CoreEnvironmentSourceStateVersion, CoreEnvironmentSourceReadVersion, "", CoreProgramEnvironmentNextVersion},
+	// 34 records what a host said it did with a declared model profile. It is
+	// the first row past the cap the published capability document set on
+	// these lists; the owner withdrew that compatibility on 2026-09-19, and
+	// the new bundle allows more while every earlier one keeps saying 32.
+	{CoreModelProfileStateVersion, CoreModelProfileReadVersion, CoreModelProfileStepReadVersion, CoreModelProfileNextVersion},
 }
 
 // nextVersionFor is the contract a next-action answer is written under for a

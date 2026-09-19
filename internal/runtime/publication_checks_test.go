@@ -92,7 +92,7 @@ func TestArtifactPublicationChecksAcceptSealedItemBeforeProducerSettles(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, value := range map[string]any{"CoreRunStateV15": r, "CoreRunViewV15": runView, "CoreNextViewV15": next, "ArtifactPublication": r.ArtifactPublications[0], "CoreCapabilitiesV15": Capabilities()} {
+	for name, value := range map[string]any{"CoreRunStateV15": r, "CoreRunViewV15": runView, "CoreNextViewV15": next, "ArtifactPublication": r.ArtifactPublications[0], "CoreCapabilitiesV34": Capabilities()} {
 		if err := validatePublic(t, name, value); err != nil {
 			t.Fatalf("%s rejects the live checked-publication value: %v", name, err)
 		}

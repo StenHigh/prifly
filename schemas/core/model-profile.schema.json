@@ -276,28 +276,28 @@
     "ContextRequest": {
       "$ref": "#/$defs/runtime_ContextRequest"
     },
-    "CoreCapabilitiesV33": {
+    "CoreCapabilitiesV34": {
       "$ref": "#/$defs/runtime_CapabilityManifest"
     },
     "CoreConfigurationV2": {
       "$ref": "#/$defs/runtime_Configuration"
     },
-    "CoreNextViewV33": {
+    "CoreNextViewV34": {
       "$ref": "#/$defs/runtime_NextView"
     },
-    "CorePreviewV33": {
+    "CorePreviewV34": {
       "$ref": "#/$defs/runtime_Preview"
     },
-    "CoreRunStateV33": {
+    "CoreRunStateV34": {
       "$ref": "#/$defs/runtime_Run"
     },
-    "CoreRunViewV33": {
+    "CoreRunViewV34": {
       "$ref": "#/$defs/runtime_RunView"
     },
-    "CoreStepReadViewV33": {
+    "CoreStepReadViewV34": {
       "$ref": "#/$defs/runtime_StepReadView"
     },
-    "CoreWorkflowInvocationV33": {
+    "CoreWorkflowInvocationV34": {
       "$ref": "#/$defs/runtime_Invocation"
     },
     "DecisionCatalog": {
@@ -2240,6 +2240,17 @@
         },
         "id": {
           "type": "string"
+        },
+        "model_profile_report": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_ModelProfileReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What the host said it did with the model profile this step declared: honoured and which model, unavailable because its platform does not choose, or declined and why. The host's statement about itself, recorded as given. This authority holds no channel to a session that existed before the Run and confirms nothing here."
         },
         "process": {
           "anyOf": [
@@ -5088,6 +5099,54 @@
       ],
       "type": "object"
     },
+    "runtime_ModelProfileReport": {
+      "additionalProperties": false,
+      "properties": {
+        "named": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reported": {
+          "$ref": "#/$defs/runtime_Observation"
+        },
+        "requested": {
+          "type": "string"
+        },
+        "schema_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome",
+        "reported",
+        "requested",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "runtime_ModelProfileStatement": {
+      "additionalProperties": false,
+      "properties": {
+        "named": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome"
+      ],
+      "type": "object"
+    },
     "runtime_NextView": {
       "additionalProperties": false,
       "allOf": [
@@ -6027,7 +6086,7 @@
           "$ref": "#/$defs/flow_Limits"
         },
         "schema_version": {
-          "const": "core-preview/31"
+          "const": "core-preview/34"
         },
         "semantics_profile": {
           "const": "core-workflow/1"
@@ -6134,7 +6193,7 @@
             "minLength": 1,
             "type": "string"
           },
-          "maxItems": 32,
+          "maxItems": 64,
           "minItems": 1,
           "type": "array",
           "uniqueItems": true
@@ -6153,7 +6212,7 @@
             "minLength": 1,
             "type": "string"
           },
-          "maxItems": 32,
+          "maxItems": 64,
           "minItems": 1,
           "type": "array",
           "uniqueItems": true
@@ -8401,7 +8460,7 @@
           "type": "string"
         },
         "schema_version": {
-          "const": "core-state/32"
+          "const": "core-state/34"
         },
         "semantics_profile": {
           "const": "core-workflow/1"
@@ -8635,7 +8694,7 @@
           "type": "integer"
         },
         "schema_version": {
-          "const": "core-read/32"
+          "const": "core-read/34"
         },
         "timing": {
           "$ref": "#/$defs/runtime_TimingTree"
@@ -8881,6 +8940,16 @@
         },
         "envelope_digest": {
           "$ref": "#/$defs/Digest"
+        },
+        "model_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_ModelProfileStatement"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "reported_costs": {
           "anyOf": [
@@ -9467,7 +9536,7 @@
           "type": "integer"
         },
         "schema_version": {
-          "const": "core-step-read/31"
+          "const": "core-step-read/34"
         },
         "step_instance_id": {
           "type": "string"
@@ -10251,14 +10320,14 @@
     "CheckResult",
     "ContextProfile",
     "ContextRequest",
-    "CoreCapabilitiesV33",
+    "CoreCapabilitiesV34",
     "CoreConfigurationV2",
-    "CoreNextViewV33",
-    "CorePreviewV33",
-    "CoreRunStateV33",
-    "CoreRunViewV33",
-    "CoreStepReadViewV33",
-    "CoreWorkflowInvocationV33",
+    "CoreNextViewV34",
+    "CorePreviewV34",
+    "CoreRunStateV34",
+    "CoreRunViewV34",
+    "CoreStepReadViewV34",
+    "CoreWorkflowInvocationV34",
     "DecisionCatalog",
     "DecisionDefinition",
     "DecisionRecordV2",

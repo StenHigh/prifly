@@ -243,11 +243,27 @@ const (
 	// including the ones that declared the cap. A read-only addition must
 	// therefore ride an existing state, and this one does.
 	CoreProgramEnvironmentNextVersion = "core-next/33"
-	CoreConfigVersion                 = "core-configuration/1"
-	CoreContextConfigVersion          = "core-configuration/2"
-	MaxDefinitionBytes                = 2 << 20
-	MaxArtifactBytes                  = 16 << 20
-	MaxRunPublications                = 1024
+	// A step may declare the profile of model it wants, and the host reports
+	// what it did with that declaration. The declaration is sealed in the plan
+	// and records nothing; the report is a new fact of one attempt, so it is
+	// the report, not the declaration, that mints a state version.
+	//
+	// 34 is the first addition to pass the cap the published capability
+	// document sets on state_versions and read_versions. The owner lifted that
+	// cap as a design constraint on 2026-09-19 — this engine has one user —
+	// and the price is named where it is paid: five assertions that today's
+	// capability document still validates against bundles V2, V12, V15 and V31
+	// stop holding, because that is exactly the promise being withdrawn.
+	CoreModelProfileStateVersion    = "core-state/34"
+	CoreModelProfileReadVersion     = "core-read/34"
+	CoreModelProfileNextVersion     = "core-next/34"
+	CoreModelProfilePreviewVersion  = "core-preview/34"
+	CoreModelProfileStepReadVersion = "core-step-read/34"
+	CoreConfigVersion               = "core-configuration/1"
+	CoreContextConfigVersion        = "core-configuration/2"
+	MaxDefinitionBytes              = 2 << 20
+	MaxArtifactBytes                = 16 << 20
+	MaxRunPublications              = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time
@@ -530,7 +546,42 @@ type Attempt struct {
 	// Session is present only for an assisted attempt. It names the host that
 	// holds the work, so a Run never claims a dispatch nobody is answering for.
 	Session *SessionHandoff `json:"session,omitempty"`
+	// ModelProfileReport is what the host said it did with a declared model
+	// profile. Present only when the step declared one, because only then is
+	// the host required to answer. It is the host's statement about itself and
+	// nothing more: this authority holds no channel to a session that existed
+	// before the Run and cannot observe what it ran on.
+	ModelProfileReport *ModelProfileReport `json:"model_profile_report,omitempty"`
 }
+
+// ModelProfileReport records one of three answers a host gives about a
+// declared profile. `honoured` names the model it used; `unavailable` says the
+// platform does not let it choose; `declined` says it chose otherwise and why.
+// Nothing here is verified, and no answer of this engine calls it a confirmed
+// selection.
+type ModelProfileReport struct {
+	SchemaVersion string `json:"schema_version"`
+	// Requested is copied from the sealed plan at intake, so the report says
+	// what it was answering even after the plan is read from somewhere else.
+	Requested string `json:"requested"`
+	Outcome   string `json:"outcome"`
+	// Named is the model the host says it used. Required with `honoured`,
+	// refused otherwise: a host that could not choose has no model to name.
+	Named string `json:"named,omitempty"`
+	// Reason is required with `unavailable` and `declined`. An answer that
+	// says only "no" tells the step's author nothing they can act on.
+	Reason   string      `json:"reason,omitempty"`
+	Reported Observation `json:"reported"`
+}
+
+// ModelProfileReportVersion is the record, not the session contract: the
+// report is stored, so it carries its own version like every other stored fact.
+const ModelProfileReportVersion = "model-profile-report/1"
+
+// ModelProfileOutcomes are the three answers, in the order a reader meets them:
+// it worked, the platform could not, the host chose otherwise.
+var ModelProfileOutcomes = []string{"honoured", "unavailable", "declined"}
+
 type Diagnostic struct {
 	ID            string      `json:"id"`
 	RunID         string      `json:"run_id"`

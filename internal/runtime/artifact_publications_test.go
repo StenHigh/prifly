@@ -63,7 +63,7 @@ func TestArtifactPublicationSealsBeforeProducerSettlementAndDoesNotReread(t *tes
 	}
 	for name, value := range map[string]any{
 		"CoreRunStateV12": r, "CoreRunViewV12": view,
-		"CoreNextViewV12": next, "CoreCapabilitiesV12": Capabilities(),
+		"CoreNextViewV12": next, "CoreCapabilitiesV34": Capabilities(),
 	} {
 		if err := validatePublic(t, name, value); err != nil {
 			t.Fatalf("%s rejects the live artifact-publication value: %v", name, err)

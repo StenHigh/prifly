@@ -1,6 +1,9 @@
 package runtime
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The contract a next-action answer is written under was a second copy of the
 // state ladder, living inside Next: sixteen sequential ifs that each overwrote
@@ -48,6 +51,7 @@ func TestEveryStateNamesItsNextContract(t *testing.T) {
 		// 32 adds a field to the sealed executor config and nothing to the
 		// answer, so it answers under the contract 31 already publishes.
 		{CoreEnvironmentSourceStateVersion, CoreProgramEnvironmentNextVersion},
+		{CoreModelProfileStateVersion, CoreModelProfileNextVersion},
 	}
 	if len(expected) != len(versionContracts) {
 		t.Fatalf("the ladder has %d rows and this table names %d; a new state version needs its next contract here", len(versionContracts), len(expected))
@@ -100,5 +104,32 @@ func TestAProjectRefusalIsNotAnAuthorityStateConflict(t *testing.T) {
 		if exit := exitForCode(code); exit != want {
 			t.Errorf("%s exits %d, expected %d", code, exit, want)
 		}
+	}
+}
+
+// The cap the published capability document sets on its own version lists was
+// 32, and this build filled it. Raising it is a withdrawal of compatibility,
+// not a number going up, so both sides are held: the bundle that allows more
+// and the bundles that do not.
+func TestTheNewBundleAllowsWhatEveryOlderOneRefuses(t *testing.T) {
+	manifest := Capabilities()
+	core := manifest.Profiles[1]
+	if len(core.StateVersions) != len(versionContracts) || len(core.ReadVersions) != len(versionContracts) {
+		t.Fatalf("the capability document lists %d state and %d read versions against a ladder of %d", len(core.StateVersions), len(core.ReadVersions), len(versionContracts))
+	}
+	if len(core.StateVersions) <= 32 {
+		t.Fatalf("this test is about passing the cap of 32 and the document lists %d", len(core.StateVersions))
+	}
+	if err := validatePublic(t, "CoreCapabilitiesV34", manifest); err != nil {
+		t.Fatalf("the bundle this build publishes rejects its own capability document: %v", err)
+	}
+	// And the withdrawal is real, not cosmetic: the bundle published before it
+	// refuses the same document, for the reason it was raised.
+	err := validatePublic(t, "CoreCapabilitiesV31", manifest)
+	if err == nil {
+		t.Fatal("an older bundle accepted a document past the cap it declares, so nothing was withdrawn and nothing needed raising")
+	}
+	if !strings.Contains(err.Error(), "32") && !strings.Contains(err.Error(), "maxItems") && !strings.Contains(err.Error(), "at most") {
+		t.Fatalf("the older bundle refused for some other reason: %v", err)
 	}
 }

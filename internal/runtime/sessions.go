@@ -368,6 +368,56 @@ type SessionSubmission struct {
 	ReportedCosts   []ReportedCost          `json:"reported_costs,omitempty"`
 	WorkspaceTrees  []WorkspaceTreeLocation `json:"workspace_trees,omitempty"`
 	DecisionRequest *DecisionRequest        `json:"decision_request,omitempty"`
+	// ModelProfile is what the host did with a profile its step declared.
+	// Required exactly when the step declared one: the engine cannot check
+	// that the answer is true, only that the host gave one, and silence is
+	// not an answer.
+	ModelProfile *ModelProfileStatement `json:"model_profile,omitempty"`
+}
+
+// ModelProfileStatement is the host speaking about itself. Outcome is one of
+// ModelProfileOutcomes; `named` belongs to `honoured` and `reason` to the two
+// that are not.
+type ModelProfileStatement struct {
+	Outcome string `json:"outcome"`
+	Named   string `json:"named,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// checkModelProfileStatement holds the report to the one thing that is
+// checkable here: that a step which asked got an answer, in a shape a reader
+// can act on. Whether the answer is true is beyond this authority, which holds
+// no channel to a session that existed before the Run -- so nothing below
+// tries to establish it, and no message calls it confirmed.
+func checkModelProfileStatement(declared *flow.ModelProfile, statement *ModelProfileStatement) error {
+	if declared == nil {
+		if statement != nil {
+			return &flow.Problem{Code: "model_profile_not_declared", Path: "/model_profile", Message: "this step declares no model profile, so there is nothing for a report to answer"}
+		}
+		return nil
+	}
+	if statement == nil {
+		return &flow.Problem{Code: "model_profile_unanswered", Path: "/model_profile", Message: "this step declares the model profile " + declared.Requested + "; a report says what the host did with it -- honoured and which model, unavailable because the platform does not let it choose, or declined and why"}
+	}
+	if !slices.Contains(ModelProfileOutcomes, statement.Outcome) {
+		return &flow.Problem{Code: "model_profile_outcome_invalid", Path: "/model_profile/outcome", Message: "a model profile is answered with one of " + strings.Join(ModelProfileOutcomes, ", ")}
+	}
+	if statement.Outcome == "honoured" {
+		if statement.Named == "" {
+			return &flow.Problem{Code: "model_profile_model_unnamed", Path: "/model_profile/named", Message: "honouring a profile names the model that was used; the name is the host's own statement and is recorded as such"}
+		}
+		if statement.Reason != "" {
+			return &flow.Problem{Code: "model_profile_reason_unexpected", Path: "/model_profile/reason", Message: "a reason explains not honouring the profile; honouring it needs no excuse"}
+		}
+		return nil
+	}
+	if statement.Named != "" {
+		return &flow.Problem{Code: "model_profile_model_unexpected", Path: "/model_profile/named", Message: "a host that did not honour the profile has no model to name under it"}
+	}
+	if statement.Reason == "" {
+		return &flow.Problem{Code: "model_profile_reason_missing", Path: "/model_profile/reason", Message: "not honouring a declared profile is answered with why; \"no\" alone leaves the step's author nothing to act on"}
+	}
+	return nil
 }
 
 // SubmissionTemplate is the shape of a report, carrying everything the
@@ -799,6 +849,9 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if !exists {
 		return local.ApplyResult{}, local.ErrIntegrity
 	}
+	if err := checkModelProfileStatement(step.ModelProfile, submission.ModelProfile); err != nil {
+		return local.ApplyResult{}, err
+	}
 	if submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && submission.SchemaVersion != AssistedSessionRoutedVersion && len(submission.WorkspaceTrees) != 0 {
 		return local.ApplyResult{}, &flow.Problem{Code: "submission_trees_unsupported", Path: "/workspace_trees", Message: "this assisted-session version cannot report workspace trees"}
 	}
@@ -837,6 +890,10 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	commandID := derivedID("command", submission.AttemptID, "session-report", submission.EnvelopeDigest, rawDigest(canonicalResult))
 	payload := map[string]any{"attempt_id": submission.AttemptID, "envelope_digest": submission.EnvelopeDigest, "source": "assisted_session"}
 	reportedCosts := append([]ReportedCost(nil), submission.ReportedCosts...)
+	declaredModelProfile := ""
+	if step.ModelProfile != nil {
+		declaredModelProfile = step.ModelProfile.Requested
+	}
 	if submission.SchemaVersion != AssistedSessionVersion {
 		costBytes, err := canonical(reportedCosts)
 		if err != nil {
@@ -873,6 +930,15 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 		current.Candidate = append(json.RawMessage(nil), canonicalResult...)
 		current.CandidateAt = &obs
 		current.ReportedCosts = reportedCosts
+		if submission.ModelProfile != nil {
+			// Requested is copied in so the record says what it was answering,
+			// even for a reader who has the Run and not the plan.
+			current.ModelProfileReport = &ModelProfileReport{
+				SchemaVersion: ModelProfileReportVersion, Requested: declaredModelProfile,
+				Outcome: submission.ModelProfile.Outcome, Named: submission.ModelProfile.Named,
+				Reason: submission.ModelProfile.Reason, Reported: obs,
+			}
+		}
 		data, err := canonical(map[string]any{"observation": obs, "attempt_id": current.ID, "envelope_digest": current.EnvelopeDigest, "source": "assisted_session", "candidate_digest": rawDigest(canonicalResult)})
 		if err != nil {
 			return local.Change{}, err

@@ -467,7 +467,7 @@ func TestCallCapabilitiesDeclareBothStateContracts(t *testing.T) {
 	if !slices.Contains(core.Capabilities, "call") || !slices.Contains(core.StateVersions, CoreStateVersion) || !slices.Contains(core.StateVersions, CoreInvocationStateVersion) || slices.Contains(manifest.Profiles[0].Capabilities, "call") {
 		t.Fatal("capabilities confused retained profiles and new calls")
 	}
-	if err := validatePublic(t, "CoreCapabilitiesV2", manifest); err != nil {
+	if err := validatePublic(t, "CoreCapabilitiesV34", manifest); err != nil {
 		t.Fatal(err)
 	}
 }
