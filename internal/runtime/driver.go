@@ -381,7 +381,7 @@ func (e *Engine) finish(ctx context.Context, r Run, v local.ReadView, p *flow.Pl
 	return err
 }
 
-func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Plan, a *Activation) error {
+func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Plan, a *Activation) (err error) {
 	stage := p.Workflow.Definition.Stages[a.StageID]
 	step := p.Steps[a.StageID]
 	if !isInvocationState(r.SchemaVersion) && len(r.Attempts) >= int(p.Workflow.Limits.MaxStepInstances) {
@@ -390,7 +390,6 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 	commandID, attemptID, admissionID, reservationID := newID("command"), newID("attempt"), newID("admission"), newID("reservation")
 	checked := pendingPassed(r, "step_input", a.ID)
 	var inputs map[string]ArtifactRef
-	var err error
 	if checked {
 		inputs = maps.Clone(r.PendingAcceptance.Bindings)
 		err = e.validateBoundArtifacts(p, step.Inputs, inputs)
@@ -511,12 +510,31 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 	if err != nil {
 		return e.failPreparation(ctx, r, v, p, a, err, "workspace_preparation_failed")
 	}
-	treeRollback := func() {}
+	// The release always runs: it closes the workspace root either way and
+	// rolls the placement back only when the step was not admitted. A refusal
+	// that leaves an input tree behind puts files in the repository the owner
+	// works in, for a step they never got.
+	treeRelease := func(bool) []string { return nil }
 	treeAdmitted := false
 	defer func() {
-		if !treeAdmitted {
-			treeRollback()
+		// The release always runs: it closes the workspace root either way and
+		// rolls the placement back only when the step was not admitted. What it
+		// could not take back joins the refusal rather than disappearing --
+		// diagnostics live in Run state, which a refused command does not write,
+		// and a rollback that says nothing reads the same whether it removed
+		// everything or nothing.
+		left := treeRelease(!treeAdmitted)
+		if len(left) == 0 {
+			return
 		}
+		leftover := fault("workspace_tree_rollback_incomplete", "preparation placed files in "+r.ID+"'s workspace that this refusal could not take back: "+strings.Join(left, ", "))
+		if err == nil {
+			err = leftover
+			return
+		}
+		// The original refusal stays first, so the reported code is still the
+		// reason the step was not admitted.
+		err = errors.Join(err, leftover)
 	}()
 	var handoff *SessionHandoff
 	var claimBinding *claimRunBinding
@@ -569,7 +587,7 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 			if err != nil {
 				return e.failPreparation(ctx, r, v, p, a, err, "workspace_tree_preparation_failed")
 			}
-			treeRollback, handoff.WorkspaceTrees = rollback, trees
+			treeRelease, handoff.WorkspaceTrees = rollback, trees
 			handoff.ClaimID, handoff.ClaimGeneration, handoff.WorkspaceMode = claim.ID, claim.Generation, claimMode(claim)
 		}
 		// A step permitted no workspace effect is handed the Run's workspaces
@@ -613,7 +631,7 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 				if err != nil {
 					return e.failPreparation(ctx, r, v, p, a, err, "workspace_tree_preparation_failed")
 				}
-				treeRollback, handoff.WorkspaceTrees = rollback, trees
+				treeRelease, handoff.WorkspaceTrees = rollback, trees
 			}
 		}
 	}

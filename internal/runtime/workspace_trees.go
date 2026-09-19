@@ -242,15 +242,28 @@ func writeRootExclusive(root *os.Root, path string, data []byte) error {
 	return f.Sync()
 }
 
-func (e *Engine) materializeWorkspaceTree(root *os.Root, manifest WorkspaceTreeManifest) ([]string, func(), error) {
+func (e *Engine) materializeWorkspaceTree(root *os.Root, manifest WorkspaceTreeManifest) ([]string, func() []string, error) {
 	createdFiles, createdDirs := []string{}, []string{}
-	cleanup := func() {
+	// Removing through the same os.Root is what keeps a rollback inside the
+	// workspace it placed into, so the root has to outlive the rollback rather
+	// than the call that built it. It returns what it could not take back: a
+	// rollback that discards its errors reports the same silence whether it
+	// removed everything or nothing, and for one release it removed nothing.
+	cleanup := func() []string {
+		left := []string{}
 		for index := len(createdFiles) - 1; index >= 0; index-- {
-			_ = root.Remove(createdFiles[index])
+			if err := root.Remove(createdFiles[index]); err != nil && !errors.Is(err, os.ErrNotExist) {
+				left = append(left, createdFiles[index])
+			}
 		}
 		for index := len(createdDirs) - 1; index >= 0; index-- {
-			_ = root.Remove(createdDirs[index])
+			// A directory the step's own work filled is not ours to empty, so
+			// a non-empty one is left alone rather than reported as stuck.
+			if err := root.Remove(createdDirs[index]); err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.ENOTEMPTY) {
+				left = append(left, createdDirs[index])
+			}
 		}
+		return left
 	}
 	for _, entry := range manifest.Files {
 		artifact, data, err := e.Artifact(entry.Ref)
@@ -287,9 +300,17 @@ func (e *Engine) materializeWorkspaceTree(root *os.Root, manifest WorkspaceTreeM
 	return createdFiles, cleanup, nil
 }
 
-func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs map[string]ArtifactRef, claim WorktreeClaim) ([]WorkspaceTreeHandoff, func(), error) {
+// prepareWorkspaceTrees places a step's declared input trees in the Run's
+// claimed workspace and returns how to release that placement. The release
+// takes a decision rather than a command: it always closes the workspace root,
+// and rolls the placement back only when the step was not admitted. It is not
+// a `func()` because the root has to outlive it -- the returned rollback used
+// to Remove through a root its own prepare had already closed, so every
+// removal failed with ErrClosed and the files stayed in the owner's working
+// folder after a refusal. It reports the paths it could not take back.
+func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs map[string]ArtifactRef, claim WorktreeClaim) ([]WorkspaceTreeHandoff, func(bool) []string, error) {
 	if len(step.WorkspaceTrees) == 0 {
-		return nil, func() {}, nil
+		return nil, func(bool) []string { return nil }, nil
 	}
 	workspace, err := e.claimWorkspacePath(claim)
 	if err != nil {
@@ -299,13 +320,23 @@ func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs m
 	if err != nil {
 		return nil, nil, err
 	}
-	defer root.Close()
-	cleanups := []func(){}
-	cleanup := func() {
+	cleanups := []func() []string{}
+	cleanup := func() []string {
+		left := []string{}
 		for index := len(cleanups) - 1; index >= 0; index-- {
-			cleanups[index]()
+			left = append(left, cleanups[index]()...)
 		}
+		return left
 	}
+	// Until the step is admitted or refused, a failure inside this function
+	// closes the root itself; afterwards the returned release owns it.
+	prepared := false
+	defer func() {
+		if !prepared {
+			cleanup()
+			_ = root.Close()
+		}
+	}()
 	handoffs := make([]WorkspaceTreeHandoff, 0, len(step.WorkspaceTrees))
 	for _, binding := range step.WorkspaceTrees {
 		handoff := WorkspaceTreeHandoff{InputPort: binding.InputPort, OutputPort: binding.OutputPort, Capture: binding.Capture}
@@ -342,10 +373,14 @@ func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs m
 				return nil, nil, err
 			}
 			if len(created) != 0 {
-				cleanups = append(cleanups, func() {
+				cleanups = append(cleanups, func() []string {
+					left := []string{}
 					for index := len(created) - 1; index >= 0; index-- {
-						_ = os.Remove(filepath.Join(workspace, created[index]))
+						if err := root.Remove(created[index]); err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.ENOTEMPTY) {
+							left = append(left, created[index])
+						}
 					}
+					return left
 				})
 			}
 			if binding.Capture.Kind == "exact_file" {
@@ -369,7 +404,14 @@ func (e *Engine) prepareWorkspaceTrees(r Run, step flow.StepDefinition, inputs m
 		}
 		handoffs = append(handoffs, handoff)
 	}
-	return handoffs, cleanup, nil
+	prepared = true
+	return handoffs, func(rollback bool) []string {
+		defer root.Close()
+		if !rollback {
+			return nil
+		}
+		return cleanup()
+	}, nil
 }
 
 // treeProblem names the reported location an intake refusal is about. A host

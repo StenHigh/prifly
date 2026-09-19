@@ -812,3 +812,66 @@ func TestStageWorkNamesControlAndStaysSilentWhenItCannotTell(t *testing.T) {
 		t.Fatalf("the fixture stopped using an assisted plan step: %+v", step.Executor)
 	}
 }
+
+// Preparation places an input tree in the owner's working folder before the
+// command that would admit the step is applied. If that command is refused,
+// the placement has to be undone: the owner asked for nothing, and files
+// appeared in the repository they work in.
+//
+// prepareWorkspaceTrees opened the workspace root, deferred its Close, and
+// returned a rollback closure that calls Remove on that same root. Every
+// caller runs the rollback after prepare has returned, so every Remove was
+// made against a closed root and failed with ErrClosed -- and the rollback
+// discarded the error, so the failure looked exactly like success.
+func TestARefusedAdmissionTakesBackWhatPreparationPlaced(t *testing.T) {
+	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
+	e, runID := treeVerifyFixture(t, policy)
+	ctx := context.Background()
+	first := handOver(t, e, runID)
+	workspace := first.RepositoryWorkspace
+	writeWorkspaceTreeFile(t, workspace, ".ai-factory/PLAN.md", "# Final\n")
+	if _, err := e.SubmitSession(ctx, treeSubmission(t, first, "plan", []WorkspaceTreeLocation{{OutputPort: "plan", Path: policy.Path}})); err != nil {
+		t.Fatal(err)
+	}
+	for _, summary := range []string{"improved", "implement"} {
+		if err := e.Drive(ctx, runID); err != nil {
+			t.Fatal(err)
+		}
+		task, err := e.SessionTask(ctx, runID, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.SubmitSession(ctx, treeSubmission(t, task, summary, nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The captured tree is gone, so the read-only step's preparation has to
+	// place it again -- and that placement is what a refusal must take back.
+	placed := filepath.Join(workspace, filepath.FromSlash(policy.Path))
+	if err := os.RemoveAll(placed); err != nil {
+		t.Fatal(err)
+	}
+	// The owner's own file, in the very directory preparation writes into. A
+	// rollback that takes the directory with it would pass the check above and
+	// destroy work nobody asked it to touch.
+	owners := filepath.Join(workspace, ".ai-factory", "NOTES.md")
+	if err := os.WriteFile(owners, []byte("mine\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Refused after preparation, not before it: the stop is read at the
+	// admission gate, which runs once the tree is already on disk.
+	if _, err := e.RestrictControl(ctx, ControlRestrictRequest{CommandID: "command:stop", Scope: "project", Reason: "owner halted the project"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err == nil {
+		t.Fatal("a stopped project admitted the step")
+	}
+	if _, err := os.Lstat(placed); err == nil {
+		t.Fatalf("a refused admission left %s in the owner's working folder", policy.Path)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if kept, err := os.ReadFile(owners); err != nil || string(kept) != "mine\n" {
+		t.Fatalf("the rollback took the owner's own file with it: %q %v", kept, err)
+	}
+}
