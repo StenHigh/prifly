@@ -167,6 +167,22 @@ var projectRunnerSkillTemplateBeforeShortening = strings.NewReplacer(
 // not say still lives here; what it says better than prose was removed.
 var projectRunnerSkillTemplate = projectRunnerSkillTemplateCurrent
 
+// projectRunnerSkillTemplateBeforeModelProfile is the text as it stood before a
+// task could name the model profile its step declared, derived from the current
+// one rather than copied: a second literal is a second place to edit wrongly.
+var projectRunnerSkillTemplateBeforeModelProfile = strings.NewReplacer(projectModelProfileInstructions, "").Replace(projectRunnerSkillTemplateCurrent)
+
+// projectModelProfileInstructions is the paragraph itself, named so the frozen
+// text above can be expressed as its absence.
+const projectModelProfileInstructions = "\nA task carrying `model_profile` names what the step's author wanted from the\n" +
+	"model, and the report must answer it or be refused. Three answers exist and one\n" +
+	"of them is always true: `honoured` with the model you actually used,\n" +
+	"`unavailable` when this host does not let you choose, `declined` with why you\n" +
+	"chose otherwise. Say which one honestly -- Pri-Fly cannot check the answer and\n" +
+	"does not pretend to, so a wrong one is simply a false record. Being unable to\n" +
+	"choose is not a failure and needs no apology; claiming a model you did not use\n" +
+	"is the only real mistake here.\n"
+
 const projectRunnerSkillTemplateCurrent = `---
 name: prifly-run
 description: Start and host one declared Pri-Fly project workflow.
@@ -277,6 +293,15 @@ output to the port path in ` + "`context.json`" + ` and report it in ` + "`outpu
 slot's ` + "`artifact_id`" + `, ` + "`revision`" + ` and the ` + "`digest`" + ` of the actual bytes. Pri-Fly
 fills workspace-tree slots itself; never invent a ref or report an unwritten
 port. Submit the typed result, then drive the same Run.
+
+A task carrying ` + "`model_profile`" + ` names what the step's author wanted from the
+model, and the report must answer it or be refused. Three answers exist and one
+of them is always true: ` + "`honoured`" + ` with the model you actually used,
+` + "`unavailable`" + ` when this host does not let you choose, ` + "`declined`" + ` with why you
+chose otherwise. Say which one honestly -- Pri-Fly cannot check the answer and
+does not pretend to, so a wrong one is simply a false record. Being unable to
+choose is not a failure and needs no apology; claiming a model you did not use
+is the only real mistake here.
 
 ## 3. Finish
 
@@ -2403,6 +2428,16 @@ func projectRunnerSkill(host projectHost) string {
 	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplate, "{{host}}", host.ID), "{{question_tool}}", questionTool)
 }
 
+// projectRunnerSkillBeforeModelProfile is the runner as it stood before a task
+// could name the model profile its step declared.
+func projectRunnerSkillBeforeModelProfile(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeModelProfile, "{{host}}", host.ID), "{{question_tool}}", questionTool)
+}
+
 func projectRunnerSkillBeforeShortening(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -2533,7 +2568,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

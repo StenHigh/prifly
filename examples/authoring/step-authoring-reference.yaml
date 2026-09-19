@@ -8,7 +8,11 @@
 # executable package: replace the illustrative exact refs with real definitions.
 # Managed steps keep prifly-step/1 and their executor configuration limits.
 authoring: prifly-step/2 # Required marker; explicitly opts into separate work/wait time.
-schema_version: "7" # Optional: v6 by default, v7 only for active_timeout_ms: null.
+schema_version: "9" # Optional; the tool picks the lowest contract that carries what
+# you declared: v6 by default, v7 for active_timeout_ms: null, v8 for a
+# materialize-only tree, v9 for model_profile. Pinning it wins over that choice,
+# so a pin below what you declared is refused rather than silently upgraded --
+# which is why this reference, declaring everything, pins the newest.
 id: example:step/full-reference # Required stable identity.
 version: 1.0.0 # Required; increase when sealed bytes change.
 title: Full step authoring reference # Optional: defaults to id.
@@ -162,3 +166,26 @@ workspace_trees:
       kind: direct_child_tree # exact_file, direct_child_file, direct_child_tree.
       path: plans # Workspace-relative fixed file or declared parent; no AI-specific path.
       entrypoint: index.md # Required only for direct_child_tree.
+
+# What this step wants from the model that executes it. A profile of work, not a
+# provider or a product: `deep-reasoning` survives a change of platform,
+# `claude-opus-5` is a detail of one and goes stale inside a sealed plan that
+# outlives it. The host names the concrete model in its report, where a fact of
+# one execution belongs.
+#
+# Pri-Fly selects nothing here, and will not: an assisted session exists before
+# the Run and this authority holds no channel to it. What the declaration buys
+# is that the host stops guessing what the author wanted, and that a report
+# which says nothing about it is refused. Three answers are accepted —
+# `honoured` with the model that was used, `unavailable` when the platform does
+# not let the host choose, `declined` with why it chose otherwise — and none of
+# them is verified. A host that cannot choose says so; that is not a violation.
+#
+# `reason` is required beside `requested`: a profile without one reads as a
+# preference, and the next author cannot tell whether it may be dropped. This
+# field lowers to StepDefinition v9 and belongs to `prifly-step/2`; a program
+# step has no model to ask about. Omit the whole field when the step does not
+# care.
+model_profile:
+  requested: deep-reasoning # ^[a-z][a-z0-9-]{1,63}$
+  reason: this step judges work it did not do, and a confident wrong answer costs a round

@@ -262,7 +262,15 @@ func TestSessionLimitsEditorSchemaMatchesAuthoring(t *testing.T) {
 		{StepSessionAuthoringVersion, "session_limits: {decision_wait_timeout_ms: 1209600000}", true},
 		{StepSessionAuthoringVersion, "session_limits: {active_timeout_ms: null}", true},
 		{StepSessionAuthoringVersion, "schema_version: '7'\nsession_limits: {active_timeout_ms: null}", true},
-		{StepSessionAuthoringVersion, "schema_version: '8'", false},
+		// The editor refused v8 while the tool accepted it, and this line
+		// pinned the disagreement as if it were the rule. Measured 2026-09-20:
+		// StepJSONBytes accepts a pinned 7, 8 and 9 under prifly-step/2, so an
+		// author who pinned 8 was refused by their editor and accepted by the
+		// tool -- which is the one thing a test named for their agreement must
+		// not allow.
+		{StepSessionAuthoringVersion, "schema_version: '8'", true},
+		{StepSessionAuthoringVersion, "schema_version: '9'", true},
+		{StepSessionAuthoringVersion, "schema_version: '10'", false},
 		{StepAuthoringVersion, "session_limits: {}", false},
 		{StepSessionAuthoringVersion, "session_limits: {active_timeout_ms: 0}", false},
 		{StepSessionAuthoringVersion, "session_limits: {decision_wait_timeout_ms: -1}", false},

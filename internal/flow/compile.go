@@ -693,8 +693,8 @@ func (p *Plan) checkWorkspaceTrees(step StepDefinition, path string) error {
 	if len(step.WorkspaceTrees) == 0 {
 		return nil
 	}
-	if !slices.Contains([]string{"5", "6", "7", "8"}, step.SchemaVersion) {
-		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees require StepDefinition v5, v6, v7 or v8")
+	if !slices.Contains([]string{"5", "6", "7", "8", "9"}, step.SchemaVersion) {
+		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees require StepDefinition v5, v6, v7, v8 or v9")
 	}
 	// A binding that captures needs a step that may write; a binding that only
 	// materializes needs a step that may not, because a tree read without being

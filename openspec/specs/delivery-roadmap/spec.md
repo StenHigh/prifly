@@ -152,7 +152,7 @@ runtime contract.
 | Active | `add-run-decision-catalog`: per-Run Fast/Full/Ultra и universal decision bridge | В работе | Versioned Project launch, sealed package profile и durable Run-state | Завершить typed catalog, preflight, wait/recovery и host/CLI evidence, не выдавая upstream AIF compatibility или live-pilot qualification за результат Core |
 | Active | `add-native-host-question-ux`: один конечный вопрос в Codex и Claude Code | Осталось ручное наблюдение UI | Доступ к обоим host runtimes | Закрыть task 2.3 active change без заявления product qualification |
 | High | `workspace-tree-preparation-rollback`: очистка файлов при отказе до admission | Выявлен прежний дефект: cleanup input tree использует уже закрытый os.Root | Существующие workspace tree materialization и rollback | Описать отдельный change и проверить удаление только созданных подготовкой файлов без потери файлов пользователя |
-| High | `assisted-model-profile-protocol` | Не начато | Versioned assisted-host contract | Создать OpenSpec change до заявления о provider/model/reasoning selection |
+| High | `assisted-model-profile-protocol` | В работе: шаг объявляет профиль, задача его несёт, отчёт обязан ответить; 10/15 задач | Versioned assisted-host contract | Закрыть документы, раннер и ворота. Объявление и отчёт — не выбор модели: движок по-прежнему ничего не выбирает и не квалифицирует provider/model/reasoning selection |
 
 На 2026-09-06 расходование рабочего срока при ожидании человека исправлено
 в новом явном контракте, и этот срез выпущен как public stable 0.10.0:
@@ -277,10 +277,22 @@ OpenSpec change.
 `StenHigh/prifly-aif-workflows` является её future acceptance fixture, но
 successful compilation не является evidence такого выбора.
 
+На 2026-09-20 versioned assisted-host contract изменён: шаг объявляет профиль
+модели в запечатанном плане (StepDefinition v9), задача его несёт, а отчёт
+хоста обязан назвать, что он с объявлением сделал, иначе отказывается. Это
+снимает prerequisite задачи и **не** является model selection: authority не
+выбирает модель, не проверяет заявление хоста и нигде не называет его
+подтверждённым выбором. Заявление хранится как наблюдение хоста о себе.
+
 #### Scenario: Веер компилируется до нового host protocol
 - **WHEN** `aif-fanout` успешно проходит authoring checks
 - **THEN** roadmap и report называют это проверкой graph/profile data, а не
   доказательством фактического model selection
+
+#### Scenario: Шаг объявил профиль и хост ответил
+- **WHEN** шаг объявил профиль модели и отчёт хоста назвал исход
+- **THEN** это записано как заявление хоста о себе, а не как квалификация
+  provider/model/reasoning selection, и RC по-прежнему её не содержит
 
 ### Requirement: Первая поставка называет состав и внешние границы
 Delivery documentation SHALL фиксировать first-build dependency inventory,

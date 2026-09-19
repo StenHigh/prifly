@@ -159,18 +159,25 @@ func TestStepAuthoringReferenceIsAValidStepDefinition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateProtocol("StepDefinitionV7", data); err != nil {
+	// The reference demonstrates every field a step may declare, so it lowers
+	// to the newest contract that carries them all. Pinning an older one here
+	// would quietly stop checking whatever was added since.
+	if err := ValidateProtocol("StepDefinitionV9", data); err != nil {
 		t.Fatal(err)
 	}
 	var step StepDefinition
 	if err := json.Unmarshal(data, &step); err != nil {
 		t.Fatal(err)
 	}
-	if step.SchemaVersion != "7" || step.SessionLimits == nil || step.SessionLimits.ActiveTimeoutMS != nil || step.SessionLimits.DecisionWaitTimeoutMS != nil {
+	if step.SchemaVersion != "9" || step.SessionLimits == nil || step.SessionLimits.ActiveTimeoutMS != nil || step.SessionLimits.DecisionWaitTimeoutMS != nil {
 		t.Fatalf("full reference lost the declared absence of both deadlines: %+v", step.SessionLimits)
 	}
 	if err := (&Plan{}).checkWorkspaceTrees(step, "/step"); err != nil {
 		t.Fatalf("step authoring reference violates workspace-tree constraints: %v", err)
+	}
+	// The reference teaches every field, so every field must survive lowering.
+	if step.ModelProfile == nil || step.ModelProfile.Requested == "" || step.ModelProfile.Reason == "" {
+		t.Fatalf("full reference lost its declared model profile: %+v", step.ModelProfile)
 	}
 }
 

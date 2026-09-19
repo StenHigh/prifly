@@ -25,6 +25,19 @@
     "hooks": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": true}},
     "telemetry": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
     "workspace_trees": {"type": "array", "items": {"$ref": "#/$defs/workspace_tree"}},
+    "model_profile": {
+      "type": "object", "additionalProperties": false, "required": ["requested", "reason"],
+      "properties": {
+        "requested": {
+          "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$",
+          "description": "Профиль работы, которого шаг хочет от модели: требование к работе, а не провайдер или продукт. deep-reasoning переживёт смену площадки, claude-opus-5 — её деталь и протухнет в запечатанном плане. Конкретную модель называет хост в отчёте. Pri-Fly здесь ничего не выбирает: ассистируемая сессия существует до Run, и у авторитета нет к ней канала."
+        },
+        "reason": {
+          "type": "string", "minLength": 1, "maxLength": 512,
+          "description": "Зачем этот профиль этому шагу. Обязателен рядом с requested: запрос без причины читается как предпочтение, и следующий автор не знает, можно ли его убрать."
+        }
+      }
+    },
     "session_limits": {
       "type": "object", "additionalProperties": false,
       "properties": {
@@ -42,7 +55,7 @@
   "allOf": [{
     "if": {"properties": {"authoring": {"const": "prifly-step/2"}}},
     "then": {"properties": {
-      "schema_version": {"enum": ["6", "7"]},
+      "schema_version": {"enum": ["6", "7", "8", "9"]},
       "executor": {
         "additionalProperties": false,
         "required": ["adapter_ref", "operation"],
@@ -55,7 +68,7 @@
         }
       }
     }},
-    "else": {"not": {"required": ["session_limits"]}}
+    "else": {"not": {"anyOf": [{"required": ["session_limits"]}, {"required": ["model_profile"]}]}}
   }],
   "$defs": {
     "reference": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "object"}]},
