@@ -307,10 +307,14 @@ func (c *cli) versionView() map[string]any {
 // a chain of string comparisons it was read as logic, and a command added to
 // one place but not the other opened the authority in the wrong mode.
 var mutatingCommands = map[string][]string{
-	"run":      {"start", "fork", "drive", "pause", "cancel", "stop", "release", "resume", "reopen", "waive", "resolve"},
-	"control":  {"stop", "release"},
-	"package":  {"import", "remove", "quarantine", "revoke", "restore", "trust-root"},
-	"claim":    {"create", "release", "heartbeat"},
+	"run":     {"start", "fork", "drive", "pause", "cancel", "stop", "release", "resume", "reopen", "waive", "resolve"},
+	"control": {"stop", "release"},
+	"package": {"import", "remove", "quarantine", "revoke", "restore", "trust-root"},
+	// create-set writes a set of claims in one transaction and was absent
+	// here for two releases: it was in the switch, in the help and in the
+	// refusal, so it looked implemented and answered read_only to everyone
+	// who called it.
+	"claim":    {"create", "create-set", "release", "heartbeat"},
 	"session":  {"publish", "action", "submit", "disconnect"},
 	"action":   {"propose", "admit"},
 	"capacity": {"set"},

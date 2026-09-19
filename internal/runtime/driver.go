@@ -1212,7 +1212,11 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	}
 	effectDetail := ""
 	if outcome.StopReason == "" {
-		if changed := boundary.changes(ctx, e); changed != "" {
+		changed, err := boundary.changes(ctx, e)
+		switch {
+		case err != nil:
+			outcome.StopReason, effectDetail = "workspace_mark_unreadable", err.Error()
+		case changed != "":
 			outcome.StopReason, effectDetail = "effect_not_permitted", changed
 		}
 	}

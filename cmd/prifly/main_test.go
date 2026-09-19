@@ -3071,6 +3071,11 @@ func TestEveryMutatingCommandOpensForWriting(t *testing.T) {
 		{[]string{"package", "import"}, true},
 		{[]string{"package", "list"}, false},
 		{[]string{"claim", "create"}, true},
+		// create-set took an atomic set of claims through an authority opened
+		// for reading for two releases: the operation was in the switch, in the
+		// help and in the refusal, and missing only from this list.
+		{[]string{"claim", "create-set"}, true},
+		{[]string{"claim", "heartbeat"}, true},
 		{[]string{"claim", "list"}, false},
 		{[]string{"session", "submit"}, true},
 		{[]string{"session", "task"}, false},

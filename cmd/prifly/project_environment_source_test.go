@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -216,5 +217,44 @@ func TestIncompatibleAuthorityNamesTheCommandThatWritesOne(t *testing.T) {
 	}
 	if !strings.Contains(problem.Message, "project init") {
 		t.Fatalf("the message does not spell the command: %s", problem.Message)
+	}
+}
+
+// claim create-set takes an atomic set of claims, and for two releases it took
+// them through an authority opened for reading: the operation existed in the
+// switch, in the help and in the refusal, and answered read_only to everyone
+// who called it.
+func TestClaimCreateSetTakesBothRepositoriesAtOnce(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	state := filepath.Join(t.TempDir(), "authority")
+	if code, _, stderr := runCLI(t, "init", state); code != 0 {
+		t.Fatalf("authority: %d %s", code, stderr)
+	}
+	repositories := []string{}
+	for _, name := range []string{"first", "second"} {
+		dir := filepath.Join(t.TempDir(), name)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{{"init", "--quiet"}, {"commit", "--allow-empty", "-m", "base", "--author", "t <t@example.com>"}} {
+			command := exec.Command("git", args...)
+			command.Dir = dir
+			command.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+			if out, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v %s", args, err, out)
+			}
+		}
+		repositories = append(repositories, dir)
+	}
+	code, stdout, stderr := runCLI(t, "--project", state, "claim", "create-set",
+		"--repository", repositories[0], "--repository", repositories[1], "--owner", "run:both")
+	if code != 0 {
+		t.Fatalf("an atomic set of claims was refused: %d %s %s", code, stdout, stderr)
+	}
+	for _, repository := range repositories {
+		if !strings.Contains(stdout, repository) {
+			t.Fatalf("the answer does not name %s: %s", repository, stdout)
+		}
 	}
 }

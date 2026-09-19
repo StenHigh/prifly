@@ -15,12 +15,12 @@
 
 ## 2. Эффекты workspace program-шага
 
-- [ ] 2.1 `internal/runtime/effects.go`: ошибка `workspaceMark` до исполнения
+- [x] 2.1 `internal/runtime/effects.go`: ошибка `workspaceMark` до исполнения
   на claimed worktree — именованный отказ (не `measured=false`); после
   исполнения ошибка сравнения — отказ приёма, не пустая строка. «Не
   репозиторий» остаётся отдельным осознанным случаем. Проверка: два новых
   падающих-затем-зелёных теста (`go test ./internal/runtime -run 'Effects|ProgramStep'`).
-- [ ] 2.2 Коды отказов внесены в глоссарий и troubleshooting.md;
+- [x] 2.2 Коды отказов внесены в глоссарий и troubleshooting.md;
   `TestGlossaryBindings` зелёный; `refusal-check` не находит код в тексте.
 
 ## 3. Телеметрия команды и allowance
@@ -34,10 +34,10 @@
 
 ## 4. CLI-режим открытия
 
-- [ ] 4.1 `cmd/prifly/main.go`: `claim create-set` в `mutatingCommands`;
+- [x] 4.1 `cmd/prifly/main.go`: `claim create-set` в `mutatingCommands`;
   оба направления в `TestEveryMutatingCommandOpensForWriting`. Сначала
   падающий тест на create-set.
-- [ ] 4.2 E2E: успешный атомарный `claim create-set` из двух repository
+- [x] 4.2 E2E: успешный атомарный `claim create-set` из двух repository
   через собранный CLI (`test/e2e`); reject read-only открытия называет режим.
 
 ## 5. Сопровождающее

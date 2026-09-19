@@ -186,28 +186,51 @@ func (e *Engine) processWorkspaceBoundary(ctx context.Context, r Run, step flow.
 	}
 	mark, status, err := e.workspaceMark(ctx, boundary.path)
 	if err != nil {
-		// Not a repository, or no commit yet: nothing to hold the program to.
-		return boundary, nil
+		// A claim is always a git worktree, so a mark this authority cannot
+		// read is its own fault, not a legal shape of the tree. Treating it as
+		// "nothing to measure" ran the step unmeasured and accepted its report:
+		// the boundary we call measured was blind exactly where it exists. A
+		// repository without a commit is the one honest exception, and it is
+		// named rather than inferred from any error at all.
+		if unborn, headErr := e.headUnborn(ctx, boundary.path); headErr == nil && unborn {
+			return boundary, nil
+		}
+		return processWorkspaceBoundary{}, wrapFault("workspace_mark_unreadable", "the workspace at "+boundary.path+" could not be read to establish what this step may not change", err)
 	}
 	boundary.mark, boundary.status, boundary.measured = mark, status, true
 	return boundary, nil
 }
 
+// headUnborn reports the one case where a missing HEAD is the tree's truth
+// rather than this authority's failure: a repository that has no commit yet.
+func (e *Engine) headUnborn(ctx context.Context, path string) (bool, error) {
+	if _, err := e.git(ctx, path, "rev-parse", "--git-dir"); err != nil {
+		return false, err
+	}
+	_, err := e.git(ctx, path, "rev-parse", "--verify", "HEAD")
+	return err != nil, nil
+}
+
 // changes names what the program changed in the workspace it was shown, or
-// returns "" when it was not measured or left the tree as it found it.
-func (b processWorkspaceBoundary) changes(ctx context.Context, e *Engine) string {
+// returns "" when it was not measured or left the tree as it found it. An
+// unreadable mark is neither: the engine does not know whether the tree moved,
+// and returning "" said that it had not.
+func (b processWorkspaceBoundary) changes(ctx context.Context, e *Engine) (string, error) {
 	if !b.measured {
-		return ""
+		return "", nil
 	}
 	mark, status, err := e.workspaceMark(ctx, b.path)
-	if err != nil || mark == b.mark {
-		return ""
+	if err != nil {
+		return "", wrapFault("workspace_mark_unreadable", "the workspace at "+b.path+" could not be read to check what this step changed", err)
+	}
+	if mark == b.mark {
+		return "", nil
 	}
 	named := strings.Join(workspaceChanges(b.status, status), ", ")
 	if named == "" {
 		named = "HEAD moved"
 	}
-	return "this step may write only inside its declared output slot, and the workspace at " + b.path + " changed while its program ran: " + named + ". Byproducts of a build or a test run belong in .gitignore, which the mark respects; declare effects.class: workspace_write only for a step that is meant to change the tree"
+	return "this step may write only inside its declared output slot, and the workspace at " + b.path + " changed while its program ran: " + named + ". Byproducts of a build or a test run belong in .gitignore, which the mark respects; declare effects.class: workspace_write only for a step that is meant to change the tree", nil
 }
 
 // materializedEntriesChanged names the entries of a materialize-only tree whose
