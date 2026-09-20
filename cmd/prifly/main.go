@@ -2455,6 +2455,9 @@ Global: --project DIR  --json  --format text|json|csv
 
   run fork --file REQUEST.json      Create a linked Run from exact sealed refs; old Run is unchanged
   run status|next|explain|events|timing RUN_ID
+                                   events reads one bounded page: --limit N (1..1000) and --after SEQ continue it,
+                                   and a partial answer names the next value in next_after, so a reader never
+                                   has to open the authority's own storage to finish reading a Run's history
                                    timing node kinds: run, workflow_invocation, stage_activation, step_instance, attempt, check_execution
                                    A node's metrics carry only numbers; the boundaries they were measured between are the same-named entry of its intervals, as from_ref/to_ref
                                    kind inside from_ref/to_ref names what a boundary was read from and is a separate vocabulary from a node's kind: it also uses step, activation, invocation, stop and report
