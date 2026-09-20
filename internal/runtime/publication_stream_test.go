@@ -429,7 +429,7 @@ func TestEachPublicationKeepsIndependentCursorsAndPendingAssignments(t *testing.
 	}
 	for name, value := range map[string]any{
 		"CoreRunStateV31": r, "CoreRunViewV31": view, "CoreNextViewV33": next, "CorePreviewV31": preview,
-		"CoreWorkflowInvocationV31": r.Invocations[r.RootInvocationID], "CoreCapabilitiesV34": Capabilities(),
+		"CoreWorkflowInvocationV31": r.Invocations[r.RootInvocationID], "CoreCapabilitiesV35": Capabilities(),
 	} {
 		if err := validatePublic(t, name, value); err != nil {
 			t.Fatalf("%s rejects the live stream value: %v", name, err)

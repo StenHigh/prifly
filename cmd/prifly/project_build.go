@@ -174,7 +174,7 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	// declared, so it belongs in the list a reader checks their edit against.
 	sources := append([]string{filepath.ToSlash(filepath.Join(".prifly", "project.yaml"))}, source.ReadPaths...)
 	slices.Sort(sources)
-	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings, PackageVerdictsUnclosed: unclosed, Sources: slices.Compact(sources)}
+	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings, PackageVerdictsUnclosed: unclosed, Sources: slices.Compact(sources), ModelProfiles: options.ModelProfiles}
 	if source.Build != nil {
 		result.SchemaVersion = "project-compile/2"
 		result.AuthorPackage = &source.Build.AuthorPackage

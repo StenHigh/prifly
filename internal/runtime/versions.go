@@ -58,6 +58,10 @@ var versionContracts = []versionContract{
 	// these lists; the owner withdrew that compatibility on 2026-09-19, and
 	// the new bundle allows more while every earlier one keeps saying 32.
 	{CoreModelProfileStateVersion, CoreModelProfileReadVersion, CoreModelProfileStepReadVersion, CoreModelProfileNextVersion},
+	// 35 seals what the project says a declared profile name means for its
+	// host, so the Run answers with what it started with rather than with
+	// whatever the machine says now.
+	{CoreProfileTranslationStateVersion, CoreProfileTranslationReadVersion, CoreProfileTranslationStepReadVersion, CoreProfileTranslationNextVersion},
 }
 
 // nextVersionFor is the contract a next-action answer is written under for a

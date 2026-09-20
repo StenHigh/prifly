@@ -52,6 +52,7 @@ func TestEveryStateNamesItsNextContract(t *testing.T) {
 		// answer, so it answers under the contract 31 already publishes.
 		{CoreEnvironmentSourceStateVersion, CoreProgramEnvironmentNextVersion},
 		{CoreModelProfileStateVersion, CoreModelProfileNextVersion},
+		{CoreProfileTranslationStateVersion, CoreProfileTranslationNextVersion},
 	}
 	if len(expected) != len(versionContracts) {
 		t.Fatalf("the ladder has %d rows and this table names %d; a new state version needs its next contract here", len(versionContracts), len(expected))
@@ -120,7 +121,7 @@ func TestTheNewBundleAllowsWhatEveryOlderOneRefuses(t *testing.T) {
 	if len(core.StateVersions) <= 32 {
 		t.Fatalf("this test is about passing the cap of 32 and the document lists %d", len(core.StateVersions))
 	}
-	if err := validatePublic(t, "CoreCapabilitiesV34", manifest); err != nil {
+	if err := validatePublic(t, "CoreCapabilitiesV35", manifest); err != nil {
 		t.Fatalf("the bundle this build publishes rejects its own capability document: %v", err)
 	}
 	// And the withdrawal is real, not cosmetic: the bundle published before it

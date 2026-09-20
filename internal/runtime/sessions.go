@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -338,6 +339,11 @@ type SessionTask struct {
 	// and the report says what the host did with it; absent means the step
 	// asked nothing, never that the host may decide silently.
 	ModelProfile *flow.ModelProfile `json:"model_profile,omitempty"`
+	// ModelProfileTranslation is what the project said that profile name means
+	// for this host, sealed when the Run started. Absent means nobody has said
+	// yet -- which is not a refusal: the host answers honestly with what it
+	// has. This authority reads no meaning from the values.
+	ModelProfileTranslation *ModelProfileTranslation `json:"model_profile_translation,omitempty"`
 	// Deadline is the deadline actually in force, whether the step declared it
 	// or inherited the default. Absent means no deadline exists, never an
 	// empty string that reads as false and present at the same time.
@@ -537,7 +543,18 @@ func (e *Engine) sessionTaskFrom(ctx context.Context, r Run, view local.ReadView
 		if a.Session.SchemaVersion == AssistedSessionRoutedVersion {
 			task.RoutedVerdicts = routedVerdicts(p, activation.StageID)
 		}
-		task.ModelProfile = step.ModelProfile
+		if step.ModelProfile != nil {
+			// The declaration is the step's and comes from the plan; the
+			// translation is the project's and comes from the Run. They travel
+			// together because the host reads them together, and each says
+			// where it came from.
+			declared := *step.ModelProfile
+			task.ModelProfile = &declared
+			if translation, exists := r.ModelProfileTranslations[declared.Requested]; exists {
+				copied := ModelProfileTranslation{Values: maps.Clone(translation.Values), Source: translation.Source}
+				task.ModelProfileTranslation = &copied
+			}
+		}
 		if step.Effects.Class == "workspace_write" {
 			if isSessionWorkspaceEdition(a.Session.SchemaVersion) {
 				task.PermittedEffects = []string{"write_inside_claimed_workspace", "local_git_commit_on_claimed_workspace"}

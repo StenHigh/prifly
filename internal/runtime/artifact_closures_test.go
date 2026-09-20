@@ -95,7 +95,7 @@ func TestArtifactClosureSealsExactManifestBeforeProducerSettlement(t *testing.T)
 	for name, value := range map[string]any{
 		"CoreRunStateV31": r, "CoreRunViewV31": after, "CoreNextViewV33": next, "CorePreviewV31": preview,
 		"CoreWorkflowInvocationV31": r.Invocations[r.RootInvocationID], "ArtifactManifest": manifest,
-		"ArtifactClosure": closure, "PublishStepPublicationCommandV3": command, "CoreCapabilitiesV34": Capabilities(),
+		"ArtifactClosure": closure, "PublishStepPublicationCommandV3": command, "CoreCapabilitiesV35": Capabilities(),
 	} {
 		if err := validatePublic(t, name, value); err != nil {
 			t.Fatalf("%s rejects the live closure value: %v", name, err)

@@ -47,6 +47,12 @@ type StartOptions struct {
 	ExecutionBindings *ExecutionBindings
 	DecisionCatalog   *DecisionCatalog
 	DecisionSheet     *DecisionSheet
+	// ModelProfiles is what the project decided a declared profile name means
+	// for the host this Run was started with. It is sealed here for the same
+	// reason the machine's environment is: a setting edited after the start
+	// must be visibly not part of this Run. The engine reads no meaning from
+	// the values; it hands them to the host in the task.
+	ModelProfiles map[string]ModelProfileTranslation
 	// Guards are the live start/stop rules this Run is registered with. They
 	// are declared here rather than installed later because a registration has
 	// to exist before the first admission it protects; one installed afterwards
@@ -1087,7 +1093,7 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			break
 		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
-		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}}
+		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}
 		if configurations != nil {
 			r.Ready = nil
 			r.WorkflowConfigurations = configurations

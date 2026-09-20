@@ -1233,3 +1233,52 @@ func TestWhatTheHostSaidAboutTheProfileIsStoredAndCountable(t *testing.T) {
 		t.Fatalf("three different answers did not count as three: %v", counted)
 	}
 }
+
+// The declaration comes from the sealed plan and the translation from the Run;
+// they travel together because the host reads them together. A profile nobody
+// has translated yet arrives without one, and that is not a refusal.
+func TestATaskCarriesTheTranslationTheProjectSealed(t *testing.T) {
+	e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", nil, nil, func(step *flow.StepDefinition) {
+		step.SchemaVersion = "9"
+		step.ModelProfile = &flow.ModelProfile{Requested: "deep-reasoning", Reason: "judges work it did not do"}
+	})
+	ctx := context.Background()
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := e.SessionTask(ctx, runID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.ModelProfile == nil {
+		t.Fatal("the declaration did not reach the task")
+	}
+	if plain.ModelProfileTranslation != nil {
+		t.Fatalf("a profile nobody translated arrived with one: %+v", plain.ModelProfileTranslation)
+	}
+	// Seal one, the way project start does, and read the task again.
+	r, view, err := e.load(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.ModelProfileTranslations = map[string]ModelProfileTranslation{
+		"deep-reasoning": {Values: map[string]string{"model": "opus", "effort": "high"}, Source: "project_default"},
+		"fast-draft":     {Values: map[string]string{"model": "haiku"}, Source: "local"},
+	}
+	translated, err := e.sessionTaskFrom(ctx, r, view, plain.AttemptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := translated.ModelProfileTranslation
+	if got == nil || got.Source != "project_default" || got.Values["model"] != "opus" || got.Values["effort"] != "high" {
+		t.Fatalf("the task did not carry what the Run sealed: %+v", got)
+	}
+	// Only the declared name is delivered: a translation for a profile this
+	// step did not ask for is not this step's business.
+	if len(got.Values) != 2 {
+		t.Fatalf("the entry carried %d values", len(got.Values))
+	}
+	if translated.ModelProfile.Requested != "deep-reasoning" {
+		t.Fatalf("the declaration changed: %+v", translated.ModelProfile)
+	}
+}

@@ -406,6 +406,15 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		startOptions.SchemaVersion, startOptions.ExecutionBindings = "2", execution
 		startOptions.Inputs, startOptions.InputValues = nil, inputValues
 	}
+	// Sealed here for the same reason the machine's environment is: a setting
+	// edited after the start must be visibly not part of this Run. Only the
+	// host this Run was started with is carried; the rest of a shared package's
+	// table describes machines nobody starts on here.
+	if translations, err := projectModelProfileTranslations(root, compiled.ModelProfiles, *host); err != nil {
+		return err
+	} else if len(translations) != 0 {
+		startOptions.ModelProfiles = translations
+	}
 	if preflight.Declared {
 		startOptions.DecisionCatalog, startOptions.DecisionSheet = &preflight.Catalog, &preflight.Sheet
 	}

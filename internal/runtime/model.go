@@ -259,11 +259,20 @@ const (
 	CoreModelProfileNextVersion     = "core-next/34"
 	CoreModelProfilePreviewVersion  = "core-preview/34"
 	CoreModelProfileStepReadVersion = "core-step-read/34"
-	CoreConfigVersion               = "core-configuration/1"
-	CoreContextConfigVersion        = "core-configuration/2"
-	MaxDefinitionBytes              = 2 << 20
-	MaxArtifactBytes                = 16 << 20
-	MaxRunPublications              = 1024
+	// A project may say what a declared profile name means for its host. The
+	// Run seals that at its start, like the machine's environment, so a
+	// setting edited afterwards is visibly not part of it -- which is a new
+	// recorded fact and therefore a state version.
+	CoreProfileTranslationStateVersion    = "core-state/35"
+	CoreProfileTranslationReadVersion     = "core-read/35"
+	CoreProfileTranslationNextVersion     = "core-next/35"
+	CoreProfileTranslationPreviewVersion  = "core-preview/35"
+	CoreProfileTranslationStepReadVersion = "core-step-read/35"
+	CoreConfigVersion                     = "core-configuration/1"
+	CoreContextConfigVersion              = "core-configuration/2"
+	MaxDefinitionBytes                    = 2 << 20
+	MaxArtifactBytes                      = 16 << 20
+	MaxRunPublications                    = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time
@@ -574,6 +583,20 @@ type ModelProfileReport struct {
 	Reported Observation `json:"reported"`
 }
 
+// ModelProfileTranslation is what a project decided one declared profile name
+// means for one host, plus which of its two sources said so. The values are
+// opaque: this authority checks their shape, seals them and hands them to the
+// host, and reads no meaning from them -- choosing a model remains something
+// it cannot do and does not claim.
+type ModelProfileTranslation struct {
+	Values map[string]string `json:"values"`
+	Source string            `json:"source"`
+}
+
+// ModelProfileTranslationSources are the two places a translation can come
+// from: the package the team shares, or this one machine.
+var ModelProfileTranslationSources = []string{"project_default", "local"}
+
 // ModelProfileReportVersion is the record, not the session contract: the
 // report is stored, so it carries its own version like every other stored fact.
 const ModelProfileReportVersion = "model-profile-report/1"
@@ -787,6 +810,10 @@ type Run struct {
 	CoreBuild                  string                              `json:"core_build"`
 	Gaps                       []TimingGap                         `json:"gaps"`
 	Transitions                []StateChange                       `json:"transitions"`
+	// ModelProfileTranslations is what the project said each declared profile
+	// name means for the host this Run was started with, sealed at its start.
+	// A machine-local edit made afterwards is visibly not part of this Run.
+	ModelProfileTranslations map[string]ModelProfileTranslation `json:"model_profile_translations,omitempty"`
 	// TransitionsPartial reports that a read stopped at maxRecordedTransitions
 	// with history still unread. It never leaves this process: it describes one
 	// read, not the Run, and a reader that treated the two as the same said a

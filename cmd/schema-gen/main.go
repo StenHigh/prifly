@@ -54,6 +54,7 @@ type generator struct {
 	environmentSources    bool
 	programEnvironment    bool
 	modelProfiles         bool
+	profileTranslations   bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -170,6 +171,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						continue
 					}
 					if !g.environmentSources && environmentSourceField(t, field.Name) {
+						continue
+					}
+					if !g.profileTranslations && profileTranslationField(t, field.Name) {
 						continue
 					}
 					if !g.modelProfiles && modelProfileField(t, field.Name) {
@@ -302,6 +306,7 @@ var profileContracts = []struct {
 	{"environment-source", "generate declared execution value source state/read version 32 contracts", func(g *generator) { g.environmentSources = true }},
 	{"program-environment", "generate named program environment read version 33 contracts", func(g *generator) { g.programEnvironment = true }},
 	{"model-profile", "generate declared model profile session contracts", func(g *generator) { g.modelProfiles = true }},
+	{"profile-translation", "generate sealed model profile translation state/read version 35 contracts", func(g *generator) { g.profileTranslations = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -850,6 +855,12 @@ func main() {
 			delete(contracts, name+"V33")
 		}
 	}
+	if g.profileTranslations {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V35"] = contracts[name+"V34"]
+			delete(contracts, name+"V34")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1093,6 +1104,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-environment-source:32"
 			bundle["title"] = "Pri-Fly declared execution value source contracts"
 			bundle["description"] = "State/read 32 lets a sealed executor config name where a value comes from — an environment variable of the caller, a whole file, or one key of a NAME=value file — instead of carrying the value. The engine reads it at the moment the program starts, so nothing enters the Run, its digests or any document made from them, and a source that is absent or empty refuses the start by name rather than letting the program fail on authentication. A Run whose owner named no source is unchanged, and the next action, the preview and the step read keep their 31 contracts."
+		}
+		if g.profileTranslations {
+			profileTranslationConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-profile-translation:35"
+			bundle["title"] = "Pri-Fly sealed model profile translation contracts"
+			bundle["description"] = "State/read 35 seals what the project decided a declared model profile name means for the host a Run was started with, and the task carries it beside the declaration with the source that said so. The values are opaque: this authority checks their shape, hands them to the host and reads no meaning from them -- selecting a model remains something it cannot do and does not claim. A machine-local edit made after the start is visibly not part of the Run, the same way the machine's environment already is. Every prior bundle describes the Run and the task without these fields, byte for byte."
 		}
 		if g.modelProfiles {
 			modelProfileConstraints(&g)

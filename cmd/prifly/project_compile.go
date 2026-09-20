@@ -102,6 +102,10 @@ type projectCompileResult struct {
 	// stderr: a --json caller reads the last document of stderr for a refusal,
 	// and a bare line there would look like one.
 	PackageVerdictsUnclosed []string `json:"package_verdicts_unclosed,omitempty"`
+	// ModelProfiles is what the package's extend.yaml said a declared profile
+	// name means, by host. It rides here because start seals it and needs it
+	// after the compile that read it. Opaque to this tool.
+	ModelProfiles map[string]map[string]map[string]string `json:"-"`
 	// Sources names every file under the repository this compile read, so a
 	// reader can tell an edit that did not matter from an edit that was never
 	// read. It is always present: a caller may rely on it being the whole list,

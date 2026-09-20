@@ -172,6 +172,10 @@ var projectRunnerSkillTemplate = projectRunnerSkillTemplateCurrent
 // one rather than copied: a second literal is a second place to edit wrongly.
 var projectRunnerSkillTemplateBeforeModelProfile = strings.NewReplacer(projectModelProfileInstructions, "").Replace(projectRunnerSkillTemplateCurrent)
 
+// projectRunnerSkillTemplateBeforeTranslation is the text as it stood when a
+// task named the declared profile but nothing said what the name meant.
+var projectRunnerSkillTemplateBeforeTranslation = strings.NewReplacer(projectModelProfileTranslationInstructions, "").Replace(projectRunnerSkillTemplateCurrent)
+
 // projectModelProfileInstructions is the paragraph itself, named so the frozen
 // text above can be expressed as its absence.
 const projectModelProfileInstructions = "\nA task carrying `model_profile` names what the step's author wanted from the\n" +
@@ -181,7 +185,17 @@ const projectModelProfileInstructions = "\nA task carrying `model_profile` names
 	"chose otherwise. Say which one honestly -- Pri-Fly cannot check the answer and\n" +
 	"does not pretend to, so a wrong one is simply a false record. Being unable to\n" +
 	"choose is not a failure and needs no apology; claiming a model you did not use\n" +
-	"is the only real mistake here.\n"
+	"is the only real mistake here.\n" + projectModelProfileTranslationInstructions
+
+// projectModelProfileTranslationInstructions is the second paragraph, named
+// separately so each frozen text can be expressed as the absence of exactly
+// what its release added.
+const projectModelProfileTranslationInstructions = "\n" +
+	"When the task also carries `model_profile_translation`, that is the project\n" +
+	"saying what the name means here -- a map of values, plus the source that said\n" +
+	"so. Start the step's session with it and answer `honoured` with the model you\n" +
+	"actually used. Without it nobody has decided yet: do the work here and answer\n" +
+	"`unavailable`, which is the truth and costs nothing.\n"
 
 const projectRunnerSkillTemplateCurrent = `---
 name: prifly-run
@@ -302,6 +316,12 @@ chose otherwise. Say which one honestly -- Pri-Fly cannot check the answer and
 does not pretend to, so a wrong one is simply a false record. Being unable to
 choose is not a failure and needs no apology; claiming a model you did not use
 is the only real mistake here.
+
+When the task also carries ` + "`model_profile_translation`" + `, that is the project
+saying what the name means here -- a map of values, plus the source that said
+so. Start the step's session with it and answer ` + "`honoured`" + ` with the model you
+actually used. Without it nobody has decided yet: do the work here and answer
+` + "`unavailable`" + `, which is the truth and costs nothing.
 
 ## 3. Finish
 
@@ -956,13 +976,14 @@ func (c *cli) projectLocal(args []string) error {
 	var allowed, environment stringsFlag
 	f.Var(&allowed, "allow-executable", "allow a local executable NAME=/absolute/path (repeatable)")
 	f.Var(&environment, "env", "environment for this machine's programs NAME=VALUE (repeatable); PATH, APP_ENV and the like live here, never in the shared package")
-	var environmentFrom stringsFlag
+	var environmentFrom, modelProfiles stringsFlag
+	f.Var(&modelProfiles, "model-profile", "what a declared profile name means on this machine: \"HOST NAME key=value\" (repeatable); the value is handed to the host, never read here")
 	f.Var(&environmentFrom, "env-from", "environment read at run time NAME=env:VAR, NAME=file:/path or NAME=dotenv:/path:KEY (repeatable); the value is never written here and never printed")
 	if err := parse(f, args[1:]); err != nil {
 		return err
 	}
-	if *executable == "" && len(allowed) == 0 && len(environment) == 0 && len(environmentFrom) == 0 {
-		return usageError("project local set requires --executable PATH, --allow-executable NAME=PATH, --env NAME=VALUE or --env-from NAME=SOURCE")
+	if *executable == "" && len(allowed) == 0 && len(environment) == 0 && len(environmentFrom) == 0 && len(modelProfiles) == 0 {
+		return usageError("project local set requires --executable PATH, --allow-executable NAME=PATH, --env NAME=VALUE, --env-from NAME=SOURCE or --model-profile \"HOST NAME key=value\"")
 	}
 	if *executable != "" && !filepath.IsAbs(*executable) {
 		return refusal("project_local_executable_relative", "--executable needs an absolute path; received "+strconv.Quote(*executable))
@@ -975,8 +996,8 @@ func (c *cli) projectLocal(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(allowed) != 0 || len(environment) != 0 || len(environmentFrom) != 0 {
-		return c.projectLocalAllowExecutables(root, current, *executable, allowed, environment, environmentFrom)
+	if len(allowed) != 0 || len(environment) != 0 || len(environmentFrom) != 0 || len(modelProfiles) != 0 {
+		return c.projectLocalAllowExecutables(root, current, *executable, allowed, environment, environmentFrom, modelProfiles)
 	}
 	lines := strings.Split(string(current), "\n")
 	replaced := false
@@ -1358,6 +1379,12 @@ type projectWorkflowOptions struct {
 	// ExecutionBindings are the project's programs for the steps its
 	// extensions insert, keyed by the extension's short step name; the
 	// package's own bindings live in its root workflow.yaml and stay there.
+	// ModelProfiles is what the team decided a declared profile name means for
+	// each host, by host and then by profile name. The values are opaque to
+	// this tool: it checks their shape, hands them to the host and reads
+	// nothing into them. A package is shared, so it carries entries for hosts
+	// this project does not declare; those simply never apply.
+	ModelProfiles     map[string]map[string]map[string]string
 	ExecutionBindings map[string]any
 	// References are the project's logical refs (core:adapter/local-process@2.0.0)
 	// for the components it adds under project/, resolved from the inventory
@@ -1552,7 +1579,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	for key := range root {
 		switch key {
-		case "extensions", "settings", "exclude", "profile", "answers", "execution_bindings", "references":
+		case "extensions", "settings", "exclude", "profile", "answers", "execution_bindings", "references", "model_profiles":
 		default:
 			return projectWorkflowOptions{}, refusal("project_extension_invalid", "unknown field "+key)
 		}
@@ -1587,6 +1614,13 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 			}
 			result.Settings[workflow] = inputs
 		}
+	}
+	if raw, exists := root["model_profiles"]; exists {
+		profiles, err := projectReadModelProfiles(raw)
+		if err != nil {
+			return projectWorkflowOptions{}, err
+		}
+		result.ModelProfiles = profiles
 	}
 	if raw, exists := root["exclude"]; exists {
 		items, ok := raw.([]any)
@@ -2430,6 +2464,14 @@ func projectRunnerSkill(host projectHost) string {
 
 // projectRunnerSkillBeforeModelProfile is the runner as it stood before a task
 // could name the model profile its step declared.
+func projectRunnerSkillBeforeTranslation(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeTranslation, "{{host}}", host.ID), "{{question_tool}}", questionTool)
+}
+
 func projectRunnerSkillBeforeModelProfile(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -2568,7 +2610,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

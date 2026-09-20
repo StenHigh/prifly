@@ -113,6 +113,13 @@ func Capabilities() CapabilityManifest {
 	profile.ReadVersions = append(profile.ReadVersions, CoreModelProfileReadVersion)
 	profile.StepVersions = append(profile.StepVersions, "9")
 	profile.Capabilities = append(profile.Capabilities, "model_profile_declared")
+	// The project may say what a profile name means for its host, and the Run
+	// seals that at its start. The values stay opaque: this build carries them
+	// to the host and reads nothing from them.
+	profile.StateVersion, profile.ReadVersion = CoreProfileTranslationStateVersion, CoreProfileTranslationReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreProfileTranslationStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreProfileTranslationReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "model_profile_translation")
 	return manifest
 }
 

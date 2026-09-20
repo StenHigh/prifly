@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -22,6 +24,11 @@ type projectLocalSettings struct {
 	Executables     map[string]string
 	Environment     map[string]string
 	EnvironmentFrom map[string]prifly.EnvironmentSource
+	// ModelProfiles is what THIS machine says a declared profile name means,
+	// by host and then by profile. It replaces the package's entry for that
+	// name whole rather than merging key by key: a value assembled from two
+	// files is one nobody wrote.
+	ModelProfiles map[string]map[string]map[string]string
 }
 
 func projectLocalExecution(root string) (authority string, executables map[string]string, err error) {
@@ -163,7 +170,15 @@ func readProjectLocalExecutionAll(root string) ([]byte, projectLocalSettings, er
 			sources[name] = source
 		}
 	}
-	return data, projectLocalSettings{Authority: authority, Executables: executables, Environment: environment, EnvironmentFrom: sources}, nil
+	profiles := map[string]map[string]map[string]string{}
+	if raw, exists := object["model_profiles"]; exists {
+		parsed, err := projectReadModelProfiles(raw)
+		if err != nil {
+			return nil, projectLocalSettings{}, err
+		}
+		profiles = parsed
+	}
+	return data, projectLocalSettings{Authority: authority, Executables: executables, Environment: environment, EnvironmentFrom: sources, ModelProfiles: profiles}, nil
 }
 
 // projectParseEnvironmentSource reads one NAME=SOURCE argument. The forms are
@@ -226,7 +241,7 @@ func lastCut(value, separator string) (before, after string, found bool) {
 // expects, and both belong beside the binary in ignored local.yaml, never in
 // the shared package or extend.yaml. Every program of a launch on this machine
 // receives it; a package's own program is no less machine-bound at run time.
-func (c *cli) projectLocalAllowExecutables(root string, current []byte, executable string, allowed, environment, environmentFrom []string) error {
+func (c *cli) projectLocalAllowExecutables(root string, current []byte, executable string, allowed, environment, environmentFrom, modelProfiles []string) error {
 	selectedSources := make(map[string]prifly.EnvironmentSource, len(environmentFrom))
 	for _, argument := range environmentFrom {
 		name, source, err := projectParseEnvironmentSource(argument)
@@ -240,6 +255,40 @@ func (c *cli) projectLocalAllowExecutables(root string, current []byte, executab
 			return refusal("project_local_invalid_environment", name+": "+err.Error())
 		}
 		selectedSources[name] = source
+	}
+	// --model-profile HOST NAME key=value, repeated: several flags for one
+	// name build one entry, and that entry replaces the package's whole.
+	selectedProfiles := map[string]map[string]map[string]string{}
+	known := map[string]bool{}
+	for _, host := range projectHosts {
+		known[host.ID] = true
+	}
+	for _, argument := range modelProfiles {
+		parts := strings.SplitN(argument, " ", 3)
+		if len(parts) != 3 {
+			return refusal("project_model_profile_invalid", "use --model-profile \"HOST NAME key=value\"; the host, the profile name and one key=value, separated by spaces")
+		}
+		host, name, assignment := parts[0], parts[1], parts[2]
+		if !known[host] {
+			return refusal("project_model_profile_unknown_host", host+" is not a host this build knows; use codex-cli, codex-app or claude-code")
+		}
+		if !projectModelProfileName.MatchString(name) {
+			return refusal("project_model_profile_invalid", name+" is not a profile name a step can declare")
+		}
+		key, value, ok := strings.Cut(assignment, "=")
+		if !ok || key == "" || value == "" || len(value) > maxModelProfileValue {
+			return refusal("project_model_profile_invalid", "each --model-profile carries one key=value with a non-empty value of at most "+strconv.Itoa(maxModelProfileValue)+" characters")
+		}
+		if selectedProfiles[host] == nil {
+			selectedProfiles[host] = map[string]map[string]string{}
+		}
+		if selectedProfiles[host][name] == nil {
+			selectedProfiles[host][name] = map[string]string{}
+		}
+		if len(selectedProfiles[host][name]) >= maxModelProfileKeys {
+			return refusal("project_model_profile_invalid", host+"."+name+" carries more than "+strconv.Itoa(maxModelProfileKeys)+" keys")
+		}
+		selectedProfiles[host][name][key] = value
 	}
 	selectedEnvironment := make(map[string]string, len(environment))
 	for _, argument := range environment {
@@ -308,6 +357,29 @@ func (c *cli) projectLocalAllowExecutables(root string, current []byte, executab
 			projectMappingSet(sourcesNode, name, entry)
 		}
 	}
+	if len(selectedProfiles) != 0 {
+		profilesNode := projectMappingValue(object, "model_profiles")
+		if profilesNode == nil {
+			profilesNode = projectMappingNode()
+			projectMappingSet(object, "model_profiles", profilesNode)
+		}
+		for host, profiles := range selectedProfiles {
+			hostNode := projectMappingValue(profilesNode, host)
+			if hostNode == nil {
+				hostNode = projectMappingNode()
+				projectMappingSet(profilesNode, host, hostNode)
+			}
+			for name, values := range profiles {
+				// Written whole: this machine's entry answers for itself, and
+				// a half-replaced one would answer for nobody.
+				entry := projectMappingNode()
+				for key, value := range values {
+					projectMappingSet(entry, key, projectScalarNode(value))
+				}
+				projectMappingSet(hostNode, name, entry)
+			}
+		}
+	}
 	if executable != "" {
 		projectMappingSet(object, "prifly_executable", projectScalarNode(executable))
 	}
@@ -345,4 +417,120 @@ func (c *cli) projectLocalAllowExecutables(root string, current []byte, executab
 		fmt.Fprintln(c.errout, "note: a program's environment is sealed when its Run starts; this change applies to the next launch, and run next reports what a started Run will hand its program")
 	}
 	return c.emit(map[string]any{"schema_version": "prifly-project-local/3", "repository": root, "prifly_executable": projectMappingValue(object, "prifly_executable").Value, "allowed_executables": settings.Executables, "environment": settings.Environment, "environment_from": sources})
+}
+
+// Bounds on a map this tool never reads: wide enough for any real vocabulary,
+// narrow enough that a malformed file is refused rather than carried.
+const (
+	maxModelProfileEntries = 64
+	maxModelProfileKeys    = 16
+	maxModelProfileValue   = 256
+)
+
+// projectModelProfileName is the same shape a step declares, so an author
+// meets one rule rather than two.
+var projectModelProfileName = regexp.MustCompile(`^[a-z][a-z0-9-]{1,63}$`)
+
+// projectReadModelProfiles parses what a team decided a declared profile name
+// means for each host. The first key is a host this build knows -- not a host
+// this project declares: a package is shared and must carry defaults for every
+// host, while a project usually declares one or two, so checking against the
+// project's own list would refuse every installation missing one of them. A
+// typo is still caught, and an entry for a host nobody starts here simply
+// never applies.
+//
+// The values are opaque. This tool checks that they are strings of a sane
+// size and hands them to the host; reading meaning into them would be the
+// engine choosing a model, which it does not do.
+func projectReadModelProfiles(raw any) (map[string]map[string]map[string]string, error) {
+	hosts, ok := raw.(map[string]any)
+	if !ok || len(hosts) == 0 {
+		return nil, refusal("project_extension_invalid", "model_profiles must be a non-empty object keyed by host")
+	}
+	known := map[string]bool{}
+	for _, host := range projectHosts {
+		known[host.ID] = true
+	}
+	result := make(map[string]map[string]map[string]string, len(hosts))
+	for host, rawProfiles := range hosts {
+		if !known[host] {
+			return nil, refusal("project_model_profile_unknown_host", host+" is not a host this build knows; model_profiles is keyed by codex-cli, codex-app or claude-code")
+		}
+		profiles, ok := rawProfiles.(map[string]any)
+		if !ok || len(profiles) == 0 {
+			return nil, refusal("project_model_profile_invalid", "model_profiles."+host+" must be a non-empty object keyed by profile name")
+		}
+		if len(profiles) > maxModelProfileEntries {
+			return nil, refusal("project_model_profile_invalid", "model_profiles."+host+" declares more than "+strconv.Itoa(maxModelProfileEntries)+" profiles")
+		}
+		translated := make(map[string]map[string]string, len(profiles))
+		for name, rawEntry := range profiles {
+			if !projectModelProfileName.MatchString(name) {
+				return nil, refusal("project_model_profile_invalid", "model_profiles."+host+"."+name+" is not a profile name a step can declare")
+			}
+			entry, ok := rawEntry.(map[string]any)
+			if !ok || len(entry) == 0 {
+				return nil, refusal("project_model_profile_invalid", "model_profiles."+host+"."+name+" must be a non-empty object")
+			}
+			if len(entry) > maxModelProfileKeys {
+				return nil, refusal("project_model_profile_invalid", "model_profiles."+host+"."+name+" carries more than "+strconv.Itoa(maxModelProfileKeys)+" keys")
+			}
+			values := make(map[string]string, len(entry))
+			for key, value := range entry {
+				text, ok := value.(string)
+				if !ok {
+					return nil, refusal("project_model_profile_invalid", "model_profiles."+host+"."+name+"."+key+" must be a string; this tool passes these values to the host without reading them")
+				}
+				if text == "" || len(text) > maxModelProfileValue {
+					return nil, refusal("project_model_profile_invalid", "model_profiles."+host+"."+name+"."+key+" must be a non-empty string of at most "+strconv.Itoa(maxModelProfileValue)+" characters")
+				}
+				values[key] = text
+			}
+			translated[name] = values
+		}
+		result[host] = translated
+	}
+	return result, nil
+}
+
+// projectModelProfileTranslation is what the host is told a declared profile
+// name means, for one host: the package's default unless this machine said
+// otherwise, and which of the two it was.
+type projectModelProfileTranslation struct {
+	Values map[string]string
+	Source string
+}
+
+// mergeModelProfiles resolves the two sources for one host. A machine entry
+// replaces the package entry for that name **whole**: merging them key by key
+// would produce a value neither file contains, and then `source` would be a
+// lie about half of it.
+func mergeModelProfiles(packaged, local map[string]map[string]map[string]string, host string) map[string]projectModelProfileTranslation {
+	merged := map[string]projectModelProfileTranslation{}
+	for name, values := range packaged[host] {
+		merged[name] = projectModelProfileTranslation{Values: values, Source: "project_default"}
+	}
+	for name, values := range local[host] {
+		merged[name] = projectModelProfileTranslation{Values: values, Source: "local"}
+	}
+	return merged
+}
+
+// projectModelProfileTranslations resolves, for one host, what the project
+// says each declared profile name means: the package's table overridden whole
+// by this machine's. It is read once at start and sealed into the Run.
+func projectModelProfileTranslations(root string, packaged map[string]map[string]map[string]string, host string) (map[string]prifly.ModelProfileTranslation, error) {
+	_, local, err := readProjectLocalExecutionAll(root)
+	if err != nil {
+		return nil, err
+	}
+	merged := mergeModelProfiles(packaged, local.ModelProfiles, host)
+	if len(merged) == 0 {
+		return nil, nil
+	}
+	sealed := make(map[string]prifly.ModelProfileTranslation, len(merged))
+	for name, entry := range merged {
+		sealed[name] = prifly.ModelProfileTranslation{Values: entry.Values, Source: entry.Source}
+	}
+	return sealed, nil
 }

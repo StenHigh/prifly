@@ -69,6 +69,7 @@ def check(args, generator):
 		("environment-source", ["--environment-source"], ("internal/runtime/environment-source.schema.json", "schemas/core/environment-source.schema.json")),
 		("program-environment", ["--program-environment"], ("internal/runtime/program-environment.schema.json", "schemas/core/program-environment.schema.json")),
 		("model-profile", ["--model-profile"], ("internal/runtime/model-profile.schema.json", "schemas/core/model-profile.schema.json")),
+		("profile-translation", ["--profile-translation"], ("internal/runtime/profile-translation.schema.json", "schemas/core/profile-translation.schema.json")),
 		("run-start-v2", ["--run-start-v2"], ("schemas/core/run-start-v2.schema.json",)),
 		("package-manifest-v2", ["--package-manifest-v2"], ("schemas/core/package-manifest-v2.schema.json",)),
 		("execution-bindings", ["--execution-bindings"], ("schemas/core/execution-bindings.schema.json",)),
