@@ -637,3 +637,37 @@ result_schema_ref: result
 		t.Fatalf("a step that declares no profile moved to %s: %+v", untouched.SchemaVersion, untouched.ModelProfile)
 	}
 }
+
+// Found on 0.13.41 by the first package that declared a model profile on every
+// step: a read-only gate handed a captured tree and asking for a careful model
+// could not compile. The binding check listed the one version that introduced
+// the form instead of asking whether the step is at least that version, so v9
+// -- which is v8 plus a field -- was refused by a rule v8 passes.
+func TestAMaterializeOnlyTreeSurvivesALaterStepContract(t *testing.T) {
+	manifest := Ref{ID: WorkspaceTreeManifestSchemaID, Version: "1.0.0", Digest: "sha256:" + strings.Repeat("a", 64)}
+	step := StepDefinition{
+		SchemaVersion: "9", ID: "test:step/review", Version: "1.0.0", Kind: "worker",
+		Inputs:         map[string]InputPort{"plan": {Port: Port{Format: "json", SchemaRef: &manifest}}},
+		Outputs:        map[string]OutputPort{},
+		WorkspaceTrees: []WorkspaceTreeBinding{{InputPort: "plan", Capture: WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}}},
+		ModelProfile:   &ModelProfile{Requested: "careful-review", Reason: "judges work it did not do"},
+	}
+	step.Effects.Class = "none"
+	if err := (&Plan{}).checkWorkspaceTrees(step, "/step"); err != nil {
+		t.Fatalf("a materialize-only tree on a v9 step was refused: %v", err)
+	}
+	// The form still needs the contract that introduced it.
+	earlier := step
+	earlier.SchemaVersion = "7"
+	if err := (&Plan{}).checkWorkspaceTrees(earlier, "/step"); err == nil {
+		t.Fatal("v7 accepted a binding without output_port")
+	}
+	// A capturing binding on the later contract is unaffected.
+	writing := step
+	writing.Effects.Class = "workspace_write"
+	writing.Outputs = map[string]OutputPort{"plan": {Port: Port{Format: "json", SchemaRef: &manifest}, RequiredFor: []string{"pass"}}}
+	writing.WorkspaceTrees = []WorkspaceTreeBinding{{InputPort: "plan", OutputPort: "plan", Capture: WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}}}
+	if err := (&Plan{}).checkWorkspaceTrees(writing, "/step"); err != nil {
+		t.Fatalf("a capturing tree on a v9 step was refused: %v", err)
+	}
+}

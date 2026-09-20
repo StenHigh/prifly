@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -689,26 +690,45 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 	return step, nil
 }
 
+// stepVersionAtLeast answers whether a step contract is the named one or a
+// later one. Each step contract is the previous plus its own change, so a rule
+// that lists the versions allowing something has to be edited again for every
+// contract after it -- and 0.13.41 shipped with v9 added to one such list and
+// not the other, which made a read-only gate that asked for a model profile
+// impossible to compile. Ask the question the rule means instead of naming the
+// answers it had when it was written.
+func stepVersionAtLeast(version, minimum string) bool {
+	have, err := strconv.Atoi(version)
+	if err != nil {
+		return false
+	}
+	want, err := strconv.Atoi(minimum)
+	if err != nil {
+		return false
+	}
+	return have >= want
+}
+
 func (p *Plan) checkWorkspaceTrees(step StepDefinition, path string) error {
 	if len(step.WorkspaceTrees) == 0 {
 		return nil
 	}
-	if !slices.Contains([]string{"5", "6", "7", "8", "9"}, step.SchemaVersion) {
-		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees require StepDefinition v5, v6, v7, v8 or v9")
+	if !stepVersionAtLeast(step.SchemaVersion, "5") {
+		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees require StepDefinition v5 or newer")
 	}
 	// A binding that captures needs a step that may write; a binding that only
 	// materializes needs a step that may not, because a tree read without being
 	// captured on a writing step would leave its changes without a manifest.
 	// The two forms never share a step: one effect class answers for all.
 	materializeOnly := slices.ContainsFunc(step.WorkspaceTrees, WorkspaceTreeBinding.MaterializeOnly)
-	if materializeOnly && step.SchemaVersion != "8" {
-		return problem("invalid_workspace_tree", path+"/workspace_trees", "a workspace tree without output_port requires StepDefinition v8")
+	if materializeOnly && !stepVersionAtLeast(step.SchemaVersion, "8") {
+		return problem("invalid_workspace_tree", path+"/workspace_trees", "a workspace tree without output_port requires StepDefinition v8 or newer")
 	}
 	if materializeOnly && step.Effects.Class != "none" {
 		return problem("invalid_workspace_tree", path+"/workspace_trees", "a workspace tree without output_port is materialized for a step whose effects class is none; a step that may write captures its trees through output_port")
 	}
 	if !materializeOnly && step.Effects.Class != "workspace_write" {
-		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees with output_port require workspace_write; a read-only step declares input_port only under StepDefinition v8")
+		return problem("invalid_workspace_tree", path+"/workspace_trees", "workspace trees with output_port require workspace_write; a read-only step declares input_port only under StepDefinition v8 or newer")
 	}
 	seenPaths, seenOutputs, seenInputs := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for index, binding := range step.WorkspaceTrees {
