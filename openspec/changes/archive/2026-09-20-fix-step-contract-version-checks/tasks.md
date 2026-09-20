@@ -20,3 +20,8 @@
 - [x] 2.1 `make ci-check` rc=0 — vet на linux и darwin, fmt-check 302 файла,
   refusal-check 163, staticcheck 9 пакетов × 2 платформы; `make e2e` rc=0;
   `make race` rc=0 (`internal/flow` 29.5 с, `internal/runtime` 1134.9 с).
+
+- [x] 2.2 Проверено на опубликованных бинарях решающей парой: тот же пакет
+  (read-only гейт + materialise-only дерево + `model_profile`) на 0.13.41
+  отказывается `invalid_workspace_tree ... requires StepDefinition v8`, на
+  0.13.42 компилируется. Архив сошёлся с манифестом (`sha256:259a04f0…`).
