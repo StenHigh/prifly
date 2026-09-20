@@ -455,7 +455,17 @@ func (t SessionTask) SubmissionTemplate() (SessionSubmission, error) {
 	if err != nil {
 		return SessionSubmission{}, err
 	}
-	return SessionSubmission{SchemaVersion: t.SchemaVersion, RunID: t.RunID, AttemptID: t.AttemptID, EnvelopeDigest: t.EnvelopeDigest, Result: body}, nil
+	submission := SessionSubmission{SchemaVersion: t.SchemaVersion, RunID: t.RunID, AttemptID: t.AttemptID, EnvelopeDigest: t.EnvelopeDigest, Result: body}
+	// A step that declared a profile will have its report refused without an
+	// answer about it, so a template that leaves the field out hands the host
+	// a document that cannot be submitted. The first host to meet this learned
+	// the shape from two refusals instead -- which is what the template exists
+	// to prevent. The outcome is left blank because only the host knows it;
+	// everything around it is the shape.
+	if t.ModelProfile != nil {
+		submission.ModelProfile = &ModelProfileStatement{}
+	}
+	return submission, nil
 }
 
 // routedVerdicts is the node's own declared set, read in the fixed StepResult

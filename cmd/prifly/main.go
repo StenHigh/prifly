@@ -1023,8 +1023,12 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		}
 		return c.emit(view)
 	case "events":
-		after := f.Int64("after", 0, "")
-		limit := f.Int("limit", 100, "")
+		// Both flags existed from the start and carried no description, so
+		// neither appeared in any help: a reader who saw more:true had no way
+		// to learn how to continue, and one went to the SQLite file instead --
+		// which is the one thing an authority exists to make unnecessary.
+		after := f.Int64("after", 0, "read events after this seq; the answer names the next value when it is partial")
+		limit := f.Int("limit", 100, "how many events to read at most, 1..1000")
 		if err := parse(f, args[2:]); err != nil {
 			return err
 		}
@@ -1032,7 +1036,13 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		if err != nil {
 			return err
 		}
-		return c.emit(map[string]any{"schema_version": "foundation-events/1", "view": view})
+		answer := map[string]any{"schema_version": "foundation-events/1", "view": view}
+		// A partial answer says how to ask for the rest. Reporting only that
+		// more exists leaves the reader to guess the form of the continuation.
+		if view.More && len(view.Events) != 0 {
+			answer["next_after"] = view.Events[len(view.Events)-1].Seq
+		}
+		return c.emit(answer)
 	case "pause", "cancel", "stop":
 		kind := f.String("kind", "pause", "")
 		invocation := f.String("invocation", "", "restrict this invocation and its descendants within the selected Run")

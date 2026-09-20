@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stenhigh/prifly/internal/flow"
+	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
 // The exact block the packaging session will ship in aif-profiled: three
@@ -97,5 +98,58 @@ func TestAMachineEntryReplacesThePackageEntryWhole(t *testing.T) {
 	}
 	if got := mergeModelProfiles(packaged, local, "codex-cli"); len(got) != 0 {
 		t.Fatalf("a host neither file describes produced %d entries", len(got))
+	}
+}
+
+// The reviewed summary is checked by a digest, and the start refuses when the
+// machine's execution configuration changed after the review. The profile
+// table is machine-local and is sealed into the Run, so leaving it out of the
+// summary meant a Run could seal a translation nobody reviewed -- and the
+// check whose whole purpose is that class would not notice.
+func TestTheReviewedSummaryCoversTheTableTheRunWillSeal(t *testing.T) {
+	packaged := map[string]map[string]map[string]string{
+		"claude-code": {"deep-reasoning": {"model": "opus", "effort": "high"}},
+	}
+	reviewed := mergeModelProfiles(packaged, nil, "claude-code")
+	if len(reviewed) != 1 {
+		t.Fatalf("the fixture resolved %d entries", len(reviewed))
+	}
+	summary := projectLaunchSummary{SchemaVersion: "project-launch-summary/3", Launch: "x", Host: "claude-code", ModelProfiles: map[string]prifly.ModelProfileTranslation{}}
+	for name, entry := range reviewed {
+		summary.ModelProfiles[name] = prifly.ModelProfileTranslation{Values: entry.Values, Source: entry.Source}
+	}
+	before, err := projectReviewDigest(summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The machine says something different afterwards. This is the edit the
+	// staleness check exists to catch.
+	local := map[string]map[string]map[string]string{
+		"claude-code": {"deep-reasoning": {"model": "sonnet"}},
+	}
+	after := summary
+	after.ModelProfiles = map[string]prifly.ModelProfileTranslation{}
+	for name, entry := range mergeModelProfiles(packaged, local, "claude-code") {
+		after.ModelProfiles[name] = prifly.ModelProfileTranslation{Values: entry.Values, Source: entry.Source}
+	}
+	changed, err := projectReviewDigest(after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed == before {
+		t.Fatal("a table edited after the review produced the same digest, so the start would accept it unreviewed")
+	}
+	// And the source is part of what is reviewed: the same values arriving
+	// from the machine rather than the package is a different answer.
+	sameValues := summary
+	sameValues.ModelProfiles = map[string]prifly.ModelProfileTranslation{
+		"deep-reasoning": {Values: map[string]string{"model": "opus", "effort": "high"}, Source: "local"},
+	}
+	moved, err := projectReviewDigest(sameValues)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved == before {
+		t.Fatal("the same values from a different source read as the same review")
 	}
 }

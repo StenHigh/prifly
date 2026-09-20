@@ -530,6 +530,47 @@ ID` показывает, где он; `run cancel --id ID` заканчивае
 
 ## Профиль модели
 
+### Как узнать, какому шагу принадлежит попытка
+
+`attempts[]` несёт `step_instance_id` и `stage_activation_id`, но не имя шага.
+Имя лежит на активации, на один переход дальше:
+
+```sh
+prifly --project DIR run status RUN_ID --json | jq -r '
+  .run.attempts | to_entries[]
+  | "\(.value.admitted.utc) \(.value.status)"'
+```
+
+С именем шага:
+
+```sh
+prifly --project DIR run status RUN_ID --json | jq -r '
+  .run as $r | $r.attempts | to_entries[]
+  | [$r.activations[.value.stage_activation_id].stage_id,
+     .value.admitted.utc, (.value.settled.utc // "-"),
+     (.value.model_profile_report.outcome // "-")] | @tsv'
+```
+
+Имя шага намеренно не продублировано в попытке: оно уже есть у активации, а
+две копии одного факта — два места, где он может разойтись. Собирать таблицу
+по порядку `admitted` работает только пока ветка одна.
+
+### Как дочитать `run events` до конца
+
+Ответ ограничен страницей и говорит `more: true`, когда прочитано не всё.
+Продолжение — `--after` с `seq` последнего прочитанного события; ответ сам
+называет его в `next_after`:
+
+```sh
+prifly --project DIR run events RUN_ID --json --limit 200
+prifly --project DIR run events RUN_ID --json --after 200 --limit 200
+```
+
+До 0.13.44 оба флага существовали, но были зарегистрированы без описания и не
+показывались ни в одном help. Читать `state.sqlite3` напрямую не нужно и не
+следует: это обход авторитета, который и существует, чтобы такого не
+требовалось.
+
 ### Откуда берётся `model_profile_translation` в задаче
 
 **Что это.** Объявленное имя профиля — требование к работе (`careful-review`),

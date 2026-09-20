@@ -1282,3 +1282,57 @@ func TestATaskCarriesTheTranslationTheProjectSealed(t *testing.T) {
 		t.Fatalf("the declaration changed: %+v", translated.ModelProfile)
 	}
 }
+
+// The template exists so a host does not assemble the shape from prose. For a
+// step that declared a profile it was handing back a document the intake would
+// refuse, and the first host to meet that learned the form from two refusals.
+func TestTheTemplateCarriesTheAnswerTheIntakeWillDemand(t *testing.T) {
+	e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", nil, nil, func(step *flow.StepDefinition) {
+		step.SchemaVersion = "9"
+		step.ModelProfile = &flow.ModelProfile{Requested: "careful-review", Reason: "judges work it did not do"}
+	})
+	ctx := context.Background()
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	task, err := e.SessionTask(ctx, runID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	template, err := task.SubmissionTemplate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if template.ModelProfile == nil {
+		t.Fatal("a step that will be refused without an answer got a template without the field")
+	}
+	if template.ModelProfile.Outcome != "" {
+		t.Fatalf("the template answered for the host: %+v", template.ModelProfile)
+	}
+	// Filling only what the host knows makes the template submittable.
+	template.ModelProfile.Outcome, template.ModelProfile.Named = "honoured", "claude-opus-5"
+	filled := hostResult(t, e, task, "planned")
+	filled.ModelProfile = template.ModelProfile
+	if _, err := e.SubmitSession(ctx, filled); err != nil {
+		t.Fatalf("the completed template was refused: %v", err)
+	}
+	// A step that declared nothing still gets no field: answering an absent
+	// declaration is its own refusal.
+	plain, _, _ := assistedFixture(t)
+	_ = plain
+	other, otherRun, _ := assistedFixture(t)
+	if err := other.Drive(ctx, otherRun); err != nil {
+		t.Fatal(err)
+	}
+	otherTask, err := other.SessionTask(ctx, otherRun, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherTemplate, err := otherTask.SubmissionTemplate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if otherTemplate.ModelProfile != nil {
+		t.Fatalf("a step that declared nothing was given something to answer: %+v", otherTemplate.ModelProfile)
+	}
+}

@@ -96,12 +96,18 @@ type projectLaunchSummary struct {
 	// RegistryBudget is how full the authority's definition budget is after
 	// this launch's edition: a project that follows every release fills it by
 	// being diligent, and the refusal came without warning.
-	RegistryBudget     *prifly.RegistryBudget       `json:"registry_budget,omitempty"`
-	SessionLimits      []prifly.SessionLimitPreview `json:"session_limits,omitempty"`
-	DecisionSheet      prifly.DecisionSheet         `json:"decision_sheet"`
-	DecisionStates     []projectDecisionState       `json:"decision_states"`
-	KnownQuestionsOnly bool                         `json:"known_questions_only"`
-	ReviewDigest       string                       `json:"review_digest,omitempty"`
+	RegistryBudget *prifly.RegistryBudget       `json:"registry_budget,omitempty"`
+	SessionLimits  []prifly.SessionLimitPreview `json:"session_limits,omitempty"`
+	// ModelProfiles is what this launch would seal as the meaning of each
+	// declared profile name for the selected host. It belongs in the summary
+	// because the Run seals it: without it the digest this summary is checked
+	// by says nothing about a machine-local table edited between the review
+	// and the start, and the staleness check exists for exactly that class.
+	ModelProfiles      map[string]prifly.ModelProfileTranslation `json:"model_profiles,omitempty"`
+	DecisionSheet      prifly.DecisionSheet                      `json:"decision_sheet"`
+	DecisionStates     []projectDecisionState                    `json:"decision_states"`
+	KnownQuestionsOnly bool                                      `json:"known_questions_only"`
+	ReviewDigest       string                                    `json:"review_digest,omitempty"`
 	// Admission is filled only by --prepare, and deliberately after the review
 	// digest is computed: it reads a quantity other Runs move, and folding it in
 	// would make the digest go stale on its own.

@@ -1,0 +1,26 @@
+## 1. Правки
+
+- [x] 1.1 `SubmissionTemplate` даёт пустой `model_profile` для шага с
+  объявленным профилем. `TestTheTemplateCarriesTheAnswerTheIntakeWillDemand`:
+  заполненный шаблон принимается, шаг без объявления поля не получает.
+
+- [x] 1.2 `--after`/`--limit` у `run events` описаны; ответ с `more: true`
+  называет `next_after` последним прочитанным `seq`.
+
+- [x] 1.3 `model_profiles` в `project-launch-summary/3` (необязательное поле,
+  как `registry_budget` и `session_limits` до него). Таблица резолвится один
+  раз перед сводкой и переиспользуется; проверка устаревания перечитывает её.
+  `TestTheReviewedSummaryCoversTheTableTheRunWillSeal`: правка после просмотра
+  меняет digest, и те же значения из другого источника — тоже.
+
+- [x] 1.4 `project_workflow_modified` называет цену удаления, когда в папке
+  есть командные файлы; `remove` отдаёт `removed_team_files`.
+
+- [x] 1.5 Troubleshooting: путь «попытка → активация → имя шага» и
+  продолжение `run events`. Имя шага в состоянии не дублируется.
+
+## 2. Ворота
+
+- [x] 2.1 `make ci-check` rc=0 — vet на linux и darwin, fmt-check 304 файла,
+  refusal-check 164, staticcheck 9 пакетов × 2 платформы; `make e2e` rc=0;
+  `make race` rc=0 (`internal/runtime` 770.6 с).

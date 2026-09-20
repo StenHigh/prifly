@@ -1399,7 +1399,15 @@ func (c *cli) projectWorkflowsUpdate(ctx context.Context, args []string) error {
 		return err
 	}
 	if digest != origin.Digest {
-		return refusal("project_workflow_modified", "local changes in "+strings.Join(projectWorkflowDriftPaths(ctx, origin, folder), ", ")+"; remove and add the folder again, or keep maintaining it by hand")
+		// The way out used to be named without its cost. `remove` deletes the
+		// whole folder, extend.yaml included -- and that file holds the team's
+		// settings and its model profile defaults, so following this advice
+		// destroyed decisions nobody meant to discard.
+		advice := "; copy extend.yaml and the project/ subtree aside, then remove and add the folder again, or keep maintaining it by hand"
+		if len(projectWorkflowTeamFiles(folder)) == 0 {
+			advice = "; remove and add the folder again, or keep maintaining it by hand"
+		}
+		return refusal("project_workflow_modified", "local changes in "+strings.Join(projectWorkflowDriftPaths(ctx, origin, folder), ", ")+advice)
 	}
 	targetRef := origin.Ref
 	if *ref != "" {
@@ -1555,6 +1563,13 @@ type projectWorkflowRemoveResult struct {
 	Name            string   `json:"name"`
 	Folder          string   `json:"folder"`
 	RemovedLaunches []string `json:"removed_launches"`
+	// RemovedTeamFiles names the files that were the team's rather than
+	// upstream's -- extend.yaml and the project subtree. They go with the
+	// folder, and since extend.yaml holds the team's settings and model
+	// profile defaults, a removal that did not say so destroyed decisions
+	// quietly. Saying which files went is the difference between a cost and
+	// a surprise.
+	RemovedTeamFiles []string `json:"removed_team_files,omitempty"`
 }
 
 func (c *cli) projectWorkflowsRemove(ctx context.Context, args []string) error {
@@ -1599,8 +1614,28 @@ func (c *cli) projectWorkflowsRemove(ctx context.Context, args []string) error {
 	if err := unregisterProjectWorkflow(root, name, launchIDs); err != nil {
 		return err
 	}
+	team := projectWorkflowTeamFiles(folder)
 	if err := os.RemoveAll(folder); err != nil {
 		return err
 	}
-	return c.emit(projectWorkflowRemoveResult{SchemaVersion: "project-workflow-remove/1", Repository: root, Name: name, Folder: pkg.Source, RemovedLaunches: launchIDs})
+	return c.emit(projectWorkflowRemoveResult{SchemaVersion: "project-workflow-remove/1", Repository: root, Name: name, Folder: pkg.Source, RemovedLaunches: launchIDs, RemovedTeamFiles: team})
+}
+
+// projectWorkflowTeamFiles names what in an installed folder belongs to the
+// team rather than upstream. It exists so a removal can say what it takes with
+// it: extend.yaml carries the settings and the model profile defaults, and a
+// folder deleted without naming them loses decisions silently.
+func projectWorkflowTeamFiles(folder string) []string {
+	digests, err := projectWorkflowFileDigests(folder)
+	if err != nil {
+		return nil
+	}
+	team := []string{}
+	for name := range digests {
+		if projectOwnedPath(name) {
+			team = append(team, name)
+		}
+	}
+	sort.Strings(team)
+	return team
 }

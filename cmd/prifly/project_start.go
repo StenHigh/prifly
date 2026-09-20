@@ -250,9 +250,16 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return closeErr
 		}
 	}
+	// What this launch would seal as the meaning of each declared profile
+	// name, resolved once: the summary shows it, the digest covers it and the
+	// start seals the same table. Reading it twice would let the two disagree.
+	reviewedProfiles, err := projectModelProfileTranslations(root, compiled.ModelProfiles, *host)
+	if err != nil {
+		return err
+	}
 	var summary projectLaunchSummary
 	if neutral {
-		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/3", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true, SessionLimits: requirements.sessionLimits}
+		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/3", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true, SessionLimits: requirements.sessionLimits, ModelProfiles: reviewedProfiles}
 		summary.Requirements = &requirements
 		for _, component := range compiled.Components {
 			if component.Path == workflowPath {
@@ -332,8 +339,16 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
+		// Re-read, not copied: the whole point of this check is that a
+		// machine-local file may have changed since the summary was written,
+		// and a copy of the reviewed value would agree with itself forever.
+		currentProfiles, err := projectModelProfileTranslations(root, compiled.ModelProfiles, *host)
+		if err != nil {
+			return err
+		}
 		currentSummary := summary
 		currentSummary.ConfigurationDigest, currentSummary.Execution, currentSummary.ReviewDigest = currentConfiguration, currentExecution, ""
+		currentSummary.ModelProfiles = currentProfiles
 		currentDigest, err := projectReviewDigest(currentSummary)
 		if err != nil {
 			return err
@@ -406,14 +421,12 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		startOptions.SchemaVersion, startOptions.ExecutionBindings = "2", execution
 		startOptions.Inputs, startOptions.InputValues = nil, inputValues
 	}
-	// Sealed here for the same reason the machine's environment is: a setting
-	// edited after the start must be visibly not part of this Run. Only the
-	// host this Run was started with is carried; the rest of a shared package's
-	// table describes machines nobody starts on here.
-	if translations, err := projectModelProfileTranslations(root, compiled.ModelProfiles, *host); err != nil {
-		return err
-	} else if len(translations) != 0 {
-		startOptions.ModelProfiles = translations
+	// Resolved before the summary and reused here, so what the Run seals is
+	// exactly what the review covered. Sealed for the same reason the
+	// machine's environment is: a setting edited after the start must be
+	// visibly not part of this Run.
+	if len(reviewedProfiles) != 0 {
+		startOptions.ModelProfiles = reviewedProfiles
 	}
 	if preflight.Declared {
 		startOptions.DecisionCatalog, startOptions.DecisionSheet = &preflight.Catalog, &preflight.Sheet
