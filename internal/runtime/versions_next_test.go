@@ -47,12 +47,14 @@ func TestEveryStateNamesItsNextContract(t *testing.T) {
 		{CoreRoutedStateVersion, CoreRoutedNextVersion},
 		{CoreEffectsStateVersion, CoreEffectsNextVersion},
 		{CoreMaterializedStateVersion, CoreMaterializedNextVersion},
-		{CoreStageWorkStateVersion, CoreProgramEnvironmentNextVersion},
-		// 32 adds a field to the sealed executor config and nothing to the
-		// answer, so it answers under the contract 31 already publishes.
-		{CoreEnvironmentSourceStateVersion, CoreProgramEnvironmentNextVersion},
-		{CoreModelProfileStateVersion, CoreModelProfileNextVersion},
-		{CoreProfileTranslationStateVersion, CoreProfileTranslationNextVersion},
+		// 36 is a next-action answer and records nothing, so every state still
+		// being created took it up, the way 31 and 32 took up 33. 33, 34 and
+		// 35 are what a Run sealed before it answers under; nothing rewrites
+		// those.
+		{CoreStageWorkStateVersion, CoreRunFinishNextVersion},
+		{CoreEnvironmentSourceStateVersion, CoreRunFinishNextVersion},
+		{CoreModelProfileStateVersion, CoreRunFinishNextVersion},
+		{CoreProfileTranslationStateVersion, CoreRunFinishNextVersion},
 	}
 	if len(expected) != len(versionContracts) {
 		t.Fatalf("the ladder has %d rows and this table names %d; a new state version needs its next contract here", len(versionContracts), len(expected))

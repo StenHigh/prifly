@@ -2458,6 +2458,10 @@ Global: --project DIR  --json  --format text|json|csv
                                    events reads one bounded page: --limit N (1..1000) and --after SEQ continue it,
                                    and a partial answer names the next value in next_after, so a reader never
                                    has to open the authority's own storage to finish reading a Run's history
+                                   explain on a finished Run names where its graph stopped in finish: the invocation,
+                                   the finish stage, the outcome, and the stage and verdict of the edge that reached it
+                                   when the sealed plan names exactly one, so the reason for an outcome is read here
+                                   rather than from activations and the workflow source
                                    timing node kinds: run, workflow_invocation, stage_activation, step_instance, attempt, check_execution
                                    A node's metrics carry only numbers; the boundaries they were measured between are the same-named entry of its intervals, as from_ref/to_ref
                                    kind inside from_ref/to_ref names what a boundary was read from and is a separate vocabulary from a node's kind: it also uses step, activation, invocation, stop and report

@@ -276,28 +276,28 @@
     "ContextRequest": {
       "$ref": "#/$defs/runtime_ContextRequest"
     },
-    "CoreCapabilitiesV35": {
+    "CoreCapabilitiesV36": {
       "$ref": "#/$defs/runtime_CapabilityManifest"
     },
     "CoreConfigurationV2": {
       "$ref": "#/$defs/runtime_Configuration"
     },
-    "CoreNextViewV35": {
+    "CoreNextViewV36": {
       "$ref": "#/$defs/runtime_NextView"
     },
-    "CorePreviewV35": {
+    "CorePreviewV36": {
       "$ref": "#/$defs/runtime_Preview"
     },
-    "CoreRunStateV35": {
+    "CoreRunStateV36": {
       "$ref": "#/$defs/runtime_Run"
     },
-    "CoreRunViewV35": {
+    "CoreRunViewV36": {
       "$ref": "#/$defs/runtime_RunView"
     },
-    "CoreStepReadViewV35": {
+    "CoreStepReadViewV36": {
       "$ref": "#/$defs/runtime_StepReadView"
     },
-    "CoreWorkflowInvocationV35": {
+    "CoreWorkflowInvocationV36": {
       "$ref": "#/$defs/runtime_Invocation"
     },
     "DecisionCatalog": {
@@ -5290,6 +5290,17 @@
         "driver_live": {
           "type": "boolean"
         },
+        "finish": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_RunFinish"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "For a Run that reached an outcome, where its graph stopped: the invocation, the finish stage it ended at, and the outcome the Run reports — which a recorded waiver may have reduced from the one that stage declares. Absent for every other action, and for a Run that stopped without reaching a finish stage — a failed or cancelled Run names what stopped it in the read view instead."
+        },
         "program_environment": {
           "anyOf": [
             {
@@ -5336,7 +5347,7 @@
           ]
         },
         "schema_version": {
-          "const": "core-next/35"
+          "const": "core-next/36"
         },
         "stage_id": {
           "$ref": "#/$defs/Identifier"
@@ -8695,6 +8706,34 @@
       ],
       "type": "object"
     },
+    "runtime_RunFinish": {
+      "additionalProperties": false,
+      "properties": {
+        "from_stage_id": {
+          "description": "The stage the declared edge into this finish came from. Present only when the sealed plan's own routing names exactly one such edge among the stages this Run settled; absent means this build cannot name one, never that there was none.",
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "stage_id": {
+          "type": "string"
+        },
+        "verdict": {
+          "description": "The verdict that took the declared edge into this finish. Present and absent together with from_stage_id.",
+          "type": "string"
+        },
+        "workflow_invocation_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome",
+        "stage_id",
+        "workflow_invocation_id"
+      ],
+      "type": "object"
+    },
     "runtime_RunView": {
       "additionalProperties": false,
       "properties": {
@@ -10352,10 +10391,10 @@
       "type": "string"
     }
   },
-  "$id": "urn:prifly:core-profile-translation:35",
+  "$id": "urn:prifly:core-run-finish:36",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "State/read 35 seals what the project decided a declared model profile name means for the host a Run was started with, and the task carries it beside the declaration with the source that said so. The values are opaque: this authority checks their shape, hands them to the host and reads no meaning from them -- selecting a model remains something it cannot do and does not claim. A machine-local edit made after the start is visibly not part of the Run, the same way the machine's environment already is. Every prior bundle describes the Run and the task without these fields, byte for byte.",
-  "title": "Pri-Fly sealed model profile translation contracts",
+  "description": "Next 36 answers, for a Run that reached an outcome, where its graph stopped: the invocation, the finish stage and that stage's outcome, and -- where the sealed plan's own routing names exactly one such edge among the stages the Run settled -- the stage and verdict that reached it. Both halves were held already, the activation in the state and the edge in the plan, and a host that wanted the reason for an outcome ordered activations by hand and then opened the workflow source. An edge this build cannot name without choosing between candidates is absent rather than guessed, and absent means not named rather than none. It mints no state version: nothing is recorded and the answer is derived at read time, so a Run started before this build answers under it too. State, read, preview and step read keep the 35 contracts, and session 7 tasks and submissions are unchanged.",
+  "title": "Pri-Fly named Run finish contracts",
   "x-prifly-contracts": [
     "ActionAdmission",
     "ActionDelivery",
@@ -10371,14 +10410,14 @@
     "CheckResult",
     "ContextProfile",
     "ContextRequest",
-    "CoreCapabilitiesV35",
+    "CoreCapabilitiesV36",
     "CoreConfigurationV2",
-    "CoreNextViewV35",
-    "CorePreviewV35",
-    "CoreRunStateV35",
-    "CoreRunViewV35",
-    "CoreStepReadViewV35",
-    "CoreWorkflowInvocationV35",
+    "CoreNextViewV36",
+    "CorePreviewV36",
+    "CoreRunStateV36",
+    "CoreRunViewV36",
+    "CoreStepReadViewV36",
+    "CoreWorkflowInvocationV36",
     "DecisionCatalog",
     "DecisionDefinition",
     "DecisionRecordV2",

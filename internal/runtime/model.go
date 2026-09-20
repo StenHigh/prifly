@@ -268,11 +268,21 @@ const (
 	CoreProfileTranslationNextVersion     = "core-next/35"
 	CoreProfileTranslationPreviewVersion  = "core-preview/35"
 	CoreProfileTranslationStepReadVersion = "core-step-read/35"
-	CoreConfigVersion                     = "core-configuration/1"
-	CoreContextConfigVersion              = "core-configuration/2"
-	MaxDefinitionBytes                    = 2 << 20
-	MaxArtifactBytes                      = 16 << 20
-	MaxRunPublications                    = 1024
+	// A terminal Run names where its graph stopped. Both halves were already
+	// held: the finish activation is in the state, and the edge that reached
+	// it is declared in the plan the Run sealed. A host that wanted the reason
+	// for an outcome ordered activations by hand and then opened the workflow
+	// source, which is the one thing an authority exists to make unnecessary.
+	//
+	// 36 is an answer, not a record, so it mints no state version and rides
+	// the states that already answer 33, 34 and 35 — which is why a Run
+	// started before this build also answers under it.
+	CoreRunFinishNextVersion = "core-next/36"
+	CoreConfigVersion        = "core-configuration/1"
+	CoreContextConfigVersion = "core-configuration/2"
+	MaxDefinitionBytes       = 2 << 20
+	MaxArtifactBytes         = 16 << 20
+	MaxRunPublications       = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time

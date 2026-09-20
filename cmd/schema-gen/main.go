@@ -55,6 +55,7 @@ type generator struct {
 	programEnvironment    bool
 	modelProfiles         bool
 	profileTranslations   bool
+	runFinish             bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -182,6 +183,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.programEnvironment && programEnvironmentField(t, field.Name) {
 						continue
 					}
+					if !g.runFinish && runFinishField(t, field.Name) {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -307,6 +311,7 @@ var profileContracts = []struct {
 	{"program-environment", "generate named program environment read version 33 contracts", func(g *generator) { g.programEnvironment = true }},
 	{"model-profile", "generate declared model profile session contracts", func(g *generator) { g.modelProfiles = true }},
 	{"profile-translation", "generate sealed model profile translation state/read version 35 contracts", func(g *generator) { g.profileTranslations = true }},
+	{"run-finish", "generate named Run finish next version 36 contracts", func(g *generator) { g.runFinish = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -861,6 +866,12 @@ func main() {
 			delete(contracts, name+"V34")
 		}
 	}
+	if g.runFinish {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreNextView", "CoreWorkflowInvocation", "CorePreview", "CoreStepReadView", "CoreCapabilities"} {
+			contracts[name+"V36"] = contracts[name+"V35"]
+			delete(contracts, name+"V35")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1105,11 +1116,15 @@ func main() {
 			bundle["title"] = "Pri-Fly declared execution value source contracts"
 			bundle["description"] = "State/read 32 lets a sealed executor config name where a value comes from — an environment variable of the caller, a whole file, or one key of a NAME=value file — instead of carrying the value. The engine reads it at the moment the program starts, so nothing enters the Run, its digests or any document made from them, and a source that is absent or empty refuses the start by name rather than letting the program fail on authentication. A Run whose owner named no source is unchanged, and the next action, the preview and the step read keep their 31 contracts."
 		}
-		if g.profileTranslations {
-			profileTranslationConstraints(&g)
-			bundle["$id"] = "urn:prifly:core-profile-translation:35"
-			bundle["title"] = "Pri-Fly sealed model profile translation contracts"
-			bundle["description"] = "State/read 35 seals what the project decided a declared model profile name means for the host a Run was started with, and the task carries it beside the declaration with the source that said so. The values are opaque: this authority checks their shape, hands them to the host and reads no meaning from them -- selecting a model remains something it cannot do and does not claim. A machine-local edit made after the start is visibly not part of the Run, the same way the machine's environment already is. Every prior bundle describes the Run and the task without these fields, byte for byte."
+		// A profile enables every profile before it, so the block that runs
+		// last is the one that names the bundle. These are in ladder order for
+		// that reason: out of order, 34 and 35 were published carrying 33's
+		// identity, and 35 pinned the Run state to 34.
+		if g.programEnvironment {
+			programEnvironmentConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-program-environment:33"
+			bundle["title"] = "Pri-Fly named program environment contracts"
+			bundle["description"] = "Read 33 answers, for a ready stage whose work is a program, what that program would be given: every variable by name and, for a value read at dispatch, the place it comes from. Never a value. The answer is read from the configuration the Run sealed at its start, so a machine-local setting changed afterwards is visibly not part of this Run. It mints no state version: nothing new is recorded, every Run that can describe a program stage answers under it whatever version its state was sealed at, and the published capability document caps state_versions at 32 entries this build already fills. State, read, preview and step read keep the 32 contracts, and session 7 tasks and submissions are unchanged."
 		}
 		if g.modelProfiles {
 			modelProfileConstraints(&g)
@@ -1117,11 +1132,17 @@ func main() {
 			bundle["title"] = "Pri-Fly declared model profile contracts"
 			bundle["description"] = "A task names the profile of model its step's author asked for, read from the sealed plan rather than stored a second time: two places for one fact are two places it can disagree. The declaration is a property of the step, so the handoff is unchanged and no Run records it. Nothing here selects a model -- an assisted session exists before the Run and this authority holds no channel to it -- so the declaration travels to the host and what the host did with it is reported, never inferred. Every prior bundle describes the task without this field, byte for byte."
 		}
-		if g.programEnvironment {
-			programEnvironmentConstraints(&g)
-			bundle["$id"] = "urn:prifly:core-program-environment:33"
-			bundle["title"] = "Pri-Fly named program environment contracts"
-			bundle["description"] = "Read 33 answers, for a ready stage whose work is a program, what that program would be given: every variable by name and, for a value read at dispatch, the place it comes from. Never a value. The answer is read from the configuration the Run sealed at its start, so a machine-local setting changed afterwards is visibly not part of this Run. It mints no state version: nothing new is recorded, every Run that can describe a program stage answers under it whatever version its state was sealed at, and the published capability document caps state_versions at 32 entries this build already fills. State, read, preview and step read keep the 32 contracts, and session 7 tasks and submissions are unchanged."
+		if g.profileTranslations {
+			profileTranslationConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-profile-translation:35"
+			bundle["title"] = "Pri-Fly sealed model profile translation contracts"
+			bundle["description"] = "State/read 35 seals what the project decided a declared model profile name means for the host a Run was started with, and the task carries it beside the declaration with the source that said so. The values are opaque: this authority checks their shape, hands them to the host and reads no meaning from them -- selecting a model remains something it cannot do and does not claim. A machine-local edit made after the start is visibly not part of the Run, the same way the machine's environment already is. Every prior bundle describes the Run and the task without these fields, byte for byte."
+		}
+		if g.runFinish {
+			runFinishConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-run-finish:36"
+			bundle["title"] = "Pri-Fly named Run finish contracts"
+			bundle["description"] = "Next 36 answers, for a Run that reached an outcome, where its graph stopped: the invocation, the finish stage and that stage's outcome, and -- where the sealed plan's own routing names exactly one such edge among the stages the Run settled -- the stage and verdict that reached it. Both halves were held already, the activation in the state and the edge in the plan, and a host that wanted the reason for an outcome ordered activations by hand and then opened the workflow source. An edge this build cannot name without choosing between candidates is absent rather than guessed, and absent means not named rather than none. It mints no state version: nothing is recorded and the answer is derived at read time, so a Run started before this build answers under it too. State, read, preview and step read keep the 35 contracts, and session 7 tasks and submissions are unchanged."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

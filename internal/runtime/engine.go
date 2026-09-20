@@ -619,6 +619,76 @@ type NextView struct {
 	// place the value is read from at dispatch. Absent for every other action
 	// and for a build that does not carry it.
 	ProgramEnvironment *ProgramEnvironmentView `json:"program_environment,omitempty"`
+	// Finish is where a Run that reached an outcome stopped. Absent for every
+	// other action, and for a Run that stopped without reaching a finish
+	// stage: a failed or cancelled Run names what stopped it in the read view
+	// instead.
+	Finish *RunFinish `json:"finish,omitempty"`
+}
+
+// RunFinish names the place a Run's graph stopped and, where the sealed plan
+// says so without ambiguity, the declared edge that reached it. Both halves
+// were held by the authority already — the activation in the state, the edge
+// in the plan — and neither was said, so a host ordered activations by hand
+// and then opened the workflow source to learn why its Run ended rejected.
+type RunFinish struct {
+	InvocationID string `json:"workflow_invocation_id"`
+	StageID      string `json:"stage_id"`
+	// Outcome is what the Run reports, which a recorded waiver may have
+	// reduced from the outcome StageID declares.
+	Outcome string `json:"outcome"`
+	// FromStageID and Verdict name the declared edge into StageID. Both are
+	// absent together when this build cannot name one edge: when more than one
+	// settled stage declares a route here, or when the route was not taken by
+	// a step verdict. Absent means "not named", never "there was none".
+	FromStageID string `json:"from_stage_id,omitempty"`
+	Verdict     string `json:"verdict,omitempty"`
+}
+
+// runFinish reads the finish of a Run that reached an outcome. The edge is
+// resolved by asking the plan's own routing where each settled step's accepted
+// verdict goes -- the same function the driver routed with, so this is a second
+// reading of one rule rather than a second copy of it.
+func runFinish(r Run) *RunFinish {
+	if r.Status != "completed" || r.Outcome == nil {
+		return nil
+	}
+	var finish *Activation
+	for _, a := range r.Activations {
+		if a.Kind == "finish" && a.Status == "completed" && a.InvocationID == r.RootInvocationID {
+			finish = a
+			break
+		}
+	}
+	if finish == nil {
+		return nil
+	}
+	view := &RunFinish{InvocationID: finish.InvocationID, StageID: finish.StageID, Outcome: *r.Outcome}
+	p, err := r.planFor(finish.InvocationID)
+	if err != nil || p == nil {
+		return view
+	}
+	for _, a := range r.Activations {
+		if a.InvocationID != finish.InvocationID || a.ID == finish.ID || a.StepID == "" {
+			continue
+		}
+		step := r.Steps[a.StepID]
+		if step == nil || step.Verdict == "" {
+			continue
+		}
+		next, err := p.Next(a.StageID, step.Verdict)
+		if err != nil || next != finish.StageID {
+			continue
+		}
+		if view.FromStageID != "" && (view.FromStageID != a.StageID || view.Verdict != step.Verdict) {
+			// Two settled stages declare a route here and nothing in the state
+			// says which one was taken. Naming either would be a guess.
+			view.FromStageID, view.Verdict = "", ""
+			return view
+		}
+		view.FromStageID, view.Verdict = a.StageID, step.Verdict
+	}
+	return view
 }
 
 // ProgramEnvironmentView is the composition of one program's environment, in
@@ -719,6 +789,7 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 	}
 	kind, work := nextKind(r)
 	reason := ""
+	var finish *RunFinish
 	if a, code := sessionTimingIssue(r, e.clock.now()); a != nil && kind != "terminal" && kind != "uncertain" && !r.cancelRequestedFor(r.Activations[a.ActivationID].InvocationID) {
 		kind, work, reason = "session_expired", a.ID, code
 	}
@@ -754,6 +825,11 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		if r.reopenable() {
 			actions = append(actions, "run.reopen")
 		}
+		// Only the states whose next contract declares the field carry it: a
+		// Run answering an older contract answers exactly what it always did.
+		if nextVersionFor(r.SchemaVersion) == CoreRunFinishNextVersion {
+			finish = runFinish(r)
+		}
 	case "uncertain":
 		// An unresolved execution keeps its slot and nothing retries it blindly,
 		// so the only move that advances the Run is the owner saying what
@@ -772,7 +848,7 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 			break
 		}
 	}
-	next := NextView{SchemaVersion: nextVersionFor(r.SchemaVersion), RunID: id, RunVersion: v.Snapshot.Version, Cut: v.Cut, Action: kind, WorkID: work, ReadOnly: true, Admission: false, DriverLive: e.driverLiveFor(id), ControlEpoch: r.ControlEpoch, ResumeRequired: r.ResumeRequired, SafeNextActions: actions}
+	next := NextView{SchemaVersion: nextVersionFor(r.SchemaVersion), RunID: id, RunVersion: v.Snapshot.Version, Cut: v.Cut, Action: kind, WorkID: work, ReadOnly: true, Admission: false, DriverLive: e.driverLiveFor(id), ControlEpoch: r.ControlEpoch, ResumeRequired: r.ResumeRequired, SafeNextActions: actions, Finish: finish}
 	next.ReasonCode = reason
 	if reason != "" {
 		next.SafeNextActions = append(next.SafeNextActions, "doctor")

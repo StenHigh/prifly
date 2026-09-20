@@ -120,6 +120,13 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreProfileTranslationStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreProfileTranslationReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "model_profile_translation")
+	// A terminal Run names the finish stage it stopped at and, where the
+	// sealed plan says so without ambiguity, the edge that reached it. No
+	// state or read version is minted: nothing new is recorded, and the answer
+	// is derived at read time from the activations and the plan the Run
+	// already carries. A Run started before this build therefore answers under
+	// it too.
+	profile.Capabilities = append(profile.Capabilities, "run_finish_named")
 	return manifest
 }
 

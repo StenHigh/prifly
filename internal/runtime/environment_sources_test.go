@@ -227,7 +227,7 @@ func TestNextAnswersWhatTheProgramWouldBeGiven(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.SchemaVersion != CoreProgramEnvironmentNextVersion || next.Action != "stage" || next.StageWork != StageWorkProgram {
+	if next.SchemaVersion != CoreRunFinishNextVersion || next.Action != "stage" || next.StageWork != StageWorkProgram {
 		t.Fatalf("the ready program stage was not named: %+v", next)
 	}
 	if next.ProgramEnvironment == nil {

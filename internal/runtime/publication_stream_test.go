@@ -428,7 +428,7 @@ func TestEachPublicationKeepsIndependentCursorsAndPendingAssignments(t *testing.
 		t.Fatal(err)
 	}
 	for name, value := range map[string]any{
-		"CoreRunStateV31": r, "CoreRunViewV31": view, "CoreNextViewV33": next, "CorePreviewV31": preview,
+		"CoreRunStateV31": r, "CoreRunViewV31": view, "CoreNextViewV36": next, "CorePreviewV31": preview,
 		"CoreWorkflowInvocationV31": r.Invocations[r.RootInvocationID], "CoreCapabilitiesV35": Capabilities(),
 	} {
 		if err := validatePublic(t, name, value); err != nil {

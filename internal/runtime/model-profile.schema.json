@@ -5310,7 +5310,7 @@
           ]
         },
         "schema_version": {
-          "const": "core-next/33"
+          "const": "core-next/34"
         },
         "stage_id": {
           "$ref": "#/$defs/Identifier"
@@ -10301,10 +10301,10 @@
       "type": "string"
     }
   },
-  "$id": "urn:prifly:core-program-environment:33",
+  "$id": "urn:prifly:core-model-profile:34",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Read 33 answers, for a ready stage whose work is a program, what that program would be given: every variable by name and, for a value read at dispatch, the place it comes from. Never a value. The answer is read from the configuration the Run sealed at its start, so a machine-local setting changed afterwards is visibly not part of this Run. It mints no state version: nothing new is recorded, every Run that can describe a program stage answers under it whatever version its state was sealed at, and the published capability document caps state_versions at 32 entries this build already fills. State, read, preview and step read keep the 32 contracts, and session 7 tasks and submissions are unchanged.",
-  "title": "Pri-Fly named program environment contracts",
+  "description": "A task names the profile of model its step's author asked for, read from the sealed plan rather than stored a second time: two places for one fact are two places it can disagree. The declaration is a property of the step, so the handoff is unchanged and no Run records it. Nothing here selects a model -- an assisted session exists before the Run and this authority holds no channel to it -- so the declaration travels to the host and what the host did with it is reported, never inferred. Every prior bundle describes the task without this field, byte for byte.",
+  "title": "Pri-Fly declared model profile contracts",
   "x-prifly-contracts": [
     "ActionAdmission",
     "ActionDelivery",

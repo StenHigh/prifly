@@ -176,6 +176,21 @@ func requiresSessionState(definitions []PinnedDefinition, p *flow.Plan) bool {
 	return false
 }
 
+// requiresModelProfileState reports whether any step of this closure declares
+// a model profile. The declaration itself records nothing, but a step that
+// carries one is a step whose attempt can carry the host's report about it,
+// and that is a fact of the Run.
+func requiresModelProfileState(p *flow.Plan) bool {
+	for _, workflow := range workflowPlans(p) {
+		for _, step := range workflow.Steps {
+			if step.ModelProfile != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Legacy definitions retain their original absolute deadline. New definitions
 // pin the separate active and human-wait allowances in SessionLimits.
 const assistedAttemptTimeoutMS = 60 * 60 * 1000

@@ -760,7 +760,7 @@ func TestNextNamesTheWorkAReadyStageHolds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.SchemaVersion != CoreProgramEnvironmentNextVersion || next.Action != "stage" || next.StageWork != StageWorkAssistedSession {
+	if next.SchemaVersion != CoreRunFinishNextVersion || next.Action != "stage" || next.StageWork != StageWorkAssistedSession {
 		t.Fatalf("a ready assisted stage is not named as one: %+v", next)
 	}
 	// Reading names the work; it does not do it.

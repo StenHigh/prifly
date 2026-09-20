@@ -1092,6 +1092,23 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			stateVersion = CoreEnvironmentSourceStateVersion
 			break
 		}
+		// A declared model profile means an attempt of this Run can carry the
+		// host's report about it, and a sealed translation is a fact the Run
+		// itself holds. Both were published as state versions and neither was
+		// ever reached: the ladder stopped at 32 and the fields were written
+		// into Runs sealed under contracts that have no place for them.
+		if requiresModelProfileState(plan) {
+			if configurations == nil {
+				return local.Change{}, local.Reject("unsupported_model_profile", "a declared model profile requires the scoped invocation state")
+			}
+			stateVersion = CoreModelProfileStateVersion
+		}
+		if len(options.ModelProfiles) != 0 {
+			if configurations == nil {
+				return local.Change{}, local.Reject("unsupported_model_profile_translation", "a sealed profile translation requires the scoped invocation state")
+			}
+			stateVersion = CoreProfileTranslationStateVersion
+		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
 		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}
 		if configurations != nil {

@@ -48,20 +48,25 @@ var versionContracts = []versionContract{
 	{CoreRoutedStateVersion, CoreRoutedReadVersion, CoreRoutedStepReadVersion, CoreRoutedNextVersion},
 	{CoreEffectsStateVersion, CoreEffectsReadVersion, CoreEffectsStepReadVersion, CoreEffectsNextVersion},
 	{CoreMaterializedStateVersion, CoreMaterializedReadVersion, CoreMaterializedStepReadVersion, CoreMaterializedNextVersion},
-	{CoreStageWorkStateVersion, CoreStageWorkReadVersion, CoreStageWorkStepReadVersion, CoreProgramEnvironmentNextVersion},
+	{CoreStageWorkStateVersion, CoreStageWorkReadVersion, CoreStageWorkStepReadVersion, CoreRunFinishNextVersion},
 	// 32 adds a field to the sealed executor config alone. The step read is
 	// left empty on purpose: nothing about it changed, so a Run at 32 answers
 	// step reads under the contract 31 already published.
-	{CoreEnvironmentSourceStateVersion, CoreEnvironmentSourceReadVersion, "", CoreProgramEnvironmentNextVersion},
+	{CoreEnvironmentSourceStateVersion, CoreEnvironmentSourceReadVersion, "", CoreRunFinishNextVersion},
 	// 34 records what a host said it did with a declared model profile. It is
 	// the first row past the cap the published capability document set on
 	// these lists; the owner withdrew that compatibility on 2026-09-19, and
 	// the new bundle allows more while every earlier one keeps saying 32.
-	{CoreModelProfileStateVersion, CoreModelProfileReadVersion, CoreModelProfileStepReadVersion, CoreModelProfileNextVersion},
+	{CoreModelProfileStateVersion, CoreModelProfileReadVersion, CoreModelProfileStepReadVersion, CoreRunFinishNextVersion},
 	// 35 seals what the project says a declared profile name means for its
 	// host, so the Run answers with what it started with rather than with
 	// whatever the machine says now.
-	{CoreProfileTranslationStateVersion, CoreProfileTranslationReadVersion, CoreProfileTranslationStepReadVersion, CoreProfileTranslationNextVersion},
+	{CoreProfileTranslationStateVersion, CoreProfileTranslationReadVersion, CoreProfileTranslationStepReadVersion, CoreRunFinishNextVersion},
+	// 36 mints no state row of its own: it is a next-action answer, so every
+	// state that can describe a finished Run and is still being created takes
+	// it up, the way 31 and 32 took up 33. That includes 31 and 32 themselves,
+	// which is where every Run this engine has finished so far actually sits.
+	// Every earlier state keeps the next contract it was published with.
 }
 
 // nextVersionFor is the contract a next-action answer is written under for a
