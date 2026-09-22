@@ -8,6 +8,7 @@
   "required": ["schema_version", "packages", "launches"],
   "properties": {
     "schema_version": {"const": "prifly-project-profile/3"},
+    "title": {"type": "string", "minLength": 1},
     "hosts": {
       "type": "object",
       "additionalProperties": false,

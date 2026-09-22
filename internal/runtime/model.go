@@ -268,6 +268,10 @@ const (
 	CoreProfileTranslationNextVersion     = "core-next/35"
 	CoreProfileTranslationPreviewVersion  = "core-preview/35"
 	CoreProfileTranslationStepReadVersion = "core-step-read/35"
+	// A Project title is declared by its owner and sealed with a Run so the
+	// monitor does not reinterpret historical work through a renamed profile.
+	CoreProjectTitleStateVersion = "core-state/37"
+	CoreProjectTitleReadVersion  = "core-read/37"
 	// A terminal Run names where its graph stopped. Both halves were already
 	// held: the finish activation is in the state, and the edge that reached
 	// it is declared in the plan the Run sealed. A host that wanted the reason
@@ -746,6 +750,7 @@ type Run struct {
 	ID                     string                    `json:"id"`
 	AuthorityID            string                    `json:"authority_id"`
 	ProjectID              string                    `json:"project_id"`
+	ProjectTitle           string                    `json:"project_title,omitempty"`
 	Profile                string                    `json:"semantics_profile"`
 	TrustProfile           string                    `json:"trust_profile"`
 	InteractionMode        string                    `json:"interaction_mode"`

@@ -55,6 +55,7 @@ type generator struct {
 	programEnvironment    bool
 	modelProfiles         bool
 	profileTranslations   bool
+	projectTitles         bool
 	runFinish             bool
 }
 
@@ -175,6 +176,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						continue
 					}
 					if !g.profileTranslations && profileTranslationField(t, field.Name) {
+						continue
+					}
+					if !g.projectTitles && t == reflect.TypeFor[prifly.Run]() && field.Name == "ProjectTitle" {
 						continue
 					}
 					if !g.modelProfiles && modelProfileField(t, field.Name) {
@@ -311,6 +315,7 @@ var profileContracts = []struct {
 	{"program-environment", "generate named program environment read version 33 contracts", func(g *generator) { g.programEnvironment = true }},
 	{"model-profile", "generate declared model profile session contracts", func(g *generator) { g.modelProfiles = true }},
 	{"profile-translation", "generate sealed model profile translation state/read version 35 contracts", func(g *generator) { g.profileTranslations = true }},
+	{"project-title", "generate sealed Project title state/read version 37 contracts", func(g *generator) { g.projectTitles = true }},
 	{"run-finish", "generate named Run finish next version 36 contracts", func(g *generator) { g.runFinish = true }},
 }
 
@@ -1137,6 +1142,11 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-profile-translation:35"
 			bundle["title"] = "Pri-Fly sealed model profile translation contracts"
 			bundle["description"] = "State/read 35 seals what the project decided a declared model profile name means for the host a Run was started with, and the task carries it beside the declaration with the source that said so. The values are opaque: this authority checks their shape, hands them to the host and reads no meaning from them -- selecting a model remains something it cannot do and does not claim. A machine-local edit made after the start is visibly not part of the Run, the same way the machine's environment already is. Every prior bundle describes the Run and the task without these fields, byte for byte."
+		}
+		if g.projectTitles {
+			bundle["$id"] = "urn:prifly:core-project-title:37"
+			bundle["title"] = "Pri-Fly sealed Project title contracts"
+			bundle["description"] = "State/read 37 seals the optional human-facing Project title from the execution profile with a new Run. A renamed profile therefore does not rewrite prior Run history; a Run without a title remains explicitly unnamed."
 		}
 		if g.runFinish {
 			runFinishConstraints(&g)

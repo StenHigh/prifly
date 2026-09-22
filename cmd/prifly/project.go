@@ -857,6 +857,7 @@ type projectProfileInit struct {
 
 type projectProfile struct {
 	SchemaVersion   string
+	Title           string
 	HostSkillsRoots map[string]string
 	Packages        map[string]projectPackage
 	Launches        map[string]projectLaunch
@@ -1979,7 +1980,7 @@ func readProjectProfile(root string) (projectProfile, error) {
 	}
 	for key := range object {
 		switch key {
-		case "schema_version", "hosts", "packages", "launches":
+		case "schema_version", "title", "hosts", "packages", "launches":
 		default:
 			return projectProfile{}, refusal("project_profile_invalid", "unknown field "+key)
 		}
@@ -1993,6 +1994,13 @@ func readProjectProfile(root string) (projectProfile, error) {
 		return projectProfile{}, refusal("project_profile_invalid", "launches must be an object")
 	}
 	profile := projectProfile{SchemaVersion: schema, HostSkillsRoots: make(map[string]string, len(projectHosts)), Launches: make(map[string]projectLaunch, len(launches))}
+	if raw, exists := object["title"]; exists {
+		title, ok := raw.(string)
+		if !ok || strings.TrimSpace(title) == "" {
+			return projectProfile{}, refusal("project_profile_invalid", "title must be a non-empty string")
+		}
+		profile.Title = strings.TrimSpace(title)
+	}
 	rawHosts, exists := object["hosts"]
 	if !exists && schema == "prifly-project-profile/2" {
 		return projectProfile{}, refusal("project_profile_invalid", "hosts is required by prifly-project-profile/2")

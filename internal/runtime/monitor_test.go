@@ -84,3 +84,34 @@ func TestMonitorHistoryAndCreationCallback(t *testing.T) {
 		t.Fatal("foreign reader enumerated runs")
 	}
 }
+
+func TestMonitorSubject(t *testing.T) {
+	for _, test := range []struct {
+		brief, task, want string
+	}{
+		{"Из RunBrief", `{"title":"Задача из сохранённого входа"}`, "Из RunBrief"},
+		{"", `{"title":"Задача из сохранённого входа"}`, "Задача из сохранённого входа"},
+		{"", `not json`, ""},
+	} {
+		if got := monitorSubject(Brief{Subject: test.brief}, []byte(test.task)); got != test.want {
+			t.Fatalf("monitorSubject(%q, %q) = %q, want %q", test.brief, test.task, got, test.want)
+		}
+	}
+}
+
+func TestStartPinsProjectTitle(t *testing.T) {
+	e, _ := reviewFanOut(t, 2)
+	options := StartOptions{CommandID: newID("command"), ProjectTitle: "Pri-Fly monitor", WorkflowFile: "workflows/fanout.json", BriefFile: "brief.json", Inputs: map[string]string{}}
+	started, err := e.Start(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := driverRun(t, e, started.Receipt.RunID)
+	if run.ProjectTitle != options.ProjectTitle || run.SchemaVersion != CoreProjectTitleStateVersion {
+		t.Fatalf("project title was not pinned: %+v", run)
+	}
+	row, err := e.MonitorSummary(context.Background(), run.ID)
+	if err != nil || row.ProjectTitle != options.ProjectTitle {
+		t.Fatalf("monitor lost the pinned title: %+v %v", row, err)
+	}
+}

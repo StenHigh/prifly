@@ -45,10 +45,11 @@ type monitorSource struct {
 }
 type monitorRun struct {
 	prifly.RunSummary
-	Source  string `json:"source"`
-	Project string `json:"project"`
-	Root    string `json:"root"`
-	Error   string `json:"error,omitempty"`
+	Source          string `json:"source"`
+	Project         string `json:"project"`
+	ProjectFallback string `json:"project_fallback"`
+	Root            string `json:"root"`
+	Error           string `json:"error,omitempty"`
 }
 type monitorDiscovery struct {
 	Scanning    bool     `json:"scanning"`
@@ -475,7 +476,7 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 						continue
 					}
 					summary, readErr := engine.MonitorSummary(readCtx, revision.RunID)
-					row := monitorRun{RunSummary: summary, Source: s.ID, Root: s.Root, Project: s.Project}
+					row := monitorRun{RunSummary: summary, Source: s.ID, Root: s.Root, Project: s.Project, ProjectFallback: filepath.Base(s.Root)}
 					if readErr != nil {
 						row.ID = revision.RunID
 						row.Error = readErr.Error()

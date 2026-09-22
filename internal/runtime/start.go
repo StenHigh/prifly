@@ -34,10 +34,13 @@ type StartOptions struct {
 	// declared workflow inputs without manufacturing a separate task document.
 	SchemaVersion string
 	CommandID     string
-	WorkflowFile  string
-	BriefFile     string
-	Inputs        map[string]string
-	InputRefs     map[string]ArtifactRef
+	// ProjectTitle is an optional human-facing name from the Project execution
+	// profile. It is recorded rather than read again after the Run starts.
+	ProjectTitle string
+	WorkflowFile string
+	BriefFile    string
+	Inputs       map[string]string
+	InputRefs    map[string]ArtifactRef
 	// Brief and InputValues carry bytes a caller already holds instead of a
 	// path to read them from. A schedule is the reason they exist: its brief
 	// and inputs were pinned by digest when it was created, so re-reading a
@@ -1109,8 +1112,14 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			}
 			stateVersion = CoreProfileTranslationStateVersion
 		}
+		if options.ProjectTitle != "" {
+			if configurations == nil {
+				return local.Change{}, local.Reject("unsupported_project_title", "a project title requires the scoped core state")
+			}
+			stateVersion = CoreProjectTitleStateVersion
+		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
-		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}
+		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}
 		if configurations != nil {
 			r.Ready = nil
 			r.WorkflowConfigurations = configurations

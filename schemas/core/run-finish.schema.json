@@ -8474,6 +8474,9 @@
         "project_id": {
           "type": "string"
         },
+        "project_title": {
+          "type": "string"
+        },
         "publication_assignments": {
           "items": {
             "$ref": "#/$defs/runtime_PublicationAssignment"

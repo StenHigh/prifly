@@ -46,6 +46,9 @@ type Invocation struct {
 // ready_stages field on the Run or silently discards a nonempty legacy frontier.
 func (r Run) MarshalJSON() ([]byte, error) {
 	type wireRun Run
+	if !isProjectTitleState(r.SchemaVersion) && r.ProjectTitle != "" {
+		return nil, faultf("invalid_project_title", "older state contains project title")
+	}
 	if !isForkState(r.SchemaVersion) && r.Fork != nil {
 		return nil, faultf("invalid_fork", "older state contains fork provenance")
 	}

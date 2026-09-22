@@ -11,6 +11,7 @@
 # the exact compiled build. Program machine paths belong in ignored local.yaml,
 # never here. execution_bindings belongs in a package's root workflow.yaml.
 schema_version: prifly-project-profile/3
+title: Example project # Optional human-facing name, sealed into new Runs.
 hosts:
   codex-cli: .codex/skills # The `prifly-run` skill installed for Codex CLI.
   codex-app: .agents/skills # The `prifly-run` skill installed for Codex Desktop.

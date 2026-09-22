@@ -62,6 +62,7 @@ var versionContracts = []versionContract{
 	// host, so the Run answers with what it started with rather than with
 	// whatever the machine says now.
 	{CoreProfileTranslationStateVersion, CoreProfileTranslationReadVersion, CoreProfileTranslationStepReadVersion, CoreRunFinishNextVersion},
+	{CoreProjectTitleStateVersion, CoreProjectTitleReadVersion, "", CoreRunFinishNextVersion},
 	// 36 mints no state row of its own: it is a next-action answer, so every
 	// state that can describe a finished Run and is still being created takes
 	// it up, the way 31 and 32 took up 33. That includes 31 and 32 themselves,
@@ -92,6 +93,9 @@ func isMaterializedState(version string) bool {
 }
 func isStageWorkState(version string) bool {
 	return atLeast(version, CoreStageWorkStateVersion)
+}
+func isProjectTitleState(version string) bool {
+	return atLeast(version, CoreProjectTitleStateVersion)
 }
 
 // stateRank is a state version's place in that order, or -1 for a version this

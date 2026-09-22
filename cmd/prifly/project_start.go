@@ -416,7 +416,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 		return err
 	}
-	startOptions := prifly.StartOptions{CommandID: *command, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
+	startOptions := prifly.StartOptions{CommandID: *command, ProjectTitle: profile.Title, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
 	if neutral {
 		startOptions.SchemaVersion, startOptions.ExecutionBindings = "2", execution
 		startOptions.Inputs, startOptions.InputValues = nil, inputValues

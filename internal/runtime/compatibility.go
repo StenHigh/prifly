@@ -120,6 +120,10 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreProfileTranslationStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreProfileTranslationReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "model_profile_translation")
+	profile.StateVersion, profile.ReadVersion = CoreProjectTitleStateVersion, CoreProjectTitleReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreProjectTitleStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreProjectTitleReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "project_title")
 	// A terminal Run names the finish stage it stopped at and, where the
 	// sealed plan says so without ambiguity, the edge that reached it. No
 	// state or read version is minted: nothing new is recorded, and the answer
@@ -131,6 +135,9 @@ func Capabilities() CapabilityManifest {
 }
 
 func supportedRun(r Run) bool {
+	if !isProjectTitleState(r.SchemaVersion) && r.ProjectTitle != "" {
+		return false
+	}
 	if sessionTimingInvariant(r) != nil {
 		return false
 	}

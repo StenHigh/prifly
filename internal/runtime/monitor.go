@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/stenhigh/prifly/internal/local"
@@ -16,6 +17,7 @@ const MonitorMaxRuns = 200
 // from the recorded Run: nothing here is derived, estimated or filled in.
 type RunSummary struct {
 	Subject       string   `json:"subject"`
+	ProjectTitle  string   `json:"project_title,omitempty"`
 	Executors     []string `json:"executors"`
 	SchemaVersion string   `json:"schema_version"`
 	ID            string   `json:"run_id"`
@@ -35,6 +37,23 @@ type RunSummary struct {
 	SettledAttempts int   `json:"settled_attempts"`
 	Version         int64 `json:"run_version"`
 	Events          int64 `json:"event_sequence"`
+}
+
+func monitorTaskTitle(data []byte) string {
+	var task struct {
+		Title string `json:"title"`
+	}
+	if json.Unmarshal(data, &task) != nil {
+		return ""
+	}
+	return strings.TrimSpace(task.Title)
+}
+
+func monitorSubject(brief Brief, task []byte) string {
+	if brief.Subject != "" {
+		return brief.Subject
+	}
+	return monitorTaskTitle(task)
 }
 
 // Runs lists the runs this reader may see, newest observation first. Access is
@@ -100,6 +119,15 @@ func (e *Engine) MonitorSummary(ctx context.Context, id string) (RunSummary, err
 			return RunSummary{}, err
 		}
 	}
+	var taskBody []byte
+	if brief.Subject == "" {
+		if task, ok := r.Inputs["task"]; ok {
+			if _, body, err := e.Artifact(task); err == nil {
+				taskBody = body
+			}
+		}
+	}
+	brief.Subject = monitorSubject(brief, taskBody)
 	executorNames := map[string]bool{}
 	for name := range r.Executors {
 		executorNames[name] = true
@@ -126,7 +154,7 @@ func (e *Engine) MonitorSummary(ctx context.Context, id string) (RunSummary, err
 			awaiting++
 		}
 	}
-	return RunSummary{Subject: brief.Subject, Executors: executors,
+	return RunSummary{Subject: brief.Subject, ProjectTitle: r.ProjectTitle, Executors: executors,
 		SchemaVersion: r.SchemaVersion, ID: r.ID, WorkflowID: r.WorkflowRef.ID, Profile: r.Profile,
 		Status: r.Status, Outcome: r.Outcome, Created: r.Created.UTC, LastObserved: r.LastObserved.UTC,
 		Steps: len(r.Steps), Attempts: len(r.Attempts), Invocations: len(r.Invocations),
