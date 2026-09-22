@@ -1,5 +1,5 @@
 id: aif:context/aif-review-bridge
-version: 1.8.0
+version: 1.9.0
 media_type: text/markdown; charset=utf-8
 text: |
   # Pri-Fly adapter for the pinned aif-review skill
@@ -54,13 +54,11 @@ text: |
   and stops when nothing blocks or the declared number of rounds runs out. Do
   not run `/aif-fix`, commit, or decide what comes next.
 
-  Your verdict for this step is `pass` whatever you find. Blocking does not
-  travel in the verdict: it travels in the `blocking` field of the `gate`
-  artifact, and the stage after you reads it there to decide whether the fix
-  step runs. Reporting `needs_revision` because findings block is the one
-  mistake this step can make that costs the whole Run: it says you could not
-  establish a result at all, so no fix round happens and the Run ends reporting
-  your findings unchanged. Use it only when that is literally true.
+  The gate artifact, not its verdict, selects the repair route. Return `pass`
+  as the normal verdict after every established gate. If an upstream procedure
+  produces `needs_revision` together with a valid gate, Pri-Fly routes it to
+  the same decision: `blocking` starts the fix round and `blocking_owner_only`
+  stops for the owner. Do not invoke `/aif-fix`, commit, or a new gate yourself.
 
   This is one session. Where the skill reaches for a separate reviewer session,
   use one only if the host platform actually provides it; where it does not,

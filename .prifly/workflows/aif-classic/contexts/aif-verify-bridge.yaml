@@ -1,5 +1,5 @@
 id: aif:context/aif-verify-bridge
-version: 1.12.0
+version: 1.13.0
 media_type: text/markdown; charset=utf-8
 text: |
   # Pri-Fly adapter for the pinned aif-verify skill
@@ -68,21 +68,14 @@ text: |
   and stops when nothing blocks or the declared number of rounds runs out. Do
   not run `/aif-fix`, commit, or decide what comes next.
 
-  Two things follow from the graph and cannot be read off this step. A `pass`
-  carrying `blocking: true` is what starts the fix round; `needs_revision` skips
-  it — the caller reports your findings and stops. So the cautious-looking
-  verdict is the one that turns remediation off, which is the opposite of how it
-  reads. And a plan file the fix step commits does not survive the route: the
-  commit step deletes `.ai-factory/PLAN.md` as Run working state, so never treat
-  its presence or absence in history as a finding.
-
-  Your verdict for this step is `pass` whatever you find. Blocking does not
-  travel in the verdict: it travels in the `blocking` field of the `gate`
-  artifact, and the stage after you reads it there to decide whether the fix
-  step runs. Reporting `needs_revision` because findings block is the one
-  mistake this step can make that costs the whole Run: it says you could not
-  establish a result at all, so no fix round happens and the Run ends reporting
-  your findings unchanged. Use it only when that is literally true.
+  The gate artifact, not its verdict, selects the repair route. Return `pass`
+  as the normal verdict after every established gate. If an upstream procedure
+  produces `needs_revision` together with a valid gate, Pri-Fly routes it to
+  the same decision: `blocking` starts the fix round and `blocking_owner_only`
+  stops for the owner. Do not invoke `/aif-fix`, commit, or a new gate yourself.
+  A plan file the fix step commits does not survive the route: the commit step
+  deletes `.ai-factory/PLAN.md` as Run working state, so never treat its
+  presence or absence in history as a finding.
 
   `blocking_owner_only` says whether another fix round could change anything.
   Set it true only when every blocker still standing is outside what any fix

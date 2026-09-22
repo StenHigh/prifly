@@ -49,8 +49,10 @@ supporting context. Adapter передаёт выбранный profile и prefl
 dialogs: raw `AskUserQuestion` не выдаётся за захваченный Pri-Fly decision,
 поэтому этот package пока не обещает полностью autonomous выполнение.
 
-Verify, security и review — read-only gates. Blocking result завершает путь
-typed artifact `gate` с `suggested_next: /aif-fix`; fix step сам не запускается.
+Verify и review — read-only gates. Their `gate.blocking` result makes Pri-Fly
+issue a separate `aif-fix` Attempt and then repeats the gate within its bounded
+loop; host never invokes that skill itself. `blocking_owner_only` ends the Run
+with the typed `gate` for the owner. Security remains a read-only terminal gate.
 Команда может исключить `improve`, `verify`, `security` или `review` через
 `extend.yaml`, не редактируя graph. Тем же файлом команда может и добавить
 собственный шаг: `extensions` вставляет его в объявленное ребро маршрута.

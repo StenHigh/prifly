@@ -1,7 +1,7 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/review-once
-version: 1.7.0
+version: 1.8.0
 title: Review the implementation once and fix what blocks it
 refs:
   schema_implementation: "{{schema_implementation}}"
@@ -26,7 +26,7 @@ stages:
     kind: step
     step_ref: step_review
     input_bindings: {implementation: $inputs.implementation, plan: $inputs.plan}
-    on: {pass: decide, needs_revision: inconclusive, fail: stopped, no_work: stopped}
+    on: {pass: decide, needs_revision: decide, fail: stopped, no_work: stopped}
   decide:
     kind: choice
     # `blocking_owner_only` implies `blocking`, so the two branches are true
@@ -66,11 +66,6 @@ stages:
     outcome: rejected
     output_bindings: {gate: $stages.review.gate}
     description: The fix step found no safe change it could make; the findings stand.
-  inconclusive:
-    kind: finish
-    outcome: rejected
-    output_bindings: {gate: $stages.review.gate}
-    description: The gate could not establish a result; its findings stand and no fix round runs.
   owner-decides:
     kind: finish
     outcome: rejected
