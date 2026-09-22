@@ -72,6 +72,7 @@ def check(args, generator):
 		("profile-translation", ["--profile-translation"], ("internal/runtime/profile-translation.schema.json", "schemas/core/profile-translation.schema.json")),
 		("project-title", ["--project-title"], ("internal/runtime/project-title.schema.json", "schemas/core/project-title.schema.json")),
 		("run-finish", ["--run-finish"], ("internal/runtime/run-finish.schema.json", "schemas/core/run-finish.schema.json")),
+		("recovery", ["--recovery"], ("internal/runtime/recovery.schema.json", "schemas/core/recovery.schema.json")),
 		("run-start-v2", ["--run-start-v2"], ("schemas/core/run-start-v2.schema.json",)),
 		("package-manifest-v2", ["--package-manifest-v2"], ("schemas/core/package-manifest-v2.schema.json",)),
 		("execution-bindings", ["--execution-bindings"], ("schemas/core/execution-bindings.schema.json",)),

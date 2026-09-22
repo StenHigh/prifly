@@ -171,6 +171,9 @@ type Command struct {
 	// are distinct from Control because they are read-only guards, not authority
 	// state a command may mutate.
 	Pins []ControlPin
+	// SourceRun checks a linked source without changing its snapshot. It is a
+	// transaction pin, not a second Run reducer.
+	SourceRun *RunPin
 	// ControlMutation changes the pinned authority state in the same SQLite
 	// transaction as this Run command. It is runtime-owned code, not wire data;
 	// it must be pure just like the Run transform. Receipt-only retries never
@@ -181,6 +184,11 @@ type Command struct {
 	// command costs no second write transaction. Telemetry never fails a
 	// command: a batch that no longer fits the diagnostic allowance is dropped.
 	Samples CommandTelemetry
+}
+
+type RunPin struct {
+	ID      string `json:"run_id"`
+	Version int64  `json:"run_version"`
 }
 
 // CommandTelemetry builds the samples for one applied command from the timings
@@ -880,6 +888,15 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 	} else if cmd.Mode != CommandCAS && state.Version == 0 {
 		rejection = &Rejection{Code: "not_found", Message: "run does not exist"}
 	}
+	if rejection == nil && cmd.SourceRun != nil {
+		source, err := loadSnapshot(ctx, conn, cmd.SourceRun.ID)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return out, err
+		}
+		if source.Version != cmd.SourceRun.Version {
+			rejection = &Rejection{Code: "version_conflict", Message: "source run changed after recovery was reviewed"}
+		}
+	}
 	var control AuthoritySnapshot
 	if rejection == nil && cmd.Control != nil {
 		control, err = loadAuthoritySnapshot(ctx, conn, cmd.Control.Key)
@@ -1472,6 +1489,9 @@ func commandDigest(cmd Command) (string, error) {
 	if cmd.Mode == CommandCAS && cmd.ExpectedVersion == nil {
 		return "", errors.New("CAS requires a nonnegative expected version")
 	}
+	if cmd.SourceRun != nil && (!validIdentity(cmd.SourceRun.ID) || cmd.SourceRun.ID == cmd.RunID || cmd.SourceRun.Version < 1 || cmd.SourceRun.Version > (1<<53)-1 || cmd.Mode != CommandCAS || cmd.ExpectedVersion == nil || *cmd.ExpectedVersion != 0) {
+		return "", errors.New("invalid source Run pin")
+	}
 	if cmd.Control != nil && (!validIdentity(cmd.Control.Key) || cmd.Control.Version < 0 || cmd.Control.Version > (1<<53)-1) {
 		return "", errors.New("invalid authority control pin")
 	}
@@ -1487,7 +1507,8 @@ func commandDigest(cmd Command) (string, error) {
 		ExpectedVersion *int64          `json:"expected_version"`
 		Payload         json.RawMessage `json:"payload"`
 		Control         *ControlPin     `json:"control,omitempty"`
-	}{cmd.RunID, cmd.Mode, cmd.ExpectedVersion, cmd.Payload, cmd.Control})
+		SourceRun       *RunPin         `json:"source_run,omitempty"`
+	}{cmd.RunID, cmd.Mode, cmd.ExpectedVersion, cmd.Payload, cmd.Control, cmd.SourceRun})
 	if err != nil {
 		return "", err
 	}

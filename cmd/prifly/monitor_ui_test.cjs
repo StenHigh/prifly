@@ -61,6 +61,9 @@ assert.match(executionRole(null,null).kind,/не записана/);
 const activity=activityRows({attempts:{one:{id:'attempt:one',session:{principal_id:'host:one'}}},activations:{ready:{id:'activation:ready',stage_id:'plan',status:'ready'}},pending_decision:{attempt_id:'attempt:one',decision_id:'decision:go'},wait_registrations:{wait:{activation_id:'activation:wait',target_stage_id:'signal',status:'active'}},fork:{source_run_id:'run:source'}});
 assert.equal(activity.length,5);assert.match(activity[0].detail,/ожидается отчёт/);
 assert.equal(activityRows({fork:{source_run_id:'run:source',reason:'project continuation'}})[0].title,'Продолжение от Run');
+const recovered={root_workflow_invocation_id:'root',recovery:{source_run_id:'run:source',frontier_stage_id:'tests',reused:[{stage_id:'verify'}],root_output_refs:{verify:{implementation:{artifact_id:'artifact:old'}}}}};
+assert.equal(graphData({definition:{entry:'verify',stages:{verify:{kind:'call',on:{succeeded:'tests'}},tests:{kind:'step'}}}},recovered,'root').nodes[0].state,'reused');
+assert.match(activityRows(recovered)[0].detail,/1 узлов взято/);
 console.log('monitor UI: status wording, escaping, timing quality, graph paths/ports/parallel/repeat/cycles, file evidence passed');
 
 // Exercise the actual pre-paint script, including browsers that deny storage.

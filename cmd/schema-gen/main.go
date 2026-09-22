@@ -57,6 +57,7 @@ type generator struct {
 	profileTranslations   bool
 	projectTitles         bool
 	runFinish             bool
+	recovery              bool
 }
 
 func (g *generator) schema(t reflect.Type) map[string]any {
@@ -179,6 +180,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						continue
 					}
 					if !g.projectTitles && t == reflect.TypeFor[prifly.Run]() && field.Name == "ProjectTitle" {
+						continue
+					}
+					if !g.recovery && t == reflect.TypeFor[prifly.Run]() && field.Name == "Recovery" {
 						continue
 					}
 					if !g.modelProfiles && modelProfileField(t, field.Name) {
@@ -317,6 +321,7 @@ var profileContracts = []struct {
 	{"profile-translation", "generate sealed model profile translation state/read version 35 contracts", func(g *generator) { g.profileTranslations = true }},
 	{"project-title", "generate sealed Project title state/read version 37 contracts", func(g *generator) { g.projectTitles = true }},
 	{"run-finish", "generate named Run finish next version 36 contracts", func(g *generator) { g.runFinish = true }},
+	{"recovery", "generate failed-stage recovery state/read version 38 contracts", func(g *generator) { g.recovery = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -877,6 +882,14 @@ func main() {
 			delete(contracts, name+"V35")
 		}
 	}
+	if g.recovery {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreCapabilities"} {
+			contracts[name+"V38"] = contracts[name+"V36"]
+			delete(contracts, name+"V36")
+		}
+		contracts["RecoveryProvenance"] = reflect.TypeFor[prifly.RecoveryProvenance]()
+		contracts["RecoveryReuse"] = reflect.TypeFor[prifly.RecoveryReuse]()
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1153,6 +1166,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-run-finish:36"
 			bundle["title"] = "Pri-Fly named Run finish contracts"
 			bundle["description"] = "Next 36 answers, for a Run that reached an outcome, where its graph stopped: the invocation, the finish stage and that stage's outcome, and -- where the sealed plan's own routing names exactly one such edge among the stages the Run settled -- the stage and verdict that reached it. Both halves were held already, the activation in the state and the edge in the plan, and a host that wanted the reason for an outcome ordered activations by hand and then opened the workflow source. An edge this build cannot name without choosing between candidates is absent rather than guessed, and absent means not named rather than none. It mints no state version: nothing is recorded and the answer is derived at read time, so a Run started before this build answers under it too. State, read, preview and step read keep the 35 contracts, and session 7 tasks and submissions are unchanged."
+		}
+		if g.recovery {
+			recoveryConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-recovery:38"
+			bundle["title"] = "Pri-Fly failed-stage recovery contracts"
+			bundle["description"] = "State/read 38 records exact source evidence in a distinct linked Run. Reused gates remain source Attempts, while only work after the failed frontier is executed in the new Run. Previous state, read and event editions remain unchanged."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

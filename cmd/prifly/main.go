@@ -2425,6 +2425,9 @@ Global: --project DIR  --json  --format text|json|csv
   project continue --repository DIR --launch ID --source-run RUN_ID --prepare [--host HOST] [--workspace worktree|checkout]
   project continue --repository DIR --launch ID --source-run RUN_ID --expected-launch-digest DIGEST [the same reviewed options]
                                    Start a new quality-tail Run from a completed partial/rejected classic Run and the current committed Git tree
+  project recover --repository DIR --launch ID --source-run RUN_ID --host HOST --prepare
+  project recover --repository DIR --launch ID --source-run RUN_ID --host HOST --expected-launch-digest DIGEST --allow-execution
+                                   Resume a technically failed quality-tail at the first unproved stage on a new package; prepare is read-only
   capabilities                     Implemented contracts/profiles, not permission grants
   exit-codes                       What every exit status of this tool means, for a driver that reads $?
    0 the command was carried out. Waiting is reported this way too: run drive returns 0 while an

@@ -272,6 +272,9 @@ const (
 	// monitor does not reinterpret historical work through a renamed profile.
 	CoreProjectTitleStateVersion = "core-state/37"
 	CoreProjectTitleReadVersion  = "core-read/37"
+	// Recovery records source evidence separately from this Run's new work.
+	CoreRecoveryStateVersion = "core-state/38"
+	CoreRecoveryReadVersion  = "core-read/38"
 	// A terminal Run names where its graph stopped. Both halves were already
 	// held: the finish activation is in the state, and the edge that reached
 	// it is declared in the plan the Run sealed. A host that wanted the reason
@@ -771,6 +774,7 @@ type Run struct {
 	// Fork records the immutable source of a semantic rework. It names a
 	// separate Run rather than changing the source Run's history in place.
 	Fork            *ForkProvenance        `json:"fork,omitempty"`
+	Recovery        *RecoveryProvenance    `json:"recovery,omitempty"`
 	Brief           ArtifactRef            `json:"brief_ref"`
 	LockRef         flow.Ref               `json:"package_lock_ref"`
 	Inputs          map[string]ArtifactRef `json:"input_artifacts"`

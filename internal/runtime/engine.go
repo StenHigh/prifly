@@ -113,6 +113,10 @@ func (e *Engine) applyControlledWithPins(ctx context.Context, control *local.Con
 // The authority reducer is internal code; its result is committed only after
 // the Run reducer accepted in the same SQLite transaction.
 func (e *Engine) applyControlledWithControlMutation(ctx context.Context, control *local.ControlPin, pins []local.ControlPin, controlMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error), actor, id, runID, eventType string, payload any, expected *int64, mode local.CommandMode, fn mutation) (local.ApplyResult, error) {
+	return e.applyControlledWithSourcePin(ctx, control, pins, nil, controlMutation, actor, id, runID, eventType, payload, expected, mode, fn)
+}
+
+func (e *Engine) applyControlledWithSourcePin(ctx context.Context, control *local.ControlPin, pins []local.ControlPin, source *local.RunPin, controlMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error), actor, id, runID, eventType string, payload any, expected *int64, mode local.CommandMode, fn mutation) (local.ApplyResult, error) {
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
@@ -125,7 +129,7 @@ func (e *Engine) applyControlledWithControlMutation(ctx context.Context, control
 	}
 	started := time.Now()
 	var observed Observation
-	command := local.Command{ID: id, Actor: actor, RunID: runID, Payload: commandBytes, ExpectedVersion: expected, Mode: mode, Control: control, Pins: pins, Samples: e.commandTelemetry(id, runID, started)}
+	command := local.Command{ID: id, Actor: actor, RunID: runID, Payload: commandBytes, ExpectedVersion: expected, Mode: mode, Control: control, Pins: pins, SourceRun: source, Samples: e.commandTelemetry(id, runID, started)}
 	if controlMutation != nil {
 		command.ControlMutation = func(snapshot local.AuthoritySnapshot) (json.RawMessage, error) {
 			return controlMutation(snapshot, observed)

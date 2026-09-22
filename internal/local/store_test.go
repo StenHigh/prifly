@@ -1546,6 +1546,45 @@ func TestCreateLinkedRunChecksSourceAndPreservesIt(t *testing.T) {
 	}
 }
 
+func TestRecoverSourcePinChecksAndDeduplicatesWithoutRewritingSource(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	applyChange(t, s, storeCommand("command:source", "run:source", 0), storeChange(`{"source":true}`))
+	before, err := s.Read(ctx, "run:source", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := storeCommand("command:recover", "run:recovered", 0)
+	command.SourceRun = &RunPin{ID: "run:source", Version: before.Snapshot.Version}
+	created := applyChange(t, s, command, storeChange(`{"recovered":true}`))
+	if created.Receipt.Rejection != nil {
+		t.Fatal(created.Receipt.Rejection)
+	}
+	duplicate, err := s.Apply(ctx, command, func(Snapshot) (Change, error) {
+		t.Fatal("duplicate recovery entered reducer")
+		return Change{}, nil
+	})
+	if err != nil || !duplicate.Duplicate {
+		t.Fatalf("duplicate recovery: %+v %v", duplicate, err)
+	}
+	stale := storeCommand("command:stale-recover", "run:stale-recover", 0)
+	stale.SourceRun = &RunPin{ID: "run:source", Version: before.Snapshot.Version + 1}
+	result, err := s.Apply(ctx, stale, func(Snapshot) (Change, error) {
+		t.Fatal("stale recovery entered reducer")
+		return Change{}, nil
+	})
+	if err != nil || result.Receipt.Rejection == nil || result.Receipt.Rejection.Code != "version_conflict" {
+		t.Fatalf("stale recovery: %+v %v", result, err)
+	}
+	if _, err := s.Read(ctx, stale.RunID, 0, 1); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale recovery created a Run: %v", err)
+	}
+	after, err := s.Read(ctx, "run:source", 0, 10)
+	if err != nil || !reflect.DeepEqual(before.Snapshot, after.Snapshot) || !reflect.DeepEqual(before.Events, after.Events) {
+		t.Fatalf("source history changed: %v", err)
+	}
+}
+
 // A read-only open does not migrate, so every read has to work on the shape the
 // database already has. The packed columns were selected unconditionally, and an
 // authority written by an earlier release answered every read with a

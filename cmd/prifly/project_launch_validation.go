@@ -18,6 +18,9 @@ type projectLaunchRequirements struct {
 	// launch's standing choice where the workflow needs a workspace, else none.
 	WorkspaceMode string `json:"-"`
 	sessionLimits []prifly.SessionLimitPreview
+	plan          *flow.Plan
+	definitions   []prifly.PinnedDefinition
+	resources     []prifly.PinnedResource
 }
 
 // standingWorkspace is the launch's declared worktree-or-checkout choice. It
@@ -48,6 +51,11 @@ func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root stri
 	plan, err := flow.CompileCore(workflow, "json", registry, resources)
 	if err != nil {
 		return nil, requirements, err
+	}
+	requirements.plan, requirements.definitions = plan, definitions
+	for ref := range plan.Resources {
+		resource := resources[ref]
+		requirements.resources = append(requirements.resources, prifly.PinnedResource{Ref: ref, RawDigest: fmt.Sprintf("sha256:%x", sha256.Sum256(resource.Bytes)), ByteEncoding: resource.ByteEncoding, MediaType: resource.MediaType, Bytes: resource.Bytes})
 	}
 	var assisted flow.Ref
 	for _, definition := range definitions {

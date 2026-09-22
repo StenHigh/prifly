@@ -124,6 +124,10 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreProjectTitleStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreProjectTitleReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "project_title")
+	profile.StateVersion, profile.ReadVersion = CoreRecoveryStateVersion, CoreRecoveryReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreRecoveryStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreRecoveryReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "failed_stage_recovery")
 	// A terminal Run names the finish stage it stopped at and, where the
 	// sealed plan says so without ambiguity, the edge that reached it. No
 	// state or read version is minted: nothing new is recorded, and the answer
@@ -135,6 +139,9 @@ func Capabilities() CapabilityManifest {
 }
 
 func supportedRun(r Run) bool {
+	if recoveryInvariant(r) != nil {
+		return false
+	}
 	if !isProjectTitleState(r.SchemaVersion) && r.ProjectTitle != "" {
 		return false
 	}

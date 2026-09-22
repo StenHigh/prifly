@@ -25,3 +25,10 @@ what the engine measures (declared effects, claimed workspace, output slots).
 - A worktree Run commits on the claim branch `prifly/<claim>`; the next
   `project start` deletes it. The final report names that branch and says the
   owner merges it into `main` (`git merge --ff-only`) or pushes it first.
+- If a quality-tail Run fails technically after accepted verify/review, use
+  `project recover --prepare --source-run RUN --launch aif-classic-continuation`
+  on the corrected package. Review the reused stages, failed frontier and
+  digest before starting with `--expected-launch-digest DIGEST --allow-execution`.
+  Follow the new Run with `run next`; never copy Artifact refs by hand or
+  treat a passing process as an accepted StepResult. This does not replace
+  `run reopen` or ordinary `project continue`.

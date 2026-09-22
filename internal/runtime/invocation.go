@@ -52,6 +52,9 @@ func (r Run) MarshalJSON() ([]byte, error) {
 	if !isForkState(r.SchemaVersion) && r.Fork != nil {
 		return nil, faultf("invalid_fork", "older state contains fork provenance")
 	}
+	if !isRecoveryState(r.SchemaVersion) && r.Recovery != nil {
+		return nil, faultf("invalid_recovery", "older state contains recovery provenance")
+	}
 	if !isContextState(r.SchemaVersion) && hasContextStateFields(r) {
 		return nil, faultf("invalid_context", "older state contains context contract fields")
 	}

@@ -37,6 +37,7 @@ type projectStartResult struct {
 	// under the repository, found nothing, and fell back to git worktree list.
 	WorkspacePath string                `json:"workspace_path,omitempty"`
 	LaunchSummary *projectLaunchSummary `json:"launch_summary,omitempty"`
+	Recovery      *prifly.RecoveryPlan  `json:"recovery,omitempty"`
 }
 
 type projectPreflight struct {
@@ -50,17 +51,24 @@ type projectPreflight struct {
 // seals declared YAML into a disposable package and uses the existing engine.
 // An assisted step waits for its host; a managed step uses its approved worker.
 func (c *cli) projectStart(ctx context.Context, args []string) error {
-	return c.projectPrepareAndStart(ctx, args, false, false)
+	return c.projectPrepareAndStart(ctx, args, false, false, false)
 }
 
 func (c *cli) projectContinue(ctx context.Context, args []string) error {
 	if index := slices.Index(args, "--prepare"); index >= 0 {
-		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true, true)
+		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true, true, false)
 	}
-	return c.projectPrepareAndStart(ctx, args, false, true)
+	return c.projectPrepareAndStart(ctx, args, false, true, false)
 }
 
-func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare, continuation bool) error {
+func (c *cli) projectRecover(ctx context.Context, args []string) error {
+	if index := slices.Index(args, "--prepare"); index >= 0 {
+		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true, false, true)
+	}
+	return c.projectPrepareAndStart(ctx, args, false, false, true)
+}
+
+func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare, continuation, recovering bool) error {
 	f := flags("project start")
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
@@ -88,11 +96,11 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if *launchID == "" {
 		return usageError("project start requires --launch")
 	}
-	if continuation && *sourceRun == "" || !continuation && *sourceRun != "" {
+	if (continuation || recovering) && *sourceRun == "" || !continuation && !recovering && *sourceRun != "" {
 		return usageError("project continue requires --source-run; project start does not accept it")
 	}
-	if continuation && !prepare && *expectedLaunch == "" {
-		return usageError("project continue requires --expected-launch-digest from project continue --prepare")
+	if (continuation || recovering) && !prepare && *expectedLaunch == "" {
+		return usageError("project continuation or recovery requires --expected-launch-digest from --prepare")
 	}
 	if *workspace != "" && *workspace != "worktree" && *workspace != "checkout" {
 		return refusal("project_start_invalid_workspace", "use worktree or checkout")
@@ -109,8 +117,8 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return err
 	}
 	neutral := profile.SchemaVersion == projectVariantProfileVersion
-	if continuation && !neutral {
-		return refusal("project_continue_requires_profile_3", "continuation requires Project profile /3")
+	if (continuation || recovering) && !neutral {
+		return refusal("project_continue_requires_profile_3", "continuation and recovery require Project profile /3")
 	}
 	if !neutral {
 		if prepare || *expectedLaunch != "" {
@@ -162,14 +170,20 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if details == nil {
 		return local.ErrIntegrity
 	}
-	if continuation {
-		for name := range inputs {
-			if name != "security_enabled" {
-				return refusal("project_continue_input_override", "task, handoff, plan and implementation come from the reviewed source and Git")
+	if continuation || recovering {
+		if recovering {
+			if len(inputs) != 0 || len(refFiles) != 0 || *workspace == "checkout" {
+				return refusal("recover_input_override", "recovery uses exact source inputs and a detached worktree")
 			}
-		}
-		if len(refFiles) != 0 {
-			return refusal("project_continue_input_override", "continuation input refs are selected from the source Run")
+		} else {
+			for name := range inputs {
+				if name != "security_enabled" {
+					return refusal("project_continue_input_override", "task, handoff, plan and implementation come from the reviewed source and Git")
+				}
+			}
+			if len(refFiles) != 0 {
+				return refusal("project_continue_input_override", "continuation input refs are selected from the source Run")
+			}
 		}
 	} else if err := projectStartInputs(*details, inputs, refFiles, !neutral); err != nil {
 		return err
@@ -236,6 +250,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		inputPaths[port] = resolved
 	}
 	var continuationReview *projectContinuationReview
+	var recoveryRequest *prifly.RecoveryRequest
 	if continuation {
 		mode := *workspace
 		if mode == "" {
@@ -261,6 +276,38 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			inputValues[name] = value
 		}
 	}
+	if recovering {
+		reader, err := prifly.Open(c.project, true)
+		if err != nil {
+			return err
+		}
+		request, carried, prepareErr := projectRecoverySource(ctx, reader, *sourceRun)
+		closeErr := reader.Close()
+		if prepareErr != nil {
+			return prepareErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		recoveryRequest = &request
+		decisionPorts := map[string]bool{}
+		for _, decision := range preflight.Catalog.Decisions {
+			if decision.Destination.Kind == "launch_input" {
+				decisionPorts[decision.Destination.Name] = true
+			}
+		}
+		for _, input := range details.Inputs {
+			if input.Configured {
+				decisionPorts[input.Name] = true
+			}
+		}
+		for name, value := range carried {
+			if !decisionPorts[name] {
+				inputValues[name] = value
+			}
+		}
+		*workspace = "worktree"
+	}
 	if err := projectDecisionInputs(preflight, inputValues, refs, neutral); err != nil {
 		return err
 	}
@@ -279,7 +326,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if err != nil {
 		return err
 	}
-	if continuation {
+	if continuation || recovering {
 		valid := false
 		for _, component := range compiled.Components {
 			if component.Path == workflowPath && (component.Ref.ID == "aif-continuation:workflow/classic-continuation" || component.Ref.ID == "aif-profiled-continuation:workflow/classic-continuation") {
@@ -295,15 +342,24 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	var execution *prifly.ExecutionBindings
 	var requirements projectLaunchRequirements
+	var recoveryPlan *prifly.RecoveryPlan
 	needsWorkspace := !neutral
 	if neutral {
 		preflightEngine, err := prifly.Open(c.project, true)
 		if err != nil {
 			return err
 		}
-		execution, requirements, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, workflowPath, *host, *workspace, standingWorkspace, *allowExecution, inputValues, refs)
+		execution, requirements, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, workflowPath, *host, *workspace, standingWorkspace, *allowExecution || recovering && prepare, inputValues, refs)
 		if err == nil {
 			*workspace = requirements.WorkspaceMode
+			if recovering {
+				var planned prifly.RecoveryPlan
+				planned, err = preflightEngine.PlanRecovery(ctx, *recoveryRequest, requirements.plan, requirements.definitions, requirements.resources)
+				if err == nil {
+					recoveryPlan = &planned
+					recoveryRequest.ReviewDigest = planned.ReviewDigest
+				}
+			}
 		}
 		needsWorkspace = requirements.GitWorkspace
 		closeErr := preflightEngine.Close()
@@ -321,10 +377,25 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if err != nil {
 		return err
 	}
+	if recovering {
+		reader, err := prifly.Open(c.project, true)
+		if err != nil {
+			return err
+		}
+		checkErr := reader.CheckRecoveryContext(ctx, *recoveryRequest, &preflight.Catalog, &preflight.Sheet, reviewedProfiles)
+		closeErr := reader.Close()
+		if checkErr != nil {
+			return checkErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
 	var summary projectLaunchSummary
 	if neutral {
 		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/3", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true, SessionLimits: requirements.sessionLimits, ModelProfiles: reviewedProfiles}
 		summary.Continuation = continuationReview
+		summary.Recovery = recoveryPlan
 		summary.Requirements = &requirements
 		for _, component := range compiled.Components {
 			if component.Path == workflowPath {
@@ -441,7 +512,11 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
-		selected, err := engine.ClaimWorktree(ctx, prifly.ClaimRequest{CommandID: *command + ":workspace", Repository: root, OwnerID: "project-launch:" + *command, WorkspaceMode: *workspace})
+		claimRequest := prifly.ClaimRequest{CommandID: *command + ":workspace", Repository: root, OwnerID: "project-launch:" + *command, WorkspaceMode: *workspace}
+		if recovering {
+			claimRequest.BaseRef = recoveryRequest.SubjectCommit
+		}
+		selected, err := engine.ClaimWorktree(ctx, claimRequest)
 		if err != nil {
 			return err
 		}
@@ -456,6 +531,12 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: selected.ID, Generation: selected.Generation})
 			}
 			return refusal("project_continue_stale_head", "claimed workspace HEAD differs from the reviewed continuation")
+		}
+		if recovering && selected.BaseCommit != recoveryRequest.SubjectCommit {
+			if createdClaim {
+				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: selected.ID, Generation: selected.Generation})
+			}
+			return refusal("recover_subject_changed", "claimed worktree differs from the reviewed Git subject")
 		}
 	}
 	importedPackage := false
@@ -502,6 +583,10 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			startOptions.Continuation = &continuationReview.Source
 			startOptions.ContinuationClaim = claim
 		}
+		if recovering {
+			startOptions.Recovery = recoveryRequest
+			startOptions.ContinuationClaim = claim
+		}
 	}
 	// Resolved before the summary and reused here, so what the Run seals is
 	// exactly what the review covered. Sealed for the same reason the
@@ -540,14 +625,19 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s was not driven: inspect its pinned executors before explicit continuation", started.Receipt.RunID), Cause: err}
 		}
 	}
-	if err := engine.Drive(ctx, started.Receipt.RunID); err != nil {
-		return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s", started.Receipt.RunID), Cause: err}
+	if !recovering {
+		if err := engine.Drive(ctx, started.Receipt.RunID); err != nil {
+			return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s", started.Receipt.RunID), Cause: err}
+		}
 	}
 	view, err := engine.View(ctx, started.Receipt.RunID)
 	if err != nil {
 		return err
 	}
 	result := projectStartResult{SchemaVersion: "project-start/1", Repository: root, Launch: *launchID, Package: compiled.Package, PackageProfile: selectedProfile, Run: view, Workspace: claim}
+	if recovering {
+		result.SchemaVersion, result.Recovery = "project-recover/1", recoveryPlan
+	}
 	if claim != nil {
 		path, err := engine.ClaimWorkspacePath(*claim)
 		if err != nil {
@@ -556,7 +646,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		result.WorkspacePath = path
 	}
 	if preflight.Declared {
-		result.SchemaVersion = "project-start/2"
+		if !recovering {
+			result.SchemaVersion = "project-start/2"
+		}
 		result.DecisionSheet = &preflight.Sheet
 		if preflight.Sheet.DecisionPolicy == "autonomous" {
 			blocked := prifly.DecisionsAutonomyCannotTake(&preflight.Catalog, &preflight.Sheet)

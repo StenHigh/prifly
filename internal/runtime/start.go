@@ -60,6 +60,9 @@ type StartOptions struct {
 	// Only the declared source artifacts become inputs; the current
 	// implementation is sealed separately from the selected Git workspace.
 	Continuation *ContinuationSource
+	// Recovery starts at a proved technical frontier on a newly sealed package.
+	// The source is checked again inside the creation transaction.
+	Recovery *RecoveryRequest
 	// ContinuationClaim is bound in the Run creation transaction so a
 	// read-only quality gate can inspect the claimed tree immediately.
 	ContinuationClaim *WorktreeClaim
@@ -668,7 +671,41 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		return local.ApplyResult{}, err
 	}
 	var fork *ForkProvenance
-	if options.Continuation != nil {
+	var recoveryPlan RecoveryPlan
+	var recoverySource Run
+	if options.Recovery != nil {
+		if !neutral || options.Continuation != nil || options.ContinuationClaim == nil || options.ContinuationClaim.BaseCommit != options.Recovery.SubjectCommit || options.GrantID != "" {
+			return local.ApplyResult{}, local.Reject("recover_request_invalid", "recovery requires a neutral start and a claim at the reviewed Git commit")
+		}
+		recoveryPlan, err = e.PlanRecovery(ctx, *options.Recovery, plan, defs, resources)
+		if err != nil {
+			return local.ApplyResult{}, err
+		}
+		if options.Recovery.ReviewDigest == "" || options.Recovery.ReviewDigest != recoveryPlan.ReviewDigest {
+			return local.ApplyResult{}, local.Reject("recover_plan_stale", "recovery evidence or target package changed after prepare")
+		}
+		recoverySource, _, err = e.load(ctx, options.Recovery.SourceRunID)
+		if err != nil {
+			return local.ApplyResult{}, err
+		}
+		if err := e.CheckRecoveryContext(ctx, *options.Recovery, options.DecisionCatalog, options.DecisionSheet, options.ModelProfiles); err != nil {
+			return local.ApplyResult{}, err
+		}
+		if len(options.InputRefs) != 0 {
+			return local.ApplyResult{}, local.Reject("recover_inputs_changed", "recovery input refs must be regenerated under the target package")
+		}
+		for name, value := range options.InputValues {
+			ref, exists := recoverySource.Inputs[name]
+			if !exists {
+				return local.ApplyResult{}, local.Reject("recover_inputs_changed", "new workflow input is not present in the source: "+name)
+			}
+			_, data, err := e.Artifact(ref)
+			if err != nil || !bytes.Equal(data, value) {
+				return local.ApplyResult{}, local.Reject("recover_inputs_changed", "source input bytes are missing or changed: "+name)
+			}
+		}
+		fork = &ForkProvenance{SchemaVersion: "1", SourceRunID: recoverySource.ID, SourceRunVersion: options.Recovery.SourceRunVersion, CommandID: options.CommandID, Reason: "recover_failed_stage", ReuseRefs: []ArtifactRef{}}
+	} else if options.Continuation != nil {
 		if options.ContinuationClaim == nil {
 			return local.ApplyResult{}, fault("claim_missing", "continuation requires the prepared workspace claim")
 		}
@@ -808,12 +845,26 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
+	if options.Recovery != nil {
+		if len(resolvedInputs) != len(recoverySource.Inputs) {
+			return local.ApplyResult{}, local.Reject("recover_inputs_changed", "target workflow resolved a different input set")
+		}
+		for name, input := range resolvedInputs {
+			_, sourceBytes, err := e.Artifact(recoverySource.Inputs[name])
+			if err != nil || !bytes.Equal(sourceBytes, input.Data) {
+				return local.ApplyResult{}, local.Reject("recover_inputs_changed", "target input bytes differ from the accepted subject: "+name)
+			}
+		}
+	}
 	inputs := map[string]ArtifactRef{}
 	for name, input := range resolvedInputs {
 		port, ref := plan.Workflow.Inputs[name], input.Ref
 		if ref == (ArtifactRef{}) {
 			identity := fmt.Sprintf("artifact:%x", sha256.Sum256([]byte(options.CommandID+"/input/"+name)))
 			var sourceRefs []ArtifactRef
+			if options.Recovery != nil {
+				sourceRefs = []ArtifactRef{recoverySource.Inputs[name]}
+			}
 			if options.Continuation != nil {
 				switch name {
 				case "task":
@@ -834,6 +885,33 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			ref = a.Ref()
 		}
 		inputs[name] = ref
+	}
+	var recoveryOutputs map[string]map[string]ArtifactRef
+	if options.Recovery != nil {
+		recoveryOutputs = map[string]map[string]ArtifactRef{}
+		for stageID, ports := range recoveryPlan.RootOutputs {
+			recoveryOutputs[stageID] = map[string]ArtifactRef{}
+			declared := plan.StageOutputs(stageID)
+			for name, sourceRef := range ports {
+				port, exists := declared[name]
+				if !exists {
+					return local.ApplyResult{}, local.Reject("recover_prefix_changed", "reused output port is absent from target: "+stageID+"."+name)
+				}
+				_, data, err := e.Artifact(sourceRef)
+				if err != nil {
+					return local.ApplyResult{}, err
+				}
+				id := derivedID("artifact", options.CommandID, "recovery", stageID, name)
+				copy, err := e.putArtifact(data, port.Format, port.SchemaRef, id, map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": name}, []ArtifactRef{sourceRef}, plan.Registry, portMedia(port.Port))
+				if err != nil {
+					return local.ApplyResult{}, err
+				}
+				if err := e.validatePortArtifact(plan, port.Port, copy, data); err != nil {
+					return local.ApplyResult{}, err
+				}
+				recoveryOutputs[stageID][name] = copy.Ref()
+			}
+		}
 	}
 	executors := map[string]PinnedExecutor{}
 	for ref, executor := range executorDefinitions(plan) {
@@ -993,8 +1071,15 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	}
 	rootID := newID("invocation")
 	activationID := newID("activation")
-	if plan.Workflow.Definition.Stages[plan.Workflow.Definition.Entry].Kind == "wait" {
-		activationID = waitActivationID(runID, rootID, plan.Workflow.Definition.Entry)
+	startStage := plan.Workflow.Definition.Entry
+	if options.Recovery != nil {
+		startStage = recoveryPlan.FrontierStageID
+		if recoveryPlan.FrontierAction == "revalidate" {
+			startStage = recoveryPlan.NextStageID
+		}
+	}
+	if plan.Workflow.Definition.Stages[startStage].Kind == "wait" {
+		activationID = waitActivationID(runID, rootID, startStage)
 	}
 	stepID := newID("step")
 	zero := int64(0)
@@ -1061,7 +1146,12 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if fork != nil {
 		startPayload = map[string]any{"run_start": startCommand, "fork": fork}
 	}
-	return e.applyControlledWithControlMutation(ctx, pin, pins, controlMutation, e.owner, options.CommandID, runID, "run.created", startPayload, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	var sourcePin *local.RunPin
+	if options.Recovery != nil {
+		sourcePin = &local.RunPin{ID: recoverySource.ID, Version: options.Recovery.SourceRunVersion}
+		startPayload = map[string]any{"run_start": startCommand, "fork": fork, "recovery_plan_digest": recoveryPlan.ReviewDigest}
+	}
+	return e.applyControlledWithSourcePin(ctx, pin, pins, sourcePin, controlMutation, e.owner, options.CommandID, runID, "run.created", startPayload, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if blocked != nil {
 			return local.Change{}, blocked
 		}
@@ -1188,12 +1278,17 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		if fork != nil && !isForkState(stateVersion) {
 			stateVersion = CoreForkStateVersion
 		}
+		var provenance *RecoveryProvenance
+		if options.Recovery != nil {
+			stateVersion = CoreRecoveryStateVersion
+			provenance = &RecoveryProvenance{SchemaVersion: "recovery/1", SourceRunID: recoveryPlan.SourceRunID, SourceRunVersion: recoveryPlan.SourceRunVersion, ReviewDigest: recoveryPlan.ReviewDigest, SubjectCommit: recoveryPlan.SubjectCommit, FrontierStageID: recoveryPlan.FrontierStageID, FrontierAction: recoveryPlan.FrontierAction, CandidateRef: recoveryPlan.CandidateRef, Reused: recoveryPlan.Reused, RootOutputs: recoveryOutputs}
+		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
-		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}
+		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Recovery: provenance, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{startStage}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}
 		if configurations != nil {
 			r.Ready = nil
 			r.WorkflowConfigurations = configurations
-			r.Invocations = map[string]*Invocation{rootID: {ID: rootID, RunID: runID, WorkflowRef: workflowRef, Status: "ready", Inputs: inputs, Outputs: map[string]ArtifactRef{}, Ready: []string{plan.Workflow.Definition.Entry}, Created: obs}}
+			r.Invocations = map[string]*Invocation{rootID: {ID: rootID, RunID: runID, WorkflowRef: workflowRef, Status: "ready", Inputs: inputs, Outputs: map[string]ArtifactRef{}, Ready: []string{startStage}, Created: obs}}
 		}
 		if requiresContextState(plan) {
 			r.ContextResources = resources
@@ -1209,9 +1304,9 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			// A guarded entry stage is not opened here. Nothing has been
 			// observed yet, and opening the activation first and asking the
 			// guard afterwards would be a start that no guard could prevent.
-			guarded, _ := r.guardBlock(rootID, plan.Workflow.Definition.Entry)
+			guarded, _ := r.guardBlock(rootID, startStage)
 			if guarded == "" {
-				if err := activateFor(r, plan, rootID, plan.Workflow.Definition.Entry, activationID, stepID, s.EventSeq, obs); err != nil {
+				if err := activateFor(r, plan, rootID, startStage, activationID, stepID, s.EventSeq, obs); err != nil {
 					return local.Change{}, err
 				}
 			}
@@ -1222,7 +1317,15 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 				return local.Change{}, err
 			}
 			pinned, err := canonical(map[string]any{"observation": obs, "state_version": r.SchemaVersion, "package_lock_ref": r.LockRef})
-			return local.Change{Events: []local.EventInput{{Type: "run.created", Version: 1, Data: created}, {Type: "run.context_pinned", Version: 1, Data: pinned}}}, err
+			events := []local.EventInput{{Type: "run.created", Version: 1, Data: created}, {Type: "run.context_pinned", Version: 1, Data: pinned}}
+			if provenance != nil {
+				recovered, encodeErr := canonical(map[string]any{"observation": obs, "recovery": provenance})
+				if encodeErr != nil {
+					return local.Change{}, encodeErr
+				}
+				events = append(events, local.EventInput{Type: "run.recovery_created", Version: 1, Data: recovered})
+			}
+			return local.Change{Events: events}, err
 		}
 		return local.Change{}, nil
 	})
@@ -1415,6 +1518,12 @@ func bindingRefsForBody(r Run, invocationID, bodyID string, bindings map[string]
 			}
 		case "stage_output":
 			a := r.activationForInvocation(invocationID, b.StageID)
+			if a == nil && r.Recovery != nil && invocationID == r.RootInvocationID {
+				if ref, ok := r.Recovery.RootOutputs[b.StageID][b.Port]; ok {
+					refs[name] = ref
+					continue
+				}
+			}
 			if a != nil && a.Kind == "wait" {
 				if a.Status == "completed" && a.Wait != nil && (a.Wait.Resolution == "event" || a.Wait.Resolution == "interrupted") && a.Wait.EventRef != nil {
 					if b.Port != flow.WaitEventPort {

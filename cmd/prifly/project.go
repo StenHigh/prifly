@@ -932,6 +932,7 @@ type projectLaunchInput struct {
 	Required    bool   `json:"required"`
 	Format      string `json:"format"`
 	Description string `json:"description,omitempty"`
+	Configured  bool   `json:"-"`
 }
 
 type projectQuestionnaireProfile struct {
@@ -975,6 +976,8 @@ func (c *cli) projectCommand(ctx context.Context, args []string) error {
 		return c.projectStart(ctx, args[1:])
 	case "continue":
 		return c.projectContinue(ctx, args[1:])
+	case "recover":
+		return c.projectRecover(ctx, args[1:])
 	case "extend":
 		return c.projectExtend(ctx, args[1:])
 	case "local":
@@ -1154,7 +1157,7 @@ func (c *cli) projectAddRunners(root string, profile projectProfile, ids []strin
 
 func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	if index := slices.Index(args, "--prepare"); index >= 0 {
-		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true, false)
+		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true, false, false)
 	}
 	f := flags("project questionnaire")
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
@@ -2240,6 +2243,7 @@ func projectFolderLaunchInputs(value any) ([]projectLaunchInput, error) {
 	for _, name := range names {
 		input := projectLaunchInput{Name: name, Required: true, Format: "json"}
 		if details, ok := inputs[name].(map[string]any); ok {
+			_, input.Configured = details["configuration"]
 			if required, exists := details["required"]; exists {
 				value, ok := required.(bool)
 				if !ok {
