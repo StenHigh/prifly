@@ -1080,8 +1080,12 @@ func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flo
 			return refusal("project_start_package_identity_conflict", "declared package ID and version already name different bytes")
 		}
 		if entry.Status == prifly.PackageRemoved {
-			if _, err := engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: commandID + ":restore-package", ID: ref.ID, Version: ref.Version, Status: prifly.PackageTrusted, Reason: "project start declares this edition again"}); err != nil {
+			restored, err := engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: commandID + ":restore-package", ID: ref.ID, Version: ref.Version, Status: prifly.PackageTrusted, Reason: "project start declares this edition again"})
+			if err != nil {
 				return err
+			}
+			if restored.Receipt.Rejection != nil {
+				return recordedRejection(restored.Receipt.Rejection, restored.Receipt.ID)
 			}
 			return nil
 		}

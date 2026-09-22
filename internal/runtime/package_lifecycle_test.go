@@ -249,6 +249,9 @@ func TestQuarantineStopsResolutionAndIsReversible(t *testing.T) {
 	if _, err := e.SetPackageStatus(ctx, PackageLifecycleRequest{CommandID: "command:restore", ID: pkg.Ref.ID, Version: pkg.Ref.Version, Status: PackageTrusted, Reason: "review cleared it"}); err != nil {
 		t.Fatal(err)
 	}
+	if _, _, resources, err := e.inventoryResources(); err != nil || len(resources) != 1 {
+		t.Fatalf("the same engine did not see the restored package: %v, %d resources", err, len(resources))
+	}
 	restored, err := Open(e.Root, false)
 	if err != nil {
 		t.Fatal(err)

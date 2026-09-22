@@ -28,6 +28,12 @@ changed files совпадают с Git diff между ними. Несовпа
 - **THEN** она отказывает до создания Attempt и не считает workspace
   продолжением source Run
 
+#### Scenario: Ранее удалённая версия пакета снова объявлена проектом
+
+- **WHEN** Project launcher восстанавливает exact версию пакета из `removed`
+- **THEN** тот же runtime process видит восстановленную версию при Start;
+  отказ восстановления не маскируется последующим `missing_ref`
+
 ### Requirement: Continuation выполняет только declared quality tail
 Continuation workflow MUST не выдавать warmup, plan, improve или implement
 Attempt. После принятия Implementation он MUST пройти только declared tail

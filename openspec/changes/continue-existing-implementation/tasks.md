@@ -20,3 +20,4 @@
 ## 4. Проверка и поставка
 
 - [x] 4.1 Выполнить targeted Go/JS/package tests, `make test`, `make build`, vet, schema/refusal gates, `openspec validate continue-existing-implementation --strict` и `git diff --check`; exact commits назвать в handoff, локальный report предыдущего Run не добавлять.
+- [x] 4.2 После удаления trial package проверить его повторное exact восстановление тем же Engine и отказ с исходным кодом, не stale `missing_ref`.

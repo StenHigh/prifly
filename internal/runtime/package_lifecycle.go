@@ -323,7 +323,7 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 		}
 		return local.AuthorityChange{Data: data, Result: json.RawMessage(`{"status":"` + c.Status + `"}`)}, nil
 	})
-	if err != nil || result.Receipt.Rejection != nil || c.Status != PackageRemoved {
+	if err != nil || result.Receipt.Rejection != nil {
 		return result, err
 	}
 	// Removal is the answer to "this identity must be free again", and until now
@@ -332,11 +332,16 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 	// definition_drift and no command released it. Nothing that already ran is
 	// affected — a Run carries its own sealed definitions — and removal already
 	// refuses while any Run still holds the package.
-	for _, ref := range removedComponents {
-		name := fmt.Sprintf("%x.json", sha256.Sum256([]byte(ref.ID+"@"+ref.Version)))
-		if err := removeLocal(e.Root, filepath.Join(".prifly/inventory", name)); err != nil {
-			return result, err
+	if c.Status == PackageRemoved {
+		for _, ref := range removedComponents {
+			name := fmt.Sprintf("%x.json", sha256.Sum256([]byte(ref.ID+"@"+ref.Version)))
+			if err := removeLocal(e.Root, filepath.Join(".prifly/inventory", name)); err != nil {
+				return result, err
+			}
 		}
+	}
+	if c.Status == PackageTrusted {
+		return result, e.loadPackages()
 	}
 	return result, nil
 }
