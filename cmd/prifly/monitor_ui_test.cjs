@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard}=require('./monitor.js');
+const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows}=require('./monitor.js');
 assert.equal(esc(`<img src='x' onerror="evil()">&`),'&lt;img src=&#39;x&#39; onerror=&quot;evil()&quot;&gt;&amp;');
 assert.equal(label('ready'),'Подготовлен к выдаче Attempt');
 assert.equal(label('pending'),'Attempt передан агенту');
@@ -31,6 +31,9 @@ assert.equal(choiceGraph.nodes.find(n=>n.id==='yes').state,'future');
 const choiceEdges=choiceGraph.edges.filter(e=>e.from==='choose');
 assert.equal(new Set(choiceEdges.map(e=>e.fromPort)).size,choiceEdges.length);
 assert.ok(choiceEdges.find(e=>e.to==='no').muted);
+const excludedGraph=graphData({definition:{entry:'choose-security',stages:{'choose-security':{kind:'choice',branches:[{id:'enabled',next:'security',predicate:{op:'eq',left:{ref:{from:'workflow_input',port:'security_enabled'}},right:{kind:'literal',value:true}}}],default:'review'},security:{kind:'step'},review:{kind:'step'}}}}, {}, '', [], {security_enabled:'false'});
+assert.equal(excludedGraph.nodes.find(n=>n.id==='security').state,'skipped');
+assert.equal(excludedGraph.nodes.find(n=>n.id==='review').state,'future');
 const skippedCard=nodeCard(choiceGraph,'no',{context:{inputs:{brief:{}}},accepted:{outputs:{result:{}}}});
 assert.match(skippedCard,/Закреплённый узел/);
 assert.match(skippedCard,/Входящие переходы/);
@@ -51,6 +54,12 @@ const cycle=graphData({definition:{entry:'a',stages:{a:{on:{go:'b'}},b:{on:{agai
 assert.equal(cycle.nodes.length,2);assert.ok(Number.isFinite(cycle.width));
 assert.equal(fileChanges(null,{files:[]}),null);
 assert.deepEqual(fileChanges({files:[{path:'a',ref:{digest:'old'}},{path:'deleted',ref:{digest:'d'}}]},{files:[{path:'a',ref:{digest:'new'}},{path:'new',ref:{digest:'n'}}]}),[{path:'a',change:'Изменён'},{path:'deleted',change:'Удалён'},{path:'new',change:'Добавлен'}]);
+assert.deepEqual(executionRole({session:{principal_id:'host:codex'},started:null}),{kind:'Внешний host',detail:'host:codex',state:'Выдано · ожидается отчёт host'});
+assert.equal(executionRole({process:{executable:'go'},started:{}},null).kind,'Локальная программа');
+assert.equal(executionRole(null,{kind:'call'}).detail,'Не является fork Run');
+assert.match(executionRole(null,null).kind,/не записана/);
+const activity=activityRows({attempts:{one:{id:'attempt:one',session:{principal_id:'host:one'}}},activations:{ready:{id:'activation:ready',stage_id:'plan',status:'ready'}},pending_decision:{attempt_id:'attempt:one',decision_id:'decision:go'},wait_registrations:{wait:{activation_id:'activation:wait',target_stage_id:'signal',status:'active'}},fork:{source_run_id:'run:source'}});
+assert.equal(activity.length,5);assert.match(activity[0].detail,/ожидается отчёт/);
 console.log('monitor UI: status wording, escaping, timing quality, graph paths/ports/parallel/repeat/cycles, file evidence passed');
 
 // Exercise the actual pre-paint script, including browsers that deny storage.

@@ -7,6 +7,14 @@ const badge = s => `<span class="badge ${/^[a-z_]+$/.test(s || '') ? s : ''}">${
 const parseMaybe = value => { if(typeof value !== 'string') return value; try{return JSON.parse(value);}catch{return value;} };
 const values = o => Object.values(o || {}).filter(Boolean);
 const short = s => String(s || '').replace(/^[a-z_]+:/,'').slice(0,12);
+function executionRole(object,stage) {
+ if(object?.session)return {kind:'Внешний host',detail:object.session.principal_id || 'host не записан',state:object.started?'Исполнение начато':'Выдано · ожидается отчёт host'};
+ if(object?.process)return {kind:'Локальная программа',detail:object.process.executable || 'программа не записана',state:object.started?'Исполнение начато':'Процесс ещё не начал работу'};
+ if(stage?.kind==='call')return {kind:'Вложенный workflow',detail:'Не является fork Run',state:label(object?.status || 'future')};
+ if(stage?.kind)return {kind:'Управляющий узел workflow',detail:label(stage.kind),state:label(object?.status || 'future')};
+ return {kind:'Роль не записана',detail:'Нельзя определить по сохранённым фактам',state:''};
+}
+function activityRows(run) {const rows=[];for(const a of values(run.attempts).filter(a=>!a.settled)){const r=executionRole(a);rows.push({node:a.id,title:r.kind,detail:r.detail+' · '+r.state});}for(const a of values(run.activations).filter(a=>a.status==='ready'))rows.push({node:a.id,title:'Готово к выдаче',detail:a.stage_id});if(run.pending_decision)rows.push({node:run.pending_decision.attempt_id,title:'Ожидается решение',detail:run.pending_decision.decision_id});for(const w of values(run.wait_registrations).filter(w=>w.status==='active'))rows.push({node:w.activation_id,title:'Ожидается сигнал',detail:w.target_stage_id});if(run.fork)rows.push({run:run.fork.source_run_id,title:'Run создан как fork',detail:run.fork.source_run_id});return rows;}
 const ms = n => n >= 60000 ? `${(n/60000).toFixed(1)} мин` : n >= 1000 ? `${(n/1000).toFixed(1)} с` : `${n} мс`;
 function spreadPorts(edges,key,port) {
  const groups=new Map();for(const edge of edges){const group=groups.get(edge[key])||[];group.push(edge);groups.set(edge[key],group);}
@@ -18,7 +26,7 @@ function duration(d,withReasons=false) {
  return `${text}${d.is_open ? ' · интервал открыт' : ''}${d.quality && d.quality !== 'measured' && (d.value_ms!=null || d.known_ms!=null || d.estimate_ms!=null) ? ' · '+label(d.quality) : ''}${withReasons && d.reasons?.length ? ' · '+d.reasons.map(label).join(', ') : ''}`;
 }
 const date = s => s ? new Date(s).toLocaleString('ru-RU') : 'Не записано';
-function graphData(workflow, run, invocation, choices=[]) {
+function graphData(workflow, run, invocation, choices=[], inputValues={}) {
  const stages = workflow?.definition?.stages || {}, nodes = [], edges = [];
  const inv = run.invocations?.[invocation];
  const activations = values(run.activations).filter(a => (a.workflow_invocation_id || '') === (invocation || ''));
@@ -41,6 +49,7 @@ function graphData(workflow, run, invocation, choices=[]) {
   }
  }
  const decisions=new Map(choices.filter(c=>(c.workflow_invocation_id || '')===(invocation || '')).map(c=>[c.stage_id,c]));
+ for(const [id,stage] of Object.entries(stages))if(stage.kind==='choice'&&!decisions.has(id)){const branches=stage.branches||[],known=branches.every(b=>{const p=b.predicate,v=p?.left?.ref;return p?.op==='eq'&&v?.from==='workflow_input'&&v.port&&p?.right?.kind==='literal'&&Object.hasOwn(inputValues,v.port);}),branch=branches.find(b=>{const p=b.predicate,v=p?.left?.ref;if(p?.op!=='eq'||v?.from!=='workflow_input'||!v.port||p?.right?.kind!=='literal')return false;try{return JSON.stringify(JSON.parse(inputValues[v.port]))===JSON.stringify(p.right.value);}catch{return false;}});if(branch)decisions.set(id,{stage_id:id,route:'branch',branch_id:branch.id,next_stage_id:branch.next});else if(known&&stage.default)decisions.set(id,{stage_id:id,route:'default',branch_id:'default',next_stage_id:stage.default});}
  for(const edge of edges) {const decision=decisions.get(edge.from);if(!decision)continue;const selected=decision.route==='branch'?decision.branch_id:decision.route;edge.unchosen=edge.to!==decision.next_stage_id || edge.label!==selected;if(edge.unchosen)edge.reason=`Выбран маршрут ${selected}${decision.next_stage_id?` → ${decision.next_stage_id}`:''}`;}
  const reachable=filtered=>{const found=new Set([workflow?.definition?.entry]),pending=[workflow?.definition?.entry];for(let i=0;i<pending.length;i++)for(const e of edges)if(e.from===pending[i] && (!filtered || !e.unchosen) && !found.has(e.to)){found.add(e.to);pending.push(e.to);}return found;};
  const all=reachable(false),chosen=reachable(true),byID=new Map(nodes.map(n=>[n.id,n])),skipped=new Map();
@@ -81,7 +90,7 @@ function nodeCard(graph,id,object,run) {
  const reason=arrived?`<div><small>Почему выбран этот переход</small><p>После ${esc(arrived.from)}: ${esc(label(arrived.label))}${summary?` — ${esc(summary)}`:''}</p></div>`:'';
  return `<section class="node-card"><div><small>Закреплённый узел</small><p>${esc(node.title)} · ${esc(label(node.kind))}</p></div><p>${badge(node.state)}${node.reason?` <span class="muted">${esc(node.reason)}</span>`:''}</p>${reason}${list('Входящие переходы',graph.edges.filter(e=>e.to===id))}${list('Исходящие переходы',graph.edges.filter(e=>e.from===id))}<div><small>Данные</small><p>${inputs.length?`Входы: ${esc(inputs.join(', '))}`:'Входы не записаны'}${outputs.length?` · Выходы: ${esc(outputs.join(', '))}`:''}</p></div></section>`;
 }
-if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard};
+if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='';
@@ -179,7 +188,7 @@ function currentWorkflow(run) {
 function renderGraph() {
  if(!state)return;const run=state.run,workflow=parseMaybe(currentWorkflow(run));
  const selectedActivation=run.attempts?.[nodeID]?.stage_activation_id || run.steps?.[nodeID]?.stage_activation_id || nodeID;
- const graphInvocation=definition?definitionInvocation(run,definition):invocation,data=graphData(workflow,run,graphInvocation,state.choices),byID=new Map(data.nodes.map(n=>[n.id,n]));
+ const graphInvocation=definition?definitionInvocation(run,definition):invocation,data=graphData(workflow,run,graphInvocation,state.choices,state.input_values),byID=new Map(data.nodes.map(n=>[n.id,n]));
  const svg=`<svg width="${data.width}" height="${data.height}" viewBox="0 0 ${data.width} ${data.height}" role="group" aria-label="Связи закреплённых стадий workflow"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>${data.edges.map((e,index)=>{const a=byID.get(e.from),b=byID.get(e.to);if(!a||!b)return '';const x=a.x+230,y=a.y+39+e.fromPort,tx=b.x,ty=b.y+39+e.toPort,channel=e.route==='return'?42+index%3*18:data.height-42-index%3*18,route=e.route==='forward'?`M ${x} ${y} H ${tx-22} V ${ty} H ${tx}`:`M ${x} ${y} H ${x+22} V ${channel} H ${tx-22} V ${ty} H ${tx}`,classes=[`route-${e.route}`,e.path?'active-path':'',e.muted?'muted-path':''].filter(Boolean).join(' ');return `<path class="${classes}" d="${route}" marker-end="url(#arrow)"/><text class="edge-label ${e.muted?'muted-path':''}" x="${(x+tx)/2}" y="${e.route==='forward'?(y+ty)/2-8:channel-6}" text-anchor="middle">${esc(e.label)}</text>`;}).join('')}${data.nodes.map(n=>`<g tabindex="0" role="button" aria-label="${esc(n.title+', '+label(n.state)+(n.reason?': '+n.reason:''))}" data-stage="${esc(n.id)}" class="node-${n.visual} ${(n.id===nodeID || n.actual?.some(a=>a.id===selectedActivation))?'selected':''}"><rect x="${n.x}" y="${n.y}" width="230" height="78" rx="9"/><text x="${n.x+12}" y="${n.y+22}">${esc(n.title.length>26?n.title.slice(0,24)+'…':n.title)}</text><text x="${n.x+12}" y="${n.y+43}">${esc(label(n.kind))}</text><text x="${n.x+12}" y="${n.y+64}">${esc(n.visual==='skipped'?label('skipped'):(n.visual==='reachable'?'Далее':label(n.state)))}</text>${n.reason?`<title>${esc(n.reason)}</title>`:''}</g>`).join('')}</svg>`;
  const left=$('graph').scrollLeft,top=$('graph').scrollTop;$('graph').innerHTML=svg;$('graph').scrollLeft=left;$('graph').scrollTop=top;
  $('graph').onclick=event=>{const target=event.target.closest('[data-stage]');if(!target)return;const n=byID.get(target.dataset.stage);if(n.invocation){navigateNode('',n.invocation);return;}if(n.ref){definition=n.ref.id;invocation='';renderDetail();return;}navigateNode(n.actual?.at(-1)?.id || n.id,invocation);};
@@ -192,15 +201,15 @@ function timingNode(node,id) {if(!node)return null;if(node.id===id)return node;f
 function nodeObject(run,id) {for(const pool of [run.attempts,run.steps,run.activations,run.invocations,run.check_executions])if(pool?.[id])return pool[id];return id===run.id?run:null;}
 function renderNode() {
  const run=state.run,object=nodeObject(run,nodeID),timing=timingNode(state.timing?.root,nodeID);
- const activation=run.activations?.[object?.stage_activation_id||object?.activation_id||nodeID],stageID=activation?.stage_id||object?.stage_id||nodeID,graph=graphData(parseMaybe(currentWorkflow(run)),run,definition?definitionInvocation(run,definition):invocation,state.choices);
- let html=nodeCard(graph,stageID,object,run);
+ const activation=run.activations?.[object?.stage_activation_id||object?.activation_id||nodeID],stageID=activation?.stage_id||object?.stage_id||nodeID,graph=graphData(parseMaybe(currentWorkflow(run)),run,definition?definitionInvocation(run,definition):invocation,state.choices,state.input_values);
+ let html=nodeCard(graph,stageID,object,run),role=executionRole(object,parseMaybe(currentWorkflow(run))?.definition?.stages?.[stageID]);
  if(!object) {
   const stage=parseMaybe(currentWorkflow(run))?.definition?.stages?.[nodeID];
   $('node-title').textContent=stage ? nodeID+' · '+label(stage.kind) : 'Выберите шаг или попытку';
   if(stage){html+='<p class="muted">Закреплённое определение стадии.</p>'+readable(stage,nodeID);const actual=values(run.activations).filter(a=>a.stage_id===nodeID && (a.workflow_invocation_id || '')===invocation);html+=actual.map(a=>`<p><button data-node="${esc(a.id)}">Открыть исполнение ${esc(short(a.id))}</button></p>`).join('');}
   preserve($('node'),html);return;
  }
- $('node-title').textContent=(timing?.stage_id || label(timing?.kind) || 'Исполнение')+' · '+short(nodeID);
+ $('node-title').textContent=(timing?.stage_id || label(timing?.kind) || 'Исполнение')+' · '+short(nodeID);html+=`<h4>Роль исполнения</h4><p><b>${esc(role.kind)}</b><br><span class="muted">${esc(role.detail)}${role.state?' · '+esc(role.state):''}</span></p>`;
  html+=`<p>${badge(object.status)} ${esc(object.verdict || object.outcome || '')}</p>`;
  if(timing){const metrics=Object.entries(timing.metrics||{}),shown=metrics.filter(([,v])=>v.quality!=='not_applicable');html+=section('Время',Object.fromEntries(shown.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':time',true);const other=metrics.filter(([,v])=>v.quality==='not_applicable');if(other.length)html+=section('Неприменимые метрики',Object.fromEntries(other.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':other-time');}
  if(run.attempts?.[nodeID]) {
@@ -235,8 +244,8 @@ function renderDetail() {
  const scrollX=window.scrollX,scrollY=window.scrollY;
  const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Прогон';
  $('detail-id').textContent=run.project_id+' · '+run.id;$('permalink').href=location.hash;
- const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host');
- preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div>${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
+ const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run);
+ preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div><h3>Сейчас</h3>${activity.length?activity.map(a=>`<p>${a.node?`<button data-node="${esc(a.node)}">${esc(a.title)}</button>`:a.run?`<a href="#${esc(new URLSearchParams({source,run:a.run}))}">${esc(a.title)}</a>`:`<b>${esc(a.title)}</b>`} <span class="muted">${esc(a.detail)}</span></p>`).join(''):'<p class="muted">Активная работа и ожидания не записаны.</p>'}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
  const invs=values(run.invocations);if(!invocation && !definition)invocation=run.root_workflow_invocation_id || '';
  $('invocation').innerHTML=invs.map(i=>`<option value="${esc(i.id)}">${esc(i.workflow_ref.id)} · ${esc(i.branch_id || '')}${i.iteration?' · итерация '+i.iteration:''} · ${esc(short(i.id))}</option>`).join('')+(!invs.length?'<option value="">Корневой workflow</option>':'')+definitions(run).map(d=>`<option value="def:${esc(d.id)}">План: ${esc(d.title || d.id)}</option>`).join('');
  $('invocation').value=definition?'def:'+definition:invocation;

@@ -168,9 +168,10 @@ func (e *Engine) MonitorSummary(ctx context.Context, id string) (RunSummary, err
 // The ordinary public View keeps its existing redaction and wire behavior.
 type MonitorRunView struct {
 	RunView
-	SchemaVersion string           `json:"schema_version"`
-	ReadVersion   string           `json:"read_version"`
-	Choices       []ChoiceDecision `json:"choices"`
+	SchemaVersion string                     `json:"schema_version"`
+	ReadVersion   string                     `json:"read_version"`
+	Choices       []ChoiceDecision           `json:"choices"`
+	InputValues   map[string]json.RawMessage `json:"input_values"`
 }
 
 func (e *Engine) MonitorView(ctx context.Context, id string) (MonitorRunView, error) {
@@ -194,6 +195,12 @@ func (e *Engine) MonitorView(ctx context.Context, id string) (MonitorRunView, er
 		check.TokenHash = ""
 	}
 	choices := []ChoiceDecision{}
+	inputValues := map[string]json.RawMessage{}
+	for name, ref := range r.Inputs {
+		if _, body, artifactErr := e.Artifact(ref); artifactErr == nil && json.Valid(body) {
+			inputValues[name] = body
+		}
+	}
 	after := int64(0)
 	for {
 		events, more, err := e.Store.ReadEventsOfType(ctx, id, "stage.choice_decided", after, read.Snapshot.EventSeq, 200)
@@ -215,7 +222,7 @@ func (e *Engine) MonitorView(ctx context.Context, id string) (MonitorRunView, er
 			break
 		}
 	}
-	return MonitorRunView{RunView: RunView{SchemaVersion: readVersionFor(r.SchemaVersion, r.Profile), RunVersion: read.Snapshot.Version, EventSequence: read.Snapshot.EventSeq, Cut: read.Cut, AsOf: asOf, DriverLive: live, Run: r, Timing: timing}, Choices: choices, SchemaVersion: "local-run-monitor/1", ReadVersion: readVersionFor(r.SchemaVersion, r.Profile)}, nil
+	return MonitorRunView{RunView: RunView{SchemaVersion: readVersionFor(r.SchemaVersion, r.Profile), RunVersion: read.Snapshot.Version, EventSequence: read.Snapshot.EventSeq, Cut: read.Cut, AsOf: asOf, DriverLive: live, Run: r, Timing: timing}, Choices: choices, InputValues: inputValues, SchemaVersion: "local-run-monitor/1", ReadVersion: readVersionFor(r.SchemaVersion, r.Profile)}, nil
 }
 
 func (e *Engine) MonitorAccess(ctx context.Context) error {
