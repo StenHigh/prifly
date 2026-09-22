@@ -1,12 +1,17 @@
 'use strict';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels = {running:'В работе',completed:'Завершён',failed:'Ошибка',cancelled:'Отменён',uncertain:'Неопределённость',waiting:'Ожидание',pending:'Ожидает',ready:'Готов',succeeded:'Выполнен',rejected:'Отклонён',stopping:'Останавливается',awaiting_host:'Ожидает агента',reported:'Результат получен',disconnected:'Связь потеряна',settled:'Завершено',future:'Ещё не выполнен',unchosen:'Ветвь не выбрана',not_taken:'Не выполнен в этом исполнении',workflow_invocation:'WorkflowInvocation',stage_activation:'StageActivation',step_instance:'StepInstance',attempt:'Attempt',run:'Run',check_execution:'Проверка',step:'Шаг',choice:'Развилка',parallel:'Параллельные ветви',call:'Вложенный workflow',repeat:'Повтор',map:'Обработка элементов',wait:'Ожидание события',finish:'Завершение',elapsed:'Общее время',executor:'Работа исполнителя',queue:'Ожидание допуска',active:'Активное время',quality:'Качество измерения',measured:'Измерено',estimated:'Оценка',partial:'Частично',unknown:'Неизвестно',not_applicable:'Не применимо',unavailable:'Недоступно',incomparable_clock_domains:'Разные сессии часов',calendar_suspend_coverage_unqualified:'Сон машины не учтён достоверно',authority_wall_estimate:'Оценка по календарным часам authority',executor_time:'Работа исполнителя',executor_sum:'Сумма времени исполнителей',executor_active_union:'Интервалы активности исполнителей',check_executor_sum:'Сумма времени проверок',check_executor_active_union:'Интервалы активности проверок',ready_queue:'Ожидание в очереди',restricted_time:'Время ограничений',dispatch_latency:'Задержка передачи',result_to_acceptance:'От результата до приёмки',post_execution_settlement:'Завершение после исполнения',output_contracts:'Требования к результату',subject:'Задача',desired_outcome:'Ожидаемый результат',in_scope:'Входит в задачу',out_of_scope:'За пределами задачи',completion_criteria:'Критерии завершения',source_refs:'Источники',assumptions:'Предположения',confirmation:'Подтверждение',summary:'Описание результата',verdict:'Вердикт',outputs:'Выходы',inputs:'Входы',instructions:'Инструкции',context:'Контекст',description:'Описание',status:'Состояние',reason:'Причина',message:'Сообщение',code:'Код',severity:'Важность',phase:'Фаза',observed:'Зафиксировано',actor:'Автор',actor_id:'Автор',amount:'Сумма',currency:'Валюта',source:'Источник',reported_costs:'Заявленная стоимость',permitted_effects:'Разрешённые действия',workspace:'Рабочая папка',skill_refs:'Навыки',host_state:'Состояние агента',deadline:'Срок',process_outcome:'Итог процесса',error:'Ошибка',evidence_refs:'Свидетельства',effect_receipt_refs:'Подтверждения эффектов'};
+Object.assign(labels,{ready:'Подготовлен к выдаче Attempt',pending:'Attempt передан агенту',running:'Исполнение начато',future:'Может быть выполнен',skipped:'Будет пропущен',no_work:'Нет работы'});
 const label = s => labels[s] || s;
 const badge = s => `<span class="badge ${/^[a-z_]+$/.test(s || '') ? s : ''}">${esc(label(s) || 'Не записано')}</span>`;
 const parseMaybe = value => { if(typeof value !== 'string') return value; try{return JSON.parse(value);}catch{return value;} };
 const values = o => Object.values(o || {}).filter(Boolean);
 const short = s => String(s || '').replace(/^[a-z_]+:/,'').slice(0,12);
 const ms = n => n >= 60000 ? `${(n/60000).toFixed(1)} мин` : n >= 1000 ? `${(n/1000).toFixed(1)} с` : `${n} мс`;
+function spreadPorts(edges,key,port) {
+ const groups=new Map();for(const edge of edges){const group=groups.get(edge[key])||[];group.push(edge);groups.set(edge[key],group);}
+ for(const group of groups.values())group.forEach((edge,index)=>edge[port]=(index-(group.length-1)/2)*14);
+}
 function duration(d,withReasons=false) {
  if(!d) return 'Не записано';
  const text = d.value_ms != null ? ms(d.value_ms) : d.estimate_ms != null ? `около ${ms(d.estimate_ms)}` : d.known_ms != null ? `не менее ${ms(d.known_ms)}` : label(d.quality || 'unknown');
@@ -20,7 +25,7 @@ function graphData(workflow, run, invocation, choices=[]) {
  for(const [id,stage] of Object.entries(stages)) {
   const actual = activations.filter(a=>a.stage_id===id);
   const state = actual.at(-1)?.status || (invocation==='__definition__' ? 'future' : ((inv?.ready_stages || run.ready_stages || []).includes(id) ? 'ready' : (inv?.settled || (!inv && run.settled)) ? 'not_taken' : 'future'));
-  nodes.push({id,title:id,kind:stage.kind,state,actual,stage});
+  nodes.push({id,title:id,kind:stage.kind,state,actual,stage,visual:'future',reason:''});
   const add = (to,reason) => {if(typeof to==='string' && stages[to]) edges.push({from:id,to,label:reason});};
   for(const key of (stage.kind==='parallel' && stage.branches?.length ? [] : ['on','on_complete'])) for(const [reason,to] of Object.entries(stage[key] || {})) add(to,reason);
   for(const key of ['on_error','on_limit','on_event','on_timeout','default','on_unknown']) add(stage[key],key);
@@ -36,24 +41,47 @@ function graphData(workflow, run, invocation, choices=[]) {
   }
  }
  const decisions=new Map(choices.filter(c=>(c.workflow_invocation_id || '')===(invocation || '')).map(c=>[c.stage_id,c]));
- for(const edge of edges) {const decision=decisions.get(edge.from);if(decision)edge.unchosen=edge.to!==decision.next_stage_id || edge.label!==(decision.route==='branch'?decision.branch_id:decision.route);}
+ for(const edge of edges) {const decision=decisions.get(edge.from);if(!decision)continue;const selected=decision.route==='branch'?decision.branch_id:decision.route;edge.unchosen=edge.to!==decision.next_stage_id || edge.label!==selected;if(edge.unchosen)edge.reason=`Выбран маршрут ${selected}${decision.next_stage_id?` → ${decision.next_stage_id}`:''}`;}
  const reachable=filtered=>{const found=new Set([workflow?.definition?.entry]),pending=[workflow?.definition?.entry];for(let i=0;i<pending.length;i++)for(const e of edges)if(e.from===pending[i] && (!filtered || !e.unchosen) && !found.has(e.to)){found.add(e.to);pending.push(e.to);}return found;};
- const all=reachable(false),chosen=reachable(true);
- for(const n of nodes)if(['future','not_taken'].includes(n.state) && all.has(n.id) && !chosen.has(n.id))n.state='unchosen';
+ const all=reachable(false),chosen=reachable(true),byID=new Map(nodes.map(n=>[n.id,n])),skipped=new Map();
+ for(const edge of edges)if(edge.unchosen)skipped.set(edge.to,edge.reason);
+ for(const [id,reason] of skipped)for(const edge of edges)if(edge.from===id&&!skipped.has(edge.to))skipped.set(edge.to,reason);
+ for(const node of nodes) {
+  if((node.actual||[]).length) node.visual=['completed','failed','cancelled'].includes(node.state)?'completed':'current';
+  else if(all.has(node.id)&&!chosen.has(node.id)) {node.visual='skipped';node.reason=skipped.get(node.id)||'Причина пропуска не записана';node.state='skipped';}
+  else if(node.state==='ready') {node.visual='reachable';node.reason='Подготовлен к выдаче Attempt';}
+  else if(node.state==='not_taken') {node.visual='unknown';node.reason='Причина отсутствия исполнения не записана';}
+ }
  // ponytail: a breadth-first layout handles cycles without a graph dependency; dense graphs remain scrollable.
  const rank = new Map(), queue = [];
  if(stages[workflow?.definition?.entry]) {rank.set(workflow.definition.entry,0);queue.push(workflow.definition.entry);}
- for(let i=0;i<queue.length;i++) for(const edge of edges.filter(e=>e.from===queue[i])) if(!rank.has(edge.to)){rank.set(edge.to,rank.get(edge.from)+1);queue.push(edge.to);}
- const counts = new Map();let maxRank=0,maxRow=0;
- for(const node of nodes) {const column=rank.get(node.id) ?? 0,row=counts.get(column)||0;counts.set(column,row+1);node.x=30+column*360;node.y=35+row*150;maxRank=Math.max(maxRank,column);maxRow=Math.max(maxRow,row);}
- return {nodes,edges,width:Math.max(600,(maxRank+1)*360+50),height:Math.max(180,(maxRow+1)*150+40)};
+ for(let i=0;i<queue.length;i++)for(const edge of edges.filter(e=>e.from===queue[i]&&!e.unchosen))if(!rank.has(edge.to)){rank.set(edge.to,rank.get(edge.from)+1);queue.push(edge.to);}
+ const columns=new Map();for(const node of nodes){const column=rank.get(node.id)??0,group=columns.get(column)||[];group.push(node);columns.set(column,group);}
+ let maxRank=0,maxY=0;
+ for(const [column,group] of columns) {maxRank=Math.max(maxRank,column);group.sort((a,b)=>['completed','current','reachable','future','unknown','skipped'].indexOf(a.visual)-['completed','current','reachable','future','unknown','skipped'].indexOf(b.visual)||a.id.localeCompare(b.id));let main=0,side=0,terminal=0;for(const node of group){node.x=30+column*300;if(node.kind==='finish'||node.visual==='skipped')node.y=360+terminal++*100;else if(['completed','current','reachable'].includes(node.visual))node.y=105+main++*100;else node.y=245+side++*100;maxY=Math.max(maxY,node.y);}}
+ for(const edge of edges) {const from=byID.get(edge.from),to=byID.get(edge.to);edge.path=!edge.unchosen&&['completed','current','reachable'].includes(from?.visual)&&['completed','current','reachable'].includes(to?.visual);edge.muted=!!edge.unchosen||['future','unknown','skipped'].includes(to?.visual);edge.route=edge.unchosen?'skipped':(rank.get(edge.to)??0)<=(rank.get(edge.from)??0)?'return':to?.kind==='finish'?'terminal':'forward';}
+ spreadPorts(edges,'from','fromPort');spreadPorts(edges,'to','toPort');
+ return {nodes,edges,width:Math.max(760,(maxRank+1)*300+50),height:Math.max(480,maxY+120)};
+}
+function definitionInvocation(run,id) {
+ const definition=(run.definitions||[]).find(d=>parseMaybe(d.bytes)?.id===id),matches=values(run.invocations).filter(i=>i.workflow_ref?.digest===definition?.ref?.digest);
+ return matches.length===1?matches[0].id:'__definition__';
 }
 function fileChanges(before,after) {
  if(!before || !after) return null;
  const left = new Map(before.files.map(f=>[f.path,f.ref?.digest])), right = new Map(after.files.map(f=>[f.path,f.ref?.digest]));
  return [...new Set([...left.keys(),...right.keys()])].sort().flatMap(path => !left.has(path) ? [{path,change:'Добавлен'}] : !right.has(path) ? [{path,change:'Удалён'}] : left.get(path)!==right.get(path) ? [{path,change:'Изменён'}] : []);
 }
-if(typeof module !== 'undefined') module.exports = {esc,duration,graphData,fileChanges};
+function nodeCard(graph,id,object,run) {
+ const node=graph.nodes.find(n=>n.id===id);if(!node)return '';
+ const list=(title,edges)=>`<div><small>${title}</small>${edges.length?`<ul>${edges.map(e=>`<li>${esc(e.label||'переход')} · ${esc(e.from===id?e.to:e.from)}${e.reason?` · ${esc(e.reason)}`:''}</li>`).join('')}</ul>`:'<p class="muted">Нет закреплённых переходов</p>'}</div>`;
+ const inputs=Object.keys(object?.context?.inputs||node.stage?.input_bindings||{}),outputs=Object.keys(object?.accepted?.outputs||node.stage?.output_bindings||{});
+ const incoming=graph.edges.filter(e=>e.to===id),attemptFor=e=>{const source=graph.nodes.find(n=>n.id===e.from);return values(run?.attempts).find(a=>a.step_instance_id===source?.actual?.at(-1)?.step_instance_id);};
+ const arrived=incoming.find(e=>{const attempt=attemptFor(e);return attempt && (attempt.accepted?.verdict||attempt.candidate?.verdict)===e.label;})||incoming.find(e=>graph.nodes.find(n=>n.id===e.from)?.actual?.length),source=graph.nodes.find(n=>n.id===arrived?.from),attempt=arrived&&attemptFor(arrived),summary=attempt?.accepted?.summary||attempt?.candidate?.summary;
+ const reason=arrived?`<div><small>Почему выбран этот переход</small><p>После ${esc(arrived.from)}: ${esc(label(arrived.label))}${summary?` — ${esc(summary)}`:''}</p></div>`:'';
+ return `<section class="node-card"><div><small>Закреплённый узел</small><p>${esc(node.title)} · ${esc(label(node.kind))}</p></div><p>${badge(node.state)}${node.reason?` <span class="muted">${esc(node.reason)}</span>`:''}</p>${reason}${list('Входящие переходы',graph.edges.filter(e=>e.to===id))}${list('Исходящие переходы',graph.edges.filter(e=>e.from===id))}<div><small>Данные</small><p>${inputs.length?`Входы: ${esc(inputs.join(', '))}`:'Входы не записаны'}${outputs.length?` · Выходы: ${esc(outputs.join(', '))}`:''}</p></div></section>`;
+}
+if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='';
@@ -150,8 +178,8 @@ function currentWorkflow(run) {
 function renderGraph() {
  if(!state)return;const run=state.run,workflow=parseMaybe(currentWorkflow(run));
  const selectedActivation=run.attempts?.[nodeID]?.stage_activation_id || run.steps?.[nodeID]?.stage_activation_id || nodeID;
- const data=graphData(workflow,run,definition?'__definition__':invocation,state.choices),byID=new Map(data.nodes.map(n=>[n.id,n]));
- const svg=`<svg width="${data.width}" height="${data.height}" viewBox="0 0 ${data.width} ${data.height}" role="group" aria-label="Связи закреплённых стадий workflow"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>${data.edges.map(e=>{const a=byID.get(e.from),b=byID.get(e.to);if(!a||!b)return '';const x=a.x+210,y=a.y+35,tx=b.x,ty=b.y+35;return `<path class="${e.unchosen?'unchosen':''}" d="M ${x} ${y} C ${x+35} ${y+20}, ${tx-35} ${ty+20}, ${tx} ${ty}" marker-end="url(#arrow)"/><text class="edge-label" x="${(x+tx)/2}" y="${(y+ty)/2+(ty>y?14:-10)}" text-anchor="middle">${esc(e.label)}</text>`;}).join('')}${data.nodes.map(n=>`<g tabindex="0" role="button" aria-label="${esc(n.title+', '+label(n.state))}" data-stage="${esc(n.id)}" class="${['future','unchosen'].includes(n.state)?'future':''} ${(n.id===nodeID || n.actual?.some(a=>a.id===selectedActivation))?'current':''}"><rect x="${n.x}" y="${n.y}" width="210" height="78" rx="9"/><text x="${n.x+12}" y="${n.y+22}">${esc(n.title.length>26?n.title.slice(0,24)+'…':n.title)}</text><text x="${n.x+12}" y="${n.y+43}">${esc(label(n.kind))}</text><text x="${n.x+12}" y="${n.y+64}">${esc(label(n.state))}</text></g>`).join('')}</svg>`;
+ const graphInvocation=definition?definitionInvocation(run,definition):invocation,data=graphData(workflow,run,graphInvocation,state.choices),byID=new Map(data.nodes.map(n=>[n.id,n]));
+ const svg=`<svg width="${data.width}" height="${data.height}" viewBox="0 0 ${data.width} ${data.height}" role="group" aria-label="Связи закреплённых стадий workflow"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>${data.edges.map((e,index)=>{const a=byID.get(e.from),b=byID.get(e.to);if(!a||!b)return '';const x=a.x+230,y=a.y+39+e.fromPort,tx=b.x,ty=b.y+39+e.toPort,channel=e.route==='return'?42+index%3*18:data.height-42-index%3*18,route=e.route==='forward'?`M ${x} ${y} H ${tx-22} V ${ty} H ${tx}`:`M ${x} ${y} H ${x+22} V ${channel} H ${tx-22} V ${ty} H ${tx}`,classes=[`route-${e.route}`,e.path?'active-path':'',e.muted?'muted-path':''].filter(Boolean).join(' ');return `<path class="${classes}" d="${route}" marker-end="url(#arrow)"/><text class="edge-label ${e.muted?'muted-path':''}" x="${(x+tx)/2}" y="${e.route==='forward'?(y+ty)/2-8:channel-6}" text-anchor="middle">${esc(e.label)}</text>`;}).join('')}${data.nodes.map(n=>`<g tabindex="0" role="button" aria-label="${esc(n.title+', '+label(n.state)+(n.reason?': '+n.reason:''))}" data-stage="${esc(n.id)}" class="node-${n.visual} ${(n.id===nodeID || n.actual?.some(a=>a.id===selectedActivation))?'selected':''}"><rect x="${n.x}" y="${n.y}" width="230" height="78" rx="9"/><text x="${n.x+12}" y="${n.y+22}">${esc(n.title.length>26?n.title.slice(0,24)+'…':n.title)}</text><text x="${n.x+12}" y="${n.y+43}">${esc(label(n.kind))}</text><text x="${n.x+12}" y="${n.y+64}">${esc(n.visual==='skipped'?label('skipped'):(n.visual==='reachable'?'Далее':label(n.state)))}</text>${n.reason?`<title>${esc(n.reason)}</title>`:''}</g>`).join('')}</svg>`;
  const left=$('graph').scrollLeft,top=$('graph').scrollTop;$('graph').innerHTML=svg;$('graph').scrollLeft=left;$('graph').scrollTop=top;
  $('graph').onclick=event=>{const target=event.target.closest('[data-stage]');if(!target)return;const n=byID.get(target.dataset.stage);if(n.invocation){navigateNode('',n.invocation);return;}if(n.ref){definition=n.ref.id;invocation='';renderDetail();return;}navigateNode(n.actual?.at(-1)?.id || n.id,invocation);};
  $('graph').onkeydown=event=>{if(event.key==='Enter'||event.key===' '){const n=event.target.closest('[data-stage]');if(n){event.preventDefault();n.dispatchEvent(new MouseEvent('click',{bubbles:true}));}}};
@@ -163,15 +191,16 @@ function timingNode(node,id) {if(!node)return null;if(node.id===id)return node;f
 function nodeObject(run,id) {for(const pool of [run.attempts,run.steps,run.activations,run.invocations,run.check_executions])if(pool?.[id])return pool[id];return id===run.id?run:null;}
 function renderNode() {
  const run=state.run,object=nodeObject(run,nodeID),timing=timingNode(state.timing?.root,nodeID);
- let html='';
+ const activation=run.activations?.[object?.stage_activation_id||object?.activation_id||nodeID],stageID=activation?.stage_id||object?.stage_id||nodeID,graph=graphData(parseMaybe(currentWorkflow(run)),run,definition?definitionInvocation(run,definition):invocation,state.choices);
+ let html=nodeCard(graph,stageID,object,run);
  if(!object) {
   const stage=parseMaybe(currentWorkflow(run))?.definition?.stages?.[nodeID];
   $('node-title').textContent=stage ? nodeID+' · '+label(stage.kind) : 'Выберите шаг или попытку';
-  if(stage){html='<p class="muted">Закреплённое определение стадии.</p>'+readable(stage,nodeID);const actual=values(run.activations).filter(a=>a.stage_id===nodeID && (a.workflow_invocation_id || '')===invocation);html+=actual.map(a=>`<p><button data-node="${esc(a.id)}">Открыть исполнение ${esc(short(a.id))}</button></p>`).join('');}
+  if(stage){html+='<p class="muted">Закреплённое определение стадии.</p>'+readable(stage,nodeID);const actual=values(run.activations).filter(a=>a.stage_id===nodeID && (a.workflow_invocation_id || '')===invocation);html+=actual.map(a=>`<p><button data-node="${esc(a.id)}">Открыть исполнение ${esc(short(a.id))}</button></p>`).join('');}
   preserve($('node'),html);return;
  }
  $('node-title').textContent=(timing?.stage_id || label(timing?.kind) || 'Исполнение')+' · '+short(nodeID);
- html=`<p>${badge(object.status)} ${esc(object.verdict || object.outcome || '')}</p>`;
+ html+=`<p>${badge(object.status)} ${esc(object.verdict || object.outcome || '')}</p>`;
  if(timing){const metrics=Object.entries(timing.metrics||{}),shown=metrics.filter(([,v])=>v.quality!=='not_applicable');html+=section('Время',Object.fromEntries(shown.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':time',true);const other=metrics.filter(([,v])=>v.quality==='not_applicable');if(other.length)html+=section('Неприменимые метрики',Object.fromEntries(other.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':other-time');}
  if(run.attempts?.[nodeID]) {
   const context=object.context || {},envelope=parseMaybe(object.envelope),step=run.steps?.[object.step_instance_id],def=(run.definitions||[]).find(d=>d.ref?.digest===step?.definition_ref?.digest)?.bytes;

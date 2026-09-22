@@ -100,11 +100,21 @@ tr:last-child td{border-bottom:0}
 .graph line,.graph path{stroke:var(--graph-edge);stroke-width:1.5;fill:none}
 .graph marker path{fill:var(--graph-edge);stroke:none}
 .graph rect{fill:var(--raised);stroke:var(--node-line);stroke-width:1.5;rx:5px}
-.graph .current rect{stroke:var(--accent);stroke-width:2.5;fill:var(--tint)}
+.graph .node-completed rect{stroke:var(--good)}
+.graph .node-current rect{stroke:var(--accent);stroke-width:2.5;fill:var(--tint)}
+.graph .node-reachable rect{stroke:var(--accent);stroke-dasharray:7 4}
+.graph .node-skipped rect{stroke:var(--wait);stroke-width:2.5;stroke-dasharray:4 5;fill:color-mix(in srgb,var(--wait) 14%,var(--raised))}
+.graph .node-future rect{stroke-dasharray:7 4}
+.graph .node-unknown{opacity:.72}
+.graph .node-unknown rect{stroke-dasharray:2 4}
+.graph path.active-path{stroke:var(--accent);stroke-width:3}
+.graph .edge-label.muted-path,.graph path.muted-path{opacity:.3}
+.graph .selected rect{stroke-width:3}
 .graph text{fill:var(--ink);font-size:13px}
 .graph g text:first-of-type{font-family:var(--mono);font-weight:500;font-size:12px}
 .graph .edge-label{font-size:12px;fill:var(--graph-edge);paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round}
-.graph .future rect{stroke-dasharray:5 4}
+.graph path.route-return{stroke-dasharray:7 4}
+.graph path.route-terminal{stroke:var(--wait)}
 .graph [role=button]{cursor:pointer}
 .graph [role=button]:focus-visible{outline:none}
 .graph [role=button]:focus-visible rect{stroke:var(--accent);stroke-width:3}
@@ -112,6 +122,8 @@ tr:last-child td{border-bottom:0}
 .inspector-layout{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(0,1.2fr);gap:24px}
 .inspector-layout>section{min-width:0}
 .inspector-layout>section+section{border-left:1px solid var(--line);padding-left:24px}
+.node-card{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.node-card>p{grid-column:1/-1;margin:0}.node-card ul{margin:6px 0 0;padding-left:18px}.node-card li{margin:4px 0;overflow-wrap:anywhere}
 .node{margin:4px 0 4px 12px;border-left:1px solid var(--line);padding-left:10px}
 .node>summary{padding:6px 0}
 .node button{padding:3px 7px;text-align:left;border-color:transparent;background:none}
@@ -140,7 +152,7 @@ footer{max-width:1680px;margin:auto;padding:18px 28px;color:var(--muted);font-si
 .danger{color:var(--bad);border-color:var(--bad)}
 [hidden]{display:none!important}
 @media(max-width:1100px){.brand span,.readonly{display:none}.filters{gap:8px}.run-table{min-width:820px}.header-tools{gap:16px}}
-@media(max-width:760px){header{padding:12px 16px;gap:10px;flex-wrap:wrap}.brand{font-size:16px}.header-tools{gap:10px}.theme-picker{gap:6px}#connection{font-size:11px}main{padding:22px 16px}.heading{align-items:start;flex-wrap:wrap;gap:16px}.totals{gap:22px}.totals b{font-size:21px}.storage-overview{grid-template-columns:1fr;gap:8px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.inspector-layout{grid-template-columns:1fr;gap:0}.inspector-layout>section+section{border-left:0;padding-left:0}.graph-toolbar{align-items:start;flex-direction:column;gap:8px}.tabs{overflow:auto}.tabs button{white-space:nowrap}.kv{grid-template-columns:110px minmax(0,1fr)}footer{padding:18px 16px}}
+@media(max-width:760px){header{padding:12px 16px;gap:10px;flex-wrap:wrap}.brand{font-size:16px}.header-tools{gap:10px}.theme-picker{gap:6px}#connection{font-size:11px}main{padding:22px 16px}.heading{align-items:start;flex-wrap:wrap;gap:16px}.totals{gap:22px}.totals b{font-size:21px}.storage-overview{grid-template-columns:1fr;gap:8px}.cards,.node-card{grid-template-columns:repeat(2,minmax(0,1fr))}.inspector-layout{grid-template-columns:1fr;gap:0}.inspector-layout>section+section{border-left:0;padding-left:0}.graph-toolbar{align-items:start;flex-direction:column;gap:8px}.tabs{overflow:auto}.tabs button{white-space:nowrap}.kv{grid-template-columns:110px minmax(0,1fr)}footer{padding:18px 16px}}
 @media(max-width:480px){.header-tools{flex-wrap:wrap;justify-content:flex-end}#connection{order:2;width:100%;text-align:right}.cards{grid-template-columns:1fr}.brand img{width:34px;height:34px}.theme-picker select{max-width:140px}}
 
 /* The same flight deck as the README, kept above the operational data. */
