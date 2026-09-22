@@ -108,6 +108,7 @@ type projectLaunchSummary struct {
 	DecisionStates     []projectDecisionState                    `json:"decision_states"`
 	KnownQuestionsOnly bool                                      `json:"known_questions_only"`
 	ReviewDigest       string                                    `json:"review_digest,omitempty"`
+	Continuation       *projectContinuationReview                `json:"continuation,omitempty"`
 	// Admission is filled only by --prepare, and deliberately after the review
 	// digest is computed: it reads a quantity other Runs move, and folding it in
 	// would make the digest go stale on its own.

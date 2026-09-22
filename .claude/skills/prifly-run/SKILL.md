@@ -24,6 +24,16 @@ the tool sends you there, not before.
 
 ## 1. Start
 
+For a completed partial or rejected Run whose implementation is already
+saved in Git, choose the declared continuation launch. Call `project continue
+--prepare --launch ID --source-run RUN_ID` with the selected host, workspace
+and decision answers; show its source refs, Git head and changed files. Then
+call `project continue --launch ID --source-run RUN_ID --expected-launch-digest
+DIGEST` with the same options. Do not call raw `run fork`, extract refs from
+Run JSON, or start the ordinary implement route. After every accepted report,
+read `run next` again and follow only its issued action.
+
+
 `PRIFLY_BIN project workflows --repository "$PWD" --json` lists launches. If the
 developer named no exact launch ID, show the list and wait; do not infer one
 from task wording or nearby files.
@@ -85,6 +95,16 @@ client has a timeout. For a ready program stage the answer also carries
 the place a declared source reads from. It is read from what this Run sealed at
 its start, so a machine-local setting changed afterwards is visibly not in it.
 
+
+After every accepted session report, read `run next RUN_ID` again. For `control` or
+`program`, call `run drive RUN_ID`, then read `run next RUN_ID` again. For
+`assisted_session`, take only the issued Attempt, submit its result, and repeat
+this loop. For waiting or terminal state, do not invent work, retry, or a
+different skill. A separate session is optional: use one only when this host
+actually provides a separate-session mechanism. When it does not, perform the
+Attempt in this host and report `model_profile` as `unavailable`; never claim a
+subagent or fork that did not run.
+
 Read outstanding handoffs with `session task --run RUN_ID --all`, which hands out
 every listed attempt and writes each task document into its own workspace.
 Index `run.attempts` by `id` -- the value the task calls `attempt_id` -- never by
@@ -108,6 +128,21 @@ output to the port path in `context.json` and report it in `outputs` with that
 slot's `artifact_id`, `revision` and the `digest` of the actual bytes. Pri-Fly
 fills workspace-tree slots itself; never invent a ref or report an unwritten
 port. Submit the typed result, then drive the same Run.
+
+A task carrying `model_profile` names what the step's author wanted from the
+model, and the report must answer it or be refused. Three answers exist and one
+of them is always true: `honoured` with the model you actually used,
+`unavailable` when this host does not let you choose, `declined` with why you
+chose otherwise. Say which one honestly -- Pri-Fly cannot check the answer and
+does not pretend to, so a wrong one is simply a false record. Being unable to
+choose is not a failure and needs no apology; claiming a model you did not use
+is the only real mistake here.
+
+When the task also carries `model_profile_translation`, that is the project
+saying what the name means here -- a map of values, plus the source that said
+so. Start the step's session with it and answer `honoured` with the model you
+actually used. Without it nobody has decided yet: do the work here and answer
+`unavailable`, which is the truth and costs nothing.
 
 ## 3. Finish
 

@@ -60,6 +60,7 @@ assert.equal(executionRole(null,{kind:'call'}).detail,'Не является for
 assert.match(executionRole(null,null).kind,/не записана/);
 const activity=activityRows({attempts:{one:{id:'attempt:one',session:{principal_id:'host:one'}}},activations:{ready:{id:'activation:ready',stage_id:'plan',status:'ready'}},pending_decision:{attempt_id:'attempt:one',decision_id:'decision:go'},wait_registrations:{wait:{activation_id:'activation:wait',target_stage_id:'signal',status:'active'}},fork:{source_run_id:'run:source'}});
 assert.equal(activity.length,5);assert.match(activity[0].detail,/ожидается отчёт/);
+assert.equal(activityRows({fork:{source_run_id:'run:source',reason:'project continuation'}})[0].title,'Продолжение от Run');
 console.log('monitor UI: status wording, escaping, timing quality, graph paths/ports/parallel/repeat/cycles, file evidence passed');
 
 // Exercise the actual pre-paint script, including browsers that deny storage.

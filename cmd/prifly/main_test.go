@@ -1388,6 +1388,9 @@ func TestCLIHelpDoesNotDenyImplementedCoreOperators(t *testing.T) {
 	if !strings.Contains(help, "project start --repository DIR --launch ID [--host codex-cli|codex-app|claude-code] [--brief FILE]") || !strings.Contains(help, "[--workspace worktree|checkout]") {
 		t.Fatalf("help does not describe the declared project launch: %s", help)
 	}
+	if !strings.Contains(help, "project continue --repository DIR --launch ID --source-run RUN_ID --prepare") {
+		t.Fatalf("help does not describe continuation: %s", help)
+	}
 }
 
 func TestCLIRefCanonicalYAMLAndJSON(t *testing.T) {

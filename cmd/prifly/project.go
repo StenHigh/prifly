@@ -165,7 +165,8 @@ var projectRunnerSkillTemplateBeforeShortening = strings.NewReplacer(
 // catalog dialogue, the refusals the tool now answers for itself. A cold start
 // on another machine spent twenty-five minutes reading them. What the tool does
 // not say still lives here; what it says better than prose was removed.
-var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateCurrent, "Read outstanding handoffs with", projectRunnerControlLoopInstructions+"\nRead outstanding handoffs with", 1)
+var projectRunnerSkillTemplateBeforeContinuation = strings.Replace(projectRunnerSkillTemplateCurrent, "Read outstanding handoffs with", projectRunnerControlLoopInstructions+"\nRead outstanding handoffs with", 1)
+var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerContinuationInstructions, 1)
 
 // projectRunnerSkillTemplateBeforeModelProfile is the text as it stood before a
 // task could name the model profile its step declared, derived from the current
@@ -205,6 +206,15 @@ const projectRunnerControlLoopInstructions = "\nAfter every accepted session rep
 	"actually provides a separate-session mechanism. When it does not, perform the\n" +
 	"Attempt in this host and report `model_profile` as `unavailable`; never claim a\n" +
 	"subagent or fork that did not run.\n"
+
+const projectRunnerContinuationInstructions = "\nFor a completed partial or rejected Run whose implementation is already\n" +
+	"saved in Git, choose the declared continuation launch. Call `project continue\n" +
+	"--prepare --launch ID --source-run RUN_ID` with the selected host, workspace\n" +
+	"and decision answers; show its source refs, Git head and changed files. Then\n" +
+	"call `project continue --launch ID --source-run RUN_ID --expected-launch-digest\n" +
+	"DIGEST` with the same options. Do not call raw `run fork`, extract refs from\n" +
+	"Run JSON, or start the ordinary implement route. After every accepted report,\n" +
+	"read `run next` again and follow only its issued action.\n\n"
 
 const projectRunnerSkillTemplateCurrent = `---
 name: prifly-run
@@ -963,6 +973,8 @@ func (c *cli) projectCommand(ctx context.Context, args []string) error {
 		return c.projectCompile(ctx, args[1:])
 	case "start":
 		return c.projectStart(ctx, args[1:])
+	case "continue":
+		return c.projectContinue(ctx, args[1:])
 	case "extend":
 		return c.projectExtend(ctx, args[1:])
 	case "local":
@@ -1142,7 +1154,7 @@ func (c *cli) projectAddRunners(root string, profile projectProfile, ids []strin
 
 func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	if index := slices.Index(args, "--prepare"); index >= 0 {
-		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true)
+		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true, false)
 	}
 	f := flags("project questionnaire")
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
@@ -2487,6 +2499,14 @@ func projectRunnerSkillBeforeControlLoop(host projectHost) string {
 	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateCurrent, "{{host}}", host.ID), "{{question_tool}}", questionTool)
 }
 
+func projectRunnerSkillBeforeContinuation(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeContinuation, "{{host}}", host.ID), "{{question_tool}}", questionTool)
+}
+
 // projectRunnerSkillBeforeModelProfile is the runner as it stood before a task
 // could name the model profile its step declared.
 func projectRunnerSkillBeforeTranslation(host projectHost) string {
@@ -2635,7 +2655,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

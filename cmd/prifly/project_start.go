@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -49,10 +50,17 @@ type projectPreflight struct {
 // seals declared YAML into a disposable package and uses the existing engine.
 // An assisted step waits for its host; a managed step uses its approved worker.
 func (c *cli) projectStart(ctx context.Context, args []string) error {
-	return c.projectPrepareAndStart(ctx, args, false)
+	return c.projectPrepareAndStart(ctx, args, false, false)
 }
 
-func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare bool) error {
+func (c *cli) projectContinue(ctx context.Context, args []string) error {
+	if index := slices.Index(args, "--prepare"); index >= 0 {
+		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true, true)
+	}
+	return c.projectPrepareAndStart(ctx, args, false, true)
+}
+
+func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare, continuation bool) error {
 	f := flags("project start")
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
@@ -64,6 +72,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	decisionPolicy := f.String("decision-policy", "", "attended or autonomous declared-decision policy; unnamed, the project's answers.decision_policy in extend.yaml, then attended")
 	expectedCatalog := f.String("expected-decision-catalog-digest", "", "catalog digest returned by project questionnaire")
 	expectedLaunch := f.String("expected-launch-digest", "", "review digest returned by project questionnaire --prepare")
+	sourceRun := f.String("source-run", "", "completed partial or rejected Run to continue")
 	command := f.String("command-id", "", "stable command identity for an explicit retry")
 	inputs := bindings{}
 	refFiles := bindings{}
@@ -78,6 +87,12 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	if *launchID == "" {
 		return usageError("project start requires --launch")
+	}
+	if continuation && *sourceRun == "" || !continuation && *sourceRun != "" {
+		return usageError("project continue requires --source-run; project start does not accept it")
+	}
+	if continuation && !prepare && *expectedLaunch == "" {
+		return usageError("project continue requires --expected-launch-digest from project continue --prepare")
 	}
 	if *workspace != "" && *workspace != "worktree" && *workspace != "checkout" {
 		return refusal("project_start_invalid_workspace", "use worktree or checkout")
@@ -94,6 +109,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return err
 	}
 	neutral := profile.SchemaVersion == projectVariantProfileVersion
+	if continuation && !neutral {
+		return refusal("project_continue_requires_profile_3", "continuation requires Project profile /3")
+	}
 	if !neutral {
 		if prepare || *expectedLaunch != "" {
 			return refusal("project_questionnaire_prepare_requires_profile_3", "exact launch review requires an explicit Project profile /3 migration; legacy start remains supported")
@@ -144,7 +162,16 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if details == nil {
 		return local.ErrIntegrity
 	}
-	if err := projectStartInputs(*details, inputs, refFiles, !neutral); err != nil {
+	if continuation {
+		for name := range inputs {
+			if name != "security_enabled" {
+				return refusal("project_continue_input_override", "task, handoff, plan and implementation come from the reviewed source and Git")
+			}
+		}
+		if len(refFiles) != 0 {
+			return refusal("project_continue_input_override", "continuation input refs are selected from the source Run")
+		}
+	} else if err := projectStartInputs(*details, inputs, refFiles, !neutral); err != nil {
 		return err
 	}
 	preflight, err := projectStartPreflight(root, profile, packageName, *packageProfile, *decisionPolicy, answers, runtimeAnswers)
@@ -208,6 +235,32 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		inputValues[port] = data
 		inputPaths[port] = resolved
 	}
+	var continuationReview *projectContinuationReview
+	if continuation {
+		mode := *workspace
+		if mode == "" {
+			mode = standingWorkspace
+		}
+		if mode == "" {
+			mode = "worktree"
+		}
+		reader, err := prifly.Open(c.project, true)
+		if err != nil {
+			return err
+		}
+		review, carried, prepareErr := projectPrepareContinuation(ctx, reader, root, *sourceRun, mode)
+		closeErr := reader.Close()
+		if prepareErr != nil {
+			return prepareErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		continuationReview = &review
+		for name, value := range carried {
+			inputValues[name] = value
+		}
+	}
 	if err := projectDecisionInputs(preflight, inputValues, refs, neutral); err != nil {
 		return err
 	}
@@ -225,6 +278,17 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	workflowPath, err := projectCompiledLaunchPath(root, launch, compiled)
 	if err != nil {
 		return err
+	}
+	if continuation {
+		valid := false
+		for _, component := range compiled.Components {
+			if component.Path == workflowPath && (component.Ref.ID == "aif-continuation:workflow/classic-continuation" || component.Ref.ID == "aif-profiled-continuation:workflow/classic-continuation") {
+				valid = true
+			}
+		}
+		if !valid {
+			return refusal("project_continue_invalid_launch", "choose a declared AI Factory continuation launch")
+		}
 	}
 	if err := projectVerifySealedDecisionCatalog(packageDirectory, preflight); err != nil {
 		return err
@@ -260,6 +324,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	var summary projectLaunchSummary
 	if neutral {
 		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/3", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true, SessionLimits: requirements.sessionLimits, ModelProfiles: reviewedProfiles}
+		summary.Continuation = continuationReview
 		summary.Requirements = &requirements
 		for _, component := range compiled.Components {
 			if component.Path == workflowPath {
@@ -349,6 +414,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		currentSummary := summary
 		currentSummary.ConfigurationDigest, currentSummary.Execution, currentSummary.ReviewDigest = currentConfiguration, currentExecution, ""
 		currentSummary.ModelProfiles = currentProfiles
+		if continuation {
+			currentReview, _, err := projectPrepareContinuation(ctx, engine, root, *sourceRun, *workspace)
+			if err != nil {
+				return err
+			}
+			currentSummary.Continuation = &currentReview
+		}
 		currentDigest, err := projectReviewDigest(currentSummary)
 		if err != nil {
 			return err
@@ -378,6 +450,12 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			if previous.ID == selected.ID {
 				createdClaim = false
 			}
+		}
+		if continuation && selected.BaseCommit != continuationReview.Implementation.HeadCommit {
+			if createdClaim {
+				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: selected.ID, Generation: selected.Generation})
+			}
+			return refusal("project_continue_stale_head", "claimed workspace HEAD differs from the reviewed continuation")
 		}
 	}
 	importedPackage := false
@@ -420,6 +498,10 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if neutral {
 		startOptions.SchemaVersion, startOptions.ExecutionBindings = "2", execution
 		startOptions.Inputs, startOptions.InputValues = nil, inputValues
+		if continuation {
+			startOptions.Continuation = &continuationReview.Source
+			startOptions.ContinuationClaim = claim
+		}
 	}
 	// Resolved before the summary and reused here, so what the Run seals is
 	// exactly what the review covered. Sealed for the same reason the

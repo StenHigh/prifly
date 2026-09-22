@@ -56,6 +56,13 @@ type StartOptions struct {
 	// must be visibly not part of this Run. The engine reads no meaning from
 	// the values; it hands them to the host in the task.
 	ModelProfiles map[string]ModelProfileTranslation
+	// Continuation records a checked source cut for a Project quality-tail Run.
+	// Only the declared source artifacts become inputs; the current
+	// implementation is sealed separately from the selected Git workspace.
+	Continuation *ContinuationSource
+	// ContinuationClaim is bound in the Run creation transaction so a
+	// read-only quality gate can inspect the claimed tree immediately.
+	ContinuationClaim *WorktreeClaim
 	// Guards are the live start/stop rules this Run is registered with. They
 	// are declared here rather than installed later because a registration has
 	// to exist before the first admission it protects; one installed afterwards
@@ -660,6 +667,34 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
+	var fork *ForkProvenance
+	if options.Continuation != nil {
+		if options.ContinuationClaim == nil {
+			return local.ApplyResult{}, fault("claim_missing", "continuation requires the prepared workspace claim")
+		}
+		if plan.Workflow.ID != "aif-continuation:workflow/classic-continuation" && plan.Workflow.ID != "aif-profiled-continuation:workflow/classic-continuation" {
+			return local.ApplyResult{}, local.Reject("continuation_workflow_invalid", "continuation requires a declared AI Factory quality-tail workflow")
+		}
+		current, err := e.ContinuationSource(ctx, options.Continuation.RunID)
+		if err != nil {
+			return local.ApplyResult{}, err
+		}
+		if current != *options.Continuation {
+			return local.ApplyResult{}, local.Reject("continuation_source_changed", "source Run version or declared artifact refs differ from the reviewed continuation")
+		}
+		for port, ref := range map[string]ArtifactRef{"task": current.Task, "handoff": current.Handoff, "plan": current.Plan} {
+			_, sourceBytes, err := e.Artifact(ref)
+			if err != nil {
+				return local.ApplyResult{}, err
+			}
+			if options.InputRefs[port] != (ArtifactRef{}) || !bytes.Equal(options.InputValues[port], sourceBytes) {
+				return local.ApplyResult{}, local.Reject("continuation_source_changed", "declared continuation input differs from the sealed source artifact")
+			}
+		}
+		fork = &ForkProvenance{SchemaVersion: "1", SourceRunID: current.RunID, SourceRunVersion: current.RunVersion, CommandID: options.CommandID, Reason: ContinuationReason, ReuseRefs: []ArtifactRef{current.Task, current.Handoff, current.Plan}}
+	} else if options.ContinuationClaim != nil {
+		return local.ApplyResult{}, fault("claim_identity_conflict", "a continuation claim requires a continuation source")
+	}
 	if neutral && plan.Profile != flow.CoreProfile {
 		return local.ApplyResult{}, fault("unsupported_start_version", "Start version 2 requires core-workflow/1")
 	}
@@ -778,7 +813,18 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		port, ref := plan.Workflow.Inputs[name], input.Ref
 		if ref == (ArtifactRef{}) {
 			identity := fmt.Sprintf("artifact:%x", sha256.Sum256([]byte(options.CommandID+"/input/"+name)))
-			a, err := e.putArtifact(input.Data, port.Format, port.SchemaRef, identity, map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": name}, nil, plan.Registry, portMedia(port.Port))
+			var sourceRefs []ArtifactRef
+			if options.Continuation != nil {
+				switch name {
+				case "task":
+					sourceRefs = []ArtifactRef{options.Continuation.Task}
+				case "handoff":
+					sourceRefs = []ArtifactRef{options.Continuation.Handoff}
+				case "plan":
+					sourceRefs = []ArtifactRef{options.Continuation.Plan}
+				}
+			}
+			a, err := e.putArtifact(input.Data, port.Format, port.SchemaRef, identity, map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": name}, sourceRefs, plan.Registry, portMedia(port.Port))
 			if err != nil {
 				return local.ApplyResult{}, err
 			}
@@ -974,6 +1020,20 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if packagePin != nil {
 		pins = append(pins, *packagePin)
 	}
+	var claimBinding *claimRunBinding
+	if options.ContinuationClaim != nil {
+		if standingGrant != "" {
+			return local.ApplyResult{}, fault("continuation_grant_unsupported", "continuation claim and standing grant cannot share one control mutation")
+		}
+		claimBinding, err = e.prepareClaimRunBinding(ctx, runID, options.ContinuationClaim.ID, options.ContinuationClaim.Generation)
+		if err != nil {
+			return local.ApplyResult{}, err
+		}
+		if pin != nil {
+			pins = append(pins, *pin)
+		}
+		pin = &claimBinding.Pin
+	}
 	// The grant's counter moves in the same transaction as the Run it authorised.
 	// Checking a grant without spending one of its operations would publish a
 	// bound that does not bind: three starts issued, unlimited starts taken.
@@ -994,7 +1054,14 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			return canonicalState(control)
 		}
 	}
-	return e.applyControlledWithControlMutation(ctx, pin, pins, controlMutation, e.owner, options.CommandID, runID, "run.created", startCommand, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	if claimBinding != nil {
+		controlMutation = claimBinding.mutate
+	}
+	startPayload := any(startCommand)
+	if fork != nil {
+		startPayload = map[string]any{"run_start": startCommand, "fork": fork}
+	}
+	return e.applyControlledWithControlMutation(ctx, pin, pins, controlMutation, e.owner, options.CommandID, runID, "run.created", startPayload, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if blocked != nil {
 			return local.Change{}, blocked
 		}
@@ -1118,8 +1185,11 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			}
 			stateVersion = CoreProjectTitleStateVersion
 		}
+		if fork != nil && !isForkState(stateVersion) {
+			stateVersion = CoreForkStateVersion
+		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
-		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}
+		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{plan.Workflow.Definition.Entry}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}
 		if configurations != nil {
 			r.Ready = nil
 			r.WorkflowConfigurations = configurations

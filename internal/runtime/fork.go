@@ -434,7 +434,7 @@ func forkProvenanceInvariant(r Run) error {
 			return errors.New("duplicate fork reuse reference")
 		}
 		seen[ref] = true
-		if _, present := r.InputsPort(ref); !present {
+		if _, present := r.InputsPort(ref); !present && p.Reason != ContinuationReason {
 			return errors.New("fork reuse reference is not a declared new input")
 		}
 	}
