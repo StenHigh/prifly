@@ -1,0 +1,299 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Pri-Fly: локальный движок workflow",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "session-path",
+        "label": "Путь сессии",
+        "focus": [
+          "host",
+          "cli",
+          "runtime",
+          "store"
+        ],
+        "note": "Хост получает задания через session protocol; решает только authority; состояние живёт в локальном SQLite."
+      },
+      {
+        "id": "compile",
+        "label": "Компиляция workflow",
+        "focus": [
+          "catalog",
+          "cli",
+          "flow",
+          "runtime"
+        ],
+        "note": "YAML из каталога компилируется в sealed package — байты контекстов закреплены до запуска."
+      },
+      {
+        "id": "guards",
+        "label": "Guard'ы и наблюдение",
+        "focus": [
+          "purity",
+          "store",
+          "workspace",
+          "monitor"
+        ],
+        "note": "Transform-команда чиста внутри write-транзакции; эффекты шага измеряются в claimed workspace; монитор только читает."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "catalog",
+      "type": "external",
+      "label": "Каталог workflow",
+      "sublabel": "GitHub repos, YAML",
+      "pos": [
+        40,
+        70
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "host",
+      "type": "external",
+      "label": "Host agent",
+      "sublabel": "Claude Code / Codex",
+      "pos": [
+        40,
+        270
+      ],
+      "size": [
+        130,
+        60
+      ],
+      "tag": "prifly-run skill"
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "prifly CLI",
+      "sublabel": "cmd/prifly",
+      "pos": [
+        320,
+        270
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "flow",
+      "type": "backend",
+      "label": "Flow compiler",
+      "sublabel": "internal/flow",
+      "pos": [
+        600,
+        70
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "runtime",
+      "type": "backend",
+      "label": "Authority",
+      "sublabel": "internal/runtime",
+      "pos": [
+        600,
+        270
+      ],
+      "size": [
+        130,
+        60
+      ],
+      "tag": "единственное место решения"
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "Local store",
+      "sublabel": "SQLite + blobs",
+      "pos": [
+        880,
+        270
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "purity",
+      "type": "security",
+      "label": "Purity guard",
+      "sublabel": "internal/purity",
+      "pos": [
+        880,
+        70
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "workspace",
+      "type": "external",
+      "label": "Claimed workspace",
+      "sublabel": "git working copy",
+      "pos": [
+        600,
+        440
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "monitor",
+      "type": "frontend",
+      "label": "Monitor",
+      "sublabel": "prifly monitor",
+      "pos": [
+        880,
+        440
+      ],
+      "size": [
+        130,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Бинарь prifly (Go, без CGO в CLI и runtime)",
+      "wraps": [
+        "cli",
+        "flow",
+        "runtime",
+        "store",
+        "purity",
+        "monitor"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Транзакция хранилища",
+      "wraps": [
+        "store",
+        "purity"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "catalog-yaml",
+      "from": "catalog",
+      "to": "cli",
+      "label": "project init: установка YAML",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "session-protocol",
+      "from": "host",
+      "to": "cli",
+      "label": "run next / session submit",
+      "variant": "emphasis"
+    },
+    {
+      "id": "compile-yaml",
+      "from": "cli",
+      "to": "flow",
+      "label": "project compile",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "sealed-package",
+      "from": "flow",
+      "to": "runtime",
+      "label": "sealed package",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "id": "admission",
+      "from": "cli",
+      "to": "runtime",
+      "label": "admission, lifecycle",
+      "variant": "emphasis"
+    },
+    {
+      "id": "transform",
+      "from": "runtime",
+      "to": "store",
+      "label": "transform-команды",
+      "variant": "emphasis"
+    },
+    {
+      "id": "purity-guard",
+      "from": "purity",
+      "to": "store",
+      "label": "guard write-tx",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "id": "claim",
+      "from": "runtime",
+      "to": "workspace",
+      "label": "claim, снимок дерева",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "id": "monitor-read",
+      "from": "monitor",
+      "to": "store",
+      "label": "только чтение",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Хост и протокол",
+      "items": [
+        "Движок не вызывает модель: хост забирает задания через session protocol",
+        "Расширения — YAML из каталога, один хост = один Run"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Authority",
+      "items": [
+        "Admission, lifecycle Run/Attempt/Session, claims",
+        "Отказ несёт код в типизированном runtime.Fault"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Guard'ы",
+      "items": [
+        "Transform — чистая функция снимка и payload",
+        "Эффекты шага объявлены и измерены движком; sealed package закрепляет байты контекстов"
+      ]
+    }
+  ]
+}

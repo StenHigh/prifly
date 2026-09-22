@@ -1,0 +1,323 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Pri-Fly: что уходит, что проверяется, что решается",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "views": [
+      {
+        "id": "launch",
+        "label": "Запуск",
+        "focus": [
+          "owner",
+          "host",
+          "prifly",
+          "store",
+          "ws"
+        ],
+        "note": "До первого эффекта: анкета читает объявленные решения, владелец подтверждает обзор по digest, authority seal-ит package и claim-ит копию."
+      },
+      {
+        "id": "step",
+        "label": "Один шаг",
+        "focus": [
+          "host",
+          "prifly",
+          "store",
+          "ws"
+        ],
+        "note": "Задание уходит с sealed context и permitted_effects; отчёт принимается только после измерения дерева, срока, схемы и digest'ов."
+      },
+      {
+        "id": "decision",
+        "label": "Решение и итог",
+        "focus": [
+          "owner",
+          "host",
+          "prifly",
+          "store"
+        ],
+        "note": "Объявленный вопрос доходит до владельца как есть; ответ привязан к request digest и версии Run, ledger хранит кто и по какой policy."
+      }
+    ],
+    "viewBox": [
+      880,
+      1120
+    ]
+  },
+  "participants": [
+    {
+      "id": "owner",
+      "type": "external",
+      "label": "Владелец",
+      "sublabel": "подтверждает и решает"
+    },
+    {
+      "id": "host",
+      "type": "external",
+      "label": "Host agent",
+      "sublabel": "Claude Code, prifly-run"
+    },
+    {
+      "id": "prifly",
+      "type": "security",
+      "label": "Pri-Fly authority",
+      "sublabel": "CLI + runtime"
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "Authority state",
+      "sublabel": "SQLite: Run, receipts, artifacts"
+    },
+    {
+      "id": "ws",
+      "type": "cloud",
+      "label": "Claimed workspace",
+      "sublabel": "git worktree / checkout"
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 430,
+      "label": "Запуск: ничего не исполняется без подтверждённого обзора"
+    },
+    {
+      "from": 450,
+      "to": 770,
+      "label": "Один шаг: задание выдано — отчёт измерен"
+    },
+    {
+      "from": 790,
+      "to": 1030,
+      "label": "Объявленное решение и итог Run"
+    }
+  ],
+  "messages": [
+    {
+      "from": "host",
+      "to": "prifly",
+      "y": 180,
+      "label": "project questionnaire --launch",
+      "variant": "default"
+    },
+    {
+      "from": "prifly",
+      "to": "host",
+      "y": 220,
+      "label": "decision_states, inputs, session_limits",
+      "variant": "return"
+    },
+    {
+      "from": "host",
+      "to": "owner",
+      "y": 260,
+      "label": "анкета: profile, preflight, policy",
+      "variant": "default"
+    },
+    {
+      "from": "owner",
+      "to": "host",
+      "y": 300,
+      "label": "ответы + подтверждение обзора (review_digest)",
+      "variant": "return"
+    },
+    {
+      "from": "host",
+      "to": "prifly",
+      "y": 340,
+      "label": "project start --expected-launch-digest",
+      "variant": "emphasis"
+    },
+    {
+      "from": "prifly",
+      "to": "ws",
+      "y": 380,
+      "label": "claim: base commit, generation, владелец",
+      "variant": "security"
+    },
+    {
+      "from": "prifly",
+      "to": "store",
+      "y": 420,
+      "label": "Run + sealed package + DecisionSheet",
+      "variant": "emphasis"
+    },
+    {
+      "from": "host",
+      "to": "prifly",
+      "y": 480,
+      "label": "run next RUN_ID",
+      "variant": "default"
+    },
+    {
+      "from": "prifly",
+      "to": "store",
+      "y": 520,
+      "label": "admission: Stop/Pause, лимиты, ControlEpoch",
+      "variant": "security"
+    },
+    {
+      "from": "prifly",
+      "to": "host",
+      "y": 560,
+      "label": "SessionTask: sealed context, permitted_effects, slots, deadline",
+      "variant": "emphasis"
+    },
+    {
+      "from": "host",
+      "to": "ws",
+      "y": 600,
+      "label": "работа строго в permitted_effects",
+      "variant": "dashed"
+    },
+    {
+      "from": "host",
+      "to": "prifly",
+      "y": 640,
+      "label": "session submit: attempt_id, envelope_digest, verdict, outputs+digest",
+      "variant": "emphasis"
+    },
+    {
+      "from": "prifly",
+      "to": "ws",
+      "y": 680,
+      "label": "измерить дерево и HEAD против отпечатка",
+      "variant": "security"
+    },
+    {
+      "from": "prifly",
+      "to": "store",
+      "y": 720,
+      "label": "принять: deadline, schema, effects, digest → route on.<verdict>",
+      "variant": "security"
+    },
+    {
+      "from": "prifly",
+      "to": "host",
+      "y": 760,
+      "label": "accepted | Fault: effect_not_permitted, late_result…",
+      "variant": "return"
+    },
+    {
+      "from": "prifly",
+      "to": "host",
+      "y": 820,
+      "label": "waiting_decision: DecisionRequest",
+      "variant": "dashed"
+    },
+    {
+      "from": "host",
+      "to": "owner",
+      "y": 860,
+      "label": "ровно объявленный вопрос, реальные опции",
+      "variant": "default"
+    },
+    {
+      "from": "owner",
+      "to": "host",
+      "y": 900,
+      "label": "выбор",
+      "variant": "return"
+    },
+    {
+      "from": "host",
+      "to": "prifly",
+      "y": 940,
+      "label": "run decision answer --request-digest --expected-run-version",
+      "variant": "emphasis"
+    },
+    {
+      "from": "prifly",
+      "to": "store",
+      "y": 980,
+      "label": "DecisionRecord: кто / policy",
+      "variant": "default"
+    },
+    {
+      "from": "prifly",
+      "to": "host",
+      "y": 1020,
+      "label": "finish: outcome, outputs, decision ledger",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "prifly",
+      "from": 174,
+      "to": 226,
+      "type": "security"
+    },
+    {
+      "participant": "owner",
+      "from": 254,
+      "to": 306,
+      "type": "external"
+    },
+    {
+      "participant": "prifly",
+      "from": 334,
+      "to": 426,
+      "type": "security"
+    },
+    {
+      "participant": "prifly",
+      "from": 474,
+      "to": 566,
+      "type": "security"
+    },
+    {
+      "participant": "host",
+      "from": 594,
+      "to": 646,
+      "type": "external"
+    },
+    {
+      "participant": "prifly",
+      "from": 634,
+      "to": 766,
+      "type": "security"
+    },
+    {
+      "participant": "owner",
+      "from": 854,
+      "to": 906,
+      "type": "external"
+    },
+    {
+      "participant": "prifly",
+      "from": 934,
+      "to": 1026,
+      "type": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Что уходит хосту",
+      "items": [
+        "Не prompt, а SessionTask: exact sealed context, permitted_effects, output slots, deadline",
+        "Applicable DecisionSheet — уже принятый выбор, не разрешение переспросить"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Что измеряется, а не читается",
+      "items": [
+        "Дерево и HEAD claimed workspace: шаг без workspace_write отказан с путями",
+        "attempt_id + envelope_digest доказывают, чью работу сдают; срок сравнивается по записанному UTC"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Что решает authority",
+      "items": [
+        "Переход только по объявленному on.<verdict>; неизвестный исход — uncertain, не успех",
+        "Отказ — типизированный Fault с кодом и safe_next_actions; retry не выводится из текста"
+      ]
+    }
+  ]
+}

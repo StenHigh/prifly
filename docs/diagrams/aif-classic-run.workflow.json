@@ -1,0 +1,332 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "aif-classic в Pri-Fly: как проходит один Run",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "launch",
+        "label": "Запуск",
+        "focus": [
+          "start",
+          "loop",
+          "warmup"
+        ],
+        "note": "Хост запускает launch: анкета, sealed package, claim рабочей копии, первый handoff; дальше крутит run next → task → submit."
+      },
+      {
+        "id": "build",
+        "label": "План и реализация",
+        "focus": [
+          "warmup",
+          "plan",
+          "improve",
+          "implement"
+        ],
+        "note": "warmup → plan → improve-or-pass (bounded) → implement. Любой шаг без вердикта pass уводит Run в rejected — цикла ревизии вне gate'ов нет."
+      },
+      {
+        "id": "gates",
+        "label": "Gate'ы и исход",
+        "focus": [
+          "verify",
+          "security",
+          "review",
+          "commit",
+          "done",
+          "partial"
+        ],
+        "note": "verify и review — repeat ≤ 8 раундов, security — feature switch. Открытые blocker'ы завершают Run как partial с gate-result."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "host",
+      "label": "Host agent ↔ Pri-Fly authority"
+    },
+    {
+      "id": "steps",
+      "label": "aif-classic: шаги"
+    },
+    {
+      "id": "gates",
+      "label": "aif-classic: gate'ы"
+    },
+    {
+      "id": "outcome",
+      "label": "Неуспешные исходы",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "ph-launch",
+      "label": "Launch",
+      "fromCol": 0,
+      "toCol": 0
+    },
+    {
+      "id": "ph-build",
+      "label": "План и реализация",
+      "fromCol": 1,
+      "toCol": 2,
+      "variant": "emphasis"
+    },
+    {
+      "id": "ph-gates",
+      "label": "Gate'ы и commit",
+      "fromCol": 3,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "rounds",
+      "label": "repeat ≤ 8 раундов на gate",
+      "lane": "gates",
+      "fromCol": 3,
+      "toCol": 5,
+      "variant": "emphasis"
+    }
+  ],
+  "mainPath": [
+    "start",
+    "warmup",
+    "plan",
+    "improve",
+    "implement",
+    "verify",
+    "security",
+    "review",
+    "commit",
+    "done"
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "lane": "host",
+      "col": 0,
+      "type": "security",
+      "label": "project start",
+      "sublabel": "анкета → seal → claim",
+      "tag": "sealed package",
+      "width": 116
+    },
+    {
+      "id": "loop",
+      "lane": "host",
+      "col": 2,
+      "type": "external",
+      "label": "Session loop",
+      "sublabel": "run next → task → submit",
+      "tag": "каждый шаг",
+      "width": 116
+    },
+    {
+      "id": "done",
+      "lane": "host",
+      "col": 5,
+      "type": "backend",
+      "label": "succeeded",
+      "sublabel": "implementation + plan"
+    },
+    {
+      "id": "warmup",
+      "lane": "steps",
+      "col": 0,
+      "type": "backend",
+      "label": "warmup",
+      "sublabel": "handoff"
+    },
+    {
+      "id": "plan",
+      "lane": "steps",
+      "col": 1,
+      "type": "backend",
+      "label": "plan",
+      "sublabel": "fast / full / ultra"
+    },
+    {
+      "id": "implement",
+      "lane": "steps",
+      "col": 2,
+      "type": "backend",
+      "label": "implement",
+      "sublabel": "по плану"
+    },
+    {
+      "id": "commit",
+      "lane": "steps",
+      "col": 5,
+      "type": "backend",
+      "label": "commit",
+      "sublabel": "conventional commit"
+    },
+    {
+      "id": "improve",
+      "lane": "gates",
+      "col": 1,
+      "type": "cloud",
+      "label": "improve-or-pass",
+      "sublabel": "bounded",
+      "width": 116
+    },
+    {
+      "id": "verify",
+      "lane": "gates",
+      "col": 3,
+      "type": "security",
+      "label": "verify",
+      "sublabel": "build, tests, lint"
+    },
+    {
+      "id": "security",
+      "lane": "gates",
+      "col": 4,
+      "type": "security",
+      "label": "security",
+      "sublabel": "OWASP checklist",
+      "tag": "feature switch"
+    },
+    {
+      "id": "review",
+      "lane": "gates",
+      "col": 5,
+      "type": "security",
+      "label": "review",
+      "sublabel": "bugs, perf, style"
+    },
+    {
+      "id": "abandoned",
+      "lane": "outcome",
+      "col": 2,
+      "type": "messagebus",
+      "label": "rejected",
+      "sublabel": "шаг без pass"
+    },
+    {
+      "id": "partial",
+      "lane": "outcome",
+      "col": 4,
+      "type": "messagebus",
+      "label": "partial",
+      "sublabel": "gate-result с blocker'ами",
+      "tag": "/aif-fix вручную",
+      "width": 116
+    }
+  ],
+  "edges": [
+    {
+      "from": "start",
+      "to": "warmup",
+      "label": "первый handoff",
+      "variant": "emphasis"
+    },
+    {
+      "from": "loop",
+      "to": "implement",
+      "variant": "dashed",
+      "role": "async",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "warmup",
+      "to": "plan"
+    },
+    {
+      "from": "plan",
+      "to": "improve"
+    },
+    {
+      "from": "improve",
+      "to": "implement",
+      "label": "plan",
+      "variant": "emphasis"
+    },
+    {
+      "from": "implement",
+      "to": "verify",
+      "variant": "emphasis"
+    },
+    {
+      "from": "verify",
+      "to": "security",
+      "label": "security_enabled"
+    },
+    {
+      "from": "security",
+      "to": "review"
+    },
+    {
+      "from": "review",
+      "to": "commit",
+      "label": "succeeded",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "commit",
+      "to": "done",
+      "variant": "emphasis"
+    },
+    {
+      "from": "verify",
+      "to": "partial",
+      "label": "blockers",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "from": "security",
+      "to": "partial",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "from": "review",
+      "to": "partial",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "from": "implement",
+      "to": "abandoned",
+      "label": "fail / needs_revision",
+      "variant": "security",
+      "role": "error"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Один путь",
+      "items": [
+        "Движок не вызывает модель: хост забирает задание через session protocol и сдаёт результат",
+        "Sealed package закрепляет байты контекстов и host skills до первого шага"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Где Run останавливается",
+      "items": [
+        "Шаг без pass → rejected: цикла ревизии вне gate'ов нет",
+        "Открытые blocker'ы после раундов → partial с gate-result, /aif-fix запускает человек"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Настраивается проектом",
+      "items": [
+        "profile: fast / full / ultra — форма plan capture",
+        "security_enabled и лимиты раундов — decisions проекта, не текст workflow"
+      ]
+    }
+  ]
+}
