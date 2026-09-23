@@ -181,6 +181,175 @@ func TestMonitorSearchBeforePagination(t *testing.T) {
 		}
 	}
 }
+func TestMonitorRelatedRunsKeepProvenanceAndPages(t *testing.T) {
+	m := newMonitorCatalog("", nil)
+	m.runs["authority"] = map[string]monitorRun{}
+	add := func(id, title, parent, reason string, observed int) {
+		at := fmt.Sprintf("2026-09-23T00:%02d:%02dZ", observed/60, observed%60)
+		m.runs["authority"][id] = monitorRun{Source: "authority", RunSummary: prifly.RunSummary{ID: id, Subject: title, ForkSourceRunID: parent, ForkReason: reason, Created: at, LastObserved: at}}
+	}
+	for i := range 220 {
+		add(fmt.Sprintf("run:root-%03d", i), "other", "", "", i)
+	}
+	add("run:154", "#154", "", "", 1)
+	add("run:independent", "#154", "", "", 2)
+	add("run:continuation", "#154", "run:154", "project continuation", 3)
+	add("run:recovery", "target child", "run:continuation", "recover_failed_stage", 200)
+	succeeded := "succeeded"
+	recovery := m.runs["authority"]["run:recovery"]
+	recovery.Status, recovery.Outcome = "completed", &succeeded
+	m.runs["authority"]["run:recovery"] = recovery
+	continuation := m.runs["authority"]["run:continuation"]
+	continuation.Status = "failed"
+	m.runs["authority"]["run:continuation"] = continuation
+	add("run:missing", "missing source", "run:deleted", "project continuation", 5)
+	m.runs["other-authority"] = map[string]monitorRun{"run:foreign": {Source: "other-authority", RunSummary: prifly.RunSummary{ID: "run:foreign", Subject: "foreign", ForkSourceRunID: "run:154"}}}
+	for i := range 115 {
+		title := "#154"
+		if i == 0 {
+			title = "only older"
+		}
+		add(fmt.Sprintf("run:branch-%03d", i), title, "run:154", "project continuation", i+6)
+	}
+	readView := func(view, query string) struct {
+		Runs                  []monitorRelatedRun `json:"runs"`
+		Filtered, Page, Pages int
+	} {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		m.listHTTP(rec, httptest.NewRequest("GET", "/api/runs?view="+view+query, nil))
+		if rec.Code != 200 {
+			t.Fatal(rec.Code, rec.Body.String())
+		}
+		var body struct {
+			Runs                  []monitorRelatedRun `json:"runs"`
+			Filtered, Page, Pages int
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+	read := func(query string) struct {
+		Runs                  []monitorRelatedRun `json:"runs"`
+		Filtered, Page, Pages int
+	} {
+		return readView("related", query)
+	}
+	seen := map[string]bool{}
+	for page := 1; page <= 5; page++ {
+		body := read(fmt.Sprintf("&page=%d", page))
+		for _, row := range body.Runs {
+			if seen[row.ID] {
+				t.Fatal("duplicate root", row.ID)
+			}
+			seen[row.ID] = true
+		}
+	}
+	if len(seen) != 224 || !seen["run:154"] || !seen["run:independent"] || !seen["run:missing"] || !seen["run:foreign"] {
+		t.Fatal("root pagination lost runs", len(seen))
+	}
+	rootRows := read("&q=%23154").Runs
+	if len(rootRows) != 2 || rootRows[0].ID != "run:154" || rootRows[1].ID != "run:independent" {
+		t.Fatalf("roots are not chronological: %+v", rootRows)
+	}
+	if tip := rootRows[0].LatestDescendant; tip == nil || tip.ID != "run:recovery" || tip.Status != "completed" || tip.Outcome == nil || *tip.Outcome != "succeeded" {
+		t.Fatalf("successful latest descendant hidden: %+v", tip)
+	}
+	if tip := read("&q=only+older").Runs[0].LatestDescendant; tip == nil || tip.ID != "run:recovery" {
+		t.Fatalf("filter changed branch tip: %+v", tip)
+	}
+	for _, row := range read("&q=target+child").Runs {
+		if row.Descendants != 2 {
+			t.Fatalf("hidden lineage count: %+v", row)
+		}
+	}
+	for _, row := range read("&q=target+child").Runs {
+		if row.ID != "run:154" || !row.Context || row.Matches != 1 {
+			t.Fatalf("missing ancestor context: %+v", row)
+		}
+	}
+	child := read("&q=target+child&source=authority&parent=run:154").Runs
+	if len(child) != 1 || child[0].ID != "run:continuation" || !child[0].Context {
+		t.Fatalf("missing intermediate context: %+v", child)
+	}
+	if child[0].Status != "failed" || child[0].LatestDescendant == nil || child[0].LatestDescendant.ID != "run:recovery" {
+		t.Fatalf("parent status obscures recovery: %+v", child[0])
+	}
+	grandchild := read("&q=target+child&source=authority&parent=run:continuation").Runs
+	if len(grandchild) != 1 || grandchild[0].ID != "run:recovery" || grandchild[0].Context {
+		t.Fatalf("missing matching recovery: %+v", grandchild)
+	}
+	ordered := []string{}
+	seen = map[string]bool{}
+	for page := 1; page <= 3; page++ {
+		body := read(fmt.Sprintf("&source=authority&parent=run:154&page=%d", page))
+		for _, row := range body.Runs {
+			if seen[row.ID] {
+				t.Fatal("duplicate child", row.ID)
+			}
+			seen[row.ID] = true
+			ordered = append(ordered, row.ID)
+		}
+	}
+	if len(seen) != 116 || !seen["run:continuation"] {
+		t.Fatal("child pagination lost runs", len(seen))
+	}
+	if ordered[0] != "run:continuation" || ordered[len(ordered)-1] != "run:branch-114" {
+		t.Fatalf("children are not chronological: %s ... %s", ordered[0], ordered[len(ordered)-1])
+	}
+	reversedRoots := readView("related-newest", "&q=%23154").Runs
+	if len(reversedRoots) != 2 || reversedRoots[0].ID != "run:independent" || reversedRoots[1].ID != "run:154" {
+		t.Fatalf("roots are not reversed: %+v", reversedRoots)
+	}
+	seen = map[string]bool{}
+	for page := 1; page <= 3; page++ {
+		body := readView("related-newest", fmt.Sprintf("&source=authority&parent=run:154&page=%d", page))
+		if page == 1 && body.Runs[0].ID != "run:branch-114" || page == 3 && body.Runs[len(body.Runs)-1].ID != "run:continuation" {
+			t.Fatalf("children are not reversed on page %d: %+v", page, body.Runs)
+		}
+		for _, row := range body.Runs {
+			if seen[row.ID] {
+				t.Fatal("duplicate reversed child", row.ID)
+			}
+			seen[row.ID] = true
+		}
+	}
+	if len(seen) != 116 {
+		t.Fatal("reversed child pagination lost runs", len(seen))
+	}
+	if child := readView("related-newest", "&q=target+child&source=authority&parent=run:154").Runs; len(child) != 1 || child[0].ID != "run:continuation" || !child[0].Context {
+		t.Fatalf("reversed filter lost parent context: %+v", child)
+	}
+	missing := read("&q=missing+source").Runs
+	if len(missing) != 1 || !missing[0].MissingParent || missing[0].ForkSourceRunID != "run:deleted" {
+		t.Fatalf("missing source not explained: %+v", missing)
+	}
+	foreign := read("&q=foreign").Runs
+	if len(foreign) != 1 || !foreign[0].MissingParent || foreign[0].ID != "run:foreign" {
+		t.Fatalf("cross-authority parent was inferred: %+v", foreign)
+	}
+}
+func TestMonitorRelatedRunsStableAtEqualTime(t *testing.T) {
+	all := map[string]monitorRun{}
+	for _, id := range []string{"run:parent", "run:a", "run:z"} {
+		parent := "run:parent"
+		if id == parent {
+			parent = ""
+		}
+		run := monitorRun{Source: "source", RunSummary: prifly.RunSummary{ID: id, ForkSourceRunID: parent, Created: "2026-09-23T00:00:00Z", LastObserved: "2026-09-23T00:00:00Z"}}
+		all[monitorRunKey(run)] = run
+	}
+	matched := []monitorRun{all["source\x00run:parent"], all["source\x00run:a"], all["source\x00run:z"]}
+	roots, _, ok := relatedRuns(all, matched, "", "", false)
+	if !ok || len(roots) != 1 || roots[0].LatestDescendant == nil || roots[0].LatestDescendant.ID != "run:z" {
+		t.Fatalf("latest descendant tie is unstable: %+v", roots)
+	}
+	children, _, ok := relatedRuns(all, matched, "run:parent", "source", true)
+	if !ok || len(children) != 2 || children[0].ID != "run:a" || children[1].ID != "run:z" {
+		t.Fatalf("chronological tie is unstable: %+v", children)
+	}
+}
 func TestMonitorStartupWarningLeavesRunCreated(t *testing.T) {
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows}=require('./monitor.js');
+const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus}=require('./monitor.js');
 assert.equal(esc(`<img src='x' onerror="evil()">&`),'&lt;img src=&#39;x&#39; onerror=&quot;evil()&quot;&gt;&amp;');
 assert.equal(label('ready'),'Подготовлен к выдаче Attempt');
 assert.equal(label('pending'),'Attempt передан агенту');
@@ -61,6 +61,19 @@ assert.match(executionRole(null,null).kind,/не записана/);
 const activity=activityRows({attempts:{one:{id:'attempt:one',session:{principal_id:'host:one'}}},activations:{ready:{id:'activation:ready',stage_id:'plan',status:'ready'}},pending_decision:{attempt_id:'attempt:one',decision_id:'decision:go'},wait_registrations:{wait:{activation_id:'activation:wait',target_stage_id:'signal',status:'active'}},fork:{source_run_id:'run:source'}});
 assert.equal(activity.length,5);assert.match(activity[0].detail,/ожидается отчёт/);
 assert.equal(activityRows({fork:{source_run_id:'run:source',reason:'project continuation'}})[0].title,'Продолжение от Run');
+const lineage={source:'authority',run_id:'run:child',subject:'#154',fork_source_run_id:'run:parent',fork_reason:'recover_failed_stage',children:2,descendants:4,matches:3,context:true};
+let row=relatedTitle(lineage,2);
+assert.match(row,/--run-depth:2/);assert.match(row,/Восстановление/);assert.match(row,/Контекст поиска/);
+assert.match(row,/aria-expanded="false"/);assert.match(row,/data-expand=/);assert.match(row,/href="#source=authority&amp;run=run%3Achild"/);
+expandedRuns.add('authority|run:child');row=relatedTitle(lineage,2);assert.match(row,/aria-expanded="true"/);
+assert.match(relatedTitle({...lineage,children:0,missing_parent:true,fork_source_run_id:'run:deleted'},0),/Исходный Run недоступен: run:deleted/);
+assert.match(relatedTitle({...lineage,fork_source_run_id:'',children:0},0),/#154/);
+assert.match(relatedTitle({...lineage,children:0},3),/run-lineage is-child/);
+expandedRuns.clear();
+const branchStatus=runStatus({source:'authority',status:'failed',latest_descendant:{run_id:'run:recovery',status:'completed',outcome:'succeeded',last_observed:'2026-09-23T00:03:20Z'}});
+assert.match(branchStatus,/Этот Run/);assert.match(branchStatus,/Ошибка/);
+assert.match(branchStatus,/Последний производный Run/);assert.match(branchStatus,/Выполнен/);
+assert.match(branchStatus,/href="#source=authority&amp;run=run%3Arecovery"/);
 const recovered={root_workflow_invocation_id:'root',recovery:{source_run_id:'run:source',frontier_stage_id:'tests',reused:[{stage_id:'verify'}],root_output_refs:{verify:{implementation:{artifact_id:'artifact:old'}}}}};
 assert.equal(graphData({definition:{entry:'verify',stages:{verify:{kind:'call',on:{succeeded:'tests'}},tests:{kind:'step'}}}},recovered,'root').nodes[0].state,'reused');
 assert.match(activityRows(recovered)[0].detail,/1 узлов взято/);
@@ -69,6 +82,18 @@ console.log('monitor UI: status wording, escaping, timing quality, graph paths/p
 // Exercise the actual pre-paint script, including browsers that deny storage.
 const vm = require('node:vm');
 const fs = require('node:fs');
+const path = require('node:path');
+const monitorHTML=fs.readFileSync(path.join(__dirname,'monitor.html'),'utf8');
+const monitorCSS=fs.readFileSync(path.join(__dirname,'monitor.css'),'utf8');
+const monitorJS=fs.readFileSync(path.join(__dirname,'monitor.js'),'utf8');
+assert.match(monitorHTML,/<select name="view"[^>]*><option value="related">/);
+assert.match(monitorHTML,/<option value="related-newest">Связанные Run · ранние снизу/);
+assert.match(monitorHTML,/<option value="flat">Плоский список/);
+assert.match(monitorCSS,/\.run-lineage\.is-child::before/);
+assert.match(monitorCSS,/@media\(max-width:1100px\).*\.run-table\{min-width:820px\}/);
+assert.match(monitorJS,/runStatus\(run\)/);assert.match(monitorJS,/run\.outcome/);
+assert.match(monitorJS,/window\.scrollBy\(0,current\.getBoundingClientRect\(\)\.top-anchorTop\)/);
+assert.match(monitorJS,/if\(child\.context && child\.children\)expandedRuns\.add/);
 const themeSource = fs.readFileSync(require('node:path').join(__dirname,'monitor-theme.js'),'utf8');
 function themeSession(saved, dark, blocked=false) {
  const callbacks={},media={matches:dark,addEventListener:(_,fn)=>callbacks.system=fn};

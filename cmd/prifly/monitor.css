@@ -74,6 +74,14 @@ tr:last-child td{border-bottom:0}
 .run-table td:first-child>small,.run-table td:nth-child(2)>small,.run-table td:last-child{font:11px/1.7 var(--mono)}
 .run-table td:first-child>small{margin-top:4px}
 .run-table td:nth-child(4){font-variant-numeric:tabular-nums}
+.run-lineage{display:flex;gap:7px;min-width:220px;margin-left:calc(var(--run-depth)*22px);padding-left:9px;position:relative}
+.run-lineage.is-child{border-left:2px solid var(--node-line)}.run-lineage.is-child::before{content:'';position:absolute;left:0;top:10px;width:9px;border-top:2px solid var(--node-line)}
+.run-lineage>div{min-width:0}.run-lineage small,.run-relation,.run-context,.missing-parent{display:block;color:var(--muted);font:11px/1.5 var(--mono)}
+.run-relation{color:var(--accent)}.run-context-row{background:var(--raised)}.run-context{color:var(--wait)}.missing-parent{color:var(--bad)}
+.run-expand,.run-expand-spacer{flex:none;width:18px;height:22px;padding:0;border:0;background:transparent;color:var(--accent);font-size:17px;line-height:1}
+.run-more{padding-left:calc(15px + var(--run-depth)*22px)}
+.branch-tip{margin-top:8px;padding-top:7px;border-top:1px solid var(--line)}
+.branch-tip small{display:block;color:var(--muted);font-size:11px}.branch-tip a{display:inline-flex;align-items:center;gap:5px;margin:3px 0}
 .badge{display:inline-flex;align-items:center;gap:6px;padding:2px 7px;border:1px solid var(--line);border-radius:4px;white-space:nowrap;font-size:11px;background:var(--panel)}
 .badge::before{content:'';width:5px;height:5px;flex-shrink:0;background:currentColor;border-radius:50%}
 .badge.running,.badge.ready{color:var(--accent)}

@@ -93,11 +93,30 @@ function nodeCard(graph,id,object,run) {
  const reason=arrived?`<div><small>Почему выбран этот переход</small><p>После ${esc(arrived.from)}: ${esc(label(arrived.label))}${summary?` — ${esc(summary)}`:''}</p></div>`:'';
  return `<section class="node-card"><div><small>Закреплённый узел</small><p>${esc(node.title)} · ${esc(label(node.kind))}</p></div><p>${badge(node.state)}${node.reason?` <span class="muted">${esc(node.reason)}</span>`:''}</p>${reason}${list('Входящие переходы',graph.edges.filter(e=>e.to===id))}${list('Исходящие переходы',graph.edges.filter(e=>e.from===id))}<div><small>Данные</small><p>${inputs.length?`Входы: ${esc(inputs.join(', '))}`:'Входы не записаны'}${outputs.length?` · Выходы: ${esc(outputs.join(', '))}`:''}</p></div></section>`;
 }
-if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows};
+const runKey = run => run.source+'|'+run.run_id;
+function relatedTitle(run,depth) {
+ const relation=run.fork_source_run_id?(run.fork_reason==='project continuation'?'Продолжение':run.fork_reason==='recover_failed_stage'?'Восстановление':'Производный Run'):'';
+ const missing=run.missing_parent?`<span class="missing-parent">Исходный Run недоступен: ${esc(run.fork_source_run_id)}</span>`:'';
+ const context=run.context?'<span class="run-context">Контекст поиска</span>':'';
+ const count=run.children?`${run.descendants} связанных Run · ${run.matches} совпадений в ветви`:'';
+ return `<div class="run-lineage ${depth?'is-child':''}" style="--run-depth:${depth}">${run.children?`<button type="button" class="run-expand" data-expand="${esc(runKey(run))}" data-focus="toggle:${esc(runKey(run))}" aria-expanded="${expandedRuns.has(runKey(run))}" aria-label="${expandedRuns.has(runKey(run))?'Свернуть':'Развернуть'} связанные Run (${run.descendants})">${expandedRuns.has(runKey(run))?'▾':'▸'}</button>`:'<span class="run-expand-spacer" aria-hidden="true"></span>'}<div>${relation?`<span class="run-relation">${relation}</span>`:''}${context}${missing}<a data-focus="${esc(run.source+run.run_id)}" href="#${esc(new URLSearchParams({source:run.source,run:run.run_id}))}">${esc(run.subject || 'Название задачи не записано')}</a>${count?`<small>${esc(count)}</small>`:''}<small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}</div></div>`;
+}
+function runStatus(run) {
+ const tip=run.latest_descendant;
+ const own=run.status==='running' && run.active_attempts>0 && run.active_attempts===run.awaiting_hosts?'awaiting_host':run.status;
+ const current=`${tip?'<small>Этот Run</small>':''}${badge(own)}${run.outcome?`<small>Outcome: ${esc(run.outcome)}</small>`:''}`;
+ if(!tip)return current;
+ const hash=new URLSearchParams({source:run.source,run:tip.run_id});
+ return `${current}<div class="branch-tip"><small>Последний производный Run · ${esc(date(tip.last_observed))}</small><a href="#${esc(hash)}">${badge(tip.outcome || tip.status)} <span>${esc(short(tip.run_id))}</span></a><small>Состояние: ${esc(label(tip.status))}</small></div>`;
+}
+const expandedRuns = new Set();
+if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='';
 let listScroll=0,maintenanceBusy=false,storageBusy=false;
+let relatedInitialized=false,expandSearch=false;
+const childPages=new Map(),childCache=new Map();
 const artifactCache=new Map(),fileCache=new Map();
 const fileKey=a=>source+selected+nodeID+JSON.stringify(a?.accepted?.outputs || {});
 const form=$('filters');
@@ -170,17 +189,51 @@ async function refreshStorage(){
 }
 function renderList(data) {
  pages=data.pages;page=data.page;
+ form.elements.sort.disabled=form.elements.view.value!=='flat';
+ form.elements.sort.title=form.elements.sort.disabled?'Порядок связанных Run выбран в поле «Вид»':'';
  $('totals').innerHTML=`<span><b>${data.total}</b> прогонов</span><span><b>${data.active}</b> с активными попытками</span>`;
  const d=data.discovery,errors=data.sources.filter(s=>s.error),pending=data.sources.filter(s=>!s.indexed && !s.error).length;
  $('coverage-title').textContent=`${data.sources.length} хранилищ · ${d.scanning?'поиск продолжается':'обход завершён'} · ${d.directories} каталогов${d.unreadable?' · недоступно: '+d.unreadable:''}${errors.length?' · ошибок чтения: '+errors.length:''}${pending?' · индексируется: '+pending:''}`;
  preserve($('sources'),`<p class="muted">Область поиска: ${esc(d.roots.join(', '))}. Исключены системные/сетевые каталоги: ${d.excluded}. Символические ссылки при обходе не раскрываются; физические каталоги читаются по исходному пути. Полнота относится к доступной проверенной области.</p>${d.completed?`<p>Последний обход: ${esc(date(d.completed))}</p>`:''}${data.sources.map(s=>`<div class="source"><b>${esc(s.project || 'Хранилище')}</b><small>${esc(s.root)}</small>${s.conflict?'<p class="error">Конфликт: одинаковая идентичность у нескольких хранилищ. Их Run показаны отдельно.</p>':''}<p class="${s.error?'error':'muted'}">${esc(s.error || (s.indexed?'Прочитано '+date(s.updated):'Индексируется…'))}</p></div>`).join('')}${d.errors.length?section('Недоступные пути (примеры)',d.errors,'scan-errors'):''}`);
  options('project',data.filters.projects,'Все проекты');options('status',data.filters.statuses,'Все статусы');options('executor',data.filters.executors,'Все исполнители');
- preserve($('runs'),data.runs.length?data.runs.map(run=>{
+ const listed=[];
+ const append=(run,depth)=>{
+  listed.push({run,depth});
+  if(form.elements.view.value==='flat' || !expandedRuns.has(runKey(run)))return;
+  const loaded=childCache.get(runKey(run));
+  for(const child of loaded?.runs||[])append(child,depth+1);
+  if(loaded && loaded.loadedPages<loaded.pages)listed.push({more:run,depth:depth+1});
+ };
+ for(const run of data.runs)append(run,0);
+ const anchor=[...$('runs').querySelectorAll('tr[data-run-key]')].find(row=>row.getBoundingClientRect().bottom>0);
+ const anchorTop=anchor?.getBoundingClientRect().top,anchorKey=anchor?.dataset.runKey;
+ preserve($('runs'),listed.length?listed.map(({run,depth,more})=>{
+  if(more)return `<tr><td colspan="5" class="run-more" style="--run-depth:${depth}"><button type="button" data-more="${esc(runKey(more))}">Показать ещё дочерние Run →</button></td></tr>`;
   const hash=new URLSearchParams({source:run.source,run:run.run_id});
   const task=run.subject || 'Название задачи не записано',project=run.project_title || run.project_fallback || 'Локальное имя не найдено',fallback=!run.project_title;
-  return `<tr class="${run.source===source && run.run_id===selected?'selected':''}"><td><a data-focus="${esc(run.source+run.run_id)}" href="#${esc(hash)}">${esc(task)}</a><small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}</td><td>${esc(project)}${fallback?'<small>Локальное имя</small>':''}<small>${esc(run.project)}</small><small>${esc(run.workflow_id)}</small><small>${esc(run.root)}</small></td><td>${badge(run.status==='running' && run.active_attempts>0 && run.active_attempts===run.awaiting_hosts?'awaiting_host':run.status)}${run.outcome?`<small>Outcome: ${esc(run.outcome)}</small>`:''}</td><td>${esc(run.step_instances ?? '—')} / ${esc(run.attempts ?? '—')}<small>${run.settled_attempts ?? '—'} попыток завершено</small></td><td>${esc(date(run.created))}<small>v${esc(run.run_version)} · e${esc(run.event_sequence)}</small></td></tr>`;
+  return `<tr data-run-key="${esc(runKey(run))}" class="${run.source===source && run.run_id===selected?'selected':''} ${run.context?'run-context-row':''}"><td>${form.elements.view.value!=='flat'?relatedTitle(run,depth):`<a data-focus="${esc(run.source+run.run_id)}" href="#${esc(hash)}">${esc(task)}</a><small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}`}</td><td>${esc(project)}${fallback?'<small>Локальное имя</small>':''}<small>${esc(run.project)}</small><small>${esc(run.workflow_id)}</small><small>${esc(run.root)}</small></td><td>${runStatus(run)}</td><td>${esc(run.step_instances ?? '—')} / ${esc(run.attempts ?? '—')}<small>${run.settled_attempts ?? '—'} попыток завершено</small></td><td>${esc(date(run.created))}<small>v${esc(run.run_version)} · e${esc(run.event_sequence)}</small></td></tr>`;
  }).join(''):'<tr><td colspan="5" class="empty">Прогоны не найдены в прочитанной области. Измените фильтры или проверьте состояние поиска выше.</td></tr>');
+ if(!selected && anchorKey && anchorTop!=null){const current=[...$('runs').querySelectorAll('tr[data-run-key]')].find(row=>row.dataset.runKey===anchorKey);if(current)window.scrollBy(0,current.getBoundingClientRect().top-anchorTop);}
  $('matches').textContent=`Найдено: ${data.filtered}`;$('page').textContent=`${page} / ${pages}`;$('previous').disabled=page<=1;$('next').disabled=page>=pages;
+}
+async function loadRelated(rows,params,g,autoExpand) {
+ const seen=new Set();
+ const load=async run=>{
+  const key=runKey(run);
+  if(!run.children || !expandedRuns.has(key) || seen.has(key))return;
+  seen.add(key);
+  const requested=childPages.get(key)||1,children=[];
+  let pages=1;
+  for(let next=1;next<=requested && next<=pages;next++) {
+   const query=new URLSearchParams(params);query.set('parent',run.run_id);query.set('source',run.source);query.set('page',next);
+   const data=await get('/api/runs',query);if(g!==generation)return;
+   pages=data.pages;children.push(...data.runs);
+  }
+  childCache.set(key,{runs:children,pages,loadedPages:Math.min(requested,pages)});
+  if(autoExpand)for(const child of children)if(child.context && child.children)expandedRuns.add(runKey(child));
+  await Promise.all(children.map(load));
+ };
+ await Promise.all(rows.map(load));
 }
 function definitions(run) {return (run.definitions || []).map(d=>parseMaybe(d.bytes)).filter(d=>d?.definition?.stages);}
 function currentWorkflow(run) {
@@ -277,6 +330,12 @@ async function tick() {
  if(busy){queued=true;return;}busy=true;queued=false;const g=generation;
  try {
   const params=query();params.set('page',page);const data=await get('/api/runs',params);if(g!==generation)return;
+  if(form.elements.view.value!=='flat'){
+   if(!relatedInitialized){for(const run of data.runs.filter(r=>r.children).slice(0,10))expandedRuns.add(runKey(run));relatedInitialized=true;}
+   if(expandSearch)for(const run of data.runs)if(run.context && run.children)expandedRuns.add(runKey(run));
+   await loadRelated(data.runs,params,g,expandSearch);if(g!==generation)return;
+   expandSearch=false;
+  }
   renderList(data);$('connection').textContent='Обновлено '+new Date().toLocaleTimeString('ru-RU');
   if(selected) {
    try {const next=await get('/api/run',{source,id:selected});if(g!==generation)return;
@@ -290,7 +349,8 @@ async function tick() {
  finally{busy=false;if(queued)setTimeout(tick,0);}
 }
 function schedule(){if(busy)queued=true;else tick();}
-form.onsubmit=e=>e.preventDefault();form.oninput=()=>{clearTimeout(filterTimer);filterTimer=setTimeout(()=>{generation++;page=1;schedule();},200);};
+form.onsubmit=e=>e.preventDefault();form.oninput=()=>{clearTimeout(filterTimer);filterTimer=setTimeout(()=>{generation++;page=1;expandSearch=true;schedule();},200);};
+$('runs').addEventListener('click',event=>{const expand=event.target.closest('[data-expand]');if(expand){const key=expand.dataset.expand;if(expandedRuns.has(key))expandedRuns.delete(key);else expandedRuns.add(key);schedule();}const more=event.target.closest('[data-more]');if(more){childPages.set(more.dataset.more,(childPages.get(more.dataset.more)||1)+1);schedule();}});
 $('previous').onclick=()=>{page--;generation++;schedule();};$('next').onclick=()=>{page++;generation++;schedule();};
 $('invocation').onchange=e=>{if(e.target.value.startsWith('def:')){definition=e.target.value.slice(4);invocation='';nodeID='';renderDetail();}else navigateNode('',e.target.value);};
 $('detail').addEventListener('click',e=>{const target=e.target.closest('[data-node]');if(target){const obj=nodeObject(state.run,target.dataset.node);navigateNode(target.dataset.node,(state.run.invocations?.[obj?.id] ? obj.id : obj?.workflow_invocation_id || state.run.activations?.[obj?.stage_activation_id]?.workflow_invocation_id || invocation));}if(e.target.closest('#load-files'))loadFiles();});

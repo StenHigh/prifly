@@ -75,9 +75,17 @@ func TestForkCreatesSeparateCoreRunWithProvenance(t *testing.T) {
 	if err != nil || createdView.Snapshot.Version != 1 || created.SchemaVersion != CoreForkStateVersion || created.Fork == nil || created.Fork.SourceRunID != sourceID || created.Fork.SourceRunVersion != view.Snapshot.Version {
 		t.Fatalf("forked run: %+v %+v %v", created, createdView, err)
 	}
+	summary, err := e.MonitorSummary(context.Background(), createdID)
+	if err != nil || summary.ForkSourceRunID != sourceID || summary.ForkReason != command.Payload.Reason {
+		t.Fatalf("monitor lost fork provenance: %+v %v", summary, err)
+	}
 	stillSource, stillView, err := e.load(context.Background(), sourceID)
 	if err != nil || stillView.Snapshot.Version != view.Snapshot.Version || stillSource.Fork != nil {
 		t.Fatalf("fork rewrote source: %+v %+v %v", stillSource, stillView, err)
+	}
+	summary, err = e.MonitorSummary(context.Background(), sourceID)
+	if err != nil || summary.ForkSourceRunID != "" || summary.ForkReason != "" {
+		t.Fatalf("monitor invented parent for source: %+v %v", summary, err)
 	}
 }
 
