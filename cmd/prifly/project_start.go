@@ -82,6 +82,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	expectedLaunch := f.String("expected-launch-digest", "", "review digest returned by project questionnaire --prepare")
 	sourceRun := f.String("source-run", "", "completed partial or rejected Run to continue")
 	implementationHead := f.String("implementation-head", "", "exact committed implementation head for project continue")
+	allowDuplicateContinuation := f.Bool("allow-duplicate-continuation", false, "explicitly start another continuation while one from the same source Run is active")
 	command := f.String("command-id", "", "stable command identity for an explicit retry")
 	inputs := bindings{}
 	refFiles := bindings{}
@@ -105,6 +106,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	if *implementationHead != "" && !continuation {
 		return usageError("--implementation-head is only valid for project continue")
+	}
+	if *allowDuplicateContinuation && !continuation {
+		return usageError("--allow-duplicate-continuation is only valid for project continue")
 	}
 	if *workspace != "" && *workspace != "worktree" && *workspace != "checkout" {
 		return refusal("project_start_invalid_workspace", "use worktree or checkout")
@@ -267,6 +271,12 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
+		if !*allowDuplicateContinuation {
+			if err := projectCheckActiveContinuation(ctx, reader, *sourceRun); err != nil {
+				_ = reader.Close()
+				return err
+			}
+		}
 		review, carried, prepareErr := projectPrepareContinuation(ctx, reader, root, *sourceRun, mode, *implementationHead)
 		closeErr := reader.Close()
 		if prepareErr != nil {
@@ -399,6 +409,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if neutral {
 		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/3", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true, SessionLimits: requirements.sessionLimits, ModelProfiles: reviewedProfiles}
 		summary.Continuation = continuationReview
+		summary.AllowDuplicateContinuation = *allowDuplicateContinuation
 		summary.Recovery = recoveryPlan
 		summary.Requirements = &requirements
 		for _, component := range compiled.Components {
@@ -507,6 +518,11 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		// machine-local symlink must not select a different installed program.
 		for index := range execution.Bindings {
 			execution.Bindings[index].Config.Executable = summary.Execution[index].Executable
+		}
+	}
+	if continuation && !*allowDuplicateContinuation {
+		if err := projectCheckActiveContinuation(ctx, engine, *sourceRun); err != nil {
+			return err
 		}
 	}
 	var claim *prifly.WorktreeClaim

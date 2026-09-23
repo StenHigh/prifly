@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -21,6 +22,26 @@ type projectImplementation struct {
 type projectContinuationReview struct {
 	Source         prifly.ContinuationSource `json:"source"`
 	Implementation projectImplementation     `json:"implementation"`
+}
+
+func projectCheckActiveContinuation(ctx context.Context, engine *prifly.Engine, sourceRunID string) error {
+	runs, err := engine.Runs(ctx)
+	if err != nil {
+		return err
+	}
+	if run := projectActiveContinuation(runs, sourceRunID); run != nil {
+		return refusal("project_continue_active_child", fmt.Sprintf("source Run already has active continuation %s (%s); inspect that Run before another start, or explicitly use --allow-duplicate-continuation for independent work", run.ID, run.Status))
+	}
+	return nil
+}
+
+func projectActiveContinuation(runs []prifly.RunSummary, sourceRunID string) *prifly.RunSummary {
+	for _, run := range runs {
+		if run.ForkSourceRunID == sourceRunID && run.ForkReason == prifly.ContinuationReason && run.Status != "completed" && run.Status != "failed" && run.Status != "cancelled" {
+			return &run
+		}
+	}
+	return nil
 }
 
 func projectPrepareContinuation(ctx context.Context, engine *prifly.Engine, repository, runID, workspaceMode, implementationHead string) (projectContinuationReview, map[string]json.RawMessage, error) {
@@ -54,7 +75,7 @@ func projectPrepareContinuation(ctx context.Context, engine *prifly.Engine, repo
 	}
 	for _, ancestor := range []string{previous.BaseCommit, previous.HeadCommit} {
 		if _, err := projectGit(ctx, repository, projectGitListTimeout, "merge-base", "--is-ancestor", ancestor, head); err != nil {
-			return review, nil, refusal("project_continue_unrelated_head", "selected implementation head must contain the source implementation base and head")
+			return review, nil, refusal("project_continue_unrelated_head", "selected implementation head must contain the source implementation base and head; when implementation is on an unmerged branch, run project continue --repository DIR --launch ID --host HOST --source-run RUN_ID --implementation-head FULL_40_CHARACTER_COMMIT --workspace worktree --allow-execution --prepare from the primary Project checkout, then use the same SHA for start")
 		}
 	}
 	if workspaceMode == "checkout" {

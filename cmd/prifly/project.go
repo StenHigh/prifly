@@ -166,7 +166,8 @@ var projectRunnerSkillTemplateBeforeShortening = strings.NewReplacer(
 // on another machine spent twenty-five minutes reading them. What the tool does
 // not say still lives here; what it says better than prose was removed.
 var projectRunnerSkillTemplateBeforeContinuation = strings.Replace(projectRunnerSkillTemplateCurrent, "Read outstanding handoffs with", projectRunnerControlLoopInstructions+"\nRead outstanding handoffs with", 1)
-var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerContinuationInstructions, 1)
+var projectRunnerSkillTemplateBeforeExplicitHead = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerContinuationInstructions, 1)
+var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerExplicitHeadInstructions, 1)
 
 // projectRunnerSkillTemplateBeforeModelProfile is the text as it stood before a
 // task could name the model profile its step declared, derived from the current
@@ -215,6 +216,20 @@ const projectRunnerContinuationInstructions = "\nFor a completed partial or reje
 	"DIGEST` with the same options. Do not call raw `run fork`, extract refs from\n" +
 	"Run JSON, or start the ordinary implement route. After every accepted report,\n" +
 	"read `run next` again and follow only its issued action.\n\n"
+
+const projectRunnerExplicitHeadInstructions = "\nFor a completed partial or rejected Run whose implementation is saved in Git,\n" +
+	"choose the declared continuation launch from the primary Project checkout.\n" +
+	"If its SHA is not the checkout HEAD, use its full 40-character SHA as\n" +
+	"`--implementation-head SHA` and select `--workspace worktree` on both\n" +
+	"`project continue --prepare --launch ID --source-run RUN_ID` and the start\n" +
+	"call with `--expected-launch-digest DIGEST`. Review the source refs, Git head\n" +
+	"and changed files. An active child is named by `project_continue_active_child`: inspect\n" +
+	"that Run before starting another. Only intentional independent work uses\n" +
+	"`--allow-duplicate-continuation` on both calls. If this installed CLI lacks\n" +
+	"`--implementation-head`, report the blocker; do not merge unverified work or\n" +
+	"change project preflight merely to bypass the missing CLI input. Do not call\n" +
+	"raw `run fork`, extract refs from Run JSON, or start the ordinary implement\n" +
+	"route. After every accepted report, read `run next` and follow its action.\n\n"
 
 const projectRunnerSkillTemplateCurrent = `---
 name: prifly-run
@@ -2511,6 +2526,14 @@ func projectRunnerSkillBeforeContinuation(host projectHost) string {
 	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeContinuation, "{{host}}", host.ID), "{{question_tool}}", questionTool)
 }
 
+func projectRunnerSkillBeforeExplicitHead(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeExplicitHead, "{{host}}", host.ID), "{{question_tool}}", questionTool)
+}
+
 // projectRunnerSkillBeforeModelProfile is the runner as it stood before a task
 // could name the model profile its step declared.
 func projectRunnerSkillBeforeTranslation(host projectHost) string {
@@ -2659,7 +2682,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

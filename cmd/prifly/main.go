@@ -2422,9 +2422,10 @@ Global: --project DIR  --json  --format text|json|csv
                                    Answer the declared questions up front with repeated --preflight-answer; project questionnaire lists them and returns the digest
                                    Profile /3: get --expected-launch-digest from project questionnaire --prepare with the same start arguments
                                    A package profile is chosen once: with --package-profile, do not also answer the decision that selects it
-  project continue --repository DIR --launch ID --source-run RUN_ID --prepare [--host HOST] [--workspace worktree|checkout] [--implementation-head COMMIT]
+  project continue --repository DIR --launch ID --source-run RUN_ID --prepare [--host HOST] [--workspace worktree|checkout] [--implementation-head COMMIT] [--allow-duplicate-continuation]
   project continue --repository DIR --launch ID --source-run RUN_ID --expected-launch-digest DIGEST [the same reviewed options]
                                    Start a new quality-tail Run from a completed partial/rejected classic Run and a committed Git tree; COMMIT selects an unmerged implementation
+                                   An active continuation of the same source refuses another launch unless --allow-duplicate-continuation is reviewed on prepare and start
   project recover --repository DIR --launch ID --source-run RUN_ID --host HOST --prepare
   project recover --repository DIR --launch ID --source-run RUN_ID --host HOST --expected-launch-digest DIGEST --allow-execution
                                    Resume a technically failed quality-tail at the first unproved stage on a new package; prepare is read-only

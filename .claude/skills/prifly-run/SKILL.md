@@ -24,14 +24,19 @@ the tool sends you there, not before.
 
 ## 1. Start
 
-For a completed partial or rejected Run whose implementation is already
-saved in Git, choose the declared continuation launch. Call `project continue
---prepare --launch ID --source-run RUN_ID` with the selected host, workspace
-and decision answers; show its source refs, Git head and changed files. Then
-call `project continue --launch ID --source-run RUN_ID --expected-launch-digest
-DIGEST` with the same options. Do not call raw `run fork`, extract refs from
-Run JSON, or start the ordinary implement route. After every accepted report,
-read `run next` again and follow only its issued action.
+For a completed partial or rejected Run whose implementation is saved in Git,
+choose the declared continuation launch from the primary Project checkout.
+If its SHA is not the checkout HEAD, use its full 40-character SHA as
+`--implementation-head SHA` and select `--workspace worktree` on both
+`project continue --prepare --launch ID --source-run RUN_ID` and the start
+call with `--expected-launch-digest DIGEST`. Review the source refs, Git head
+and changed files. An active child is named by `project_continue_active_child`: inspect
+that Run before starting another. Only intentional independent work uses
+`--allow-duplicate-continuation` on both calls. If this installed CLI lacks
+`--implementation-head`, report the blocker; do not merge unverified work or
+change project preflight merely to bypass the missing CLI input. Do not call
+raw `run fork`, extract refs from Run JSON, or start the ordinary implement
+route. After every accepted report, read `run next` and follow its action.
 
 
 `PRIFLY_BIN project workflows --repository "$PWD" --json` lists launches. If the

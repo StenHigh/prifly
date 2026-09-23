@@ -70,6 +70,14 @@ mode для такого выбора запрещён, потому что не
 Сохранённый claim-worktree внутри authority остаётся рабочим деревом прежнего
 Run, а не Project repository для нового launch.
 
+Перед prepare и повторно перед созданием claim CLI читает список Runs в этой
+authority. Если у source уже есть незавершённый continuation, он отказывает с
+ID и статусом дочернего Run. Оператор может явно выбрать независимый второй
+continuation через `--allow-duplicate-continuation` на prepare и start; выбор
+попадает в review digest. Проверка чтением не является атомарным запретом для
+двух одновременных стартов. Для такой гарантии потребуется отдельное правило
+authority admission.
+
 Альтернатива — заставить host вручную написать Implementation JSON — отвергнута:
 она допускает неверный head/changed_files и заставляет модель разбирать state.
 
