@@ -81,6 +81,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	expectedCatalog := f.String("expected-decision-catalog-digest", "", "catalog digest returned by project questionnaire")
 	expectedLaunch := f.String("expected-launch-digest", "", "review digest returned by project questionnaire --prepare")
 	sourceRun := f.String("source-run", "", "completed partial or rejected Run to continue")
+	implementationHead := f.String("implementation-head", "", "exact committed implementation head for project continue")
 	command := f.String("command-id", "", "stable command identity for an explicit retry")
 	inputs := bindings{}
 	refFiles := bindings{}
@@ -101,6 +102,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	if (continuation || recovering) && !prepare && *expectedLaunch == "" {
 		return usageError("project continuation or recovery requires --expected-launch-digest from --prepare")
+	}
+	if *implementationHead != "" && !continuation {
+		return usageError("--implementation-head is only valid for project continue")
 	}
 	if *workspace != "" && *workspace != "worktree" && *workspace != "checkout" {
 		return refusal("project_start_invalid_workspace", "use worktree or checkout")
@@ -263,7 +267,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
-		review, carried, prepareErr := projectPrepareContinuation(ctx, reader, root, *sourceRun, mode)
+		review, carried, prepareErr := projectPrepareContinuation(ctx, reader, root, *sourceRun, mode, *implementationHead)
 		closeErr := reader.Close()
 		if prepareErr != nil {
 			return prepareErr
@@ -486,7 +490,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		currentSummary.ConfigurationDigest, currentSummary.Execution, currentSummary.ReviewDigest = currentConfiguration, currentExecution, ""
 		currentSummary.ModelProfiles = currentProfiles
 		if continuation {
-			currentReview, _, err := projectPrepareContinuation(ctx, engine, root, *sourceRun, *workspace)
+			currentReview, _, err := projectPrepareContinuation(ctx, engine, root, *sourceRun, *workspace, *implementationHead)
 			if err != nil {
 				return err
 			}
@@ -513,6 +517,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return err
 		}
 		claimRequest := prifly.ClaimRequest{CommandID: *command + ":workspace", Repository: root, OwnerID: "project-launch:" + *command, WorkspaceMode: *workspace}
+		if continuation {
+			claimRequest.BaseRef = continuationReview.Implementation.HeadCommit
+		}
 		if recovering {
 			claimRequest.BaseRef = recoveryRequest.SubjectCommit
 		}

@@ -4,6 +4,7 @@
 - [x] 1.2 Реализовать `project continue --source-run` с `--prepare`/review digest: проверить Git HEAD, ancestry source base и exact `changed_files`, seal-ить актуальную Implementation как imported input; вручную проверить на SMSPlace successful start и stale digest до claim/Run creation.
 - [x] 1.3 Расширить read-only Run/monitor projection fork provenance с continuation reason; проверить, что новый Run виден как continuation, а не обычный fork, и historical Run сохраняет прежний status/outcome/events.
 - [ ] 1.4 Добавить переносимые CLI integration tests на dirty checkout, stale digest и claim binding первого read-only gate.
+- [x] 1.5 Проверить `--implementation-head` для незамерженной реализации: exact commit и ancestry, review digest, materialized worktree от выбранного SHA, отказы для неверного SHA и checkout mode; пройти pilot read-only prepare без изменения source Run. `TestContinuationSelectsUnmergedImplementationCommit` и read-only pilot на partial `run:5c6fd74e…`: HEAD `542493c8691bdb634082b5910032e3833bb7f95a`, 291 changed files, review digest `sha256:3401cccade58b05dd1b6f9b88aec9c542383f53a82e04a9ad8db5f8e3c838c8f`; сокращённый SHA и checkout mode отказали до claim.
 
 ## 2. AI Factory continuation package
 

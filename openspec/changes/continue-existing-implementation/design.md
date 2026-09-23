@@ -61,6 +61,15 @@ command. Поэтому post-terminal commit виден как новый фак
 workspace и review digest. Start требует этот digest и заново сверяет source
 run/version, Git HEAD и refs перед созданием claim/Run.
 
+Если реализация осталась в незамерженной ветке, оператор может передать полный
+commit ID через `--implementation-head` из обычного project checkout. Git
+объекты worktree общие: временный внешний checkout или перенос commit в
+development не нужен. CLI проверяет ancestry этого commit, включает его в
+review digest и создаёт новый `worktree` claim от exact commit. `checkout`
+mode для такого выбора запрещён, потому что не материализует другой HEAD.
+Сохранённый claim-worktree внутри authority остаётся рабочим деревом прежнего
+Run, а не Project repository для нового launch.
+
 Альтернатива — заставить host вручную написать Implementation JSON — отвергнута:
 она допускает неверный head/changed_files и заставляет модель разбирать state.
 

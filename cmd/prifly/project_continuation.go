@@ -23,8 +23,11 @@ type projectContinuationReview struct {
 	Implementation projectImplementation     `json:"implementation"`
 }
 
-func projectPrepareContinuation(ctx context.Context, engine *prifly.Engine, repository, runID, workspaceMode string) (projectContinuationReview, map[string]json.RawMessage, error) {
+func projectPrepareContinuation(ctx context.Context, engine *prifly.Engine, repository, runID, workspaceMode, implementationHead string) (projectContinuationReview, map[string]json.RawMessage, error) {
 	var review projectContinuationReview
+	if implementationHead != "" && workspaceMode != "worktree" {
+		return review, nil, refusal("project_continue_invalid_workspace", "--implementation-head requires worktree mode so the claimed tree can start at that commit")
+	}
 	source, err := engine.ContinuationSource(ctx, runID)
 	if err != nil {
 		return review, nil, err
@@ -45,13 +48,13 @@ func projectPrepareContinuation(ctx context.Context, engine *prifly.Engine, repo
 	if err := json.Unmarshal(data, &previous); err != nil || !projectCommitID.MatchString(previous.BaseCommit) || !projectCommitID.MatchString(previous.HeadCommit) {
 		return review, nil, refusal("project_continue_invalid_implementation", "source Implementation has no valid Git base and head")
 	}
-	head, err := projectGit(ctx, repository, projectGitListTimeout, "rev-parse", "--verify", "HEAD^{commit}")
-	if err != nil || !projectCommitID.MatchString(head) {
-		return review, nil, refusal("project_continue_invalid_head", "selected repository HEAD is not a commit")
+	head, err := projectContinuationHead(ctx, repository, implementationHead)
+	if err != nil {
+		return review, nil, err
 	}
 	for _, ancestor := range []string{previous.BaseCommit, previous.HeadCommit} {
 		if _, err := projectGit(ctx, repository, projectGitListTimeout, "merge-base", "--is-ancestor", ancestor, head); err != nil {
-			return review, nil, refusal("project_continue_unrelated_head", "current HEAD must contain the source implementation base and head")
+			return review, nil, refusal("project_continue_unrelated_head", "selected implementation head must contain the source implementation base and head")
 		}
 	}
 	if workspaceMode == "checkout" {
@@ -81,4 +84,19 @@ func projectPrepareContinuation(ctx context.Context, engine *prifly.Engine, repo
 	encoded, err := json.Marshal(review.Implementation)
 	inputs["implementation"] = encoded
 	return review, inputs, err
+}
+
+func projectContinuationHead(ctx context.Context, repository, requested string) (string, error) {
+	ref := "HEAD"
+	if requested != "" {
+		if !projectCommitID.MatchString(requested) {
+			return "", refusal("project_continue_invalid_head", "--implementation-head requires a full 40-character commit ID")
+		}
+		ref = requested
+	}
+	head, err := projectGit(ctx, repository, projectGitListTimeout, "rev-parse", "--verify", ref+"^{commit}")
+	if err != nil || !projectCommitID.MatchString(head) || requested != "" && head != requested {
+		return "", refusal("project_continue_invalid_head", "selected implementation head is not an available commit")
+	}
+	return head, nil
 }

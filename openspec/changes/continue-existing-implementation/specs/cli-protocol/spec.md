@@ -16,6 +16,17 @@ runtime fork internally only after validating the declared source artifacts.
 - **THEN** prepare возвращает exact source refs и review digest, а start с
   этим digest создаёт новый continuation Run
 
+#### Scenario: Реализация сохранена только в незамерженной ветке
+
+- **WHEN** владелец передаёт полный commit ID реализации через
+  `--implementation-head`, доступный в Git repository, а этот commit содержит
+  source Implementation и выбирается `worktree` mode
+- **THEN** prepare проверяет ancestry и включает выбранный HEAD в review
+  digest, а start создаёт чистый отдельный claim-worktree от того же commit;
+  текущую ветку repository и source Run он не меняет
+- **AND** неизвестный commit, сокращённый SHA или `checkout` mode отказывает
+  до создания claim и Run
+
 #### Scenario: Source Run не подходит
 
 - **WHEN** source Run не terminal, принадлежит другой authority либо не
