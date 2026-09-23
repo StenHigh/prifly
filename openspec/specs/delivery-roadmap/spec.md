@@ -149,7 +149,7 @@ runtime contract.
 
 | Очередь | Change | Статус | Prerequisite | Следующий шаг |
 |---|---|---|---|---|
-| Исправление admission | [`route-worktree-claim-by-run`](../../changes/route-worktree-claim-by-run/tasks.md) | Локально проверено: 4/5 | Два отдельных worktree claims одного authority | Проверить на сохранённых Runs #142 и #155 после обновления бинарника |
+| Исправление admission | [`route-worktree-claim-by-run`](../../changes/route-worktree-claim-by-run/tasks.md) | Локально проверено: 5/6 | Два отдельных worktree claims одного authority | После обновления бинарника проверить два новых Run в разных worktree |
 | Запуск и решения | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md) | 23/24; открыта 3.5 | Доступ к Codex и Claude Code | Завершить generic host guidance, связать UI evidence и сохранить отдельный commit среза |
 | Продолжение и recovery | [`continue-existing-implementation`](../../changes/continue-existing-implementation/tasks.md) | 10/12; открыты 1.4 и 3.3 | Существующие Project CLI, claims и AI Factory package | Добавить CLI integration cases и провести новый Run до terminal quality outcome |
 | Продолжение и recovery | [`retry-failed-stage-with-new-package`](../../changes/retry-failed-stage-with-new-package/tasks.md) | 5/13 | Sealed source Run, новый package edition и доказательства пригодности результатов | Реализовать recovery command/projection, проверить reuse и сквозной Run |
