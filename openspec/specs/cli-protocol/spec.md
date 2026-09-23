@@ -43,9 +43,34 @@ MUST отказывать лишь из-за конфликта самого nam
 вызов, изменивший одно, не читался как отменивший другое.
 Чтение `/2` и распознавание опубликованных frozen runners MUST сохраняться.
 
+Для конечного developer decision entry point MUST использовать нативный
+question tool своего host, когда этот tool предоставлен runtime: Codex runner
+вызывает `request_user_input`, а Claude Code runner — `AskUserQuestion`.
+Новый runner для Codex CLI и Codex app MAY разделять один текст template с
+подставленным fixed host ID; Claude Code MUST получать отдельный template.
+Вопрос содержит только реальные взаимоисключающие варианты, short label и
+последствие выбора; рекомендуемый вариант обозначается явно. Runner MUST NOT
+синтезировать Markdown-псевдокнопки, скрывать варианты или выбирать default.
+Если native tool не предоставлен, runner MUST ждать явный текстовый ответ и
+MUST NOT начинать mutation. Existing tracked runner остаётся reviewed source:
+новая версия `project init` не перезаписывает его; owner обновляет его отдельным
+commit.
+
 #### Scenario: Claude Code запускает общий проект
 - **WHEN** developer вызывает установленный `.claude/skills/prifly-run`
 - **THEN** он передаёт `claude-code` и не читает Codex root
+
+#### Scenario: Codex показывает конечный выбор нативно
+- **WHEN** Codex runner получил несколько допустимых launch или Workspace
+  вариантов и `request_user_input` предоставлен runtime
+- **THEN** runner вызывает этот tool до создания package, claim или Run и ждёт
+  returned selection
+
+#### Scenario: Native tool недоступен
+- **WHEN** host runner обязан получить конечное решение, но runtime не
+  предоставляет его native question tool
+- **THEN** runner запрашивает один явный текстовый ответ и не выбирает вариант
+  или не меняет authority до ответа
 
 #### Scenario: Existing host runner останавливает init
 - **WHEN** создание выбранного runner конфликтует с существующим файлом
@@ -82,7 +107,6 @@ MUST отказывать лишь из-за конфликта самого nam
   записана в `local.yaml`
 - **THEN** квитанция печатает обе из файла, и владелец не читает её как отмену
   того, чего вызов не касался
-
 ### Requirement: Общий runner не содержит правил отраслевого процесса
 Текущий `prifly-run` SHALL исполнять только общий protocol выбранного launch:
 объявленные inputs, ready tasks, effects, typed decisions, control и outputs.

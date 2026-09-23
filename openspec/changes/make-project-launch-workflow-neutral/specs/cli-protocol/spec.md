@@ -65,6 +65,18 @@ MUST отказывать лишь из-за конфликта самого nam
 - **THEN** квитанция печатает обе из файла, и владелец не читает её как отмену
   того, чего вызов не касался
 
+#### Scenario: Codex показывает конечный выбор нативно
+- **WHEN** Codex runner получил несколько допустимых launch или Workspace
+  вариантов и `request_user_input` предоставлен runtime
+- **THEN** runner вызывает этот tool до создания package, claim или Run и ждёт
+  returned selection
+
+#### Scenario: Native tool недоступен
+- **WHEN** host runner обязан получить конечное решение, но runtime не
+  предоставляет его native question tool
+- **THEN** runner запрашивает один явный текстовый ответ и не выбирает вариант
+  или не меняет authority до ответа
+
 ### Requirement: CLI запускает declared Project workflow с explicit workspace mode
 CLI SHALL предоставлять один `project start` для declared launch. В profile
 `/3` путь проекта MUST не подразумевать Git; нужны только declared typed inputs,

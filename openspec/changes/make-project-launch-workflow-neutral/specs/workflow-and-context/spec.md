@@ -112,6 +112,12 @@ Interactive host MUST получить explicit `worktree` или `checkout` д�
 - **WHEN** launch `/3` не требует Git или assisted execution
 - **THEN** он исполняется без host, Git claim и фиктивного RunBrief
 
+#### Scenario: Варианты не помещаются в один native question
+- **WHEN** launch или другой известный host конечный выбор содержит больше
+  вариантов, чем принимает native question tool host
+- **THEN** host показывает последовательные страницы без скрытого default и
+  ждёт explicit selection до mutation
+
 ### Requirement: Project init prepares a context-capable authority
 `project init` MUST создавать отдельную authority с current Core context
 configuration для selected skills и других context resources, в том числе

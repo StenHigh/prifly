@@ -150,8 +150,6 @@ runtime contract.
 | Очередь | Change | Статус | Prerequisite | Следующий шаг |
 |---|---|---|---|---|
 | Запуск и решения | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md) | 23/24; открыта 3.5 | Доступ к Codex и Claude Code | Завершить generic host guidance, связать UI evidence и сохранить отдельный commit среза |
-| Ожидает архивации | [`add-native-host-question-ux`](../../changes/add-native-host-question-ux/tasks.md) | 7/7; host UI подтверждён владельцем | Все задачи отмечены | Проверить evidence и архивировать change |
-| Ожидает архивации | [`add-run-decision-catalog`](../../changes/add-run-decision-catalog/tasks.md) | 20/20; host UI подтверждён владельцем | Все задачи отмечены | Проверить evidence и архивировать change |
 | Продолжение и recovery | [`continue-existing-implementation`](../../changes/continue-existing-implementation/tasks.md) | 10/12; открыты 1.4 и 3.3 | Существующие Project CLI, claims и AI Factory package | Добавить CLI integration cases и провести новый Run до terminal quality outcome |
 | Продолжение и recovery | [`retry-failed-stage-with-new-package`](../../changes/retry-failed-stage-with-new-package/tasks.md) | 5/13 | Sealed source Run, новый package edition и доказательства пригодности результатов | Реализовать recovery command/projection, проверить reuse и сквозной Run |
 | Packages | [`auto-retire-unused-package-editions`](../../changes/auto-retire-unused-package-editions/tasks.md) | 0/8 | Package budget, pins и сериализованное admission | Начать с fixture и проверок безопасного выбора editions |
@@ -160,21 +158,23 @@ runtime contract.
 | Монитор | [`explain-terminal-partial-runs`](../../changes/explain-terminal-partial-runs/tasks.md) | 0/4 | Terminal Run outcome и доказанный маршрут | Разделить terminal/live empty-state и объяснить `partial` |
 | Монитор | [`show-live-execution-ownership`](../../changes/show-live-execution-ownership/tasks.md) | 2/5 | Закреплённые Run/Attempt/Session/Process facts | Завершить read-only activity projection и проверить монитор |
 | Монитор | [`observe-running-program-progress`](../../changes/observe-running-program-progress/tasks.md) | 0/11 | Local program runner и versioned read projections | Начать с versioned progress contract и bounded fd 4 |
-| Ожидает архивации | [`clarify-monitor-run-status-graph`](../../changes/clarify-monitor-run-status-graph/tasks.md) | 7/7 | Все задачи отмечены | Проверить evidence и архивировать change |
-| Ожидает архивации | [`group-related-runs-in-monitor`](../../changes/group-related-runs-in-monitor/tasks.md) | 10/10 | Все задачи отмечены | Проверить evidence и архивировать change |
-| Ожидает архивации | [`harden-aif-classic-gate-routing`](../../changes/harden-aif-classic-gate-routing/tasks.md) | 7/7 | Все задачи отмечены | Проверить evidence и архивировать change |
 
-Завершённые `separate-work-time-from-human-wait`, `add-local-run-monitor`,
-`workspace-tree-preparation-rollback` и `assisted-model-profile-protocol`
-находятся в `openspec/changes/archive/`; их прежние backlog-строки не являются
-открытыми задачами. Опубликованный срез и закрытый change не означают приёмку
-P1/P2. Host UI observations в `add-native-host-question-ux` и
-`add-run-decision-catalog` отмечены по подтверждению владельца от 2026-09-23;
-это не независимое release evidence. Общий пункт 3.5
+Завершённые changes `separate-work-time-from-human-wait`,
+`add-local-run-monitor`, `workspace-tree-preparation-rollback`,
+`assisted-model-profile-protocol` и шесть changes, архивированных 2026-09-23,
+находятся в `openspec/changes/archive/`; они не являются открытой работой.
+Архив этого среза: [`add-native-host-question-ux`](../../changes/archive/2026-09-23-add-native-host-question-ux/tasks.md),
+[`add-run-decision-catalog`](../../changes/archive/2026-09-23-add-run-decision-catalog/tasks.md),
+[`clarify-monitor-run-status-graph`](../../changes/archive/2026-09-23-clarify-monitor-run-status-graph/tasks.md),
+[`group-related-runs-in-monitor`](../../changes/archive/2026-09-23-group-related-runs-in-monitor/tasks.md),
+[`harden-aif-classic-gate-routing`](../../changes/archive/2026-09-23-harden-aif-classic-gate-routing/tasks.md)
+и [`refresh-delivery-backlog-2026-09-23`](../../changes/archive/2026-09-23-refresh-delivery-backlog-2026-09-23/tasks.md).
+Host UI observations в архивированных `add-native-host-question-ux` и
+`add-run-decision-catalog` отмечены по подтверждению владельца от 2026-09-23,
+а не по независимому release evidence. Пункт 3.5
 `make-project-launch-workflow-neutral` остаётся открытым до обновления generic
-host инструкций и отдельного commit среза. Работа над самими AI Factory
-packages остаётся в backlog repository `StenHigh/prifly-aif-workflows`;
-здесь перечислена только работа Pri-Fly.
+host инструкций и отдельного commit среза. Завершение change не меняет
+формальную приёмку P1/P2.
 
 Ревью надёжности и производительности authority выполнено и закрыто archived
 change `2026-09-04-harden-authority-reliability-and-performance`: измерения,
@@ -239,6 +239,11 @@ backlog.
 - **WHEN** team начинает следующий post-RC change
 - **THEN** она берёт первую незавершённую работу из active backlog и не создаёт
   compatibility scope для unreleased source form
+
+#### Scenario: Владелец сверяет очередь с changes
+- **WHEN** reader открывает текущий backlog
+- **THEN** он видит каждый неархивированный change с его фактическим статусом,
+  а завершённые архивированные работы не принимаются за открытые задачи
 
 #### Scenario: В каталог добавлен новый workflow
 - **WHEN** team добавляет возможный workflow или integration
@@ -327,16 +332,3 @@ source ownership or future plan.
 - **WHEN** старый release snapshot упоминает прежний status или authoring path
 - **THEN** reader использует current OpenSpec snapshot; dated history остаётся
   evidence и не возвращает старую очередь или старый contract
-
-### Requirement: Каталог решений Run остаётся в backlog до архивации
-Единый current backlog MUST хранить `add-run-decision-catalog` до его
-архивации. После отметки всех OpenSpec tasks запись MUST отличать завершение
-задач от независимой квалификации release; следующий шаг — проверить evidence
-и архивировать change. Она MUST отделять этот scope от
-`assisted-model-profile-protocol`, upstream AI Factory compatibility и live
-pilot qualification.
-
-#### Scenario: Команда выбирает следующую работу
-- **WHEN** владелец читает current delivery backlog
-- **THEN** он видит, что per-Run Fast/Full/Ultra и безопасный autonomous
-  decision policy требуют этой отдельной change, а не правки `extend.yaml`
