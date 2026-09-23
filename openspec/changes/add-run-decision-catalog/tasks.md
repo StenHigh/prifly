@@ -21,7 +21,7 @@
 ## 4. CLI и native host experience
 
 - [x] 4.1 Добавить CLI read/answer surfaces и human-readable final decision ledger без раскрытия unauthorized secret answer bytes; проверить structured outputs and diagnostics в `go test ./cmd/prifly`.
-- [ ] 4.2 Обновить generated Codex и Claude `prifly-run` templates: один conditional questionnaire, итоговая confirmation page, launch with typed values, wait/reconnect and decision answer flow. Проверить exact template/unit cases, затем вручную наблюдать по одному Fast/Full/Ultra dialog в обоих supported hosts.
+- [x] 4.2 Обновить generated Codex и Claude `prifly-run` templates: один conditional questionnaire, итоговая confirmation page, launch with typed values, wait/reconnect and decision answer flow. Проверить exact template/unit cases, затем вручную наблюдать по одному Fast/Full/Ultra dialog в обоих supported hosts.
 - [x] 4.3 Добавить explicit `project runners update`, который atomically обновляет только exact known generated templates и отказывает modified runner; проверить normal, stale and modified runner cases через `go test ./cmd/prifly`.
 
 ## 5. Совместимость `aif-classic`
@@ -120,3 +120,10 @@ extend.yaml, `decision_policy: autonomous`, `workspace: worktree`), старт �
 wait/reconnect и decision answer flow на этом заходе не задействованы
 (преднастроенные ответы вопросов не оставили). Codex-половина открыта: у
 проекта нет исполнителя на Codex.
+
+## 4.2 — закрытие host-наблюдений, 2026-09-23
+
+Владелец сообщил, что сегодня проверки и исправления в Codex завершены и все
+остающиеся host-диалоги этого пункта можно считать проверенными. Отдельные
+экранные шаги Fast/Full/Ultra и независимый лог здесь не сохранены; отметка
+основана на подтверждении владельца, а не на новой runtime qualification.

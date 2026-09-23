@@ -7,7 +7,7 @@
 
 - [x] 2.1 Add exact generation tests for native launch and Workspace questions, recommended options, complete paging and ordinary free-form inputs; verify `go test ./cmd/prifly` passes.
 - [x] 2.2 Update the Project profile documentation with the reviewed-runner migration rule and the fact that Codex native questions require an exposed `request_user_input`; verify the documented paths and command names against generated output.
-- [ ] 2.3 Manually exercise one finite question in a Codex runtime that exposes `request_user_input` and in Claude Code; record only the observed host UI result in the change evidence, without claiming runtime or release qualification.
+- [x] 2.3 Manually exercise one finite question in a Codex runtime that exposes `request_user_input` and in Claude Code; record only the observed host UI result in the change evidence, without claiming runtime or release qualification.
 
 ## 3. Validation
 
@@ -25,3 +25,10 @@ Code): единственный не преднастроенный вопрос
 движок и не хост. Только наблюдённый результат; квалификации рантайма или
 выпуска не утверждается. Codex-половина открыта: у проекта нет исполнителя на
 Codex.
+
+## 2.3 — закрытие Codex-половины, 2026-09-23
+
+Владелец сообщил, что сегодня конечный вопрос проверили в Codex и обнаруженные
+проблемы исправили. Это подтверждение владельца о наблюдении UI; конкретные
+экранные шаги и независимый лог в этом change не сохранены. Claude Code-половина
+описана выше. Product qualification не заявляется.
