@@ -63,9 +63,9 @@ type StartOptions struct {
 	// Recovery starts at a proved technical frontier on a newly sealed package.
 	// The source is checked again inside the creation transaction.
 	Recovery *RecoveryRequest
-	// ContinuationClaim is bound in the Run creation transaction so a
-	// read-only quality gate can inspect the claimed tree immediately.
-	ContinuationClaim *WorktreeClaim
+	// WorkspaceClaim is bound in the Run creation transaction so later
+	// admissions select this Run's tree even when other Runs are active.
+	WorkspaceClaim *WorktreeClaim
 	// Guards are the live start/stop rules this Run is registered with. They
 	// are declared here rather than installed later because a registration has
 	// to exist before the first admission it protects; one installed afterwards
@@ -661,6 +661,9 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if options.WorkspaceMode != "" && options.WorkspaceMode != "worktree" && options.WorkspaceMode != "checkout" {
 		return local.ApplyResult{}, errors.New("workspace mode must be worktree or checkout")
 	}
+	if options.WorkspaceClaim != nil && (options.WorkspaceMode == "" || options.WorkspaceMode != claimMode(*options.WorkspaceClaim)) {
+		return local.ApplyResult{}, fault("claim_identity_conflict", "the selected claim must match the workspace mode")
+	}
 	if options.DecisionCatalog != nil || options.DecisionSheet != nil {
 		if options.DecisionCatalog == nil || options.DecisionSheet == nil || ValidateDecisionSheet(*options.DecisionCatalog, *options.DecisionSheet) != nil {
 			return local.ApplyResult{}, errors.New("decision catalog and sheet must be a matching valid pair")
@@ -674,7 +677,7 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	var recoveryPlan RecoveryPlan
 	var recoverySource Run
 	if options.Recovery != nil {
-		if !neutral || options.Continuation != nil || options.ContinuationClaim == nil || options.ContinuationClaim.BaseCommit != options.Recovery.SubjectCommit || options.GrantID != "" {
+		if !neutral || options.Continuation != nil || options.WorkspaceClaim == nil || options.WorkspaceClaim.BaseCommit != options.Recovery.SubjectCommit || options.GrantID != "" {
 			return local.ApplyResult{}, local.Reject("recover_request_invalid", "recovery requires a neutral start and a claim at the reviewed Git commit")
 		}
 		recoveryPlan, err = e.PlanRecovery(ctx, *options.Recovery, plan, defs, resources)
@@ -706,7 +709,7 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		}
 		fork = &ForkProvenance{SchemaVersion: "1", SourceRunID: recoverySource.ID, SourceRunVersion: options.Recovery.SourceRunVersion, CommandID: options.CommandID, Reason: "recover_failed_stage", ReuseRefs: []ArtifactRef{}}
 	} else if options.Continuation != nil {
-		if options.ContinuationClaim == nil {
+		if options.WorkspaceClaim == nil {
 			return local.ApplyResult{}, fault("claim_missing", "continuation requires the prepared workspace claim")
 		}
 		if plan.Workflow.ID != "aif-continuation:workflow/classic-continuation" && plan.Workflow.ID != "aif-profiled-continuation:workflow/classic-continuation" {
@@ -729,8 +732,6 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			}
 		}
 		fork = &ForkProvenance{SchemaVersion: "1", SourceRunID: current.RunID, SourceRunVersion: current.RunVersion, CommandID: options.CommandID, Reason: ContinuationReason, ReuseRefs: []ArtifactRef{current.Task, current.Handoff, current.Plan}}
-	} else if options.ContinuationClaim != nil {
-		return local.ApplyResult{}, fault("claim_identity_conflict", "a continuation claim requires a continuation source")
 	}
 	if neutral && plan.Profile != flow.CoreProfile {
 		return local.ApplyResult{}, fault("unsupported_start_version", "Start version 2 requires core-workflow/1")
@@ -1106,11 +1107,11 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		pins = append(pins, *packagePin)
 	}
 	var claimBinding *claimRunBinding
-	if options.ContinuationClaim != nil {
+	if options.WorkspaceClaim != nil {
 		if standingGrant != "" {
 			return local.ApplyResult{}, fault("continuation_grant_unsupported", "continuation claim and standing grant cannot share one control mutation")
 		}
-		claimBinding, err = e.prepareClaimRunBinding(ctx, runID, options.ContinuationClaim.ID, options.ContinuationClaim.Generation)
+		claimBinding, err = e.prepareClaimRunBinding(ctx, runID, options.WorkspaceClaim.ID, options.WorkspaceClaim.Generation)
 		if err != nil {
 			return local.ApplyResult{}, err
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,15 +31,50 @@ func (e *Engine) prepareClaimRunBinding(ctx context.Context, runID, claimID stri
 		return nil, err
 	}
 	var selected *WorktreeClaim
+	var soleActive *WorktreeClaim
+	var legacyProjectClaim *WorktreeClaim
+	activeCount := 0
 	for _, claim := range record.Claims {
-		if claimID != "" && claim.ID != claimID || claimID == "" && claim.Status != "active" {
+		copy := claim
+		if claimID != "" {
+			if claim.ID != claimID {
+				continue
+			}
+			if selected != nil {
+				return nil, fault("claim_ambiguous", "more than one claim has the selected ID")
+			}
+			selected = &copy
 			continue
 		}
-		if selected != nil {
-			return nil, fault("claim_ambiguous", "more than one active claim; select an exact claim")
+		if claim.Status != "active" {
+			continue
 		}
-		copy := claim
-		selected = &copy
+		activeCount++
+		soleActive = &copy
+		if claim.RunID == "" && claim.Actor == e.owner && strings.HasPrefix(claim.OwnerID, "project-launch:") {
+			commandID := strings.TrimPrefix(claim.OwnerID, "project-launch:")
+			if commandID != "" && claim.ID == derivedID("claim", e.Installation.ID, commandID+":workspace") && startRunID(e.owner, commandID) == runID {
+				if legacyProjectClaim != nil {
+					return nil, fault("claim_ambiguous", "more than one legacy project claim matches this Run")
+				}
+				legacyProjectClaim = &copy
+			}
+		}
+		if claim.RunID == runID {
+			if selected != nil {
+				return nil, fault("claim_ambiguous", "this Run holds more than one active claim; select an exact claim")
+			}
+			selected = &copy
+		}
+	}
+	if claimID == "" && selected == nil {
+		if legacyProjectClaim != nil {
+			selected = legacyProjectClaim
+		} else if activeCount > 1 {
+			return nil, fault("claim_ambiguous", "more than one active claim; select an exact claim")
+		} else {
+			selected = soleActive
+		}
 	}
 	if selected == nil {
 		return nil, fault("claim_missing", "an assisted workspace write requires an active claim")

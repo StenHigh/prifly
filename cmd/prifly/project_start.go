@@ -576,16 +576,15 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return err
 	}
 	startOptions := prifly.StartOptions{CommandID: *command, ProjectTitle: profile.Title, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
+	startOptions.WorkspaceClaim = claim
 	if neutral {
 		startOptions.SchemaVersion, startOptions.ExecutionBindings = "2", execution
 		startOptions.Inputs, startOptions.InputValues = nil, inputValues
 		if continuation {
 			startOptions.Continuation = &continuationReview.Source
-			startOptions.ContinuationClaim = claim
 		}
 		if recovering {
 			startOptions.Recovery = recoveryRequest
-			startOptions.ContinuationClaim = claim
 		}
 	}
 	// Resolved before the summary and reused here, so what the Run seals is

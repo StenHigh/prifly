@@ -72,6 +72,73 @@ func TestClaimBindingCommitIsAtomic(t *testing.T) {
 	}
 }
 
+func TestTwoRunsUseTheirOwnWorktreeClaims(t *testing.T) {
+	e, firstRun, firstClaim := assistedWorkspaceFixture(t, "worktree")
+	ctx := context.Background()
+	firstBinding, err := e.prepareClaimRunBinding(ctx, firstRun, firstClaim.ID, firstClaim.Generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := commitClaimBinding(t, e, firstRun, firstBinding, false); err != nil {
+		t.Fatal(err)
+	}
+	secondClaim, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: newID("command"), Repository: firstClaim.Repository.Toplevel, OwnerID: "session:second", WorkspaceMode: "worktree"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := e.Start(ctx, StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/pilot.json", BriefFile: "brief.json", Inputs: map[string]string{}, WorkspaceMode: "worktree", WorkspaceClaim: &secondClaim})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.SetAdmissionCapacity(ctx, CapacityRequest{CommandID: newID("command"), Capacity: 2, Reason: "admit two independent worktrees"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, run := range []struct{ id, claimID string }{{firstRun, firstClaim.ID}, {second.Receipt.RunID, secondClaim.ID}} {
+		if err := e.Drive(ctx, run.id); err != nil {
+			t.Fatalf("Run %s could not admit its own worktree: %v", run.id, err)
+		}
+		task, err := e.HandOverSessionTask(ctx, run.id, "")
+		if err != nil || task.ClaimID != run.claimID {
+			t.Fatalf("Run %s received claim %s instead of %s: %v", run.id, task.ClaimID, run.claimID, err)
+		}
+		binding, err := e.prepareClaimRunBinding(ctx, run.id, "", 0)
+		if err != nil || binding.Claim.ID != run.claimID {
+			t.Fatalf("Run %s could not select its claim again: %+v %v", run.id, binding, err)
+		}
+	}
+	if _, err := e.prepareClaimRunBinding(ctx, "run:unbound", "", 0); refusalCode(err) != "claim_ambiguous" {
+		t.Fatalf("an unbound Run selected one of two foreign claims: %v", err)
+	}
+}
+
+func TestLegacyProjectRunFindsItsUnboundWorktree(t *testing.T) {
+	e, firstRun, firstClaim := assistedWorkspaceFixture(t, "worktree")
+	ctx := context.Background()
+	binding, err := e.prepareClaimRunBinding(ctx, firstRun, firstClaim.ID, firstClaim.Generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := commitClaimBinding(t, e, firstRun, binding, false); err != nil {
+		t.Fatal(err)
+	}
+	commandID := newID("command")
+	legacyClaim, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: commandID + ":workspace", Repository: firstClaim.Repository.Toplevel, OwnerID: "project-launch:" + commandID, WorkspaceMode: "worktree"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyRun, err := e.Start(ctx, StartOptions{CommandID: commandID, WorkflowFile: "workflows/pilot.json", BriefFile: "brief.json", Inputs: map[string]string{}, WorkspaceMode: "worktree"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, legacyRun.Receipt.RunID); err != nil {
+		t.Fatalf("existing unbound Project Run cannot resume beside another Run: %v", err)
+	}
+	task, err := e.HandOverSessionTask(ctx, legacyRun.Receipt.RunID, "")
+	if err != nil || task.ClaimID != legacyClaim.ID {
+		t.Fatalf("legacy Run received %s instead of its own %s: %v", task.ClaimID, legacyClaim.ID, err)
+	}
+}
+
 // Every launch used to begin with claim_conflict, and the operator answered it
 // with claim list and claim release for a workspace no Run was using any more.
 // A Run that is over releases what it held; an unfinished one still refuses.
