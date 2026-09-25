@@ -44,16 +44,40 @@ const MaxLocalRegistryEntries = 512
 type RegistryBudget struct {
 	Entries int `json:"entries"`
 	Limit   int `json:"limit"`
+	// WouldRefuse is the code a start would answer with at this count, in the
+	// same spelling admission already uses for a full slot. Showing both
+	// numbers and saying nothing about their order left the comparison to the
+	// reader in the one place that exists to have made it for them: a launch
+	// review reported 519 against 512 and the refusal still arrived at start.
+	WouldRefuse string `json:"would_refuse,omitempty"`
 }
 
 // RegistryBudget counts local and trusted-package definitions the way the
 // dependency_limit refusal does.
-func (e *Engine) RegistryBudget() (RegistryBudget, error) {
+func (e *Engine) RegistryBudget() (RegistryBudget, error) { return e.RegistryBudgetAfter(0) }
+
+// RegistryBudgetAfter is the budget as adding extra definitions would leave it.
+// The counting and the comparison stay together on purpose: the caller used to
+// add its edition's components to a budget whose refusal had already been
+// decided on the count before them, so the flag described a different number
+// than the one it was printed beside.
+func (e *Engine) RegistryBudgetAfter(extra int) (RegistryBudget, error) {
 	file, err := e.localRegistry()
 	if err != nil {
 		return RegistryBudget{}, err
 	}
-	return RegistryBudget{Entries: len(file.Entries) + len(e.packageEntries()), Limit: MaxLocalRegistryEntries}, nil
+	return registryBudget(len(file.Entries) + len(e.packageEntries()) + extra), nil
+}
+
+// registryBudget names the refusal by the same comparison localRegistry
+// refuses on, so a count exactly at the bound -- which starts -- is not
+// reported as one that would not.
+func registryBudget(entries int) RegistryBudget {
+	budget := RegistryBudget{Entries: entries, Limit: MaxLocalRegistryEntries}
+	if budget.Entries > budget.Limit {
+		budget.WouldRefuse = "dependency_limit"
+	}
+	return budget
 }
 
 func (e *Engine) localRegistry() (RegistryFile, error) {

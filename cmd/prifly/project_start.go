@@ -1164,21 +1164,16 @@ func projectCompiledLaunchWorkflow(root string, launch projectLaunch, components
 // when the edition is not trusted yet. Read after the review digest, never into
 // it -- other launches move it.
 func projectRegistryBudgetAfter(ctx context.Context, engine *prifly.Engine, compiled projectCompileResult) (prifly.RegistryBudget, error) {
-	budget, err := engine.RegistryBudget()
-	if err != nil {
-		return prifly.RegistryBudget{}, err
-	}
 	packages, err := engine.Packages(ctx)
 	if err != nil {
 		return prifly.RegistryBudget{}, err
 	}
 	for _, entry := range packages.Packages {
 		if entry.Ref == compiled.Package && (entry.Status == "" || entry.Status == prifly.PackageTrusted) {
-			return budget, nil
+			return engine.RegistryBudget()
 		}
 	}
-	budget.Entries += len(compiled.Components)
-	return budget, nil
+	return engine.RegistryBudgetAfter(len(compiled.Components))
 }
 
 func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flow.Ref, commandID string) error {
