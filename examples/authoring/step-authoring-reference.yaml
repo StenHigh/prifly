@@ -89,6 +89,15 @@ session_limits:
 instructions_ref: instructions # Optional primary instruction context.
 context_refs: [context] # Optional supporting contexts; defaults to [].
 required_capabilities: [network] # Optional extra capabilities; defaults to [].
+# The declared class is measured where the authority can look: a step with no
+# workspace right has its claimed trees compared when it reports, and a
+# difference is refused by name. Where it cannot look, the class stays a
+# declaration -- the program runs with the user's rights, so a network write it
+# makes is neither refused nor receipted, and a green report is not evidence
+# that none happened. An external change belongs in ActionIntent, admission and
+# delivery; a build that does not support delivery says so in `prifly
+# capabilities`, and publishing from a worker declared `class: none` is a way
+# around the contract rather than through it.
 effects:
   class: workspace_write # Required: explicitly state none or workspace_write.
   retry_class: never # Required retry contract; it is never inferred.
