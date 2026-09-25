@@ -1746,7 +1746,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		}
 		for _, verdict := range verdicts {
 			name, ok := verdict.(string)
-			if !ok || !slices.Contains(flow.StepVerdicts, name) {
+			if !ok || !slices.Contains(flow.VerdictsRequiredBy(flow.WorkflowRevisionVerdictVersion), name) {
 				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d impossible_verdicts must name StepResult verdicts", index))
 			}
 			extension.ImpossibleVerdicts = append(extension.ImpossibleVerdicts, name)

@@ -84,6 +84,8 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 			contract = "WorkflowRevisionV4"
 		case WorkflowRevisionRetryVersion:
 			contract = "WorkflowRevisionV5"
+		case WorkflowRevisionBlockedVersion:
+			contract = "WorkflowRevisionV6"
 		}
 	}
 	if err := validateProtocolValue(contract, value, ""); err != nil {
@@ -293,8 +295,8 @@ func supportedWorkflowProfile(workflow map[string]any, profile string, shared *c
 					}
 					continue
 				}
-				if !slices.Contains(StepVerdicts, verdict) {
-					return problem("unsupported", path+"/on/"+verdict, "verdict route is not supported by "+profile)
+				if !slices.Contains(VerdictsRequiredBy(workflowVersion), verdict) {
+					return problem("unsupported", path+"/on/"+verdict, "verdict route is not supported by "+profile+" at workflow revision "+workflowVersion)
 				}
 			}
 		}
@@ -305,7 +307,7 @@ func supportedWorkflowProfile(workflow map[string]any, profile string, shared *c
 		if _, declared := stage["technical_retries"]; declared && stage["kind"] != "step" {
 			return problem("unsupported_retries", path+"/technical_retries", "only a step stage repeats: a control stage has no attempt to take again")
 		}
-		if stage["kind"] == "step" && (workflowVersion == WorkflowRevisionVerdictVersion || workflowVersion == WorkflowRevisionRetryVersion) {
+		if stage["kind"] == "step" && slices.Contains(verdictRevisions, workflowVersion) {
 			// A document raised to this revision by a project's insertion carries
 			// stages nobody in this project wrote. Requiring completeness of them
 			// asks the project to answer for a package author's routing, which it
@@ -315,10 +317,10 @@ func supportedWorkflowProfile(workflow map[string]any, profile string, shared *c
 			// there and the rest are named instead of refused.
 			_, declares := stage["impossible_verdicts"]
 			if shared != nil && shared.raisedByInsertion && !declares {
-				if err := checkVerdictCoverage(stage, path); err != nil {
+				if err := checkVerdictCoverage(stage, path, workflowVersion); err != nil {
 					shared.unclosedPackageStages = append(shared.unclosedPackageStages, id)
 				}
-			} else if err := checkVerdictCoverage(stage, path); err != nil {
+			} else if err := checkVerdictCoverage(stage, path, workflowVersion); err != nil {
 				return err
 			}
 		}
@@ -370,7 +372,27 @@ func supportedWorkflowProfile(workflow map[string]any, profile string, shared *c
 // StepVerdicts is the closed set a StepResult may carry. Nothing in the
 // protocol narrows it by step kind, adapter or effect class, so every step
 // stage answers for all four.
-var StepVerdicts = []string{"pass", "fail", "needs_revision", "no_work"}
+var StepVerdicts = []string{"pass", "fail", "needs_revision", "no_work", "blocked"}
+
+// sealedRevisionVerdicts is the set revisions 4 and 5 were published answering
+// for. It is written out rather than derived from StepVerdicts on purpose: a
+// plan is recompiled from sealed bytes on every read of its Run, so a set
+// derived from the growing list would make a document that read yesterday
+// incomplete today. Those bytes cannot name a verdict added later, and their
+// published schema refuses to, so the rule has to stop where they stopped.
+var sealedRevisionVerdicts = []string{"pass", "fail", "needs_revision", "no_work"}
+
+// VerdictsRequiredBy is the set a revision must answer for. A revision that can
+// name every legal verdict answers for every legal verdict: one nobody has to
+// route is one an author can forget. Every caller asking "which verdicts does
+// this document deal in" asks this and not StepVerdicts: the global list is
+// what a StepResult may legally carry, which is a different question and grows.
+func VerdictsRequiredBy(workflowVersion string) []string {
+	if workflowVersion == WorkflowRevisionBlockedVersion {
+		return StepVerdicts
+	}
+	return sealedRevisionVerdicts
+}
 
 // WorkflowRevisionVerdictVersion is the WorkflowRevision schema_version that
 // introduced impossible_verdicts and, with it, the requirement that a step
@@ -390,18 +412,36 @@ var RepeatableRetryClasses = map[string]bool{"pure": true, "idempotent": true}
 // its stages keep ending the Run on the first technical failure.
 const WorkflowRevisionRetryVersion = "5"
 
+// WorkflowRevisionBlockedVersion is the WorkflowRevision schema_version that
+// answers for the verdict a step returns when it could not judge the work at
+// all. Revisions 4 and 5 were sealed before that verdict existed and cannot
+// name it, so they keep answering for the four they were published with.
+const WorkflowRevisionBlockedVersion = "6"
+
+// verdictRevisions are the revisions the completeness rule applies to, in the
+// order they were introduced. Each answers for the set VerdictsRequiredBy gives
+// it, never for the global list.
+var verdictRevisions = []string{WorkflowRevisionVerdictVersion, WorkflowRevisionRetryVersion, WorkflowRevisionBlockedVersion}
+
+// WorkflowRevisions are every revision this build compiles, oldest first. A
+// caller asking "may I load this document" asks here: the same list written
+// out a second time is how a new revision comes to be compiled by one check
+// and refused by another.
+var WorkflowRevisions = append([]string{"1", "2", "3"}, verdictRevisions...)
+
 // checkVerdictCoverage refuses a step stage that leaves a verdict its step can
 // return undeclared. An author certain a verdict cannot occur here says so in
 // impossible_verdicts; saying nothing is not that statement, and the sealed
 // graph used to carry the difference into a Run that died on the seventh step.
-func checkVerdictCoverage(stage map[string]any, path string) error {
+// The set is the revision's own: see verdictsRequiredBy.
+func checkVerdictCoverage(stage map[string]any, path, workflowVersion string) error {
 	on, _ := stage["on"].(map[string]any)
 	declared, _ := stage["impossible_verdicts"].([]any)
 	impossible := make(map[string]bool, len(declared))
 	for _, verdict := range declared {
 		impossible[verdict.(string)] = true
 	}
-	for _, verdict := range StepVerdicts {
+	for _, verdict := range VerdictsRequiredBy(workflowVersion) {
 		_, routed := on[verdict]
 		switch {
 		case routed && impossible[verdict]:

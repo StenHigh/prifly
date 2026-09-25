@@ -68,6 +68,14 @@ func contextBuiltinDefinitions(coreConfiguration, localContext map[string]any) (
 	if err != nil {
 		return nil, err
 	}
+	// A step that can be stopped by something it does not judge needs a result
+	// contract that can say so. Version 1 stays exactly as published: a step
+	// referencing it may not return the new verdict, and nothing upgrades a
+	// saved reference.
+	blockedResultSchema, err := flow.ProtocolSchema("StepResultV2")
+	if err != nil {
+		return nil, err
+	}
 	definitions := []PinnedDefinition{}
 	add := func(id, version, kind string, value any) error {
 		data, err := canonical(value)
@@ -82,6 +90,7 @@ func contextBuiltinDefinitions(coreConfiguration, localContext map[string]any) (
 		id, version, kind string
 		value             any
 	}{
+		{"core:schema/step-result", "2.0.0", "schema", json.RawMessage(blockedResultSchema)},
 		{"core:schema/core-configuration", "2.0.0", "schema", configuration},
 		{"core:schema/local-context", "2.0.0", "schema", transport},
 		{"core:schema/context-profile", "1.0.0", "schema", profileSchema},

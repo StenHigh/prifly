@@ -3125,6 +3125,81 @@
       ],
       "additionalProperties": false
     },
+    "StepResultV2": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1"
+        },
+        "run_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "step_instance_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "attempt_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "envelope_digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "verdict": {
+          "enum": [
+            "pass",
+            "fail",
+            "needs_revision",
+            "no_work",
+            "blocked"
+          ]
+        },
+        "outputs": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/PortName"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "maxProperties": 256
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "minItems": 0,
+          "maxItems": 256,
+          "uniqueItems": true
+        },
+        "effect_receipt_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "minItems": 0,
+          "maxItems": 256,
+          "uniqueItems": true
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 16000
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "step_instance_id",
+        "attempt_id",
+        "envelope_digest",
+        "verdict",
+        "outputs",
+        "evidence_refs",
+        "effect_receipt_refs",
+        "summary"
+      ],
+      "additionalProperties": false
+    },
     "Evidence": {
       "type": "object",
       "properties": {

@@ -132,7 +132,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
 		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9",
-		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5",
+		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6",
 	}
 	for name := range defs {
 		names = append(names, name)
@@ -238,6 +238,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV5":
 		extension = workflowRevisionV2Schema
+	case "WorkflowRevisionV6":
+		extension = workflowRevisionV2Schema
 	}
 	if extension != nil {
 		value, err := Parse(extension, "json")
@@ -254,14 +256,15 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		for i := 0; i <= slices.Index(stepContracts, name); i++ {
 			stepMutators[i](root)
 		}
-		if name == "WorkflowRevisionV3" || name == "WorkflowRevisionV4" || name == "WorkflowRevisionV5" {
-			workflowRevisionV3(root, defs)
+		revisions := []string{"WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6"}
+		revisionMutators := []func(){
+			func() { workflowRevisionV3(root, defs) },
+			func() { workflowRevisionV4(root, defs) },
+			func() { workflowRevisionV5(root) },
+			func() { workflowRevisionV6(root) },
 		}
-		if name == "WorkflowRevisionV4" || name == "WorkflowRevisionV5" {
-			workflowRevisionV4(root, defs)
-		}
-		if name == "WorkflowRevisionV5" {
-			workflowRevisionV5(root)
+		for i := 0; i <= slices.Index(revisions, name); i++ {
+			revisionMutators[i]()
 		}
 	} else if _, exists := defs[name]; !exists {
 		return nil, problem("unsupported_contract", "", "unknown protocol contract")
@@ -378,21 +381,55 @@ func workflowRevisionV4(root map[string]any, baseline map[string]any) {
 	data, _ := json.Marshal(baseline["StepStage"])
 	var step map[string]any
 	_ = json.Unmarshal(data, &step)
-	verdicts := make([]any, len(StepVerdicts))
-	for i, verdict := range StepVerdicts {
-		verdicts[i] = verdict
-	}
-	step["properties"].(map[string]any)["impossible_verdicts"] = map[string]any{
-		"type": "array", "items": map[string]any{"enum": verdicts},
-		// A step stage must keep at least one route, so declaring the whole
-		// set impossible is a stage that can never be left: at most three.
-		"minItems": json.Number("1"), "maxItems": json.Number(strconv.Itoa(len(StepVerdicts) - 1)), "uniqueItems": true,
-	}
+	// The published set, not the growing one. This enum was generated from
+	// StepVerdicts and so moved by itself when a verdict was added: the frozen
+	// contracts of revisions 4 and 5 would have started naming a verdict their
+	// own documents cannot carry, and their maxItems would have loosened by
+	// one without anyone deciding to.
+	step["properties"].(map[string]any)["impossible_verdicts"] = impossibleVerdictsSchema(VerdictsRequiredBy(WorkflowRevisionVerdictVersion))
 	defs["StepStage"] = step
 }
 
 // WorkflowRevision v5 adds one number to a step stage: how many more attempts
 // it may take when one ends in a technical failure. Everything else is v4.
+// impossibleVerdictsSchema is the declaration a revision offers for the set it
+// answers for. A step stage must keep at least one route, so declaring the
+// whole set impossible is a stage that can never be left: at most one fewer.
+func impossibleVerdictsSchema(verdicts []string) map[string]any {
+	values := make([]any, len(verdicts))
+	for i, verdict := range verdicts {
+		values[i] = verdict
+	}
+	return map[string]any{
+		"type": "array", "items": map[string]any{"enum": values},
+		"minItems": json.Number("1"), "maxItems": json.Number(strconv.Itoa(len(verdicts) - 1)), "uniqueItems": true,
+	}
+}
+
+// workflowRevisionV6 widens the declaration to the verdict a step returns when
+// it could not judge the work. Revisions 4 and 5 keep the set they published.
+func workflowRevisionV6(root map[string]any) {
+	root["$id"] = "urn:prifly:workflow-revision:6"
+	defs := root["$defs"].(map[string]any)
+	workflow := defs["WorkflowRevisionV5"].(map[string]any)
+	delete(defs, "WorkflowRevisionV5")
+	defs["WorkflowRevisionV6"] = workflow
+	root["$ref"] = "#/$defs/WorkflowRevisionV6"
+	workflow["properties"].(map[string]any)["schema_version"].(map[string]any)["const"] = WorkflowRevisionBlockedVersion
+	step := defs["StepStage"].(map[string]any)
+	properties := step["properties"].(map[string]any)
+	properties["impossible_verdicts"] = impossibleVerdictsSchema(StepVerdicts)
+	// A route for it as well as a declaration about it: the route map names
+	// every verdict it accepts, so widening only the declaration would let an
+	// author say the verdict is impossible and never say where it leads.
+	routes := properties["on"].(map[string]any)["properties"].(map[string]any)
+	for _, verdict := range StepVerdicts {
+		if _, exists := routes[verdict]; !exists {
+			routes[verdict] = map[string]any{"$ref": "#/$defs/Identifier"}
+		}
+	}
+}
+
 func workflowRevisionV5(root map[string]any) {
 	root["$id"] = "urn:prifly:workflow-revision:5"
 	defs := root["$defs"].(map[string]any)

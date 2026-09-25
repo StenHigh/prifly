@@ -5,6 +5,14 @@
 # the pieces you need and replace refs with exact bytes from `prifly inventory`.
 authoring: prifly-workflow/1 # Required marker; this YAML is lowered before sealing.
 schema_version: "4" # Optional: the compiler derives the lowest version the source needs; impossible_verdicts below needs v4.
+# Revision 6 adds one verdict, `blocked`: a step saying it could not judge the
+# work at all, which is not a judgement that the work is bad. A gate stopped by
+# something it does not judge -- a database that never answered -- returns it,
+# and the stage routes it where its author decided, typically back to itself.
+# Revisions 4 and 5 answer for the four verdicts they were published with and
+# cannot name this one: a plan is recompiled from sealed bytes on every read, so
+# their set does not move. A step returns it only if its result_schema_ref names
+# the contract that carries it (core:schema/step-result 2.0.0).
 id: example:workflow/full-reference # Required stable identity.
 version: 1.0.0 # Required; increase when sealed bytes change.
 title: Full workflow authoring reference # Optional: defaults to id.

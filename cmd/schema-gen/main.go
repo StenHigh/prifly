@@ -339,6 +339,7 @@ var documentContracts = []struct {
 	{"workflow-revision-v3", "generate WorkflowRevision v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV3") }},
 	{"workflow-revision-v4", "generate WorkflowRevision v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV4") }},
 	{"workflow-revision-v5", "generate WorkflowRevision v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV5") }},
+	{"workflow-revision-v6", "generate WorkflowRevision v6 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV6") }},
 	{"run-start-v2", "generate RunStart v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("RunStartV2") }},
 	{"package-manifest-v2", "generate PackageManifest v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("PackageManifestV2") }},
 	{"execution-bindings", "generate explicit execution bindings contract", func() ([]byte, error) { return prifly.PublicSchema("ExecutionBindings") }},

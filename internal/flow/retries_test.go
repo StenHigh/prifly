@@ -56,7 +56,7 @@ func TestTechnicalRetriesNeedTheStepAuthorsPermission(t *testing.T) {
 				routed[verdict] = next
 			}
 			impossible := []string{}
-			for _, verdict := range StepVerdicts {
+			for _, verdict := range VerdictsRequiredBy(WorkflowRevisionRetryVersion) {
 				if _, exists := routed[verdict]; !exists {
 					impossible = append(impossible, verdict)
 				}

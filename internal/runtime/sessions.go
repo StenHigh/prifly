@@ -490,7 +490,10 @@ func (t SessionTask) SubmissionTemplate() (SessionSubmission, error) {
 func routedVerdicts(p *flow.Plan, stageID string) []string {
 	stage := p.Workflow.Definition.Stages[stageID]
 	verdicts := []string{}
-	for _, verdict := range []string{"pass", "fail", "needs_revision", "no_work"} {
+	// The legal set, not a copy of it written out here: a third spelling of
+	// these four meant a verdict added to the contract was routed by the graph
+	// and never named to the host that had to return it.
+	for _, verdict := range flow.StepVerdicts {
 		if _, routed := stage.On[verdict]; routed {
 			verdicts = append(verdicts, verdict)
 		}

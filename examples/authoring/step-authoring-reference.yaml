@@ -104,6 +104,11 @@ effects:
 # Optional result checks; defaults to []. A workspace-tree step must keep this
 # empty because its native output is sealed atomically by runtime.
 result_check_refs: []
+# core:schema/step-result 1.0.0 carries pass, fail, needs_revision and no_work.
+# Version 2.0.0 adds `blocked`, for a step that could not judge the work at all
+# rather than judging it bad. Reference the version your step actually needs:
+# nothing upgrades a saved reference, and a step declaring 1.0.0 that returns
+# `blocked` is refused by the contract it chose, naming that contract.
 result_schema_ref: result_schema # Required schema of the worker-reported result.
 
 # Optional state/event hooks. A state hook additionally requires freshness_ms;

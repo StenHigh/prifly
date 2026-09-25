@@ -1383,7 +1383,13 @@ func (e *Engine) observeResult(ctx context.Context, runID, attemptID string, o l
 	if len(candidate) > maxResultEvidenceBytes {
 		return local.Reject("result_payload_limit", "result evidence exceeds the local byte allowance")
 	}
-	if err := flow.ValidateProtocol("StepResult", candidate); err != nil {
+	// The widest shape a StepResult may take, not the one any particular step
+	// may return: intake happens before the step is resolved, and the step's
+	// own declared result schema is what narrows it -- at settlement for a
+	// program (driver) and at submission for an assisted session. Validating
+	// the narrow contract here refused a verdict the author had declared their
+	// step could return, before anything could read that declaration.
+	if err := flow.ValidateProtocol("StepResultV2", candidate); err != nil {
 		return err
 	}
 	var parsed Result
@@ -1412,7 +1418,7 @@ func (e *Engine) observeResult(ctx context.Context, runID, attemptID string, o l
 				return err
 			}
 		}
-		resultSchema := builtinRef(r.Definitions, "core:schema/step-result")
+		resultSchema := resultSchemaRefFor(&r, a)
 		artifact, err := e.putArtifact(candidate, "json", &resultSchema, derivedID("artifact", "result-intake", runID, attemptID, digest), map[string]any{"kind": "authority", "authority_id": r.AuthorityID, "command_id": commandID, "port": "result_intake"}, nil, r.registry())
 		if err != nil {
 			return err
@@ -1819,6 +1825,31 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 		return change, nil
 	})
 	return err
+}
+
+// resultSchemaRefFor labels a stored result with the contract its own step
+// declared, falling back to the builtin first version when the plan cannot be
+// read here. The label used to be that first version for every result, which
+// would describe a result carrying a later verdict as conforming to a contract
+// that does not name it.
+func resultSchemaRefFor(r *Run, a *Attempt) flow.Ref {
+	fallback := builtinRef(r.Definitions, "core:schema/step-result")
+	if a == nil {
+		return fallback
+	}
+	activation := r.Activations[a.ActivationID]
+	if activation == nil {
+		return fallback
+	}
+	p, err := r.planFor(activation.InvocationID)
+	if err != nil || p == nil {
+		return fallback
+	}
+	step, exists := p.Steps[activation.StageID]
+	if !exists || step.ResultSchemaRef == (flow.Ref{}) {
+		return fallback
+	}
+	return step.ResultSchemaRef
 }
 
 // settleRecoveredExecutorEnd closes an attempt whose process group was already
