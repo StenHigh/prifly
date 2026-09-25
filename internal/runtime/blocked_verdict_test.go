@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -118,5 +119,80 @@ func TestASealedGraphKeepsItsWorkWhenTheNewVerdictHasNoRoute(t *testing.T) {
 		if a.Accepted == nil {
 			t.Fatalf("a graph sealed before the verdict lost its accepted result: %+v", a)
 		}
+	}
+}
+
+// The step contract accepted the promise, project compile sealed it, and the
+// Run still died: the execution envelope carries the sealed step's output
+// contracts and was validated against the base port, which does not name the
+// verdict. It is validated in three places, including a re-read of a stored
+// envelope, so the Run repeated the refusal on every drive.
+//
+// Found by the package session on a real Run at verify, after compile and start
+// had both passed -- their gates and mine ended at the first handoff, and the
+// step that promises the verdict is never the first. This enters at the handoff
+// of a step that makes the promise.
+func TestTheEnvelopeCarriesAnOutputPromisedForTheBlockedVerdict(t *testing.T) {
+	e, _, _ := assistedWorkspaceFixture(t, "checkout")
+	ctx := context.Background()
+	definitions, _, err := Builtins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var registry RegistryFile
+	readRuntimeJSON(t, filepath.Join(e.Root, e.Config.Configuration.RegistryFile), &registry)
+	var planStep flow.StepDefinition
+	for _, entry := range registry.Entries {
+		if entry.Kind == "step" {
+			readRuntimeJSON(t, filepath.Join(e.Root, entry.Path), &planStep)
+		}
+	}
+	promising := planStep
+	promising.ID, promising.SchemaVersion = "aif:step/promising", "10"
+	outputs := map[string]flow.OutputPort{}
+	for name, port := range planStep.Outputs {
+		port.RequiredFor = []string{"pass", "blocked"}
+		outputs[name] = port
+	}
+	if len(outputs) == 0 {
+		t.Fatal("the fixture step declares no output, so there is no promise to carry")
+	}
+	promising.Outputs = outputs
+	bytes := writeRegistryDocument(t, e, "steps/promising.json", promising)
+	ref := flow.Ref{ID: promising.ID, Version: promising.Version, Digest: rawDigest(bytes)}
+	entries := append(append([]Definition{}, registry.Entries...), Definition{Ref: ref, Kind: "step", Path: "steps/promising.json"})
+	writeRuntimeJSON(t, filepath.Join(e.Root, e.Config.Configuration.RegistryFile), RegistryFile{SchemaVersion: registry.SchemaVersion, Entries: entries})
+
+	workflow := flow.WorkflowRevision{
+		SchemaVersion: flow.WorkflowRevisionBlockedVersion, ID: "aif:workflow/promising", Version: "1.0.0", Title: "Promise on the blocked edge",
+		Inputs: map[string]flow.InputPort{}, Outputs: map[string]flow.OutputPort{}, AllowedOutcomes: []string{"succeeded", "partial"},
+		Limits: flow.Limits{MaxStepInstances: 4, MaxControlTransitions: 16, MaxParallelism: 1}, PolicyRef: builtinVersionRef(definitions, "core:policy/local", "2.0.0"),
+	}
+	workflow.Definition.Entry = "gate"
+	workflow.Definition.Stages = map[string]flow.Stage{
+		"gate":    {Kind: "step", StepRef: ref, InputBindings: map[string]flow.Binding{}, On: map[string]string{"pass": "done", "blocked": "stopped"}, ImpossibleVerdicts: []string{"fail", "needs_revision", "no_work"}},
+		"done":    {Kind: "finish", Outcome: "succeeded", OutputBindings: map[string]flow.Binding{}},
+		"stopped": {Kind: "finish", Outcome: "partial", OutputBindings: map[string]flow.Binding{}},
+	}
+	writeRuntimeJSON(t, filepath.Join(e.Root, "workflows/promising.json"), workflow)
+	result, err := e.Start(ctx, StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/promising.json", BriefFile: "brief.json", Inputs: map[string]string{}, WorkspaceMode: "checkout"})
+	if err != nil {
+		t.Fatalf("a graph whose gate promises an output on the blocked edge did not start: %v", err)
+	}
+	runID := result.Receipt.RunID
+
+	// The handoff is where the envelope is built and validated. This is the
+	// call that refused on the published binary.
+	task := handOver(t, e, runID)
+	r := driverRun(t, e, runID)
+	attempt := r.Attempts[task.AttemptID]
+	if attempt == nil || len(attempt.Envelope) == 0 {
+		t.Fatal("no envelope was built for the handed-over attempt")
+	}
+	if err := flow.ValidateProtocol("ExecutionEnvelope", attempt.Envelope); err != nil {
+		t.Fatalf("the envelope the engine itself built is refused by its own contract: %v", err)
+	}
+	if !strings.Contains(string(attempt.Envelope), `"blocked"`) {
+		t.Fatalf("the envelope dropped the promise it was supposed to carry: %s", attempt.Envelope)
 	}
 }

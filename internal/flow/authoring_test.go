@@ -196,10 +196,13 @@ func TestAuthoringDerivesTheContractThatCarriesTheVerdict(t *testing.T) {
 		name, marker, want string
 		verdicts           []any
 	}{
-		// The assisted form is covered by the reference above, which is written
-		// at prifly-step/2 and now lowers to 10 through the same path. This
-		// covers the program form, which a gate is just as likely to be.
-		{"program source promising it", StepAuthoringVersion, "10", []any{"pass", "blocked"}},
+		// The assisted form reaching 10 is covered by the reference above, which
+		// is written at prifly-step/2 and lowers through the same path. Here:
+		// a program source cannot reach it, because every contract from v6 on
+		// pins the assisted executor. The first writing of this row asserted
+		// the program form lowers to 10 and passed -- it checked the ladder and
+		// never validated the result against the contract the ladder named.
+		{"program source promising it", StepAuthoringVersion, "", []any{"pass", "blocked"}},
 		{"program source without it", StepAuthoringVersion, "2", []any{"pass"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -226,11 +229,25 @@ func TestAuthoringDerivesTheContractThatCarriesTheVerdict(t *testing.T) {
 				t.Fatal(err)
 			}
 			lowered, err := lowerStepAuthoring(asYAML)
+			if test.want == "" {
+				if err == nil {
+					t.Fatalf("a program source reached %v, a contract it cannot validate against", lowered["schema_version"])
+				}
+				if p := expectProblem(t, err, "schema_invalid"); !strings.Contains(p.Message, StepSessionAuthoringVersion) {
+					t.Fatalf("the refusal does not name the authoring version that can carry it: %s", p.Message)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("the authoring path refused a source the contract accepts: %v", err)
 			}
 			if lowered["schema_version"] != test.want {
 				t.Fatalf("lowered to %v, expected %s", lowered["schema_version"], test.want)
+			}
+			// And the contract the ladder named actually accepts it: checking
+			// only the number is what let a program source claim v10.
+			if err := validateProtocolValue("StepDefinition"+"V"+test.want, lowered, ""); err != nil {
+				t.Fatalf("lowered to v%s and that contract refuses it: %v", test.want, err)
 			}
 		})
 	}

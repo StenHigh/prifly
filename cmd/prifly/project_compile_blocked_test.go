@@ -28,13 +28,17 @@ func TestProjectCompileAcceptsAnOutputPromisedForTheBlockedVerdict(t *testing.T)
 	// The same fixture, with one producer promising its output for the verdict
 	// that judged nothing -- which is what a gate handing over its findings on
 	// an unreachable dependency declares.
-	writeFixtureFile(t, root, ".prifly/workflows/cycle/steps/build.yaml", `authoring: prifly-step/1
+	// prifly-step/2, as the package's own gates are: the contract that carries
+	// this promise is the assisted line, and a program source is refused by
+	// name rather than lowered to a contract it cannot validate against.
+	writeFixtureFile(t, root, ".prifly/workflows/cycle/steps/build.yaml", `authoring: prifly-step/2
 id: test:step/build
 version: 1.0.0
 title: Build
 kind: worker
 executor: {adapter_ref: "{{assisted}}", operation: session}
 effects: {class: none, retry_class: never}
+session_limits: {active_timeout_ms: null}
 result_schema_ref: "{{result}}"
 outputs:
   handoff:

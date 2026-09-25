@@ -191,8 +191,8 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 		if timed && version != "6" && version != "7" && version != "8" && version != "9" && version != "10" {
 			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6, v7, v8, v9 or v10")
 		}
-		if !timed && version != "2" && version != "5" && version != "8" && version != "10" {
-			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2, v5, v8 or v10")
+		if !timed && version != "2" && version != "5" && version != "8" {
+			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2, v5 or v8")
 		}
 	}
 	refs, err := authorRefs(source["refs"])
@@ -268,7 +268,7 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	// carries it, and lowering to a contract that refuses the source is a
 	// refusal about a version nobody chose.
 	if outputs, ok := source["outputs"].(map[string]any); ok {
-		for _, raw := range outputs {
+		for name, raw := range outputs {
 			port, ok := raw.(map[string]any)
 			if !ok {
 				continue
@@ -277,9 +277,17 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 			if !ok {
 				continue
 			}
-			if slices.Contains(verdicts, any("blocked")) {
-				schemaVersion = "10"
+			if !slices.Contains(verdicts, any("blocked")) {
+				continue
 			}
+			// The contract that carries this promise is v10, and every contract
+			// from v6 on pins the assisted executor, so a program source cannot
+			// reach it. Refusing here names that; deriving v10 anyway produced a
+			// refusal about the adapter, which reads as a typo in the executor.
+			if !timed {
+				return nil, problem("schema_invalid", "/outputs/"+escapePointer(name)+"/required_for", "an output promised for the blocked verdict needs StepDefinition v10, which "+StepSessionAuthoringVersion+" reaches and "+StepAuthoringVersion+" does not: a program step may return the verdict, it may not promise an output on that edge")
+			}
+			schemaVersion = "10"
 		}
 	}
 	if value, exists := source["schema_version"]; exists {

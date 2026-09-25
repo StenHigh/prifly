@@ -426,6 +426,107 @@
         }
       ]
     },
+    "SealedStepOutputPort": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "enum": [
+            "json",
+            "blob"
+          ]
+        },
+        "schema_ref": {
+          "$ref": "#/$defs/ImmutableRef"
+        },
+        "media_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "content_check_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableRef"
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "required_for": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "pass",
+              "fail",
+              "needs_revision",
+              "no_work",
+              "skipped",
+              "waived",
+              "blocked"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 7,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "format",
+        "required_for"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "format": {
+                "const": "json"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "schema_ref"
+            ],
+            "not": {
+              "required": [
+                "media_types"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "format": {
+                "const": "blob"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "media_types"
+            ],
+            "not": {
+              "required": [
+                "schema_ref"
+              ]
+            }
+          }
+        }
+      ]
+    },
     "WorkflowOutputPort": {
       "type": "object",
       "properties": {
@@ -3020,7 +3121,7 @@
             "$ref": "#/$defs/PortName"
           },
           "additionalProperties": {
-            "$ref": "#/$defs/StepOutputPort"
+            "$ref": "#/$defs/SealedStepOutputPort"
           },
           "maxProperties": 256
         }
@@ -3460,7 +3561,7 @@
             "type": "object",
             "properties": {
               "contract": {
-                "$ref": "#/$defs/StepOutputPort"
+                "$ref": "#/$defs/SealedStepOutputPort"
               },
               "destination": {
                 "$ref": "#/$defs/ResourceIdentity"
