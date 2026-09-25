@@ -8874,7 +8874,7 @@
           "type": "string"
         },
         "verdict": {
-          "description": "The verdict that took the declared edge into this finish. Present and absent together with from_stage_id.",
+          "description": "What took the declared edge into this finish: a step stage's accepted verdict, or a call stage's child outcome. The two vocabularies are separate and this field carries whichever the naming stage routes by; from_stage_id says which stage that is. Present and absent together with from_stage_id.",
           "type": "string"
         },
         "workflow_invocation_id": {

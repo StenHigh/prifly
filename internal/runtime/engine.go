@@ -641,10 +641,13 @@ type RunFinish struct {
 	// Outcome is what the Run reports, which a recorded waiver may have
 	// reduced from the outcome StageID declares.
 	Outcome string `json:"outcome"`
-	// FromStageID and Verdict name the declared edge into StageID. Both are
-	// absent together when this build cannot name one edge: when more than one
-	// settled stage declares a route here, or when the route was not taken by
-	// a step verdict. Absent means "not named", never "there was none".
+	// FromStageID and Verdict name the declared edge into StageID. Verdict is
+	// a step stage's accepted verdict or a call stage's child outcome --
+	// separate vocabularies, and this carries whichever the naming stage routes
+	// by. Both are absent together when this build cannot name one edge: when
+	// more than one settled stage declares a route here, or when the stage
+	// routes by something else again, such as a repeat's decision. Absent means
+	// "not named", never "there was none".
 	FromStageID string `json:"from_stage_id,omitempty"`
 	Verdict     string `json:"verdict,omitempty"`
 }
@@ -673,17 +676,44 @@ func runFinish(r Run) *RunFinish {
 		return view
 	}
 	for _, a := range r.Activations {
-		if a.InvocationID != finish.InvocationID || a.ID == finish.ID || a.StepID == "" {
+		if a.InvocationID != finish.InvocationID || a.ID == finish.ID {
 			continue
 		}
-		step := r.Steps[a.StepID]
-		if step == nil || step.Verdict == "" {
+		// A step routes by the verdict it settled on; a call routes by the
+		// outcome its child reached. Reading only the first named no edge at
+		// all on a graph built from child workflows, which is what a real one
+		// is: the case this answer exists for.
+		taken, next := "", ""
+		switch {
+		case a.StepID != "":
+			step := r.Steps[a.StepID]
+			if step == nil || step.Verdict == "" {
+				continue
+			}
+			taken = step.Verdict
+			routed, err := p.Next(a.StageID, taken)
+			if err != nil {
+				continue
+			}
+			next = routed
+		case a.Kind == "call":
+			child := r.childForCall(a.ID)
+			if child == nil || child.Outcome == nil {
+				continue
+			}
+			taken = *child.Outcome
+			routed, err := p.NextOutcome(a.StageID, taken)
+			if err != nil {
+				continue
+			}
+			next = routed
+		default:
 			continue
 		}
-		next, err := p.Next(a.StageID, step.Verdict)
-		if err != nil || next != finish.StageID {
+		if next != finish.StageID {
 			continue
 		}
+		step := &Step{Verdict: taken}
 		if view.FromStageID != "" && (view.FromStageID != a.StageID || view.Verdict != step.Verdict) {
 			// Two settled stages declare a route here and nothing in the state
 			// says which one was taken. Naming either would be a guess.

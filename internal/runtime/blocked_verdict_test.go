@@ -196,3 +196,33 @@ func TestTheEnvelopeCarriesAnOutputPromisedForTheBlockedVerdict(t *testing.T) {
 		t.Fatalf("the envelope dropped the promise it was supposed to carry: %s", attempt.Envelope)
 	}
 }
+
+// A real graph reaches its finish from a call stage, not from a step: the
+// package's verify is a child workflow. The edge derivation read only step
+// verdicts, so on the graph this answer exists for it named no edge at all --
+// and my fixture, being one plain step, could never have shown that.
+func TestTheFinishEdgeIsNamedWhenACallReachesIt(t *testing.T) {
+	for _, outcome := range []string{"succeeded", "partial", "rejected"} {
+		t.Run(outcome, func(t *testing.T) {
+			e, workflow, _, options := callFixture(t, "commit-pass", outcome, true)
+			runID := choiceStart(t, e, workflow, options)
+			if err := e.Drive(context.Background(), runID); err != nil {
+				t.Fatal(err)
+			}
+			r := driverRun(t, e, runID)
+			if r.Status != "completed" || r.Outcome == nil || *r.Outcome != outcome {
+				t.Fatalf("the fixture did not reach %s: %s %v", outcome, r.Status, r.Outcome)
+			}
+			finish := runFinish(r)
+			if finish == nil {
+				t.Fatal("a completed Run named no finish")
+			}
+			// The call's own stage routed, and the value is the child's outcome:
+			// a separate vocabulary from a step verdict, carried by the same
+			// field because the naming stage decides which one applies.
+			if finish.FromStageID == "" || finish.Verdict != outcome {
+				t.Fatalf("the edge from a call stage was not named: %+v", finish)
+			}
+		})
+	}
+}

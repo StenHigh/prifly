@@ -20,5 +20,5 @@ func runFinishConstraints(g *generator) {
 	g.property("runtime_NextView", "schema_version", map[string]any{"const": prifly.CoreRunFinishNextVersion})
 	g.describe("runtime_NextView", "finish", "For a Run that reached an outcome, where its graph stopped: the invocation, the finish stage it ended at, and the outcome the Run reports — which a recorded waiver may have reduced from the one that stage declares. Absent for every other action, and for a Run that stopped without reaching a finish stage — a failed or cancelled Run names what stopped it in the read view instead.")
 	g.describe("runtime_RunFinish", "from_stage_id", "The stage the declared edge into this finish came from. Present only when the sealed plan's own routing names exactly one such edge among the stages this Run settled; absent means this build cannot name one, never that there was none.")
-	g.describe("runtime_RunFinish", "verdict", "The verdict that took the declared edge into this finish. Present and absent together with from_stage_id.")
+	g.describe("runtime_RunFinish", "verdict", "What took the declared edge into this finish: a step stage's accepted verdict, or a call stage's child outcome. The two vocabularies are separate and this field carries whichever the naming stage routes by; from_stage_id says which stage that is. Present and absent together with from_stage_id.")
 }

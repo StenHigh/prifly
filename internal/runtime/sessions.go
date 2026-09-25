@@ -872,7 +872,11 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if err != nil {
 		return local.ApplyResult{}, local.Reject("invalid_result", "the report is not canonicalizable JSON")
 	}
-	if err := flow.ValidateProtocol("StepResult", canonicalResult); err != nil {
+	// The widest shape a StepResult may take. The step's own declared result
+	// schema narrows it below, which is where a step that referenced the first
+	// contract is still held to four verdicts. Validating the narrow contract
+	// here refused a verdict the task itself had just told the host it routes.
+	if err := flow.ValidateProtocol("StepResultV2", canonicalResult); err != nil {
 		return local.ApplyResult{}, err
 	}
 	var reported Result
@@ -913,7 +917,7 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 		if err != nil {
 			return local.ApplyResult{}, err
 		}
-		if err := flow.ValidateProtocol("StepResult", canonicalResult); err != nil {
+		if err := flow.ValidateProtocol("StepResultV2", canonicalResult); err != nil {
 			return local.ApplyResult{}, err
 		}
 	}
