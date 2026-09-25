@@ -1186,24 +1186,14 @@ func compileProjectComponent(root, skillsRoot string, document projectPackageDoc
 		return projectCompileComponent{}, errors.New("component requires string id and version")
 	}
 	if document.Kind == "step" {
+		// Asked, not written out again: this switch was a second copy of the
+		// mapping, it stopped at 9, and a step lowered to 10 fell through to
+		// the base contract -- refused on the very port the tenth widened.
 		protocol := "StepDefinition"
-		switch object["schema_version"] {
-		case "2":
-			protocol = "StepDefinitionV2"
-		case "3":
-			protocol = "StepDefinitionV3"
-		case "4":
-			protocol = "StepDefinitionV4"
-		case "5":
-			protocol = "StepDefinitionV5"
-		case "6":
-			protocol = "StepDefinitionV6"
-		case "7":
-			protocol = "StepDefinitionV7"
-		case "8":
-			protocol = "StepDefinitionV8"
-		case "9":
-			protocol = "StepDefinitionV9"
+		if version, ok := object["schema_version"].(string); ok {
+			if named := flow.StepContractFor(version); named != "" {
+				protocol = named
+			}
 		}
 		if err := flow.ValidateProtocol(protocol, canonical); err != nil {
 			return projectCompileComponent{}, err

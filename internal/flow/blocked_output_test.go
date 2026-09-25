@@ -77,3 +77,34 @@ func TestAnInsertionRaisesTheRevisionAndNeverLowersIt(t *testing.T) {
 		t.Fatal("an unknown revision compared as older than a known one")
 	}
 }
+
+// Six places wrote the set of step contracts out by hand before this, and the
+// sixth shipped: the project compile path stopped at 9, so a step lowered to 10
+// fell through to the base contract. This holds the list against the mutators
+// that produce the contracts and against every version the authoring ladder can
+// lower to, which is what a seventh copy would have to disagree with.
+func TestEveryStepContractThisBuildLowersToIsNamed(t *testing.T) {
+	for _, version := range StepContracts {
+		named := StepContractFor(version)
+		if named == "" {
+			t.Fatalf("version %s is listed and maps to nothing", version)
+		}
+		if _, err := ProtocolSchema(named); err != nil {
+			t.Errorf("%s maps to %s, which this build cannot produce: %v", version, named, err)
+		}
+	}
+	// A version outside the list maps to nothing rather than to the base
+	// contract by accident: the caller decides what to do with an unknown one,
+	// and validating it against a contract that merely happens to accept it is
+	// the failure this whole round was.
+	if named := StepContractFor("11"); named != "" {
+		t.Fatalf("an unknown step version mapped to %s", named)
+	}
+	// Every version the authoring path can lower to is one of these. A ladder
+	// row producing a version nothing names is the same defect one step earlier.
+	for _, version := range []string{"2", "5", "6", "7", "8", "9", "10"} {
+		if StepContractFor(version) == "" {
+			t.Errorf("the authoring ladder lowers to %s and nothing names its contract", version)
+		}
+	}
+}

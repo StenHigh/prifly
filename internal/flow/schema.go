@@ -687,6 +687,23 @@ func stepDefinitionV10(root map[string]any, baseline map[string]any) {
 	defs["StepOutputPort"] = port
 }
 
+// StepContracts are the versioned StepDefinition contracts, oldest first. The
+// list the mutators run from is the same one callers ask, so a contract cannot
+// be added to one and missing from the other.
+var StepContracts = []string{"2", "3", "4", "5", "6", "7", "8", "9", "10"}
+
+// StepContractFor names the protocol contract a step of this schema_version is
+// validated against, or "" for a version this build does not know. Every caller
+// asks here: the mapping was written out a second time in the project compile
+// path, that copy stopped at 9, and a step lowered to 10 fell through to the
+// base contract -- whose output port refuses the verdict the tenth exists for.
+func StepContractFor(version string) string {
+	if !slices.Contains(StepContracts, version) {
+		return ""
+	}
+	return "StepDefinitionV" + version
+}
+
 // ValidateSchema checks data before a Run exists, using the same pinned schema
 // machinery used for compiled workflow ports. No file/URL resolution is allowed.
 func ValidateSchema(registry Registry, ref Ref, data []byte) error {
