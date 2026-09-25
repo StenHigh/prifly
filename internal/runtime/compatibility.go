@@ -135,6 +135,14 @@ func Capabilities() CapabilityManifest {
 	// already carries. A Run started before this build therefore answers under
 	// it too.
 	profile.Capabilities = append(profile.Capabilities, "run_finish_named")
+	// A step may say it could not judge the work at all, which is not a
+	// judgement that the work is bad. Two declarations carry it and a reader
+	// needs both: the revision whose graphs may route it, and the result
+	// contract a step references to be allowed to return it. The build
+	// compiled revision 6 before this line existed and its own document said
+	// it could not -- which is the answer a package checks before adopting it.
+	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionBlockedVersion)
+	profile.Capabilities = append(profile.Capabilities, "blocked_verdict")
 	return manifest
 }
 
