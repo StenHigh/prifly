@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.yaml.in/yaml/v3"
+	"slices"
 	"strings"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func TestConciseWorkflowYAMLCompilesToTheSameRevision(t *testing.T) {
@@ -162,14 +164,14 @@ func TestStepAuthoringReferenceIsAValidStepDefinition(t *testing.T) {
 	// The reference demonstrates every field a step may declare, so it lowers
 	// to the newest contract that carries them all. Pinning an older one here
 	// would quietly stop checking whatever was added since.
-	if err := ValidateProtocol("StepDefinitionV9", data); err != nil {
+	if err := ValidateProtocol("StepDefinitionV10", data); err != nil {
 		t.Fatal(err)
 	}
 	var step StepDefinition
 	if err := json.Unmarshal(data, &step); err != nil {
 		t.Fatal(err)
 	}
-	if step.SchemaVersion != "9" || step.SessionLimits == nil || step.SessionLimits.ActiveTimeoutMS != nil || step.SessionLimits.DecisionWaitTimeoutMS != nil {
+	if step.SchemaVersion != "10" || step.SessionLimits == nil || step.SessionLimits.ActiveTimeoutMS != nil || step.SessionLimits.DecisionWaitTimeoutMS != nil {
 		t.Fatalf("full reference lost the declared absence of both deadlines: %+v", step.SessionLimits)
 	}
 	if err := (&Plan{}).checkWorkspaceTrees(step, "/step"); err != nil {
@@ -178,6 +180,59 @@ func TestStepAuthoringReferenceIsAValidStepDefinition(t *testing.T) {
 	// The reference teaches every field, so every field must survive lowering.
 	if step.ModelProfile == nil || step.ModelProfile.Requested == "" || step.ModelProfile.Reason == "" {
 		t.Fatalf("full reference lost its declared model profile: %+v", step.ModelProfile)
+	}
+	if !slices.Contains(step.Outputs["report"].RequiredFor, "blocked") {
+		t.Fatalf("full reference lost the output promised for the blocked verdict: %+v", step.Outputs["report"].RequiredFor)
+	}
+}
+
+// The contract accepting a verdict and the authoring path accepting it are two
+// statements. The first shipped in 0.13.51 and the second did not: a source
+// naming it lowered to the contract its other fields needed, and that contract's
+// port refused the word. The check goes through the lowering because the one
+// that went straight to the contract is what let it ship.
+func TestAuthoringDerivesTheContractThatCarriesTheVerdict(t *testing.T) {
+	for _, test := range []struct {
+		name, marker, want string
+		verdicts           []any
+	}{
+		// The assisted form is covered by the reference above, which is written
+		// at prifly-step/2 and now lowers to 10 through the same path. This
+		// covers the program form, which a gate is just as likely to be.
+		{"program source promising it", StepAuthoringVersion, "10", []any{"pass", "blocked"}},
+		{"program source without it", StepAuthoringVersion, "2", []any{"pass"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			digest := "sha256:" + strings.Repeat("0", 64)
+			ref := map[string]any{"id": "test:schema/out", "version": "1.0.0", "digest": digest}
+			executor := map[string]any{"adapter_ref": "adapter", "operation": "process"}
+			source := map[string]any{
+				"authoring": test.marker,
+				"id":        "test:step/derive", "version": "1.0.0", "title": "Derive",
+				"refs":              map[string]any{"out": ref, "adapter": map[string]any{"id": "test:adapter/x", "version": "1.0.0", "digest": digest}, "result": ref},
+				"kind":              "command",
+				"inputs":            map[string]any{},
+				"outputs":           map[string]any{"gate": map[string]any{"schema_ref": "out", "required_for": test.verdicts}},
+				"executor":          executor,
+				"effects":           map[string]any{"class": "none", "retry_class": "never"},
+				"result_schema_ref": "result",
+			}
+			encoded, err := json.Marshal(source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var asYAML map[string]any
+			if err := json.Unmarshal(encoded, &asYAML); err != nil {
+				t.Fatal(err)
+			}
+			lowered, err := lowerStepAuthoring(asYAML)
+			if err != nil {
+				t.Fatalf("the authoring path refused a source the contract accepts: %v", err)
+			}
+			if lowered["schema_version"] != test.want {
+				t.Fatalf("lowered to %v, expected %s", lowered["schema_version"], test.want)
+			}
+		})
 	}
 }
 

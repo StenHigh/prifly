@@ -8,7 +8,7 @@
 # executable package: replace the illustrative exact refs with real definitions.
 # Managed steps keep prifly-step/1 and their executor configuration limits.
 authoring: prifly-step/2 # Required marker; explicitly opts into separate work/wait time.
-schema_version: "9" # Optional; the tool picks the lowest contract that carries what
+schema_version: "10" # Optional; the tool picks the lowest contract that carries what
 # you declared: v6 by default, v7 for active_timeout_ms: null, v8 for a
 # materialize-only tree, v9 for model_profile. Pinning it wins over that choice,
 # so a pin below what you declared is refused rather than silently upgraded --
@@ -55,7 +55,7 @@ outputs: # Optional: defaults to {}.
     schema_ref: output_schema # JSON also defaults format=json.
     content_check_refs: [check] # Optional checks before this output is accepted.
     description: Typed result for later stages.
-    required_for: [pass, fail, needs_revision, no_work, skipped, waived]
+    required_for: [pass, fail, needs_revision, no_work, skipped, waived, blocked]
   log:
     format: blob
     media_types: [text/plain]

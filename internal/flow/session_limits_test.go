@@ -113,8 +113,10 @@ func TestSessionLimitsAuthoringRefusesInvalidContracts(t *testing.T) {
 		{"unknown marker", "prifly-step/2", "prifly-step/3", "unsupported_authoring"},
 		{"wrong machine edition", "kind: worker", "schema_version: '5'\nkind: worker", "schema_invalid"},
 		// Whatever edition this build does not know yet: 9 stopped being one
-		// when a step gained a declared model profile.
-		{"unknown machine edition", "kind: worker", "schema_version: '10'\nkind: worker", "schema_invalid"},
+		// when a step gained a declared model profile, and 10 when an output
+		// could be promised for the blocked verdict. The number moves with the
+		// newest contract, which is the point of the row.
+		{"unknown machine edition", "kind: worker", "schema_version: '11'\nkind: worker", "schema_invalid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := strings.Replace(string(sessionLimitSource(StepSessionAuthoringVersion, "")), test.before, test.after, 1)
@@ -270,7 +272,8 @@ func TestSessionLimitsEditorSchemaMatchesAuthoring(t *testing.T) {
 		// not allow.
 		{StepSessionAuthoringVersion, "schema_version: '8'", true},
 		{StepSessionAuthoringVersion, "schema_version: '9'", true},
-		{StepSessionAuthoringVersion, "schema_version: '10'", false},
+		{StepSessionAuthoringVersion, "schema_version: '10'", true},
+		{StepSessionAuthoringVersion, "schema_version: '11'", false},
 		{StepAuthoringVersion, "session_limits: {}", false},
 		{StepSessionAuthoringVersion, "session_limits: {active_timeout_ms: 0}", false},
 		{StepSessionAuthoringVersion, "session_limits: {decision_wait_timeout_ms: -1}", false},
