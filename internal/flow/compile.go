@@ -423,6 +423,17 @@ const WorkflowRevisionBlockedVersion = "6"
 // it, never for the global list.
 var verdictRevisions = []string{WorkflowRevisionVerdictVersion, WorkflowRevisionRetryVersion, WorkflowRevisionBlockedVersion}
 
+// WorkflowRevisionAtLeast answers whether the first revision is the second or
+// newer, by the order they were introduced. A revision this build does not know
+// is not comparable and answers false either way: read with slices.Index alone
+// it answered that every known revision is at least an unknown one, which is
+// how a caller raising a document would have lowered one it cannot reason
+// about.
+func WorkflowRevisionAtLeast(version, other string) bool {
+	at, to := slices.Index(WorkflowRevisions, version), slices.Index(WorkflowRevisions, other)
+	return at >= 0 && to >= 0 && at >= to
+}
+
 // WorkflowRevisions are every revision this build compiles, oldest first. A
 // caller asking "may I load this document" asks here: the same list written
 // out a second time is how a new revision comes to be compiled by one check
@@ -680,6 +691,11 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 				return step, problem("unsupported", path+"/schema_version", "a declared model profile requires core-workflow/1")
 			}
 			name = "StepDefinitionV9"
+		case "10":
+			if p.Profile != CoreProfile {
+				return step, problem("unsupported", path+"/schema_version", "an output promised for the blocked verdict requires core-workflow/1")
+			}
+			name = "StepDefinitionV10"
 		}
 	}
 	if err := validateProtocolValue(name, value, path); err != nil {

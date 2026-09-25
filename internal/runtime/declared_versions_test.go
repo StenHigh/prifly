@@ -47,6 +47,11 @@ func TestTheVerdictIsDeclaredOnBothSidesItNeeds(t *testing.T) {
 	if ref := builtinVersionRef(definitions, "core:schema/step-result", "2.0.0"); ref == (flow.Ref{}) {
 		t.Fatal("the result contract a step must reference is not published")
 	}
+	// And the step contract that lets the gate hand over what it found on that
+	// verdict. Without it the verdict arrives and its reason does not.
+	if !slices.Contains(profile.StepVersions, "10") {
+		t.Fatalf("the step contract that promises an output for the verdict is not declared: %v", profile.StepVersions)
+	}
 	// And the contract published before it is still published, unchanged: a
 	// step that referenced it keeps referencing it.
 	if ref := builtinVersionRef(definitions, "core:schema/step-result", "1.0.0"); ref == (flow.Ref{}) {

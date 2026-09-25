@@ -336,6 +336,7 @@ var documentContracts = []struct {
 	{"step-definition-v6", "generate StepDefinition v6 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV6") }},
 	{"step-definition-v7", "generate StepDefinition v7 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV7") }},
 	{"step-definition-v8", "generate StepDefinition v8 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV8") }},
+	{"step-definition-v10", "generate StepDefinition v10 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV10") }},
 	{"workflow-revision-v3", "generate WorkflowRevision v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV3") }},
 	{"workflow-revision-v4", "generate WorkflowRevision v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV4") }},
 	{"workflow-revision-v5", "generate WorkflowRevision v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV5") }},

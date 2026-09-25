@@ -131,7 +131,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
-		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9",
+		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10",
 		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6",
 	}
 	for name := range defs {
@@ -230,6 +230,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = stepDefinitionV2Schema
 	case "StepDefinitionV9":
 		extension = stepDefinitionV2Schema
+	case "StepDefinitionV10":
+		extension = stepDefinitionV2Schema
 	case "WorkflowRevisionV2":
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV3":
@@ -251,10 +253,14 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		// Each step contract is the previous one plus its own change, so the
 		// requested name is reached by running the mutators in order up to it.
 		// A name outside this list is a base contract and runs none of them.
-		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9"}
-		stepMutators := []func(map[string]any){stepDefinitionV3, stepDefinitionV4, stepDefinitionV5, stepDefinitionV6, stepDefinitionV7, stepDefinitionV8, stepDefinitionV9}
+		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10"}
+		stepMutators := []func(){
+			func() { stepDefinitionV3(root) }, func() { stepDefinitionV4(root) }, func() { stepDefinitionV5(root) },
+			func() { stepDefinitionV6(root) }, func() { stepDefinitionV7(root) }, func() { stepDefinitionV8(root) },
+			func() { stepDefinitionV9(root) }, func() { stepDefinitionV10(root, defs) },
+		}
 		for i := 0; i <= slices.Index(stepContracts, name); i++ {
-			stepMutators[i](root)
+			stepMutators[i]()
 		}
 		revisions := []string{"WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6"}
 		revisionMutators := []func(){
@@ -651,6 +657,34 @@ func stepDefinitionV9(root map[string]any) {
 			"reason":    map[string]any{"type": "string", "minLength": 1, "maxLength": 512},
 		},
 	}
+}
+
+// stepDefinitionV10 lets an output be declared required for the verdict a step
+// returns when it could not judge the work. Without it a gate could return that
+// verdict and not hand over what it found: the binding on that edge is refused
+// as unguaranteed, correctly, because the step never promised the value there.
+// The reason an operator needs most would have reached only the journal.
+func stepDefinitionV10(root map[string]any, baseline map[string]any) {
+	root["$id"] = "urn:prifly:step-definition:10"
+	root["title"] = "Pri-Fly StepDefinition v10: an output may be promised for the blocked verdict"
+	properties := root["properties"].(map[string]any)
+	properties["schema_version"].(map[string]any)["const"] = "10"
+	// The port lives in the baseline defs at this point, the way the stage does
+	// for a workflow revision: copied, widened, and placed in this contract's
+	// own defs so every earlier one keeps the port it published.
+	data, _ := json.Marshal(baseline["StepOutputPort"])
+	var port map[string]any
+	_ = json.Unmarshal(data, &port)
+	required := port["properties"].(map[string]any)["required_for"].(map[string]any)
+	values := required["items"].(map[string]any)["enum"].([]any)
+	required["items"].(map[string]any)["enum"] = append(values, "blocked")
+	required["maxItems"] = json.Number(strconv.Itoa(len(values) + 1))
+	defs, ok := root["$defs"].(map[string]any)
+	if !ok {
+		defs = map[string]any{}
+		root["$defs"] = defs
+	}
+	defs["StepOutputPort"] = port
 }
 
 // ValidateSchema checks data before a Run exists, using the same pinned schema

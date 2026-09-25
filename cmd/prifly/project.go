@@ -1746,7 +1746,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		}
 		for _, verdict := range verdicts {
 			name, ok := verdict.(string)
-			if !ok || !slices.Contains(flow.VerdictsRequiredBy(flow.WorkflowRevisionVerdictVersion), name) {
+			if !ok || !slices.Contains(flow.StepVerdicts, name) {
 				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d impossible_verdicts must name StepResult verdicts", index))
 			}
 			extension.ImpossibleVerdicts = append(extension.ImpossibleVerdicts, name)
@@ -1988,10 +1988,33 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 	stages[extension.Step] = map[string]any{"kind": "step", "step_ref": ref, "input_bindings": bindings, "on": on}
 	if len(extension.ImpossibleVerdicts) != 0 {
 		stages[extension.Step].(map[string]any)["impossible_verdicts"] = extension.ImpossibleVerdicts
-		// Only v4 admits the declaration, so an insertion that carries one
-		// raises the revision it is spliced into, exactly as authoring does.
-		// An insertion without one leaves the sealed version untouched.
-		workflow["schema_version"] = flow.WorkflowRevisionVerdictVersion
+		// Only v4 and later admit the declaration, so an insertion that carries
+		// one raises the revision it is spliced into, exactly as authoring does.
+		// Raises, never sets: assigning v4 here lowered a graph authored at a
+		// later revision, and every route that revision added would then be
+		// refused as unsupported -- a project's insertion silently rewriting
+		// the package author's contract.
+		// An insertion without a declaration leaves the sealed version untouched.
+		current, _ := workflow["schema_version"].(string)
+		// Absent means the compiler will derive it, so the insertion supplies
+		// the lowest revision that admits the declaration. Present and known
+		// and older is raised. Present and unknown is left alone: a revision
+		// this build cannot place is one it must not rewrite.
+		if current == "" || flow.WorkflowRevisionAtLeast(flow.WorkflowRevisionVerdictVersion, current) {
+			workflow["schema_version"] = flow.WorkflowRevisionVerdictVersion
+			current = flow.WorkflowRevisionVerdictVersion
+		}
+		// The set the resulting revision answers for is known right here, and
+		// nowhere earlier: the extension is read before its target. Saying it
+		// here turns a raw schema refusal about an enum into the two things an
+		// author can act on -- the revision this graph is at, and the verdicts
+		// it deals in.
+		answered := flow.VerdictsRequiredBy(current)
+		for _, verdict := range extension.ImpossibleVerdicts {
+			if !slices.Contains(answered, verdict) {
+				return refusal("project_extension_invalid", fmt.Sprintf("this workflow is at revision %s, which answers for %s; %q is not one of them, so an inserted stage cannot declare it impossible here", current, strings.Join(answered, ", "), verdict))
+			}
+		}
 	}
 	return nil
 }

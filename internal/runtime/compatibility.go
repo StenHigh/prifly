@@ -142,6 +142,10 @@ func Capabilities() CapabilityManifest {
 	// compiled revision 6 before this line existed and its own document said
 	// it could not -- which is the answer a package checks before adopting it.
 	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionBlockedVersion)
+	// Step contract 10 lets an output be promised for that verdict, so a gate
+	// stopped by something it does not judge hands over what it found instead
+	// of leaving the reason in the journal.
+	profile.StepVersions = append(profile.StepVersions, "10")
 	profile.Capabilities = append(profile.Capabilities, "blocked_verdict")
 	return manifest
 }

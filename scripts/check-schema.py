@@ -84,6 +84,7 @@ def check(args, generator):
 		("step-definition-v6", ["--step-definition-v6"], ("schemas/core/step-definition-v6.schema.json",)),
 		("step-definition-v7", ["--step-definition-v7"], ("schemas/core/step-definition-v7.schema.json",)),
 		("step-definition-v8", ["--step-definition-v8"], ("schemas/core/step-definition-v8.schema.json",)),
+		("step-definition-v10", ["--step-definition-v10"], ("schemas/core/step-definition-v10.schema.json",)),
         ("workflow-revision-v3", ["--workflow-revision-v3"], ("schemas/core/workflow-revision-v3.schema.json",)),
         ("workflow-revision-v4", ["--workflow-revision-v4"], ("schemas/core/workflow-revision-v4.schema.json",)),
 		("workflow-revision-v5", ["--workflow-revision-v5"], ("schemas/core/workflow-revision-v5.schema.json",)),
