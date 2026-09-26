@@ -95,12 +95,6 @@ func isMaterializedState(version string) bool {
 	return atLeast(version, CoreMaterializedStateVersion)
 }
 
-// isExternalWriteState reports whether a Run's state can record the declared
-// boundary of an external write on its handoff.
-func isExternalWriteState(version string) bool {
-	return atLeast(version, CoreExternalWriteStateVersion)
-}
-
 func isStageWorkState(version string) bool {
 	return atLeast(version, CoreStageWorkStateVersion)
 }
