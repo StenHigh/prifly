@@ -118,10 +118,13 @@ type Stage struct {
 	// environment that was not there, an authority read that failed. It never
 	// repeats a verdict — an accepted fail is an answer — and it is declared
 	// only where the step's own retry_class says a repeat is safe.
-	TechnicalRetries int64          `json:"technical_retries,omitempty"`
-	OnError          string         `json:"on_error,omitempty"`
-	Selection        string         `json:"selection,omitempty"`
-	Branches         []ChoiceBranch `json:"branches,omitempty"`
+	TechnicalRetries int64 `json:"technical_retries,omitempty"`
+	// Checkpoint names the output port of this step stage that reports the
+	// workflow's checkpoint.
+	Checkpoint string         `json:"checkpoint,omitempty"`
+	OnError    string         `json:"on_error,omitempty"`
+	Selection  string         `json:"selection,omitempty"`
+	Branches   []ChoiceBranch `json:"branches,omitempty"`
 	// The published contracts reuse the name "branches" for two different
 	// shapes, discriminated by kind, so a parallel stage decodes its own.
 	ParallelBranches []ParallelBranch `json:"-"`
@@ -213,6 +216,9 @@ func (s Stage) MarshalJSON() ([]byte, error) {
 		if s.TechnicalRetries != 0 {
 			value["technical_retries"] = s.TechnicalRetries
 		}
+		if s.Checkpoint != "" {
+			value["checkpoint"] = s.Checkpoint
+		}
 	case "call":
 		value["workflow_ref"], value["input_bindings"], value["on"] = s.WorkflowRef, s.InputBindings, s.On
 		if s.OnError != "" {
@@ -298,6 +304,36 @@ type WorkflowRevision struct {
 	} `json:"definition"`
 	Limits    Limits `json:"limits"`
 	PolicyRef Ref    `json:"policy_ref"`
+	// Checkpoint is the schema of the point this workflow's work can be
+	// continued from. Its content is the author's; the authority keeps and
+	// hands it over and never reads it.
+	Checkpoint *CheckpointDeclaration `json:"checkpoint,omitempty"`
+	// Continuation says which finished Runs this workflow continues and where
+	// each of its inputs comes from in them. The authority takes exactly what
+	// it names and checks nothing it does not.
+	Continuation *Continuation `json:"continuation,omitempty"`
+}
+
+type CheckpointDeclaration struct {
+	SchemaRef Ref `json:"schema_ref"`
+}
+
+type Continuation struct {
+	FromWorkflows []string                      `json:"from_workflows"`
+	FromOutcomes  []string                      `json:"from_outcomes"`
+	Inputs        map[string]ContinuationSource `json:"inputs"`
+}
+
+// ContinuationSource names one place in the source Run: one of its inputs, an
+// accepted output of a stage of its root invocation, or its last accepted
+// checkpoint. Exactly one form is set, as the published contract requires.
+type ContinuationSource struct {
+	SourceInput string `json:"source_input,omitempty"`
+	Stage       string `json:"stage,omitempty"`
+	Output      string `json:"output,omitempty"`
+	Verdict     string `json:"verdict,omitempty"`
+	Outcome     string `json:"outcome,omitempty"`
+	Checkpoint  bool   `json:"checkpoint,omitempty"`
 }
 
 // ExternalWriteBoundary is what a step declaring external_write says it may

@@ -91,7 +91,7 @@ func workflowValue(data []byte, format string) (any, bool, error) {
 }
 
 func lowerWorkflowAuthoring(source map[string]any) (map[string]any, error) {
-	allowed := []string{"authoring", "schema_version", "id", "version", "title", "refs", "inputs", "outputs", "allowed_outcomes", "entry", "stages", "limits", "policy_ref"}
+	allowed := []string{"authoring", "schema_version", "id", "version", "title", "refs", "inputs", "outputs", "allowed_outcomes", "entry", "stages", "limits", "policy_ref", "checkpoint", "continuation"}
 	for key := range source {
 		if !slices.Contains(allowed, key) {
 			return nil, problem("schema_invalid", "/"+escapePointer(key), "field is not part of "+WorkflowAuthoringVersion)
@@ -129,7 +129,7 @@ func lowerWorkflowAuthoring(source map[string]any) (map[string]any, error) {
 	}
 	version, _ := source["schema_version"].(string)
 	if version == "" {
-		version = authorSchemaVersion(inputs, stages)
+		version = authorSchemaVersion(source, inputs, stages)
 	}
 	title, _ := source["title"].(string)
 	if title == "" {
@@ -139,7 +139,7 @@ func lowerWorkflowAuthoring(source map[string]any) (map[string]any, error) {
 	if outcomes == nil {
 		outcomes = authorOutcomes(stages)
 	}
-	return map[string]any{
+	lowered := map[string]any{
 		"schema_version":   version,
 		"id":               source["id"],
 		"version":          source["version"],
@@ -150,7 +150,21 @@ func lowerWorkflowAuthoring(source map[string]any) (map[string]any, error) {
 		"definition":       map[string]any{"entry": source["entry"], "stages": stages},
 		"limits":           limits,
 		"policy_ref":       policy,
-	}, nil
+	}
+	if raw, declared := source["checkpoint"]; declared {
+		checkpoint := cloneObject(raw)
+		if checkpoint == nil {
+			return nil, problem("schema_invalid", "/checkpoint", "checkpoint must be an object")
+		}
+		if checkpoint["schema_ref"], err = authorRef(checkpoint["schema_ref"], refs, "/checkpoint/schema_ref"); err != nil {
+			return nil, err
+		}
+		lowered["checkpoint"] = checkpoint
+	}
+	if continuation, declared := source["continuation"]; declared {
+		lowered["continuation"] = continuation
+	}
+	return lowered, nil
 }
 
 func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
@@ -794,11 +808,25 @@ func authorFieldRef(expression, path string) (map[string]any, error) {
 	return ref, nil
 }
 
-func authorSchemaVersion(inputs, stages map[string]any) string {
+func authorSchemaVersion(source, inputs, stages map[string]any) string {
 	// Deriving the lowest contract that can express the source keeps concise
 	// YAML and hand-written JSON sealing to the same bytes. Naming a verdict
 	// impossible is the one thing only v4 can express, so it alone raises the
 	// version, and with it the completeness the contract requires.
+	//
+	// A checkpoint or a continuation is only v7's, and v7 answers for every
+	// verdict, so it is asked first and answers for everything below it.
+	if _, declared := source["continuation"]; declared {
+		return WorkflowRevisionContinuationVersion
+	}
+	if _, declared := source["checkpoint"]; declared {
+		return WorkflowRevisionContinuationVersion
+	}
+	for _, raw := range stages {
+		if stage := cloneObject(raw); stage != nil && stage["checkpoint"] != nil {
+			return WorkflowRevisionContinuationVersion
+		}
+	}
 	for _, raw := range stages {
 		stage := cloneObject(raw)
 		if stage == nil {

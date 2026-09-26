@@ -281,6 +281,12 @@ const (
 	// state version rather than riding an existing one.
 	CoreExternalWriteStateVersion = "core-state/39"
 	CoreExternalWriteReadVersion  = "core-read/39"
+	// A workflow declares its checkpoint and what it continues from, and a
+	// continuation or recovery takes the source Run's tree over. The read
+	// names the last accepted checkpoint and recovery/2 records no commit, so
+	// both halves are new facts in the contract.
+	CoreContinuationStateVersion = "core-state/40"
+	CoreContinuationReadVersion  = "core-read/40"
 	// A terminal Run names where its graph stopped. Both halves were already
 	// held: the finish activation is in the state, and the edge that reached
 	// it is declared in the plan the Run sealed. A host that wanted the reason
@@ -996,6 +1002,9 @@ type RunView struct {
 	// Failure names what stopped a failed or cancelled Run, derived from its
 	// diagnostics at read time; a completed or unfinished Run carries none.
 	Failure *RunFailure `json:"failure,omitempty"`
+	// Checkpoint is the Run's last accepted checkpoint, derived at read time
+	// from its accepted results and the plans naming which output is one.
+	Checkpoint *CheckpointRef `json:"checkpoint,omitempty"`
 }
 
 // RunFailure is the one diagnostic a reader of a stopped Run needs first: the

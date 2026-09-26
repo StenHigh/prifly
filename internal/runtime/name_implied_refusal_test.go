@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"github.com/stenhigh/prifly/internal/flow"
 	"strconv"
 	"strings"
 	"testing"
@@ -97,7 +98,10 @@ func TestTheContinuationWalkIsBounded(t *testing.T) {
 func TestTheNamedSourceIsDetailAndNotANewCode(t *testing.T) {
 	r := Run{ID: "run:continuation", Status: "completed", Outcome: stringPointer("partial"),
 		Fork: &ForkProvenance{SourceRunID: "run:classic", Reason: ContinuationReason}}
-	_, err := continuationRefs(r, 1)
+	target := &flow.Plan{}
+	target.Workflow.ID = "example:workflow/continue"
+	target.Workflow.Continuation = &flow.Continuation{FromWorkflows: []string{"example:workflow/source"}, FromOutcomes: []string{"partial"}}
+	_, err := continuationRefs(r, 1, target)
 	if err == nil {
 		t.Fatal("a continuation Run was accepted as a continuation source")
 	}

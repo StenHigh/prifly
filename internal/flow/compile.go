@@ -86,6 +86,8 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 			contract = "WorkflowRevisionV5"
 		case WorkflowRevisionBlockedVersion:
 			contract = "WorkflowRevisionV6"
+		case WorkflowRevisionContinuationVersion:
+			contract = "WorkflowRevisionV7"
 		}
 	}
 	if err := validateProtocolValue(contract, value, ""); err != nil {
@@ -241,6 +243,16 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 			return nil, problem("unsupported_retries", "/definition/stages/"+escapePointer(id)+"/technical_retries", "this step declares retry_class pure and effects.class "+step.Effects.Class+": a step that leaves something behind is not pure, and a budget would repeat that; declare idempotent if repeating it is genuinely safe")
 		}
 	}
+	if err := plan.checkCheckpoint(); err != nil {
+		return nil, err
+	}
+	if continuation := plan.Workflow.Continuation; continuation != nil {
+		for _, name := range keys(continuation.Inputs) {
+			if _, exists := plan.Workflow.Inputs[name]; !exists {
+				return nil, problem("invalid_continuation", "/continuation/inputs/"+escapePointer(name), "the continuation fills an input this workflow does not declare")
+			}
+		}
+	}
 	checkGraph := plan.checkGraph
 	if profile == CoreProfile {
 		checkGraph = plan.checkCoreGraph
@@ -254,6 +266,54 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 		}
 	}
 	return plan, nil
+}
+
+// checkCheckpoint holds a workflow to one checkpoint shape. A step stage names
+// the output that reports it, and that output carries the declared schema; a
+// workflow it calls reports into the same Run, so it may only declare the same
+// one. The last accepted checkpoint of a Run is then always one shape, which a
+// continuation's input can be checked against.
+func (p *Plan) checkCheckpoint() error {
+	declared := p.Workflow.Checkpoint
+	for _, id := range keys(p.Workflow.Definition.Stages) {
+		stage := p.Workflow.Definition.Stages[id]
+		if stage.Checkpoint == "" {
+			continue
+		}
+		path := "/definition/stages/" + escapePointer(id) + "/checkpoint"
+		if declared == nil {
+			return problem("invalid_checkpoint", path, "the stage reports a checkpoint this workflow does not declare")
+		}
+		output, exists := p.Steps[id].Outputs[stage.Checkpoint]
+		if !exists {
+			return problem("invalid_checkpoint", path, "the step declares no output named "+stage.Checkpoint)
+		}
+		if output.Format != "json" || output.SchemaRef == nil || *output.SchemaRef != declared.SchemaRef {
+			return problem("invalid_checkpoint", path, "the output "+stage.Checkpoint+" does not carry the workflow's checkpoint schema")
+		}
+	}
+	children := map[string]*Plan{}
+	for id, child := range p.Calls {
+		children["/definition/stages/"+escapePointer(id)] = child
+	}
+	for id, child := range p.Repeats {
+		children["/definition/stages/"+escapePointer(id)] = child
+	}
+	for id, child := range p.Maps {
+		children["/definition/stages/"+escapePointer(id)] = child
+	}
+	for id, branches := range p.Branches {
+		for branch, child := range branches {
+			children["/definition/stages/"+escapePointer(id)+"/branches/"+escapePointer(branch)] = child
+		}
+	}
+	for _, path := range keys(children) {
+		child := children[path].Workflow.Checkpoint
+		if child != nil && (declared == nil || child.SchemaRef != declared.SchemaRef) {
+			return problem("invalid_checkpoint", path, "the called workflow declares a checkpoint of another schema; a Run keeps one checkpoint shape")
+		}
+	}
+	return nil
 }
 
 func supportedWorkflowProfile(workflow map[string]any, profile string, shared *compilation) error {
@@ -388,7 +448,7 @@ var sealedRevisionVerdicts = []string{"pass", "fail", "needs_revision", "no_work
 // this document deal in" asks this and not StepVerdicts: the global list is
 // what a StepResult may legally carry, which is a different question and grows.
 func VerdictsRequiredBy(workflowVersion string) []string {
-	if workflowVersion == WorkflowRevisionBlockedVersion {
+	if workflowVersion == WorkflowRevisionBlockedVersion || workflowVersion == WorkflowRevisionContinuationVersion {
 		return StepVerdicts
 	}
 	return sealedRevisionVerdicts
@@ -418,10 +478,15 @@ const WorkflowRevisionRetryVersion = "5"
 // name it, so they keep answering for the four they were published with.
 const WorkflowRevisionBlockedVersion = "6"
 
+// WorkflowRevisionContinuationVersion is the WorkflowRevision schema_version
+// in which a workflow declares its checkpoint and what it continues from. It
+// answers for the same verdicts as revision 6.
+const WorkflowRevisionContinuationVersion = "7"
+
 // verdictRevisions are the revisions the completeness rule applies to, in the
 // order they were introduced. Each answers for the set VerdictsRequiredBy gives
 // it, never for the global list.
-var verdictRevisions = []string{WorkflowRevisionVerdictVersion, WorkflowRevisionRetryVersion, WorkflowRevisionBlockedVersion}
+var verdictRevisions = []string{WorkflowRevisionVerdictVersion, WorkflowRevisionRetryVersion, WorkflowRevisionBlockedVersion, WorkflowRevisionContinuationVersion}
 
 // WorkflowRevisionAtLeast answers whether the first revision is the second or
 // newer, by the order they were introduced. A revision this build does not know

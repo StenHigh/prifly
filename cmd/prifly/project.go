@@ -167,7 +167,13 @@ var projectRunnerSkillTemplateBeforeShortening = strings.NewReplacer(
 // not say still lives here; what it says better than prose was removed.
 var projectRunnerSkillTemplateBeforeContinuation = strings.Replace(projectRunnerSkillTemplateCurrent, "Read outstanding handoffs with", projectRunnerControlLoopInstructions+"\nRead outstanding handoffs with", 1)
 var projectRunnerSkillTemplateBeforeExplicitHead = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerContinuationInstructions, 1)
-var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerExplicitHeadInstructions, 1)
+var projectRunnerSkillTemplateBeforeDeclaredContinuation = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerExplicitHeadInstructions, 1)
+
+// The continuation paragraph used to speak for one package: an implementation
+// saved in Git, its head and changed files, an implement route. A continuation
+// is whatever the continuing workflow declares, so the host is told only what
+// the tool does for any workflow.
+var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerDeclaredContinuationInstructions, 1)
 
 // projectRunnerSkillTemplateBeforeModelProfile is the text as it stood before a
 // task could name the model profile its step declared, derived from the current
@@ -230,6 +236,20 @@ const projectRunnerExplicitHeadInstructions = "\nFor a completed partial or reje
 	"change project preflight merely to bypass the missing CLI input. Do not call\n" +
 	"raw `run fork`, extract refs from Run JSON, or start the ordinary implement\n" +
 	"route. After every accepted report, read `run next` and follow its action.\n\n"
+
+const projectRunnerDeclaredContinuationInstructions = "\nTo continue a finished Run, choose a launch whose workflow declares a\n" +
+	"continuation. Call `project continue --prepare --launch ID --source-run RUN_ID`\n" +
+	"with the selected host and decision answers, and show what it returns: where\n" +
+	"each carried input comes from in the source Run, and the source Run's tree the\n" +
+	"new Run takes over as it was left, with every file its steps left there. Then\n" +
+	"call `project continue --launch ID\n" +
+	"--source-run RUN_ID --expected-launch-digest DIGEST` with the same options.\n" +
+	"`project_continue_undeclared` means that launch's workflow does not continue\n" +
+	"Runs: choose another launch or report it. An active child is named by\n" +
+	"`project_continue_active_child`: inspect that Run before starting another;\n" +
+	"only intentional independent work uses `--allow-duplicate-continuation` on both\n" +
+	"calls. Do not call raw `run fork` or extract refs from Run JSON. After every\n" +
+	"accepted report, read `run next` and follow its action.\n\n"
 
 const projectRunnerSkillTemplateCurrent = `---
 name: prifly-run
@@ -2549,6 +2569,14 @@ func projectRunnerSkillBeforeContinuation(host projectHost) string {
 	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeContinuation, "{{host}}", host.ID), "{{question_tool}}", questionTool)
 }
 
+func projectRunnerSkillBeforeDeclaredContinuation(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeDeclaredContinuation, "{{host}}", host.ID), "{{question_tool}}", questionTool)
+}
+
 func projectRunnerSkillBeforeExplicitHead(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -2705,7 +2733,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

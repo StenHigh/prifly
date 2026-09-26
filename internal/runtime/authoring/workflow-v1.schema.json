@@ -19,7 +19,29 @@
     "entry": {"type": "string", "minLength": 1},
     "stages": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/stage"}},
     "limits": {"$ref": "#/$defs/limits"},
-    "policy_ref": {"$ref": "#/$defs/reference"}
+    "policy_ref": {"$ref": "#/$defs/reference"},
+    "checkpoint": {
+      "description": "Revision 7: the schema of the point this workflow's work can be continued from. A step stage names the output reporting it with `checkpoint: PORT`.",
+      "type": "object", "additionalProperties": false, "required": ["schema_ref"],
+      "properties": {"schema_ref": {"$ref": "#/$defs/reference"}}
+    },
+    "continuation": {
+      "description": "Revision 7: which finished Runs this workflow continues and where each input comes from in them.",
+      "type": "object", "additionalProperties": false, "required": ["from_workflows", "from_outcomes", "inputs"],
+      "properties": {
+        "from_workflows": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+        "from_outcomes": {"type": "array", "items": {"enum": ["succeeded", "rejected", "no_work", "partial", "completed_with_waivers"]}, "minItems": 1, "uniqueItems": true},
+        "inputs": {
+          "type": "object", "minProperties": 1,
+          "additionalProperties": {"oneOf": [
+            {"type": "object", "additionalProperties": false, "required": ["source_input"], "properties": {"source_input": {"type": "string", "minLength": 1}}},
+            {"type": "object", "additionalProperties": false, "required": ["stage", "output", "verdict"], "properties": {"stage": {"type": "string", "minLength": 1}, "output": {"type": "string", "minLength": 1}, "verdict": {"enum": ["pass", "fail", "needs_revision", "no_work", "blocked"]}}},
+            {"type": "object", "additionalProperties": false, "required": ["stage", "output", "outcome"], "properties": {"stage": {"type": "string", "minLength": 1}, "output": {"type": "string", "minLength": 1}, "outcome": {"enum": ["succeeded", "rejected", "no_work", "partial", "completed_with_waivers"]}}},
+            {"type": "object", "additionalProperties": false, "required": ["checkpoint"], "properties": {"checkpoint": {"const": true}}}
+          ]}
+        }
+      }
+    }
   },
   "$defs": {
     "reference": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "object"}]},

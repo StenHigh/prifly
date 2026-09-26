@@ -17,7 +17,6 @@ import (
 type RecoveryRequest struct {
 	SourceRunID      string `json:"source_run_id"`
 	SourceRunVersion int64  `json:"source_run_version"`
-	SubjectCommit    string `json:"subject_commit"`
 	ReviewDigest     string `json:"review_digest"`
 }
 
@@ -58,7 +57,8 @@ type RecoveryPlan struct {
 	SourceRunID       string                            `json:"source_run_id"`
 	SourceRunVersion  int64                             `json:"source_run_version"`
 	TargetWorkflowRef flow.Ref                          `json:"target_workflow_ref"`
-	SubjectCommit     string                            `json:"subject_commit"`
+	Checkpoint        *CheckpointRef                    `json:"checkpoint,omitempty"`
+	Claim             *ContinuationClaim                `json:"claim,omitempty"`
 	FrontierStageID   string                            `json:"frontier_stage_id"`
 	FrontierAttemptID string                            `json:"source_frontier_attempt_id"`
 	FrontierAction    string                            `json:"frontier_action"`
@@ -71,16 +71,19 @@ type RecoveryPlan struct {
 }
 
 type RecoveryProvenance struct {
-	SchemaVersion    string                            `json:"schema_version"`
-	SourceRunID      string                            `json:"source_run_id"`
-	SourceRunVersion int64                             `json:"source_run_version"`
-	ReviewDigest     string                            `json:"review_digest"`
-	SubjectCommit    string                            `json:"subject_commit"`
-	FrontierStageID  string                            `json:"frontier_stage_id"`
-	FrontierAction   string                            `json:"frontier_action,omitempty"`
-	CandidateRef     *ArtifactRef                      `json:"source_candidate_ref,omitempty"`
-	Reused           []RecoveryReuse                   `json:"reused"`
-	RootOutputs      map[string]map[string]ArtifactRef `json:"root_output_refs"`
+	SchemaVersion    string `json:"schema_version"`
+	SourceRunID      string `json:"source_run_id"`
+	SourceRunVersion int64  `json:"source_run_version"`
+	ReviewDigest     string `json:"review_digest"`
+	// SubjectCommit is kept by recovery/1 only, which chose its tree by a
+	// commit read out of an artifact. recovery/2 takes the source Run's own
+	// tree over and chooses nothing, so it records the field empty.
+	SubjectCommit   string                            `json:"subject_commit,omitempty"`
+	FrontierStageID string                            `json:"frontier_stage_id"`
+	FrontierAction  string                            `json:"frontier_action,omitempty"`
+	CandidateRef    *ArtifactRef                      `json:"source_candidate_ref,omitempty"`
+	Reused          []RecoveryReuse                   `json:"reused"`
+	RootOutputs     map[string]map[string]ArtifactRef `json:"root_output_refs"`
 }
 
 func recoveryInvariant(r Run) error {
@@ -88,7 +91,7 @@ func recoveryInvariant(r Run) error {
 		return nil
 	}
 	p := r.Recovery
-	if !isRecoveryState(r.SchemaVersion) || p.SchemaVersion != "recovery/1" || r.Fork == nil || r.Fork.SourceRunID != p.SourceRunID || r.Fork.SourceRunVersion != p.SourceRunVersion || p.ReviewDigest == "" || !recoveryCommit(p.SubjectCommit) || p.FrontierStageID == "" || p.FrontierAction != "" && p.FrontierAction != "execute" && p.FrontierAction != "revalidate" || p.FrontierAction == "revalidate" && p.CandidateRef == nil || len(p.Reused) == 0 || p.RootOutputs == nil {
+	if !isRecoveryState(r.SchemaVersion) || !(p.SchemaVersion == "recovery/1" && recoveryCommit(p.SubjectCommit) || p.SchemaVersion == "recovery/2" && p.SubjectCommit == "" && isContinuationState(r.SchemaVersion)) || r.Fork == nil || r.Fork.SourceRunID != p.SourceRunID || r.Fork.SourceRunVersion != p.SourceRunVersion || p.ReviewDigest == "" || p.FrontierStageID == "" || p.FrontierAction != "" && p.FrontierAction != "execute" && p.FrontierAction != "revalidate" || p.FrontierAction == "revalidate" && p.CandidateRef == nil || len(p.Reused) == 0 || p.RootOutputs == nil {
 		return local.ErrIntegrity
 	}
 	for stageID, outputs := range p.RootOutputs {
@@ -147,24 +150,24 @@ func (e *Engine) PlanRecovery(ctx context.Context, request RecoveryRequest, targ
 			}
 		}
 	}
-	implementation := rootOutputs["review"]["implementation"]
-	if implementation == (ArtifactRef{}) {
-		return result, local.Reject("recover_subject_unproven", "quality-tail review has no sealed implementation subject")
-	}
-	_, subjectBytes, err := e.Artifact(implementation)
+	// The failed stage runs again in the tree it failed in, so the source's
+	// claim is handed over as it was left. A released tree is gone; nothing
+	// the authority holds could stand in for it.
+	claim, released, err := e.recoveryClaim(ctx, source.ID)
 	if err != nil {
 		return result, err
 	}
-	var subject struct {
-		HeadCommit string `json:"head_commit"`
+	if released {
+		return result, local.Reject("recover_workspace_released", "the source Run's tree was released, so the failed stage has no tree to run in again")
 	}
-	if json.Unmarshal(subjectBytes, &subject) != nil || !recoveryCommit(subject.HeadCommit) || subject.HeadCommit != request.SubjectCommit {
-		return result, local.Reject("recover_subject_changed", "selected Git commit differs from the reviewed implementation")
+	checkpoint, err := lastCheckpoint(source)
+	if err != nil {
+		return result, err
 	}
 	if frontier.InvocationID != source.RootInvocationID {
 		return result, local.Reject("recover_frontier_unsupported", "the first recovery edition supports a root failed step")
 	}
-	result = RecoveryPlan{SchemaVersion: "recovery-plan/1", SourceRunID: source.ID, SourceRunVersion: view.Snapshot.Version, TargetWorkflowRef: flow.Ref{ID: target.Workflow.ID, Version: target.Workflow.Version, Digest: target.Digest}, SubjectCommit: subject.HeadCommit, FrontierStageID: frontier.StageID, FrontierAttemptID: attempt.ID, FrontierAction: "execute", FrontierReason: "failed Attempt outputs were not all sealed", Reused: reused, RootOutputs: rootOutputs}
+	result = RecoveryPlan{SchemaVersion: "recovery-plan/1", SourceRunID: source.ID, SourceRunVersion: view.Snapshot.Version, TargetWorkflowRef: flow.Ref{ID: target.Workflow.ID, Version: target.Workflow.Version, Digest: target.Digest}, Checkpoint: checkpoint, Claim: claim, FrontierStageID: frontier.StageID, FrontierAttemptID: attempt.ID, FrontierAction: "execute", FrontierReason: "failed Attempt outputs were not all sealed", Reused: reused, RootOutputs: rootOutputs}
 	candidate, err := recoveryCandidateRef(events, attempt.ID)
 	if err != nil {
 		return RecoveryPlan{}, err
@@ -570,4 +573,24 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 		return reused[i].ActivationID < reused[j].ActivationID
 	})
 	return reused, rootOutputs, nil
+}
+
+// recoveryClaim is the source Run's tree: the claim still bound to it, or the
+// fact that one was bound and has since been released.
+func (e *Engine) recoveryClaim(ctx context.Context, runID string) (*ContinuationClaim, bool, error) {
+	record, _, err := e.readClaims(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	released := false
+	for _, claim := range record.Claims {
+		if claim.RunID != runID {
+			continue
+		}
+		if claim.Status == "active" {
+			return &ContinuationClaim{ID: claim.ID, Generation: claim.Generation, Mode: claimMode(claim), Path: claim.Path}, false, nil
+		}
+		released = true
+	}
+	return nil, released, nil
 }

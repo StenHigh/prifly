@@ -86,6 +86,7 @@
 | `run_finish_named` | поведение чтения: `finish` в `run explain` | — |
 | `blocked_verdict` | `required_for: [..., blocked]` — контракт 10, маршрут при **ревизии 6**, `result_schema_ref` → `core:schema/step-result@2.0.0` | step, workflow |
 | `declared_external_write` | `effects.class: external_write` и блок `external_write` — контракт 11, только ассистируемый шаг | step |
+| `workflow_continuation` | `checkpoint` в корне и у шаговой стадии, `continuation` в корне — **ревизия 7**; `prifly project continue` | workflow, continuation-guide |
 
 Полный список того, что сборка о себе говорит, включая неподдерживаемое:
 
@@ -99,6 +100,10 @@ prifly capabilities --json | jq -c '{caps:.profiles[1].capabilities, unsupported
   поля `prifly-workflow/1`, восемь видов stages, bindings, limits и comments, а
   также что открывают ревизии 4, 5 и 6: `impossible_verdicts`,
   `technical_retries` и маршрут для `blocked`.
+- [`authoring/continuation-guide.md`](authoring/continuation-guide.md) — как
+  сделать workflow продолжаемым: `checkpoint` (что сохранить),
+  `continuation` (от каких Runs и откуда брать входы), проверка первым шагом,
+  передача рабочего дерева, восстановление и отказы. Ревизия 7.
 - [`authoring/step-authoring-reference.yaml`](authoring/step-authoring-reference.yaml) — все поля
   `prifly-step/2` на новейшем контракте шага: ports, hooks, telemetry,
   `session_limits`, `workspace_trees`, `model_profile`, обещание выхода на

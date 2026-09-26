@@ -156,6 +156,16 @@ func Capabilities() CapabilityManifest {
 	profile.ReadVersions = append(profile.ReadVersions, CoreExternalWriteReadVersion)
 	profile.StepVersions = append(profile.StepVersions, "11")
 	profile.Capabilities = append(profile.Capabilities, "declared_external_write")
+	// A workflow says what it keeps and what it continues from: the schema of
+	// its checkpoint, the stages reporting it, and where each input of a
+	// continuation comes from in the Run it continues. The authority takes
+	// exactly that and hands over the finished Run's tree; it names no
+	// workflow of its own.
+	profile.StateVersion, profile.ReadVersion = CoreContinuationStateVersion, CoreContinuationReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreContinuationStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreContinuationReadVersion)
+	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionContinuationVersion)
+	profile.Capabilities = append(profile.Capabilities, "workflow_continuation")
 	return manifest
 }
 

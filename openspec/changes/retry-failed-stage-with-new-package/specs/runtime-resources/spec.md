@@ -10,8 +10,12 @@ Recovery на исправленном пакете MUST создавать от
 
 ### Requirement: Recovery не наследует открытые обязательства
 
-Новый Run MUST NOT наследовать активную Attempt, ExecutionAdmission, ActionAdmission, Stop, Grant, Approval или WorktreeClaim source Run. При unresolved obligation либо невозможности доказать остановку исполнителя создание нового Run MUST отказывать до любых эффектов.
+Новый Run MUST NOT наследовать активную Attempt, ExecutionAdmission, ActionAdmission, Stop, Grant или Approval source Run. WorktreeClaim завершённого source Run SHALL передаваться новому Run целиком, как дерево, в котором упавшая стадия будет исполнена снова; освобождённое дерево MUST давать отказ `recover_workspace_released`, а не новый claim. При unresolved obligation либо невозможности доказать остановку исполнителя создание нового Run MUST отказывать до любых эффектов.
 
 #### Scenario: Неурегулированный процесс
 - **WHEN** судьба прежнего процесса или действия остаётся uncertain
 - **THEN** recovery не допускает повтор работы и требует обычного выяснения исхода
+
+#### Scenario: Дерево исходного Run освобождено
+- **WHEN** claim технически упавшего Run освобождён до восстановления
+- **THEN** prepare отказывает `recover_workspace_released` без Run и без нового claim

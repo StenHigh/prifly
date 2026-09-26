@@ -58,6 +58,7 @@ type generator struct {
 	projectTitles         bool
 	runFinish             bool
 	externalWrite         bool
+	continuation          bool
 	recovery              bool
 }
 
@@ -198,6 +199,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.externalWrite && externalWriteField(t, field.Name) {
 						continue
 					}
+					if !g.continuation && continuationField(t, field.Name) {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -221,6 +225,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 						optional = false
 					}
 					if !g.materializedSessions && materializedSessionRequired(t, field.Name) {
+						optional = false
+					}
+					if !g.continuation && continuationRequired(t, field.Name) {
 						optional = false
 					}
 					if !optional {
@@ -327,6 +334,7 @@ var profileContracts = []struct {
 	{"run-finish", "generate named Run finish next version 36 contracts", func(g *generator) { g.runFinish = true }},
 	{"recovery", "generate failed-stage recovery state/read version 38 contracts", func(g *generator) { g.recovery = true }},
 	{"external-write", "generate declared external write state/read version 39 contracts", func(g *generator) { g.externalWrite = true }},
+	{"continuation", "generate declared continuation state/read version 40 contracts", func(g *generator) { g.continuation = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -346,6 +354,7 @@ var documentContracts = []struct {
 	{"workflow-revision-v4", "generate WorkflowRevision v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV4") }},
 	{"workflow-revision-v5", "generate WorkflowRevision v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV5") }},
 	{"workflow-revision-v6", "generate WorkflowRevision v6 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV6") }},
+	{"workflow-revision-v7", "generate WorkflowRevision v7 author contract", func() ([]byte, error) { return flow.ProtocolSchema("WorkflowRevisionV7") }},
 	{"run-start-v2", "generate RunStart v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("RunStartV2") }},
 	{"package-manifest-v2", "generate PackageManifest v2 contract", func() ([]byte, error) { return flow.ProtocolSchema("PackageManifestV2") }},
 	{"execution-bindings", "generate explicit execution bindings contract", func() ([]byte, error) { return prifly.PublicSchema("ExecutionBindings") }},
@@ -903,6 +912,12 @@ func main() {
 			delete(contracts, name+"V38")
 		}
 	}
+	if g.continuation {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreCapabilities"} {
+			contracts[name+"V40"] = contracts[name+"V39"]
+			delete(contracts, name+"V39")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1191,6 +1206,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-external-write:39"
 			bundle["title"] = "Pri-Fly declared external write contracts"
 			bundle["description"] = "State/read 39 lets an assisted step declare that it changes a system this authority does not observe, and bound what it may change: the system, the changing operations and the exact target. The handoff carries that boundary to the host as the permission it acts under, verbatim -- the engine reaches nothing, receipts nothing and reads no meaning from the values, so nothing here is evidence that the change happened. Operations name changes only; reading the same system is not a change, needs no permission from here, and its absence forbids nothing. A step declaring the class without a boundary is refused, and so is one declaring a repeatable retry class, because a blind second attempt writes twice. Every prior bundle describes the handoff without this field, byte for byte."
+		}
+		if g.continuation {
+			continuationConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-continuation:40"
+			bundle["title"] = "Pri-Fly declared continuation contracts"
+			bundle["description"] = "State/read 40 carries what a workflow declares about continuing its work. The read names the Run's last accepted checkpoint -- the output a stage declared as the workflow's checkpoint, whose content is the author's and is never read here. A continuation takes exactly the inputs its workflow declares from the Run it continues and takes over that Run's claimed tree as it was left, so recovery/2 records no commit: the tree is the source's own. recovery/1 keeps the commit it chose its tree by. Every prior bundle is unchanged, byte for byte."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

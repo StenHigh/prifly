@@ -81,7 +81,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	expectedCatalog := f.String("expected-decision-catalog-digest", "", "catalog digest returned by project questionnaire")
 	expectedLaunch := f.String("expected-launch-digest", "", "review digest returned by project questionnaire --prepare")
 	sourceRun := f.String("source-run", "", "completed partial or rejected Run to continue")
-	implementationHead := f.String("implementation-head", "", "exact committed implementation head for project continue")
+	workspaceCommit := f.String("workspace-commit", "", "full commit ID to claim a new tree at instead of taking over the source Run's tree (project continue)")
 	allowDuplicateContinuation := f.Bool("allow-duplicate-continuation", false, "explicitly start another continuation while one from the same source Run is active")
 	command := f.String("command-id", "", "stable command identity for an explicit retry")
 	inputs := bindings{}
@@ -104,8 +104,8 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if (continuation || recovering) && !prepare && *expectedLaunch == "" {
 		return usageError("project continuation or recovery requires --expected-launch-digest from --prepare")
 	}
-	if *implementationHead != "" && !continuation {
-		return usageError("--implementation-head is only valid for project continue")
+	if *workspaceCommit != "" && !continuation {
+		return usageError("--workspace-commit is only valid for project continue")
 	}
 	if *allowDuplicateContinuation && !continuation {
 		return usageError("--allow-duplicate-continuation is only valid for project continue")
@@ -178,20 +178,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if details == nil {
 		return local.ErrIntegrity
 	}
-	if continuation || recovering {
-		if recovering {
-			if len(inputs) != 0 || len(refFiles) != 0 || *workspace == "checkout" {
-				return refusal("recover_input_override", "recovery uses exact source inputs and a detached worktree")
-			}
-		} else {
-			for name := range inputs {
-				if name != "security_enabled" {
-					return refusal("project_continue_input_override", "task, handoff, plan and implementation come from the reviewed source and Git")
-				}
-			}
-			if len(refFiles) != 0 {
-				return refusal("project_continue_input_override", "continuation input refs are selected from the source Run")
-			}
+	if recovering {
+		if len(inputs) != 0 || len(refFiles) != 0 || *workspace != "" {
+			return refusal("recover_input_override", "recovery uses the exact source inputs and takes over the source Run's tree")
 		}
 	} else if err := projectStartInputs(*details, inputs, refFiles, !neutral); err != nil {
 		return err
@@ -259,37 +248,6 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	var continuationReview *projectContinuationReview
 	var recoveryRequest *prifly.RecoveryRequest
-	if continuation {
-		mode := *workspace
-		if mode == "" {
-			mode = standingWorkspace
-		}
-		if mode == "" {
-			mode = "worktree"
-		}
-		reader, err := prifly.Open(c.project, true)
-		if err != nil {
-			return err
-		}
-		if !*allowDuplicateContinuation {
-			if err := projectCheckActiveContinuation(ctx, reader, *sourceRun); err != nil {
-				_ = reader.Close()
-				return err
-			}
-		}
-		review, carried, prepareErr := projectPrepareContinuation(ctx, reader, root, *sourceRun, mode, *implementationHead)
-		closeErr := reader.Close()
-		if prepareErr != nil {
-			return prepareErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-		continuationReview = &review
-		for name, value := range carried {
-			inputValues[name] = value
-		}
-	}
 	if recovering {
 		reader, err := prifly.Open(c.project, true)
 		if err != nil {
@@ -320,7 +278,6 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				inputValues[name] = value
 			}
 		}
-		*workspace = "worktree"
 	}
 	if err := projectDecisionInputs(preflight, inputValues, refs, neutral); err != nil {
 		return err
@@ -340,17 +297,6 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if err != nil {
 		return err
 	}
-	if continuation || recovering {
-		valid := false
-		for _, component := range compiled.Components {
-			if component.Path == workflowPath && (component.Ref.ID == "aif-continuation:workflow/classic-continuation" || component.Ref.ID == "aif-profiled-continuation:workflow/classic-continuation") {
-				valid = true
-			}
-		}
-		if !valid {
-			return refusal("project_continue_invalid_launch", "choose a declared AI Factory continuation launch")
-		}
-	}
 	if err := projectVerifySealedDecisionCatalog(packageDirectory, preflight); err != nil {
 		return err
 	}
@@ -363,7 +309,23 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
-		execution, requirements, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, workflowPath, *host, *workspace, standingWorkspace, *allowExecution || recovering && prepare, inputValues, refs)
+		launch, err := projectCompileLaunch(preflightEngine, compiled, workflowPath)
+		if err == nil && continuation {
+			var review projectContinuationReview
+			var carried map[string]json.RawMessage
+			review, carried, err = projectContinuationPrepare(ctx, preflightEngine, root, launch.plan, *sourceRun, *workspace, standingWorkspace, *workspaceCommit, *allowDuplicateContinuation)
+			for name, value := range carried {
+				if _, supplied := inputValues[name]; supplied || refs[name] != (prifly.ArtifactRef{}) {
+					err = refusal("project_continue_input_override", name+" is carried from the source Run by the continuation this workflow declares")
+					break
+				}
+				inputValues[name] = value
+			}
+			continuationReview = &review
+		}
+		if err == nil {
+			execution, requirements, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, launch, *host, *workspace, standingWorkspace, *allowExecution || recovering && prepare, inputValues, refs)
+		}
 		if err == nil {
 			*workspace = requirements.WorkspaceMode
 			if recovering {
@@ -501,7 +463,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		currentSummary.ConfigurationDigest, currentSummary.Execution, currentSummary.ReviewDigest = currentConfiguration, currentExecution, ""
 		currentSummary.ModelProfiles = currentProfiles
 		if continuation {
-			currentReview, _, err := projectPrepareContinuation(ctx, engine, root, *sourceRun, *workspace, *implementationHead)
+			currentReview, _, err := projectContinuationPrepare(ctx, engine, root, requirements.plan, *sourceRun, *workspace, standingWorkspace, *workspaceCommit, true)
 			if err != nil {
 				return err
 			}
@@ -527,17 +489,42 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	var claim *prifly.WorktreeClaim
 	createdClaim := false
-	if needsWorkspace {
+	// A continuation or recovery takes the source Run's tree over as it was
+	// left, uncommitted files included; the Run creation binds it. Only a
+	// continuation told to start at another commit, or one whose source tree
+	// is gone, claims anew.
+	var handed *prifly.ContinuationClaim
+	if recovering && recoveryPlan != nil {
+		handed = recoveryPlan.Claim
+	}
+	if continuation && continuationReview.WorkspaceCommit == "" {
+		handed = continuationReview.Source.Claim
+	}
+	if handed != nil {
+		record, err := engine.Claims(ctx)
+		if err != nil {
+			return err
+		}
+		for _, held := range record.Claims {
+			if held.ID == handed.ID && held.Generation == handed.Generation && held.Status == "active" {
+				selected := held
+				claim = &selected
+			}
+		}
+		if claim == nil {
+			return refusal("project_continue_stale_workspace", "the source Run's tree changed hands after the review; prepare again")
+		}
+		*workspace = handed.Mode
+	} else if recovering && needsWorkspace {
+		return refusal("recover_workspace_missing", "the source Run held no tree, and the target workflow needs one to run the failed stage again")
+	} else if needsWorkspace {
 		before, err := engine.Claims(ctx)
 		if err != nil {
 			return err
 		}
 		claimRequest := prifly.ClaimRequest{CommandID: *command + ":workspace", Repository: root, OwnerID: "project-launch:" + *command, WorkspaceMode: *workspace}
 		if continuation {
-			claimRequest.BaseRef = continuationReview.Implementation.HeadCommit
-		}
-		if recovering {
-			claimRequest.BaseRef = recoveryRequest.SubjectCommit
+			claimRequest.BaseRef = continuationReview.WorkspaceCommit
 		}
 		selected, err := engine.ClaimWorktree(ctx, claimRequest)
 		if err != nil {
@@ -549,17 +536,11 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				createdClaim = false
 			}
 		}
-		if continuation && selected.BaseCommit != continuationReview.Implementation.HeadCommit {
+		if continuation && continuationReview.WorkspaceCommit != "" && selected.BaseCommit != continuationReview.WorkspaceCommit {
 			if createdClaim {
 				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: selected.ID, Generation: selected.Generation})
 			}
-			return refusal("project_continue_stale_head", "claimed workspace HEAD differs from the reviewed continuation")
-		}
-		if recovering && selected.BaseCommit != recoveryRequest.SubjectCommit {
-			if createdClaim {
-				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: selected.ID, Generation: selected.Generation})
-			}
-			return refusal("recover_subject_changed", "claimed worktree differs from the reviewed Git subject")
+			return refusal("project_continue_stale_head", "claimed workspace HEAD differs from the reviewed commit")
 		}
 	}
 	importedPackage := false
@@ -655,6 +636,20 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	view, err := engine.View(ctx, started.Receipt.RunID)
 	if err != nil {
 		return err
+	}
+	// The Run creation bound the claim, and a handover moved its generation:
+	// report the claim as it now stands, not the copy taken before the start.
+	if claim != nil {
+		record, err := engine.Claims(ctx)
+		if err != nil {
+			return err
+		}
+		for _, current := range record.Claims {
+			if current.ID == claim.ID {
+				fresh := current
+				claim = &fresh
+			}
+		}
 	}
 	result := projectStartResult{SchemaVersion: "project-start/1", Repository: root, Launch: *launchID, Package: compiled.Package, PackageProfile: selectedProfile, Run: view, Workspace: claim}
 	if recovering {

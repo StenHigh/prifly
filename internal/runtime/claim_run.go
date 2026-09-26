@@ -20,6 +20,9 @@ type claimRunBinding struct {
 	runID       string
 	actor       string
 	authorityID string
+	// handedFrom is the finished Run this claim is handed over from; empty for
+	// an ordinary binding.
+	handedFrom string
 }
 
 func (e *Engine) prepareClaimRunBinding(ctx context.Context, runID, claimID string, generation int64) (*claimRunBinding, error) {
@@ -90,22 +93,71 @@ func (e *Engine) prepareClaimRunBinding(ctx context.Context, runID, claimID stri
 			return nil, err
 		}
 	}
-	path, err := e.claimWorkspacePath(*selected)
-	if err != nil {
+	if err := e.checkClaimDirectory(*selected); err != nil {
 		return nil, err
+	}
+	return &claimRunBinding{Claim: *selected, Pin: local.ControlPin{Key: AuthorityClaimsKey, Version: version}, runID: runID, actor: e.owner, authorityID: e.Installation.ID}, nil
+}
+
+func (e *Engine) checkClaimDirectory(claim WorktreeClaim) error {
+	path, err := e.claimWorkspacePath(claim)
+	if err != nil {
+		return err
 	}
 	info, err := os.Lstat(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	// The device number is not identity: a volume is renumbered across boots on
 	// APFS, and comparing it refused admission to the very directory the claim
 	// created. The inode is what a replacement changes.
-	if !ok || !info.IsDir() || selected.Inode == 0 || stat.Ino != selected.Inode {
-		return nil, fault("claim_identity_conflict", "the claimed directory identity changed before admission: the inode at "+selected.Path+" differs from the recorded one, so this is no longer the directory the claim created; claim list names it and claim release --id "+selected.ID+" --generation N ends the claim")
+	if !ok || !info.IsDir() || claim.Inode == 0 || stat.Ino != claim.Inode {
+		return fault("claim_identity_conflict", "the claimed directory identity changed before admission: the inode at "+claim.Path+" differs from the recorded one, so this is no longer the directory the claim created; claim list names it and claim release --id "+claim.ID+" --generation N ends the claim")
 	}
-	return &claimRunBinding{Claim: *selected, Pin: local.ControlPin{Key: AuthorityClaimsKey, Version: version}, runID: runID, actor: e.owner, authorityID: e.Installation.ID}, nil
+	return nil
+}
+
+// prepareClaimHandover hands the tree of a finished Run to the Run created from
+// it. The directory is the state: whatever the source's steps left in it,
+// committed or not, is what the new Run starts with, so the authority needs no
+// knowledge of how that state is kept. The generation moves so that a release
+// prepared against the source's binding can no longer remove the tree.
+func (e *Engine) prepareClaimHandover(ctx context.Context, runID, sourceRunID, claimID string, generation int64) (*claimRunBinding, error) {
+	record, version, err := e.readClaims(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var selected *WorktreeClaim
+	for _, claim := range record.Claims {
+		if claim.ID == claimID {
+			copy := claim
+			selected = &copy
+		}
+	}
+	if selected == nil || selected.Status != "active" {
+		return nil, fault("claim_state_conflict", "the source Run's claim is no longer active; it was released or is being released")
+	}
+	if selected.RunID != sourceRunID {
+		return nil, fault("claim_run_conflict", "the claim is not bound to the source Run it is handed over from")
+	}
+	if selected.Generation != generation {
+		return nil, fault("claim_generation_conflict", "the requested claim generation is no longer current")
+	}
+	if selected.Actor != e.owner {
+		return nil, fault("claim_owner_unproven", "the claim was taken by another actor; only its own actor hands it over")
+	}
+	source, _, err := e.load(ctx, sourceRunID)
+	if err != nil {
+		return nil, err
+	}
+	if !claimRunFinished(source) {
+		return nil, fault("claim_run_active", "the source Run is unfinished or uncertain; its tree is handed over only once it is over")
+	}
+	if err := e.checkClaimDirectory(*selected); err != nil {
+		return nil, err
+	}
+	return &claimRunBinding{Claim: *selected, Pin: local.ControlPin{Key: AuthorityClaimsKey, Version: version}, runID: runID, actor: e.owner, authorityID: e.Installation.ID, handedFrom: sourceRunID}, nil
 }
 
 // A lease bounds presence, not ownership. The same actor coming back to the Run
@@ -156,7 +208,12 @@ func (binding *claimRunBinding) mutate(snapshot local.AuthoritySnapshot, observe
 		if claim.Generation != binding.Claim.Generation || claim.RunID != binding.Claim.RunID {
 			return nil, fault("claim_generation_conflict", "claim ownership changed before admission")
 		}
-		if err := claimAdmissibleForRun(*claim, binding.runID, binding.actor, observed); err != nil {
+		if binding.handedFrom != "" {
+			if claim.Status != "active" || claim.RunID != binding.handedFrom || claim.Actor != binding.actor {
+				return nil, fault("claim_state_conflict", "the source Run's claim changed before the handover")
+			}
+			claim.Generation++
+		} else if err := claimAdmissibleForRun(*claim, binding.runID, binding.actor, observed); err != nil {
 			return nil, err
 		}
 		// Handing work to this claim is the authority observing its owner, so it
@@ -197,6 +254,15 @@ func claimRunFinished(run Run) bool {
 	return run.terminal() && len(run.Active) == 0 && run.ActiveCheckID == "" && run.PendingAcceptance == nil && run.PendingDecision == nil && !run.HasUnresolvedEffects
 }
 
+// runFinishedItsWork names the outcomes after which a worktree holds nothing a
+// continuation could still need. Removing a worktree deletes its directory and
+// branch, so a partial, rejected, failed or cancelled Run keeps its tree -- with
+// whatever its step left uncommitted -- until a linked Run takes it over or the
+// operator releases it. A checkout is never removed, so it is not asked this.
+func runFinishedItsWork(run Run) bool {
+	return run.Outcome != nil && (*run.Outcome == "succeeded" || *run.Outcome == "completed_with_waivers" || *run.Outcome == "no_work")
+}
+
 // releaseSettledClaim frees a repository still held by a Run that is over. That
 // holder was never the operator's mistake, so the two commands the refusal used
 // to demand before every launch happen here instead, on exactly the predicate
@@ -218,7 +284,7 @@ func (e *Engine) releaseSettledClaim(ctx context.Context, commonDir string) erro
 		if err != nil {
 			return err
 		}
-		if !claimRunFinished(run) {
+		if !claimRunFinished(run) || claimMode(claim) == "worktree" && !runFinishedItsWork(run) {
 			continue
 		}
 		command := derivedID("command", claim.ID, "settled-release", strconv.FormatInt(claim.Generation, 10))

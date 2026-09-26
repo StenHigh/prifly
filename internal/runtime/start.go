@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -690,8 +691,13 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	var recoveryPlan RecoveryPlan
 	var recoverySource Run
 	if options.Recovery != nil {
-		if !neutral || options.Continuation != nil || options.WorkspaceClaim == nil || options.WorkspaceClaim.BaseCommit != options.Recovery.SubjectCommit || options.GrantID != "" {
-			return local.ApplyResult{}, local.Reject("recover_request_invalid", "recovery requires a neutral start and a claim at the reviewed Git commit")
+		if !neutral || options.Continuation != nil || options.GrantID != "" {
+			return local.ApplyResult{}, local.Reject("recover_request_invalid", "recovery requires a neutral start")
+		}
+		// Recovery runs the failed stage again in the tree it failed in, so
+		// the only claim it may take is the source Run's own, handed over.
+		if options.WorkspaceClaim != nil && options.WorkspaceClaim.RunID != options.Recovery.SourceRunID {
+			return local.ApplyResult{}, local.Reject("recover_request_invalid", "recovery takes over the source Run's tree and no other")
 		}
 		recoveryPlan, err = e.PlanRecovery(ctx, *options.Recovery, plan, defs, resources)
 		if err != nil {
@@ -699,6 +705,9 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		}
 		if options.Recovery.ReviewDigest == "" || options.Recovery.ReviewDigest != recoveryPlan.ReviewDigest {
 			return local.ApplyResult{}, local.Reject("recover_plan_stale", "recovery evidence or target package changed after prepare")
+		}
+		if held := recoveryPlan.Claim; held == nil && options.WorkspaceClaim != nil || held != nil && (options.WorkspaceClaim == nil || options.WorkspaceClaim.ID != held.ID || options.WorkspaceClaim.Generation != held.Generation) {
+			return local.ApplyResult{}, local.Reject("recover_plan_stale", "the recovery must take over exactly the source Run's tree the plan names")
 		}
 		recoverySource, _, err = e.load(ctx, options.Recovery.SourceRunID)
 		if err != nil {
@@ -722,29 +731,31 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		}
 		fork = &ForkProvenance{SchemaVersion: "1", SourceRunID: recoverySource.ID, SourceRunVersion: options.Recovery.SourceRunVersion, CommandID: options.CommandID, Reason: "recover_failed_stage", ReuseRefs: []ArtifactRef{}}
 	} else if options.Continuation != nil {
-		if options.WorkspaceClaim == nil {
-			return local.ApplyResult{}, fault("claim_missing", "continuation requires the prepared workspace claim")
-		}
-		if plan.Workflow.ID != "aif-continuation:workflow/classic-continuation" && plan.Workflow.ID != "aif-profiled-continuation:workflow/classic-continuation" {
-			return local.ApplyResult{}, local.Reject("continuation_workflow_invalid", "continuation requires a declared AI Factory quality-tail workflow")
-		}
-		current, err := e.ContinuationSource(ctx, options.Continuation.RunID)
+		current, err := e.ContinuationSource(ctx, options.Continuation.RunID, plan)
 		if err != nil {
 			return local.ApplyResult{}, err
 		}
-		if current != *options.Continuation {
-			return local.ApplyResult{}, local.Reject("continuation_source_changed", "source Run version or declared artifact refs differ from the reviewed continuation")
+		if !reflect.DeepEqual(current, *options.Continuation) {
+			return local.ApplyResult{}, local.Reject("continuation_source_changed", "source Run version, carried artifacts or its tree differ from the reviewed continuation")
 		}
-		for port, ref := range map[string]ArtifactRef{"task": current.Task, "handoff": current.Handoff, "plan": current.Plan} {
+		if current.Claim != nil && options.WorkspaceClaim != nil && options.WorkspaceClaim.ID == current.Claim.ID && options.WorkspaceClaim.Generation != current.Claim.Generation {
+			return local.ApplyResult{}, local.Reject("continuation_source_changed", "the source Run's tree changed hands after the review")
+		}
+		reuse := []ArtifactRef{}
+		for _, name := range slices.Sorted(maps.Keys(current.Inputs)) {
+			ref := current.Inputs[name].Ref
 			_, sourceBytes, err := e.Artifact(ref)
 			if err != nil {
 				return local.ApplyResult{}, err
 			}
-			if options.InputRefs[port] != (ArtifactRef{}) || !bytes.Equal(options.InputValues[port], sourceBytes) {
-				return local.ApplyResult{}, local.Reject("continuation_source_changed", "declared continuation input differs from the sealed source artifact")
+			if options.InputRefs[name] != (ArtifactRef{}) || !bytes.Equal(options.InputValues[name], sourceBytes) {
+				return local.ApplyResult{}, local.Reject("continuation_source_changed", "declared continuation input "+name+" differs from the sealed source artifact")
+			}
+			if !slices.Contains(reuse, ref) {
+				reuse = append(reuse, ref)
 			}
 		}
-		fork = &ForkProvenance{SchemaVersion: "1", SourceRunID: current.RunID, SourceRunVersion: current.RunVersion, CommandID: options.CommandID, Reason: ContinuationReason, ReuseRefs: []ArtifactRef{current.Task, current.Handoff, current.Plan}}
+		fork = &ForkProvenance{SchemaVersion: "1", SourceRunID: current.RunID, SourceRunVersion: current.RunVersion, CommandID: options.CommandID, Reason: ContinuationReason, ReuseRefs: reuse}
 	}
 	if neutral && plan.Profile != flow.CoreProfile {
 		return local.ApplyResult{}, fault("unsupported_start_version", "Start version 2 requires core-workflow/1")
@@ -880,13 +891,8 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 				sourceRefs = []ArtifactRef{recoverySource.Inputs[name]}
 			}
 			if options.Continuation != nil {
-				switch name {
-				case "task":
-					sourceRefs = []ArtifactRef{options.Continuation.Task}
-				case "handoff":
-					sourceRefs = []ArtifactRef{options.Continuation.Handoff}
-				case "plan":
-					sourceRefs = []ArtifactRef{options.Continuation.Plan}
+				if carried, exists := options.Continuation.Inputs[name]; exists {
+					sourceRefs = []ArtifactRef{carried.Ref}
 				}
 			}
 			a, err := e.putArtifact(input.Data, port.Format, port.SchemaRef, identity, map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": name}, sourceRefs, plan.Registry, portMedia(port.Port))
@@ -1124,7 +1130,17 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		if standingGrant != "" {
 			return local.ApplyResult{}, fault("continuation_grant_unsupported", "continuation claim and standing grant cannot share one control mutation")
 		}
-		claimBinding, err = e.prepareClaimRunBinding(ctx, runID, options.WorkspaceClaim.ID, options.WorkspaceClaim.Generation)
+		if options.WorkspaceClaim.RunID != "" {
+			// A claim already bound to a Run can only be the tree of the Run
+			// this one is created from; any other bound claim is refused by the
+			// ordinary binding below.
+			if fork == nil || fork.SourceRunID != options.WorkspaceClaim.RunID {
+				return local.ApplyResult{}, fault("claim_run_conflict", "the claimed workspace remains bound to another Run")
+			}
+			claimBinding, err = e.prepareClaimHandover(ctx, runID, fork.SourceRunID, options.WorkspaceClaim.ID, options.WorkspaceClaim.Generation)
+		} else {
+			claimBinding, err = e.prepareClaimRunBinding(ctx, runID, options.WorkspaceClaim.ID, options.WorkspaceClaim.Generation)
+		}
 		if err != nil {
 			return local.ApplyResult{}, err
 		}
@@ -1275,7 +1291,7 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			if configurations == nil {
 				return local.Change{}, local.Reject("unsupported_model_profile", "a declared model profile requires the scoped invocation state")
 			}
-			stateVersion = CoreModelProfileStateVersion
+			stateVersion = higherState(stateVersion, CoreModelProfileStateVersion)
 		}
 		// The handoff of a step declaring an external write records the boundary
 		// it was given, so the state that can hold it is the one this Run seals
@@ -1285,27 +1301,35 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			if configurations == nil {
 				return local.Change{}, local.Reject("unsupported_effect", "a declared external write requires the scoped invocation state")
 			}
-			stateVersion = CoreExternalWriteStateVersion
+			stateVersion = higherState(stateVersion, CoreExternalWriteStateVersion)
 		}
 		if len(options.ModelProfiles) != 0 {
 			if configurations == nil {
 				return local.Change{}, local.Reject("unsupported_model_profile_translation", "a sealed profile translation requires the scoped invocation state")
 			}
-			stateVersion = CoreProfileTranslationStateVersion
+			stateVersion = higherState(stateVersion, CoreProfileTranslationStateVersion)
 		}
 		if options.ProjectTitle != "" {
 			if configurations == nil {
 				return local.Change{}, local.Reject("unsupported_project_title", "a project title requires the scoped core state")
 			}
-			stateVersion = CoreProjectTitleStateVersion
+			stateVersion = higherState(stateVersion, CoreProjectTitleStateVersion)
+		}
+		// A workflow declaring its checkpoint or what it continues from, and a
+		// recovery that takes its source's tree over, are facts only 40 holds.
+		if requiresContinuationState(plan) || options.Recovery != nil {
+			if configurations == nil {
+				return local.Change{}, local.Reject("unsupported_continuation", "a declared checkpoint or continuation requires the scoped invocation state")
+			}
+			stateVersion = higherState(stateVersion, CoreContinuationStateVersion)
 		}
 		if fork != nil && !isForkState(stateVersion) {
 			stateVersion = CoreForkStateVersion
 		}
 		var provenance *RecoveryProvenance
 		if options.Recovery != nil {
-			stateVersion = CoreRecoveryStateVersion
-			provenance = &RecoveryProvenance{SchemaVersion: "recovery/1", SourceRunID: recoveryPlan.SourceRunID, SourceRunVersion: recoveryPlan.SourceRunVersion, ReviewDigest: recoveryPlan.ReviewDigest, SubjectCommit: recoveryPlan.SubjectCommit, FrontierStageID: recoveryPlan.FrontierStageID, FrontierAction: recoveryPlan.FrontierAction, CandidateRef: recoveryPlan.CandidateRef, Reused: recoveryPlan.Reused, RootOutputs: recoveryOutputs}
+			stateVersion = higherState(stateVersion, CoreRecoveryStateVersion)
+			provenance = &RecoveryProvenance{SchemaVersion: "recovery/2", SourceRunID: recoveryPlan.SourceRunID, SourceRunVersion: recoveryPlan.SourceRunVersion, ReviewDigest: recoveryPlan.ReviewDigest, FrontierStageID: recoveryPlan.FrontierStageID, FrontierAction: recoveryPlan.FrontierAction, CandidateRef: recoveryPlan.CandidateRef, Reused: recoveryPlan.Reused, RootOutputs: recoveryOutputs}
 		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
 		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Recovery: provenance, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{startStage}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}

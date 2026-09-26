@@ -81,11 +81,42 @@ limits:
 policy_ref: policy # Required policy of this workflow.
 entry: start # Required ID of the first stage.
 
+# Revision 7 (capability workflow_continuation): what this workflow keeps and
+# what it continues from. Either field raises the derived revision to 7.
+#
+# checkpoint is the schema of the point the work can be continued from. What it
+# holds is yours -- a commit, a document version, a row id; the engine keeps
+# and hands it over and never reads it. A step stage names the output that
+# reports it (see `checkpoint:` on `start` below); make that output
+# required_for every verdict after which you want to continue, fail and blocked
+# included, or the step may end without reporting one.
+# checkpoint: {schema_ref: value_schema}
+#
+# continuation makes this workflow a continuation of finished Runs. It is what
+# `prifly project continue --source-run RUN` reads: the source Run's workflow
+# must be listed and its outcome must be one of from_outcomes (a technical
+# failure is recovered with `project recover`, not continued). Each listed
+# input is taken from the source Run in exactly one of four ways; inputs not
+# listed are supplied by the launch as usual. The continuation gets the source
+# Run's claimed tree as it was left, uncommitted files included; checking that
+# tree against the checkpoint is the job of your entry step, not the engine's.
+# continuation:
+#   from_workflows: [example:workflow/full-reference]
+#   from_outcomes: [partial, rejected]
+#   inputs:
+#     request: {source_input: request} # An input of the source Run.
+#     attachment: {stage: start, output: archive, verdict: pass} # Accepted output of a root stage; for a call stage write outcome: instead of verdict:.
+#     repeat_limit: {checkpoint: true} # The source Run's last accepted checkpoint.
+#
+# Both are commented out here because this reference lowers to revision 4, and
+# revision 7 also answers for the verdict blocked on every step stage.
+
 stages:
   # A worker Step runs one StepDefinition. `on` routes its declared verdicts.
   start:
     kind: step
     step_ref: worker_step
+    # checkpoint: result # Revision 7: this output reports the workflow's checkpoint.
     input_bindings:
       request:
         from: $inputs.request#/subject # $inputs.PORT is workflow_input; # needs a projected schema.

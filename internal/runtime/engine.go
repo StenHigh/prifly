@@ -365,6 +365,21 @@ func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 	}
 	asOf, live := e.clock.now(), e.driverLiveFor(id)
 	timing := Timing(r, asOf, live)
+	// Read before the definitions are stripped below: which output is the
+	// checkpoint is written in the sealed plans. Two checkpoints settled at the
+	// same moment name none rather than one chosen by guess; the status itself
+	// still answers.
+	var checkpoint *CheckpointRef
+	if isContinuationState(r.SchemaVersion) {
+		checkpoint, err = lastCheckpoint(r)
+		var rejection *local.Rejection
+		if errors.As(err, &rejection) && rejection.Code == "continuation_source_ambiguous" {
+			checkpoint, err = nil, nil
+		}
+		if err != nil {
+			return RunView{}, err
+		}
+	}
 	// Views never dump executable arguments, environment, raw definitions or
 	// publication credentials. They do carry what a worker reported about its
 	// own work: withholding an accepted summary left the owner reading an empty
@@ -388,6 +403,7 @@ func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 	if isMaterializedState(r.SchemaVersion) {
 		view.Failure = runFailure(r)
 	}
+	view.Checkpoint = checkpoint
 	return view, nil
 }
 func (e *Engine) Events(ctx context.Context, id string, after int64, limit int) (local.ReadView, error) {

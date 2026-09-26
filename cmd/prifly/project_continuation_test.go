@@ -25,9 +25,6 @@ func TestContinuationSelectsUnmergedImplementationCommit(t *testing.T) {
 	gitFixture(t, branch, "add", ".")
 	gitFixture(t, branch, "commit", "-q", "-m", "implementation")
 	implementation := gitFixture(t, branch, "rev-parse", "HEAD")
-	if got, err := projectContinuationHead(context.Background(), root, ""); err != nil || got != base {
-		t.Fatalf("default head = %s, %v; want %s", got, err, base)
-	}
 	if got, err := projectContinuationHead(context.Background(), root, implementation); err != nil || got != implementation {
 		t.Fatalf("unmerged implementation = %s, %v; want %s", got, err, implementation)
 	}
@@ -95,7 +92,10 @@ func TestDuplicateContinuationChoiceChangesReviewDigest(t *testing.T) {
 	}
 }
 
-func TestCLIContinuationFromUnmergedImplementation(t *testing.T) {
+// Nothing in this fixture belongs to a package the engine knows: the tail
+// workflow declares what it continues and where each input comes from, and
+// the continuation takes over the source Run's tree as it was left.
+func TestCLIContinuationTakesOverTheSourceTree(t *testing.T) {
 	root, authority := newProjectFixture(t)
 	writeFixtureFile(t, root, ".prifly/project.yaml", `schema_version: prifly-project-profile/3
 `+projectHostsYAML+`packages:
@@ -117,12 +117,12 @@ launches:
 `)
 	for _, name := range []string{"source", "tail"} {
 		folder := ".prifly/workflows/" + name + "/"
-		writeFixtureFile(t, root, folder+"schemas/object.yaml", "id: "+name+":schema/object\nversion: 1.0.0\ntype: object\n")
-		writeFixtureFile(t, root, folder+"contexts/work.yaml", "id: "+name+":context/work\nversion: 1.0.0\nmedia_type: text/markdown; charset=utf-8\ntext: Fixture work.\n")
+		writeFixtureFile(t, root, folder+"schemas/object.yaml", "id: example-"+name+":schema/object\nversion: 1.0.0\ntype: object\n")
+		writeFixtureFile(t, root, folder+"contexts/work.yaml", "id: example-"+name+":context/work\nversion: 1.0.0\nmedia_type: text/markdown; charset=utf-8\ntext: Fixture work.\n")
 		writeFixtureFile(t, root, folder+"extend.yaml", "extensions: []\n")
 	}
-	writeFixtureFile(t, root, ".prifly/workflows/source/steps/warmup.yaml", `authoring: prifly-step/1
-id: test:step/warmup
+	writeFixtureFile(t, root, ".prifly/workflows/source/steps/prepare.yaml", `authoring: prifly-step/1
+id: example:step/prepare
 version: 1.0.0
 kind: worker
 outputs: {handoff: {schema_ref: "{{schema_object}}", required_for: [pass]}}
@@ -131,14 +131,14 @@ instructions_ref: "{{context_work}}"
 effects: {class: none, retry_class: never}
 result_schema_ref: "{{step_result_schema}}"
 `)
-	writeFixtureFile(t, root, ".prifly/workflows/source/steps/implement.yaml", `authoring: prifly-step/1
-id: test:step/implement
+	writeFixtureFile(t, root, ".prifly/workflows/source/steps/draft.yaml", `authoring: prifly-step/1
+id: example:step/draft
 version: 1.0.0
 kind: worker
 inputs: {handoff: {schema_ref: "{{schema_object}}"}}
 outputs:
   plan: {schema_ref: "{{workspace_tree_manifest}}", required_for: [pass]}
-  implementation: {schema_ref: "{{schema_object}}", required_for: [pass]}
+  draft: {schema_ref: "{{schema_object}}", required_for: [pass]}
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
 instructions_ref: "{{context_work}}"
 effects: {class: workspace_write, retry_class: never}
@@ -149,7 +149,7 @@ workspace_trees:
 `)
 	writeFixtureFile(t, root, ".prifly/workflows/source/workflow.yaml", `authoring: prifly-project-workflow/1
 package:
-  id: aif:package/classic
+  id: example-source:package/source
   version: 1.0.0
   description: Minimal partial source fixture.
   requires_core_protocol: "1"
@@ -158,33 +158,33 @@ package:
     local_policy: core:policy/local@3.0.0
     step_result_schema: core:schema/step-result@1.0.0
     workspace_tree_manifest: core:schema/workspace-tree-manifest@1.0.0
-id: aif:workflow/classic
+id: example:workflow/source
 version: 1.0.0
 refs:
   object: "{{schema_object}}"
-  warmup: "{{step_warmup}}"
-  implement: "{{step_implement}}"
+  prepare: "{{step_prepare}}"
+  draft: "{{step_draft}}"
   local_policy: "{{local_policy}}"
 inputs: {task: {schema_ref: object}}
-entry: warmup
+entry: prepare
 limits: {max_step_instances: 2, max_control_transitions: 3}
 policy_ref: local_policy
 stages:
-  warmup: {kind: step, step_ref: warmup, on: {pass: implement}, impossible_verdicts: [fail, needs_revision, no_work]}
-  implement:
+  prepare: {kind: step, step_ref: prepare, on: {pass: draft}, impossible_verdicts: [fail, needs_revision, no_work]}
+  draft:
     kind: step
-    step_ref: implement
-    input_bindings: {handoff: $stages.warmup.handoff}
+    step_ref: draft
+    input_bindings: {handoff: $stages.prepare.handoff}
     on: {pass: partial}
     impossible_verdicts: [fail, needs_revision, no_work]
   partial: {kind: finish, outcome: partial}
 `)
 	writeFixtureFile(t, root, ".prifly/workflows/tail/steps/verify.yaml", `authoring: prifly-step/1
-id: test:step/verify
+id: example:step/verify
 version: 1.0.0
 kind: worker
 inputs:
-  implementation: {schema_ref: "{{schema_object}}"}
+  draft: {schema_ref: "{{schema_object}}"}
   plan: {schema_ref: "{{workspace_tree_manifest}}"}
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
 instructions_ref: "{{context_work}}"
@@ -194,18 +194,9 @@ workspace_trees:
   - input_port: plan
     capture: {kind: exact_file, path: plans/plan.md}
 `)
-	writeFixtureFile(t, root, ".prifly/workflows/tail/steps/fix.yaml", `authoring: prifly-step/1
-id: test:step/fix
-version: 1.0.0
-kind: worker
-executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
-instructions_ref: "{{context_work}}"
-effects: {class: workspace_write, retry_class: never}
-result_schema_ref: "{{step_result_schema}}"
-`)
-	writeFixtureFile(t, root, ".prifly/workflows/tail/workflow.yaml", `authoring: prifly-project-workflow/1
+	tail := `authoring: prifly-project-workflow/1
 package:
-  id: aif-continuation:package/classic-continuation
+  id: example-tail:package/tail
   version: 1.0.0
   description: Minimal continuation fixture.
   requires_core_protocol: "1"
@@ -214,32 +205,39 @@ package:
     local_policy: core:policy/local@3.0.0
     step_result_schema: core:schema/step-result@1.0.0
     workspace_tree_manifest: core:schema/workspace-tree-manifest@1.0.0
-id: aif-continuation:workflow/classic-continuation
+id: example:workflow/tail
 version: 1.0.0
 refs:
   object: "{{schema_object}}"
   plan: "{{workspace_tree_manifest}}"
   verify: "{{step_verify}}"
-  fix: "{{step_fix}}"
   local_policy: "{{local_policy}}"
 inputs:
   task: {schema_ref: object}
   handoff: {schema_ref: object}
   plan: {schema_ref: plan}
-  implementation: {schema_ref: object}
+  draft: {schema_ref: object}
+continuation:
+  from_workflows: [example:workflow/source]
+  from_outcomes: [partial]
+  inputs:
+    task: {source_input: task}
+    handoff: {stage: prepare, output: handoff, verdict: pass}
+    plan: {stage: draft, output: plan, verdict: pass}
+    draft: {stage: draft, output: draft, verdict: pass}
 entry: verify
-limits: {max_step_instances: 2, max_control_transitions: 3}
+limits: {max_step_instances: 1, max_control_transitions: 2}
 policy_ref: local_policy
 stages:
   verify:
     kind: step
     step_ref: verify
-    input_bindings: {implementation: $inputs.implementation, plan: $inputs.plan}
-    on: {pass: fix}
-    impossible_verdicts: [fail, needs_revision, no_work]
-  fix: {kind: step, step_ref: fix, on: {pass: done}, impossible_verdicts: [fail, needs_revision, no_work]}
+    input_bindings: {draft: $inputs.draft, plan: $inputs.plan}
+    on: {pass: done}
+    impossible_verdicts: [fail, needs_revision, no_work, blocked]
   done: {kind: finish, outcome: succeeded}
-`)
+`
+	writeFixtureFile(t, root, ".prifly/workflows/tail/workflow.yaml", tail)
 	writeFixtureFile(t, root, "task.json", "{}\n")
 	gitFixture(t, root, "add", ".")
 	gitFixture(t, root, "commit", "-qm", "base")
@@ -269,7 +267,7 @@ stages:
 	if err := json.Unmarshal([]byte(command(append(append([]string{"project", "start"}, startArgs...), "--expected-launch-digest", sourceReview.ReviewDigest)...)), &source); err != nil {
 		t.Fatal(err)
 	}
-	if source.WorkspacePath == "" {
+	if source.WorkspacePath == "" || source.Workspace == nil {
 		t.Fatal("source Run has no claim worktree")
 	}
 	submit := func(outputs map[string]string, trees []prifly.WorkspaceTreeLocation) {
@@ -303,85 +301,83 @@ stages:
 		command("--project", authority, "run", "drive", source.Run.Run.ID)
 	}
 	submit(map[string]string{"handoff": "{}\n"}, nil)
-	writeFixtureFile(t, source.WorkspacePath, "feature.txt", "implementation\n")
+	writeFixtureFile(t, source.WorkspacePath, "feature.txt", "drafted\n")
 	writeFixtureFile(t, source.WorkspacePath, "plans/plan.md", "# Plan\n")
 	gitFixture(t, source.WorkspacePath, "add", ".")
-	gitFixture(t, source.WorkspacePath, "commit", "-qm", "implementation")
-	implementation := gitFixture(t, source.WorkspacePath, "rev-parse", "HEAD")
-	saved := filepath.Join(t.TempDir(), "saved-implementation")
-	gitFixture(t, root, "worktree", "add", "-q", "-b", "saved-implementation", saved, implementation)
-	implementationJSON, err := json.Marshal(projectImplementation{BaseCommit: base, HeadCommit: implementation, ChangedFiles: []string{"feature.txt", "plans/plan.md"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	submit(map[string]string{"implementation": string(implementationJSON)}, []prifly.WorkspaceTreeLocation{{OutputPort: "plan", Path: "plans/plan.md"}})
-	if got := gitFixture(t, root, "rev-parse", "HEAD"); got != base {
-		t.Fatalf("primary checkout moved: %s", got)
-	}
-	continueArgs := []string{"--repository", root, "--launch", "tail", "--host", "codex-cli", "--source-run", source.Run.Run.ID, "--implementation-head", implementation, "--workspace", "worktree"}
-	withoutHead := []string{"--repository", root, "--launch", "tail", "--host", "codex-cli", "--source-run", source.Run.Run.ID, "--workspace", "worktree"}
-	if problem := refuse("project_continue_unrelated_head", append([]string{"project", "continue", "--prepare"}, withoutHead...)...); !strings.Contains(problem, "--implementation-head FULL_40_CHARACTER_COMMIT") {
-		t.Fatalf("unrelated HEAD gives no explicit command: %s", problem)
-	}
-	wrongHead := append([]string{}, continueArgs...)
-	wrongHead[len(wrongHead)-3] = "542493c"
-	refuse("project_continue_invalid_head", append([]string{"project", "continue", "--prepare"}, wrongHead...)...)
-	checkoutArgs := append(append([]string{}, continueArgs[:len(continueArgs)-1]...), "checkout")
-	refuse("project_continue_invalid_workspace", append([]string{"project", "continue", "--prepare"}, checkoutArgs...)...)
-	gitFixture(t, root, "switch", "--detach", implementation)
-	writeFixtureFile(t, root, "dirty.txt", "dirty\n")
-	refuse("project_continue_dirty_checkout", append([]string{"project", "continue", "--prepare"}, "--repository", root, "--launch", "tail", "--host", "codex-cli", "--source-run", source.Run.Run.ID, "--workspace", "checkout")...)
-	if err := os.Remove(filepath.Join(root, "dirty.txt")); err != nil {
-		t.Fatal(err)
-	}
-	gitFixture(t, root, "switch", "main")
+	gitFixture(t, source.WorkspacePath, "commit", "-qm", "draft")
+	drafted := gitFixture(t, source.WorkspacePath, "rev-parse", "HEAD")
+	submit(map[string]string{"draft": "{}\n"}, []prifly.WorkspaceTreeLocation{{OutputPort: "plan", Path: "plans/plan.md"}})
+	// Left behind uncommitted, as a step stopped mid-way leaves its work.
+	writeFixtureFile(t, source.WorkspacePath, "unsaved.txt", "work in progress\n")
+
+	continueArgs := []string{"--repository", root, "--launch", "tail", "--host", "codex-cli", "--source-run", source.Run.Run.ID}
+	refuse("project_continue_undeclared", "project", "continue", "--prepare", "--repository", root, "--launch", "source", "--host", "codex-cli", "--source-run", source.Run.Run.ID)
+	refuse("project_continue_invalid_head", append(append([]string{"project", "continue", "--prepare"}, continueArgs...), "--workspace-commit", "542493c", "--workspace", "worktree")...)
+	refuse("project_continue_invalid_workspace", append(append([]string{"project", "continue", "--prepare"}, continueArgs...), "--workspace-commit", drafted, "--workspace", "checkout")...)
+	refuse("project_continue_input_override", append(append([]string{"project", "continue", "--prepare"}, continueArgs...), "--input", "task="+filepath.Join(root, "task.json"))...)
 	var reviewed projectLaunchSummary
 	if err := json.Unmarshal([]byte(command(append([]string{"project", "continue", "--prepare"}, continueArgs...)...)), &reviewed); err != nil {
 		t.Fatal(err)
 	}
-	if reviewed.Continuation == nil || reviewed.Continuation.Implementation.HeadCommit != implementation {
-		t.Fatalf("review selected wrong commit: %+v", reviewed.Continuation)
+	if reviewed.Continuation == nil || reviewed.Continuation.Source.Claim == nil || reviewed.Continuation.Source.Claim.ID != source.Workspace.ID {
+		t.Fatalf("review does not hand over the source tree: %+v", reviewed.Continuation)
+	}
+	if got := reviewed.Continuation.Source.Inputs["handoff"].Source; got.Stage != "prepare" || got.Output != "handoff" || got.Verdict != "pass" {
+		t.Fatalf("review does not name where handoff comes from: %+v", reviewed.Continuation.Source.Inputs)
 	}
 	refuse("project_start_stale_launch", append(append([]string{"project", "continue"}, continueArgs...), "--expected-launch-digest", "sha256:000")...)
 	var child projectStartResult
 	if err := json.Unmarshal([]byte(command(append(append([]string{"project", "continue"}, continueArgs...), "--expected-launch-digest", reviewed.ReviewDigest)...)), &child); err != nil {
 		t.Fatal(err)
 	}
-	if child.WorkspacePath == "" || gitFixture(t, child.WorkspacePath, "rev-parse", "HEAD") != implementation || gitFixture(t, root, "rev-parse", "HEAD") != base || gitFixture(t, saved, "rev-parse", "HEAD") != implementation {
-		t.Fatalf("continuation did not preserve checkouts at the selected commit: %+v", child.Workspace)
+	if child.Workspace == nil || child.Workspace.ID != source.Workspace.ID || child.Workspace.RunID != child.Run.Run.ID || child.Workspace.Generation != source.Workspace.Generation+1 {
+		t.Fatalf("the continuation did not take over the source tree: %+v", child.Workspace)
 	}
-	if child.Run.Run.Fork == nil || child.Run.Run.Fork.SourceRunID != source.Run.Run.ID {
+	if data, err := os.ReadFile(filepath.Join(child.WorkspacePath, "unsaved.txt")); err != nil || string(data) != "work in progress\n" {
+		t.Fatalf("uncommitted work did not reach the continuation: %q %v", data, err)
+	}
+	if gitFixture(t, child.WorkspacePath, "rev-parse", "HEAD") != drafted || gitFixture(t, root, "rev-parse", "HEAD") != base {
+		t.Fatal("the handover moved a checkout")
+	}
+	if child.Run.Run.Fork == nil || child.Run.Run.Fork.SourceRunID != source.Run.Run.ID || len(child.Run.Run.Fork.ReuseRefs) != 4 {
 		t.Fatalf("new Run lost source provenance: %+v", child.Run.Run.Fork)
 	}
 	if problem := refuse("project_continue_active_child", append([]string{"project", "continue", "--prepare"}, continueArgs...)...); !strings.Contains(problem, child.Run.Run.ID) {
 		t.Fatalf("active child refusal omitted Run ID: %s", problem)
 	}
-	if problem := refuse("project_continue_active_child", append(append([]string{"project", "continue"}, continueArgs...), "--expected-launch-digest", reviewed.ReviewDigest)...); !strings.Contains(problem, child.Run.Run.ID) {
-		t.Fatalf("repeat start refusal omitted Run ID: %s", problem)
-	}
-	overrideArgs := append(append([]string{}, continueArgs...), "--allow-duplicate-continuation")
+	// A second, independent continuation at a named commit claims a new tree:
+	// the source tree now belongs to the first one.
+	atCommit := append(append([]string{}, continueArgs...), "--allow-duplicate-continuation", "--workspace-commit", drafted, "--workspace", "worktree")
 	var independent projectLaunchSummary
-	if err := json.Unmarshal([]byte(command(append([]string{"project", "continue", "--prepare"}, overrideArgs...)...)), &independent); err != nil || !independent.AllowDuplicateContinuation || independent.ReviewDigest == reviewed.ReviewDigest {
+	if err := json.Unmarshal([]byte(command(append([]string{"project", "continue", "--prepare"}, atCommit...)...)), &independent); err != nil || !independent.AllowDuplicateContinuation || independent.ReviewDigest == reviewed.ReviewDigest || independent.Continuation.WorkspaceCommit != drafted {
 		t.Fatalf("explicit duplicate review is not distinct: %+v %v", independent, err)
+	}
+	command("--project", authority, "capacity", "set", "--capacity", "2", "--reason", "two continuations of one source")
+	var second projectStartResult
+	if err := json.Unmarshal([]byte(command(append(append([]string{"project", "continue"}, atCommit...), "--expected-launch-digest", independent.ReviewDigest)...)), &second); err != nil {
+		t.Fatal(err)
+	}
+	if second.Workspace == nil || second.Workspace.ID == source.Workspace.ID || gitFixture(t, second.WorkspacePath, "rev-parse", "HEAD") != drafted {
+		t.Fatalf("a named commit did not get its own tree: %+v", second.Workspace)
 	}
 	engine, err := prifly.Open(authority, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer engine.Close()
-	current, err := engine.ContinuationSource(context.Background(), source.Run.Run.ID)
-	if err != nil || current.RunVersion != reviewed.Continuation.Source.RunVersion {
-		t.Fatalf("source changed during continuation: %+v %v", current, err)
+	view, err := engine.View(context.Background(), source.Run.Run.ID)
+	if err != nil || view.RunVersion != reviewed.Continuation.Source.RunVersion || view.Run.Outcome == nil || *view.Run.Outcome != "partial" {
+		t.Fatalf("source changed during continuation: %+v %v", view.Run.Outcome, err)
 	}
 	runs, err := engine.Runs(context.Background())
-	if err != nil || len(runs) != 2 {
+	if err != nil || len(runs) != 3 {
 		t.Fatalf("prepare/refusal created another Run: %d %v", len(runs), err)
 	}
 	var first prifly.SessionTask
 	if err := json.Unmarshal([]byte(command("--project", authority, "session", "task", "--run", child.Run.Run.ID)), &first); err != nil {
 		t.Fatal(err)
 	}
-	if first.ClaimID == "" || first.ClaimPath != child.Workspace.Path {
-		t.Fatalf("read-only first gate is not bound to claim: %+v", first)
+	if first.ClaimID != source.Workspace.ID || first.ClaimPath != child.Workspace.Path {
+		t.Fatalf("read-only first gate is not bound to the handed-over claim: %+v", first)
 	}
 }

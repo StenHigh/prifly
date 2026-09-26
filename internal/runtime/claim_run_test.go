@@ -187,6 +187,115 @@ func TestSettledRunFreesItsWorkspaceForTheNextClaim(t *testing.T) {
 	}
 }
 
+// The next claim used to remove every settled Run's tree, so a cancelled Run
+// lost the files its step left uncommitted. Only a Run that finished its work
+// gives the tree back on its own; any other is kept for continuation or for an
+// explicit claim release.
+func TestUnfinishedWorkKeepsItsTreeFromTheNextClaim(t *testing.T) {
+	e, runID, claim := assistedWorkspaceFixture(t, "worktree")
+	ctx := context.Background()
+	binding, err := e.prepareClaimRunBinding(ctx, runID, claim.ID, claim.Generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := commitClaimBinding(t, e, runID, binding, false); err != nil {
+		t.Fatal(err)
+	}
+	path, err := e.claimWorkspacePath(claim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsaved := filepath.Join(path, "unsaved.txt")
+	if err := os.WriteFile(unsaved, []byte("work in progress\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Restrict(ctx, RestrictCommand{SchemaVersion: "1", CommandID: newID("command"), Scope: "run", ScopeID: runID, Kind: "cancel", Reason: "stopped with work in the tree"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	if r := driverRun(t, e, runID); r.Status != "cancelled" || !claimRunFinished(r) {
+		t.Fatalf("the fixture Run did not end cancelled with nothing outstanding: %s %+v", r.Status, r.Diagnostics)
+	}
+	next, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: newID("command"), Repository: claim.Repository.Toplevel, OwnerID: "session:next"})
+	if err != nil {
+		t.Fatalf("the next claim was refused beside a kept tree: %v", err)
+	}
+	if next.Path == claim.Path {
+		t.Fatalf("the next claim took the cancelled Run's tree: %+v", next)
+	}
+	kept, err := e.claim(ctx, claim.ID)
+	if err != nil || kept.Status != "active" || kept.RunID != runID {
+		t.Fatalf("the cancelled Run's claim was released by the next claim: %+v %v", kept, err)
+	}
+	if data, err := os.ReadFile(unsaved); err != nil || string(data) != "work in progress\n" {
+		t.Fatalf("the uncommitted file did not survive the next claim: %q %v", data, err)
+	}
+}
+
+// A Run created from a finished one takes its tree as it is. Every condition
+// that makes the tree someone else's still refuses.
+func TestFinishedRunHandsItsTreeToTheLinkedRun(t *testing.T) {
+	e, sourceID, claim := assistedWorkspaceFixture(t, "worktree")
+	ctx := context.Background()
+	binding, err := e.prepareClaimRunBinding(ctx, sourceID, claim.ID, claim.Generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := commitClaimBinding(t, e, sourceID, binding, false); err != nil {
+		t.Fatal(err)
+	}
+	path, err := e.claimWorkspacePath(claim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsaved := filepath.Join(path, "unsaved.txt")
+	if err := os.WriteFile(unsaved, []byte("work in progress\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	linked, err := e.Start(ctx, StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/pilot.json", BriefFile: "brief.json", Inputs: map[string]string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkedID := linked.Receipt.RunID
+	if _, err := e.prepareClaimHandover(ctx, linkedID, sourceID, claim.ID, claim.Generation); refusalCode(err) != "claim_run_active" {
+		t.Fatalf("an unfinished Run handed its tree over: %v", err)
+	}
+	if _, err := e.Restrict(ctx, RestrictCommand{SchemaVersion: "1", CommandID: newID("command"), Scope: "run", ScopeID: sourceID, Kind: "cancel", Reason: "stopped with work in the tree"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.prepareClaimHandover(ctx, linkedID, "run:someone-else", claim.ID, claim.Generation); refusalCode(err) != "claim_run_conflict" {
+		t.Fatalf("a claim was handed over from a Run it is not bound to: %v", err)
+	}
+	if _, err := e.prepareClaimHandover(ctx, linkedID, sourceID, claim.ID, claim.Generation+1); refusalCode(err) != "claim_generation_conflict" {
+		t.Fatalf("a stale generation was handed over: %v", err)
+	}
+	handover, err := e.prepareClaimHandover(ctx, linkedID, sourceID, claim.ID, claim.Generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := commitClaimBinding(t, e, linkedID, handover, false); err != nil {
+		t.Fatal(err)
+	}
+	taken, err := e.claim(ctx, claim.ID)
+	if err != nil || taken.Status != "active" || taken.RunID != linkedID || taken.Generation != claim.Generation+1 || taken.Path != claim.Path {
+		t.Fatalf("the linked Run did not take the same tree at the next generation: %+v %v", taken, err)
+	}
+	if data, err := os.ReadFile(unsaved); err != nil || string(data) != "work in progress\n" {
+		t.Fatalf("the handover changed the tree: %q %v", data, err)
+	}
+	if _, err := e.ReleaseWorktree(ctx, ClaimReleaseRequest{CommandID: newID("command"), ClaimID: claim.ID, Generation: claim.Generation}); err == nil {
+		t.Fatal("a release prepared against the source's generation removed the handed-over tree")
+	}
+	if _, err := e.prepareClaimHandover(ctx, newID("run"), sourceID, claim.ID, taken.Generation); refusalCode(err) != "claim_run_conflict" {
+		t.Fatalf("a tree already handed over was handed over again: %v", err)
+	}
+}
+
 // An expired lease is waived for exactly one triple: this claim, bound to this
 // Run, asked for by the actor recorded on it. Every other case still stands on it.
 func TestExpiredLeaseAdmitsOnlyTheReturningOwner(t *testing.T) {

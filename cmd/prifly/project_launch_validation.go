@@ -27,31 +27,9 @@ type projectLaunchRequirements struct {
 // answers the workspace question only where the workflow asks it: a Git-less
 // workflow still refuses an explicit --workspace and silently ignores a
 // standing one, so a project declares the choice once for every launch.
-func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root string, compiled projectCompileResult, workflowPath, host, workspace, standingWorkspace string, allow bool, values map[string]json.RawMessage, refs map[string]prifly.ArtifactRef) (*prifly.ExecutionBindings, projectLaunchRequirements, error) {
+func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root string, compiled projectCompileResult, launch projectCompiledLaunch, host, workspace, standingWorkspace string, allow bool, values map[string]json.RawMessage, refs map[string]prifly.ArtifactRef) (*prifly.ExecutionBindings, projectLaunchRequirements, error) {
 	requirements := projectLaunchRequirements{EffectClasses: map[string]string{}, WorkspaceMode: workspace}
-	definitions, registry, resources, err := engine.CompilationInventory()
-	if err != nil {
-		return nil, requirements, err
-	}
-	var workflow []byte
-	for _, component := range compiled.Components {
-		if component.Path == workflowPath {
-			workflow = component.Bytes
-		}
-		if component.Resource != nil {
-			resources[component.Ref] = *component.Resource
-			continue
-		}
-		registry[component.Ref] = component.Bytes
-		definitions = append(definitions, prifly.PinnedDefinition{Ref: component.Ref, Kind: component.Kind, RawDigest: fmt.Sprintf("sha256:%x", sha256.Sum256(component.Bytes)), Bytes: component.Bytes})
-	}
-	if workflow == nil {
-		return nil, requirements, refusal("project_start_invalid_root", "compiled root not found")
-	}
-	plan, err := flow.CompileCore(workflow, "json", registry, resources)
-	if err != nil {
-		return nil, requirements, err
-	}
+	plan, definitions, registry, resources := launch.plan, launch.definitions, launch.registry, launch.resources
 	requirements.plan, requirements.definitions = plan, definitions
 	for ref := range plan.Resources {
 		resource := resources[ref]
@@ -134,4 +112,42 @@ func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root stri
 	}
 	requirements.sessionLimits = prifly.PreviewSessionLimits(plan)
 	return payload, requirements, nil
+}
+
+// projectCompiledLaunch is a launch's root workflow compiled once, as Start
+// will compile it, with the inventory it was compiled against. Everything that
+// reads the launch before its Run exists -- what it continues from, what it
+// needs to run -- reads this one compilation.
+type projectCompiledLaunch struct {
+	plan        *flow.Plan
+	definitions []prifly.PinnedDefinition
+	registry    flow.Registry
+	resources   flow.ContextResources
+}
+
+func projectCompileLaunch(engine *prifly.Engine, compiled projectCompileResult, workflowPath string) (projectCompiledLaunch, error) {
+	definitions, registry, resources, err := engine.CompilationInventory()
+	if err != nil {
+		return projectCompiledLaunch{}, err
+	}
+	var workflow []byte
+	for _, component := range compiled.Components {
+		if component.Path == workflowPath {
+			workflow = component.Bytes
+		}
+		if component.Resource != nil {
+			resources[component.Ref] = *component.Resource
+			continue
+		}
+		registry[component.Ref] = component.Bytes
+		definitions = append(definitions, prifly.PinnedDefinition{Ref: component.Ref, Kind: component.Kind, RawDigest: fmt.Sprintf("sha256:%x", sha256.Sum256(component.Bytes)), Bytes: component.Bytes})
+	}
+	if workflow == nil {
+		return projectCompiledLaunch{}, refusal("project_start_invalid_root", "compiled root not found")
+	}
+	plan, err := flow.CompileCore(workflow, "json", registry, resources)
+	if err != nil {
+		return projectCompiledLaunch{}, err
+	}
+	return projectCompiledLaunch{plan: plan, definitions: definitions, registry: registry, resources: resources}, nil
 }

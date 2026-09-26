@@ -66,6 +66,9 @@ var versionContracts = []versionContract{
 	{CoreRecoveryStateVersion, CoreRecoveryReadVersion, "", CoreRunFinishNextVersion},
 	// 39 records the declared boundary of an external write on the handoff.
 	{CoreExternalWriteStateVersion, CoreExternalWriteReadVersion, "", CoreRunFinishNextVersion},
+	// 40 records recovery/2, which takes the source's tree and chooses no
+	// commit, and reads the last accepted checkpoint.
+	{CoreContinuationStateVersion, CoreContinuationReadVersion, "", CoreRunFinishNextVersion},
 	// 36 mints no state row of its own: it is a next-action answer, so every
 	// state that can describe a finished Run and is still being created takes
 	// it up, the way 31 and 32 took up 33. That includes 31 and 32 themselves,
@@ -103,6 +106,33 @@ func isProjectTitleState(version string) bool {
 }
 
 func isRecoveryState(version string) bool { return atLeast(version, CoreRecoveryStateVersion) }
+
+func isContinuationState(version string) bool {
+	return atLeast(version, CoreContinuationStateVersion)
+}
+
+// higherState is whichever of two known states is later in the ladder. A Run
+// needing several features is sealed at the highest of them, which carries
+// every lower one; the last feature checked is not necessarily the highest,
+// and taking it instead sealed an external write under a state with no place
+// for it.
+func higherState(current, candidate string) string {
+	if stateRank(candidate) > stateRank(current) {
+		return candidate
+	}
+	return current
+}
+
+// requiresContinuationState reports whether any workflow of this closure
+// declares its checkpoint or what it continues from.
+func requiresContinuationState(p *flow.Plan) bool {
+	for _, workflow := range workflowPlans(p) {
+		if workflow.Workflow.Checkpoint != nil || workflow.Workflow.Continuation != nil {
+			return true
+		}
+	}
+	return false
+}
 
 // stateRank is a state version's place in that order, or -1 for a version this
 // build does not know. An unknown version is never "at least" anything.

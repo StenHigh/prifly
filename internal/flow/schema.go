@@ -132,7 +132,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
 		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11",
-		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6",
+		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7",
 	}
 	for name := range defs {
 		names = append(names, name)
@@ -244,6 +244,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV6":
 		extension = workflowRevisionV2Schema
+	case "WorkflowRevisionV7":
+		extension = workflowRevisionV2Schema
 	}
 	if extension != nil {
 		value, err := Parse(extension, "json")
@@ -265,12 +267,13 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		for i := 0; i <= slices.Index(stepContracts, name); i++ {
 			stepMutators[i]()
 		}
-		revisions := []string{"WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6"}
+		revisions := []string{"WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7"}
 		revisionMutators := []func(){
 			func() { workflowRevisionV3(root, defs) },
 			func() { workflowRevisionV4(root, defs) },
 			func() { workflowRevisionV5(root) },
 			func() { workflowRevisionV6(root) },
+			func() { workflowRevisionV7(root) },
 		}
 		for i := 0; i <= slices.Index(revisions, name); i++ {
 			revisionMutators[i]()
@@ -437,6 +440,52 @@ func workflowRevisionV6(root map[string]any) {
 			routes[verdict] = map[string]any{"$ref": "#/$defs/Identifier"}
 		}
 	}
+}
+
+// workflowRevisionV7 lets a workflow say what it keeps and what it continues
+// from: the schema of its checkpoint, the step stages reporting it, and where
+// each input of a continuation comes from in the Run it continues. Everything
+// else is v6, completeness included.
+func workflowRevisionV7(root map[string]any) {
+	root["$id"] = "urn:prifly:workflow-revision:7"
+	defs := root["$defs"].(map[string]any)
+	workflow := defs["WorkflowRevisionV6"].(map[string]any)
+	delete(defs, "WorkflowRevisionV6")
+	defs["WorkflowRevisionV7"] = workflow
+	root["$ref"] = "#/$defs/WorkflowRevisionV7"
+	properties := workflow["properties"].(map[string]any)
+	properties["schema_version"].(map[string]any)["const"] = WorkflowRevisionContinuationVersion
+	properties["checkpoint"] = map[string]any{
+		"type": "object", "properties": map[string]any{"schema_ref": map[string]any{"$ref": "#/$defs/ImmutableRef"}},
+		"required": []any{"schema_ref"}, "additionalProperties": false,
+	}
+	stageName := map[string]any{"$ref": "#/$defs/Identifier"}
+	port := map[string]any{"$ref": "#/$defs/PortName"}
+	verdicts := make([]any, len(StepVerdicts))
+	for i, verdict := range StepVerdicts {
+		verdicts[i] = verdict
+	}
+	source := func(required []any, fields map[string]any) map[string]any {
+		return map[string]any{"type": "object", "properties": fields, "required": required, "additionalProperties": false}
+	}
+	properties["continuation"] = map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"from_workflows": map[string]any{"type": "array", "items": stageName, "minItems": json.Number("1"), "maxItems": json.Number("64"), "uniqueItems": true},
+			"from_outcomes":  map[string]any{"type": "array", "items": map[string]any{"$ref": "#/$defs/Outcome"}, "minItems": json.Number("1"), "maxItems": json.Number("5"), "uniqueItems": true},
+			"inputs": map[string]any{
+				"type": "object", "propertyNames": port, "minProperties": json.Number("1"), "maxProperties": json.Number("256"),
+				"additionalProperties": map[string]any{"oneOf": []any{
+					source([]any{"source_input"}, map[string]any{"source_input": port}),
+					source([]any{"stage", "output", "verdict"}, map[string]any{"stage": stageName, "output": port, "verdict": map[string]any{"enum": verdicts}}),
+					source([]any{"stage", "output", "outcome"}, map[string]any{"stage": stageName, "output": port, "outcome": map[string]any{"$ref": "#/$defs/Outcome"}}),
+					source([]any{"checkpoint"}, map[string]any{"checkpoint": map[string]any{"const": true}}),
+				}},
+			},
+		},
+		"required": []any{"from_workflows", "from_outcomes", "inputs"}, "additionalProperties": false,
+	}
+	defs["StepStage"].(map[string]any)["properties"].(map[string]any)["checkpoint"] = port
 }
 
 func workflowRevisionV5(root map[string]any) {

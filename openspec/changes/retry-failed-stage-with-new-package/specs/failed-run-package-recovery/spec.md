@@ -9,8 +9,8 @@
 Authority SHALL создавать новый Run только из технически failed source Run без принятого outcome и с проверенной новой версией пакета. Source Run, его lock, события, результаты и диагностики MUST оставаться неизменными. Новый Run MUST закреплять source Run ID/version, exact старый и новый package refs, первую неперенесённую стадию и обоснование каждого перенесённого результата; `run reopen`, `run fork` и `project continue` не меняют семантику.
 
 #### Scenario: Отказ на поздней стадии
-- **WHEN** source Run технически failed на `tests` после принятых `verify` и `review`, а новый пакет проходит проверку совместимости
-- **THEN** новый связанный Run начинает с повторной приёмки candidate или с `tests`, не выдавая `verify` и `review` за выполненные им заново
+- **WHEN** source Run технически упал на поздней стадии после двух принятых, а новый пакет проходит проверку совместимости
+- **THEN** новый связанный Run начинает с повторной приёмки candidate или с упавшей стадии, не выдавая принятые стадии за выполненные им заново
 
 #### Scenario: Предметный результат уже принят
 - **WHEN** source Run достиг объявленного outcome, включая `partial` и `rejected`
@@ -18,11 +18,11 @@ Authority SHALL создавать новый Run только из технич
 
 ### Requirement: Переносится только доказанный совместимый префикс
 
-Каждая переносимая стадия MUST иметь принятый StepResult, доступные immutable ArtifactRevisions и проверенное соответствие значимых inputs, code tree, StepDefinition, executor, context, checks, decision values и routes в новом пакете. Смена только compiled identity MAY быть признана совместимой лишь при доказанном равенстве эффективного контракта. Старые Attempt, approvals, grants, slots, claims, model provenance и право на внешние effects MUST NOT переноситься. При несовместимости или недостатке evidence восстановление MUST отказать с точной причиной, а не тихо исполнять или пропускать префикс.
+Каждая переносимая стадия MUST иметь принятый StepResult, доступные immutable ArtifactRevisions и проверенное соответствие значимых inputs, StepDefinition, executor, context, checks, decision values и routes в новом пакете. Смена только compiled identity MAY быть признана совместимой лишь при доказанном равенстве эффективного контракта. Рабочее дерево не выбирается: claim завершённого source Run передаётся новому Run таким, каким его оставила упавшая стадия. Старые Attempt, approvals, grants, slots, model provenance и право на внешние effects MUST NOT переноситься. При несовместимости или недостатке evidence восстановление MUST отказать с точной причиной, а не тихо исполнять или пропускать префикс.
 
-#### Scenario: Код изменился после review
-- **WHEN** новое рабочее дерево отличается от дерева, на котором принят `review`, и правило предмета проверки не доказывает эквивалентность
-- **THEN** `review` не переносится; план восстановления называет несовпадение до запуска
+#### Scenario: Изменилось определение принятой стадии
+- **WHEN** эффективный контракт, входы или решения принятой стадии в новом пакете отличаются от исходных
+- **THEN** стадия не переносится; план восстановления называет несовпадение до запуска
 
 #### Scenario: Пакет перекомпилирован без смысловой перемены префикса
 - **WHEN** compiled refs префикса изменились, но эффективные definitions, bindings, inputs и предмет проверки доказуемо совпадают
@@ -42,12 +42,12 @@ Authority SHALL создавать новый Run только из технич
 
 ### Requirement: Восстановление сохраняет границы управления и ресурсов
 
-До создания и каждого нового допуска authority MUST перепроверять текущие права, trust/status пакета, stop/cancel, unresolved effects, budget и ownership Workspace. Активная Attempt, невыясненный внешний эффект, отсутствующие pinned bytes либо несовместимый graph MUST давать отказ до повторного исполнения. Конкурирующее изменение source Run или Git tree MUST вызывать stale refusal, а повтор той же команды с тем же payload MUST возвращать прежний receipt.
+До создания и каждого нового допуска authority MUST перепроверять текущие права, trust/status пакета, stop/cancel, unresolved effects, budget и ownership Workspace. Активная Attempt, невыясненный внешний эффект, отсутствующие pinned bytes либо несовместимый graph MUST давать отказ до повторного исполнения. Конкурирующее изменение source Run или передаваемого дерева (его claim или generation) MUST вызывать stale refusal, а повтор той же команды с тем же payload MUST возвращать прежний receipt.
 
 #### Scenario: Неизвестный внешний эффект
 - **WHEN** source Run содержит неразрешённое effect obligation
 - **THEN** восстановление не создаёт повторный effect и называет необходимость Resolution
 
 #### Scenario: Source изменился после просмотра
-- **WHEN** source RunVersion или проверенный Git tree изменился между prepare и start
+- **WHEN** source RunVersion или передаваемое дерево изменились между prepare и start
 - **THEN** start отказывает без нового Run и без claim новой рабочей области

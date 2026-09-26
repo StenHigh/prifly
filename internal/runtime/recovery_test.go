@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -278,5 +279,66 @@ func TestRecoverTraceReusesNestedQualityGatesAndRejectsChangedPrefix(t *testing.
 	changed.Workflow.Definition.Stages["review_call"] = stage
 	if _, _, err := recoveryTrace(source, oldPlan, &changed, newDefs, nil, events); err == nil || !strings.Contains(err.Error(), "recover_prefix_changed") {
 		t.Fatalf("changed route was reused: %v", err)
+	}
+}
+
+// recovery/1 chose its tree by a commit and keeps saying so; recovery/2 takes
+// the source Run's own tree and chooses nothing, and only the state that
+// published it may carry it.
+func TestRecoveryProvenanceEditionsKeepTheirOwnShape(t *testing.T) {
+	ref := ArtifactRef{ArtifactID: "artifact:candidate", Revision: 1, Digest: "sha256:candidate"}
+	provenance := func(edition, commit string) *RecoveryProvenance {
+		return &RecoveryProvenance{SchemaVersion: edition, SourceRunID: "run:source", SourceRunVersion: 2, ReviewDigest: "sha256:review", SubjectCommit: commit, FrontierStageID: "tests", FrontierAction: "revalidate", CandidateRef: &ref, Reused: []RecoveryReuse{{StageID: "verify"}}, RootOutputs: map[string]map[string]ArtifactRef{}}
+	}
+	fork := &ForkProvenance{SourceRunID: "run:source", SourceRunVersion: 2}
+	commit := strings.Repeat("a", 40)
+	for _, c := range []struct {
+		name, state, edition, commit string
+		valid                        bool
+	}{
+		{"recovery/1 with its commit", CoreRecoveryStateVersion, "recovery/1", commit, true},
+		{"recovery/1 read by a later state", CoreContinuationStateVersion, "recovery/1", commit, true},
+		{"recovery/1 without a commit", CoreRecoveryStateVersion, "recovery/1", "", false},
+		{"recovery/2 without a commit", CoreContinuationStateVersion, "recovery/2", "", true},
+		{"recovery/2 claiming a commit", CoreContinuationStateVersion, "recovery/2", commit, false},
+		{"recovery/2 in a state that cannot hold it", CoreExternalWriteStateVersion, "recovery/2", "", false},
+	} {
+		r := Run{SchemaVersion: c.state, Fork: fork, Recovery: provenance(c.edition, c.commit)}
+		if err := recoveryInvariant(r); (err == nil) != c.valid {
+			t.Errorf("%s: valid=%v, got %v", c.name, c.valid, err)
+		}
+	}
+}
+
+// The tree a recovery runs the failed stage in again is the source Run's own:
+// the claim still bound to it, or the fact that it was released.
+func TestRecoveryFindsTheSourceTree(t *testing.T) {
+	e, runID, claim := assistedWorkspaceFixture(t, "worktree")
+	ctx := context.Background()
+	if held, released, err := e.recoveryClaim(ctx, runID); err != nil || held != nil || released {
+		t.Fatalf("a Run that never held a tree reported one: %+v %v %v", held, released, err)
+	}
+	binding, err := e.prepareClaimRunBinding(ctx, runID, claim.ID, claim.Generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := commitClaimBinding(t, e, runID, binding, false); err != nil {
+		t.Fatal(err)
+	}
+	held, released, err := e.recoveryClaim(ctx, runID)
+	if err != nil || released || held == nil || held.ID != claim.ID || held.Generation != claim.Generation || held.Mode != "worktree" {
+		t.Fatalf("the held tree was not found: %+v %v %v", held, released, err)
+	}
+	if _, err := e.Restrict(ctx, RestrictCommand{SchemaVersion: "1", CommandID: newID("command"), Scope: "run", ScopeID: runID, Kind: "cancel", Reason: "stopped"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.ReleaseWorktree(ctx, ClaimReleaseRequest{CommandID: newID("command"), ClaimID: claim.ID, Generation: claim.Generation}); err != nil {
+		t.Fatal(err)
+	}
+	if held, released, err := e.recoveryClaim(ctx, runID); err != nil || held != nil || !released {
+		t.Fatalf("a released tree was not reported released: %+v %v %v", held, released, err)
 	}
 }

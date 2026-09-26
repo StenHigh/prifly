@@ -212,17 +212,44 @@ git всё же даёт, называется `claim_worktree_removal_failed` �
 `has_unresolved_effects=false`. Принятые до этого шаги остаются принятыми,
 коммиты — на claim-ветке.
 
-**Что нельзя.** `run fork` всегда стартует с entry workflow'а, а `reuse_refs`
-принимает только выходы Run, дошедшего до `done` — у cancelled Run их нет
-(`invalid_reuse`). Продолжить с прерванного шага — нечем; дальше по протоколу
-пакета: доделка руками.
+**Что сохраняется.** С выпуска, в `prifly capabilities` которого есть `workflow_continuation`, дерево отменённого Run в режиме `worktree`
+больше не снимается следующим `project start`: автоматически освобождаются
+только деревья Runs, завершившихся `succeeded`, `completed_with_waivers` или
+`no_work`. Каталог claim с ветвью и незакоммиченными файлами остаётся, пока
+его не освободит явный `claim release`. Раньше следующий claim в том же
+репозитории удалял его вместе с веткой.
 
-**Что сначала.** Запушить claim-ветку (`git push origin prifly/<claim>:…`)
-**до** `claim release` или следующего `project start`: release снимает
-worktree и удаляет ветку force'ом. Рычаг против повтора — у проекта:
-параллельность программы (`PHPUNIT_PARALLEL_PROCESSES=2` в окружении через
-`project local set --env`) и не запускать челленджер-агента одновременно с
-tests; на macOS драйвер можно вынести из харнеса (`nohup … &`).
+**Что нельзя.** Отменённый Run не имеет исхода, поэтому его не продолжает ни
+`project continue` (продолжает только объявленные исходы), ни `project
+recover` (восстанавливает технический отказ), ни `run fork` (`reuse_refs`
+принимает только выходы Run, дошедшего до исхода, — `invalid_reuse`).
+Работа в дереве цела; дальше — по протоколу пакета, руками.
+
+**Что сначала.** `claim list` называет сохранённое дерево и его путь.
+Сохранить нужное (`git push origin prifly/<claim>:…`) — и только потом
+`claim release`: release снимает worktree и удаляет ветку force'ом. Рычаг
+против повтора — у проекта: параллельность программы
+(`PHPUNIT_PARALLEL_PROCESSES=2` в окружении через `project local set --env`)
+и не запускать челленджер-агента одновременно с tests; на macOS драйвер можно
+вынести из харнеса (`nohup … &`).
+
+### `project_continue_undeclared`, `continuation_source_ineligible`, `continuation_source_incomplete`
+
+**Причина.** Продолжение делает только то, что объявил workflow продолжения
+(ревизия 7, блок `continuation`). `project_continue_undeclared` — у workflow
+выбранного launch объявления нет. `continuation_source_ineligible` — workflow
+или исход исходного Run не входят в `from_workflows` / `from_outcomes`;
+текст называет оба списка. `continuation_source_incomplete` — в исходном Run
+нет объявленного источника: стадия не принята с объявленным вердиктом, не
+сообщила объявленный выход, или не принят ни один checkpoint; текст называет
+стадию и порт.
+
+**Поле.** Блок `continuation` и `checkpoint` — в
+[`authoring/continuation-guide.md`](authoring/continuation-guide.md).
+
+**Команда.** `run status RUN` показывает принятые шаги, их выходы и
+`checkpoint` исходного Run; `project continue --prepare` показывает, откуда
+будет взят каждый вход, до создания claim и Run.
 
 ### Клон не подключается: `project_runner_missing` про раннер чужого хоста
 
