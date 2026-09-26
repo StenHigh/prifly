@@ -59,6 +59,7 @@ type generator struct {
 	runFinish             bool
 	externalWrite         bool
 	continuation          bool
+	nextHandoff           bool
 	recovery              bool
 }
 
@@ -202,6 +203,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.continuation && continuationField(t, field.Name) {
 						continue
 					}
+					if !g.nextHandoff && nextHandoffField(t, field.Name) {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -335,6 +339,7 @@ var profileContracts = []struct {
 	{"recovery", "generate failed-stage recovery state/read version 38 contracts", func(g *generator) { g.recovery = true }},
 	{"external-write", "generate declared external write state/read version 39 contracts", func(g *generator) { g.externalWrite = true }},
 	{"continuation", "generate declared continuation state/read version 40 contracts", func(g *generator) { g.continuation = true }},
+	{"next-handoff", "generate next version 41 handoff contracts", func(g *generator) { g.nextHandoff = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -919,6 +924,10 @@ func main() {
 			delete(contracts, name+"V39")
 		}
 	}
+	if g.nextHandoff {
+		contracts["CoreNextViewV41"] = contracts["CoreNextViewV36"]
+		delete(contracts, "CoreNextViewV36")
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1213,6 +1222,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-continuation:40"
 			bundle["title"] = "Pri-Fly declared continuation contracts"
 			bundle["description"] = "State/read 40 carries what a workflow declares about continuing its work. The read names the Run's last accepted checkpoint -- the output a stage declared as the workflow's checkpoint, whose content is the author's and is never read here. A continuation takes exactly the inputs its workflow declares from the Run it continues and takes over that Run's claimed tree as it was left, so recovery/2 records no commit: the tree is the source's own. recovery/1 keeps the commit it chose its tree by. Every prior bundle is unchanged, byte for byte."
+		}
+		if g.nextHandoff {
+			nextHandoffConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-next-handoff:41"
+			bundle["title"] = "Pri-Fly next-action handoff contracts"
+			bundle["description"] = "Next 41 hands a Run to an executor that has none of the history before it: the accepted result that led to the current action -- after a blocked, the reason the step handed over -- the Run's last accepted checkpoint, the bounded repeats the action runs inside with the limit this Run applies and where the workflow goes when it is reached, and, once the Run has ended, the installed workflows that declare they continue it. Everything is derived at read time from what the Run and the installed packages already hold, so it mints no state version and the states that answered 36 answer 41. State, read, preview and step read keep the 40 contracts."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

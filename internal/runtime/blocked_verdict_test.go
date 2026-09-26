@@ -19,7 +19,7 @@ import (
 //
 // A step that declares the result contract naming the verdict can now say it
 // could not judge, and a graph at the revision that answers for it routes that
-// wherever its author decided -- here, back to the same stage.
+// wherever its author decided -- here, to a finish of its own.
 func TestAStepCanSayItCouldNotJudgeAndTheGraphRoutesIt(t *testing.T) {
 	e, workflow := coreDriverFixture(t, "pass")
 	definitions, _, err := Builtins()
@@ -323,5 +323,37 @@ func TestAProgramStepThatPromisedAReportMustGiveIt(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("blocked without the promised report was accepted: %+v", r.Diagnostics)
+	}
+}
+
+// A fresh executor learns why it is here: the stage whose accepted blocked led
+// to its action and the report that stage handed over, read by the same
+// routing the driver used.
+func TestNextNamesTheBlockedResultThatLedHere(t *testing.T) {
+	e, runID := programBlockedFixture(t, "blocked-report")
+	ctx := context.Background()
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	r := driverRun(t, e, runID)
+	p, err := r.planFor(r.RootInvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report ArtifactRef
+	for _, activation := range r.Activations {
+		if activation.StageID == "work" {
+			report = r.Steps[activation.StepID].Outputs["report"]
+		}
+	}
+	arrival := arrivalAt(r, p, r.RootInvocationID, "consume")
+	if arrival == nil || arrival.StageID != "work" || arrival.Verdict != "blocked" || arrival.Outputs["report"] != report {
+		t.Fatalf("the stage blocked routes to does not name what led there: %+v", arrival)
+	}
+	// This fixture seals an early core state, which keeps the next contract it
+	// was published with: the answer below is next 41's only for states that
+	// took it up, which TestNextHandsTheRunToAFreshExecutor reads.
+	if next, err := e.Next(ctx, runID); err != nil || next.SchemaVersion == CoreHandoffNextVersion || next.ArrivedFrom != nil {
+		t.Fatalf("an early state answered under next 41: %+v %v", next, err)
 	}
 }

@@ -1,0 +1,8 @@
+id: example:schema/blocked-result
+version: 1.0.0
+type: object
+additionalProperties: false
+required: [subject, condition_ref]
+properties:
+  subject: {type: string, minLength: 1, maxLength: 200}
+  condition_ref: {type: string, minLength: 1, maxLength: 1000}

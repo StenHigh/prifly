@@ -1,0 +1,67 @@
+# Do the work once a condition holds; retry at most three times while it
+# does not, then stop `partial` with the obstacle as the Run's output. The
+# continue/ package next to this one continues such a Run later.
+authoring: prifly-project-workflow/1
+package:
+  id: example:package/blocked-condition
+  version: 1.0.0
+  description: Work that waits on a condition, bounded, and hands over why it stopped.
+  requires_core_protocol: "1"
+  references:
+    adapter: core:adapter/local-process@2.0.0
+    policy: core:policy/local@3.0.0
+    result: core:schema/step-result@2.0.0
+id: example:workflow/blocked-condition
+version: 1.0.0
+title: Work on a condition
+inputs:
+  request: {schema_ref: "{{schema_blocked-request}}"}
+outputs:
+  result: {schema_ref: "{{schema_blocked-result}}", required_for: [succeeded]}
+  obstacle: {schema_ref: "{{schema_obstacle}}", required_for: [partial]}
+entry: attempt
+policy_ref: "{{policy}}"
+limits: {max_step_instances: 6, max_control_transitions: 24, max_child_depth: 1}
+stages:
+  attempt:
+    kind: repeat
+    body_workflow_ref: "{{workflow_blocked-condition-attempt}}"
+    initial_bindings: {request: $inputs.request}
+    next_bindings: {request: $inputs.request}
+    continue_on: [partial]
+    # A body that passed ends `succeeded`, which is not in continue_on, so the
+    # loop completes; this never holds on a `partial` body and is here
+    # because a repeat declares one.
+    until: {op: exists, ref: $iteration.result}
+    max_iterations: 3
+    on_complete: {succeeded: done, rejected: rejected}
+    on_limit: stopped
+    on_error: rejected
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {result: $stages.attempt.result}
+  stopped:
+    kind: finish
+    outcome: partial
+    output_bindings: {obstacle: $stages.attempt.obstacle}
+  rejected:
+    kind: finish
+    outcome: rejected
+
+execution_bindings:
+  steps:
+    example:step/check-condition:
+      executable: node
+      args: [worker.mjs, check]
+      files: {worker.mjs: files/worker.mjs}
+      timeout_ms: 10000
+      grace_ms: 100
+      max_output_bytes: 1048576
+    example:step/remedy:
+      executable: node
+      args: [worker.mjs, remedy]
+      files: {worker.mjs: files/worker.mjs}
+      timeout_ms: 10000
+      grace_ms: 100
+      max_output_bytes: 1048576

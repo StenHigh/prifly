@@ -357,6 +357,24 @@ func TestRepeatProjectLimitIsPinnedAndOnlyNarrows(t *testing.T) {
 			if a.Repeat.IterationCount != int64(tc.bodies) || a.Repeat.LastDecision.Route != "on_limit" || r.WorkflowConfigurations[r.WorkflowRef.Digest].Inputs["round_limit"].Source != "project" {
 				t.Fatalf("project limit was not pinned and applied: %+v", a.Repeat)
 			}
+			// What run next tells a fresh executor about the loop it is in: the
+			// iteration, the limit this Run applies -- the project's 2, not the
+			// declared 3 -- and where the workflow goes when it is reached.
+			read := 0
+			for _, inv := range r.Invocations {
+				if inv.Iteration == nil || *inv.Iteration != int64(tc.bodies) || inv.CallerActivationID != a.ID {
+					continue
+				}
+				read++
+				positions, err := repeatsAround(r, inv.ID)
+				onLimit := r.mustPlan(t).Workflow.Definition.Stages["work"].OnLimit
+				if err != nil || len(positions) != 1 || positions[0].StageID != "work" || positions[0].Iteration != int64(tc.bodies) || positions[0].Limit != 2 || positions[0].OnLimit != onLimit {
+					t.Fatalf("the repeat around the last body is not named with its applied limit: %+v %v", positions, err)
+				}
+			}
+			if read != 1 {
+				t.Fatalf("read %d last bodies, want exactly one", read)
+			}
 		})
 	}
 }
@@ -480,4 +498,13 @@ func TestRepeatNonContinuingOutcomeSkipsUntil(t *testing.T) {
 	if r.Status != "completed" || d.Iteration != 1 || d.Route != "on_complete" || d.UntilResult != "not_evaluated" || len(d.Inputs) != 0 || len(r.Invocations) != 2 {
 		t.Fatal("noncontinuing outcome read until or ran another body")
 	}
+}
+
+func (r Run) mustPlan(t *testing.T) *flow.Plan {
+	t.Helper()
+	p, err := r.plan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
 }

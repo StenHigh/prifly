@@ -137,9 +137,22 @@ func acceptedStageOutput(r Run, source flow.ContinuationSource) (ArtifactRef, er
 			}
 			outputs, settled = step.Outputs, step.Settled
 		} else {
+			// A call has one child; a repeat has one per iteration, and the
+			// one that counts is the last settled. Map order chose one before.
+			var last time.Time
 			for _, invocation := range r.Invocations {
-				if invocation != nil && invocation.CallerActivationID == activation.ID && invocation.Status == "completed" && invocation.Outcome != nil && *invocation.Outcome == source.Outcome {
-					outputs, settled = invocation.Outputs, invocation.Settled
+				if invocation == nil || invocation.CallerActivationID != activation.ID || invocation.Status != "completed" || invocation.Outcome == nil || *invocation.Outcome != source.Outcome {
+					continue
+				}
+				at, err := settlementTime(invocation.Settled)
+				if err != nil {
+					return ArtifactRef{}, err
+				}
+				if outputs != nil && at.Equal(last) {
+					return ArtifactRef{}, local.Reject("continuation_source_ambiguous", "stage "+source.Stage+" has two children settled at the same moment")
+				}
+				if outputs == nil || at.After(last) {
+					outputs, settled, last = invocation.Outputs, invocation.Settled, at
 				}
 			}
 		}

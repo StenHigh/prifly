@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -371,6 +372,15 @@ func TestCLIContinuationTakesOverTheSourceTree(t *testing.T) {
 	if child.Run.Run.Fork == nil || child.Run.Run.Fork.SourceRunID != source.Run.Run.ID || len(child.Run.Run.Fork.ReuseRefs) != 4 {
 		t.Fatalf("new Run lost source provenance: %+v", child.Run.Run.Fork)
 	}
+	// Now the tail's package is installed, run next on the source names it as
+	// what continues this Run and offers the command.
+	var sourceNext prifly.NextView
+	if err := json.Unmarshal([]byte(command("--project", authority, "run", "next", source.Run.Run.ID)), &sourceNext); err != nil {
+		t.Fatal(err)
+	}
+	if sourceNext.Continuations == nil || len(*sourceNext.Continuations) != 1 || (*sourceNext.Continuations)[0].ID != "example:workflow/tail" || !slices.Contains(sourceNext.SafeNextActions, "project.continue") {
+		t.Fatalf("run next on the source does not name what continues it: %+v %v", sourceNext.Continuations, sourceNext.SafeNextActions)
+	}
 	if problem := refuse("project_continue_active_child", append([]string{"project", "continue", "--prepare"}, continueArgs...)...); !strings.Contains(problem, child.Run.Run.ID) {
 		t.Fatalf("active child refusal omitted Run ID: %s", problem)
 	}
@@ -452,6 +462,13 @@ func TestCLIContinuationOfACancelledRun(t *testing.T) {
 	if data, err := os.ReadFile(filepath.Join(child.WorkspacePath, "unsaved.txt")); err != nil || string(data) != "work in progress\n" {
 		t.Fatalf("the cancelled Run's uncommitted work did not reach the continuation: %q %v", data, err)
 	}
+	var sourceNext prifly.NextView
+	if err := json.Unmarshal([]byte(f.command("--project", f.authority, "run", "next", f.source.Run.Run.ID)), &sourceNext); err != nil {
+		t.Fatal(err)
+	}
+	if sourceNext.Continuations == nil || len(*sourceNext.Continuations) != 1 || !slices.Contains(sourceNext.SafeNextActions, "project.continue") {
+		t.Fatalf("run next on the cancelled source does not name what continues it: %+v %v", sourceNext.Continuations, sourceNext.SafeNextActions)
+	}
 }
 
 // A tail continuing only outcomes does not take a cancelled Run.
@@ -464,5 +481,14 @@ func TestCLIContinuationRefusesACancelledRunItDoesNotDeclare(t *testing.T) {
 	f.command("--project", f.authority, "run", "drive", f.source.Run.Run.ID)
 	if problem := f.refuse("continuation_source_ineligible", "project", "continue", "--prepare", "--repository", f.root, "--launch", "tail", "--host", "codex-cli", "--source-run", f.source.Run.Run.ID); !strings.Contains(problem, "ended cancelled") {
 		t.Fatalf("the refusal does not say how the source ended: %s", problem)
+	}
+	// Not installed and not admitting cancellation either way: nothing is
+	// offered, and the list says so rather than being absent.
+	var sourceNext prifly.NextView
+	if err := json.Unmarshal([]byte(f.command("--project", f.authority, "run", "next", f.source.Run.Run.ID)), &sourceNext); err != nil {
+		t.Fatal(err)
+	}
+	if sourceNext.Continuations == nil || len(*sourceNext.Continuations) != 0 || slices.Contains(sourceNext.SafeNextActions, "project.continue") {
+		t.Fatalf("a Run nothing continues offered a continuation: %+v %v", sourceNext.Continuations, sourceNext.SafeNextActions)
 	}
 }

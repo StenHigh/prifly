@@ -1266,6 +1266,16 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		if configurations != nil && requiresSessionState(defs, plan) {
 			stateVersion = CoreStageWorkStateVersion
 		}
+		// Every Run a project launches is sealed at least at 31, the first state
+		// whose next answer hands a Run to a fresh executor. A program-only Run
+		// used to stay at the state of its features alone and kept an answer
+		// that could not say how it got to its action or what continues it --
+		// for the workflows that need that most. Runs sealed before keep the
+		// state and answer they were sealed with, and a Run started without a
+		// project keeps sealing at the state of its features.
+		if neutral && configurations != nil {
+			stateVersion = higherState(stateVersion, CoreStageWorkStateVersion)
+		}
 		// A Run whose owner named no source is byte-for-byte the Run this
 		// build always wrote, under the version it always wrote: only a
 		// binding that actually carries a declaration moves the state on. The

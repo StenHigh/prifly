@@ -25,8 +25,10 @@ func TestContinuationTakesExactlyWhatTheWorkflowDeclares(t *testing.T) {
 			"s2": {Status: "completed", Verdict: "pass", ActivationID: "a2", Settled: early, Outputs: map[string]ArtifactRef{"text": ref("old-text")}},
 			"s3": {Status: "completed", Verdict: "pass", ActivationID: "a3", Settled: late, Outputs: map[string]ArtifactRef{"text": ref("new-text")}},
 		},
+		// A repeat leaves one child per iteration; the last settled counts.
 		Invocations: map[string]*Invocation{
-			"child": {ID: "child", CallerActivationID: "a4", Status: "completed", Outcome: &outcome, Settled: late, Outputs: map[string]ArtifactRef{"finding": ref("finding")}},
+			"child":   {ID: "child", CallerActivationID: "a4", Status: "completed", Outcome: &outcome, Settled: late, Outputs: map[string]ArtifactRef{"finding": ref("finding")}},
+			"child-0": {ID: "child-0", CallerActivationID: "a4", Status: "completed", Outcome: &outcome, Settled: early, Outputs: map[string]ArtifactRef{"finding": ref("old-finding")}},
 		},
 	}
 	target := &flow.Plan{}

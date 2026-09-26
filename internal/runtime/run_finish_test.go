@@ -71,7 +71,7 @@ func TestTerminalRunNamesItsFinishAndTheEdgeThatReachedIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.Action != "terminal" || next.SchemaVersion != CoreRunFinishNextVersion {
+	if next.Action != "terminal" || next.SchemaVersion != CoreHandoffNextVersion {
 		t.Fatalf("a finished Run answered under the wrong contract: %s %s", next.Action, next.SchemaVersion)
 	}
 	if next.Finish == nil {
@@ -124,5 +124,18 @@ func TestFinishEdgeIsNotNamedWhenTwoSettledStagesDeclareIt(t *testing.T) {
 	}
 	if finish.FromStageID != "" || finish.Verdict != "" {
 		t.Fatalf("one of two candidate edges was passed off as the one taken: %+v", finish)
+	}
+	// The handoff reads the same rule for any stage, not only a finish: with
+	// the two disagreeing candidates it names none either.
+	p, err := r.planFor(r.RootInvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if arrival := arrivalAt(r, p, r.RootInvocationID, "abandoned"); arrival != nil {
+		t.Fatalf("the handoff passed one of two candidate edges off as the one taken: %+v", arrival)
+	}
+	delete(r.Activations, other.ID)
+	if arrival := arrivalAt(r, p, r.RootInvocationID, "abandoned"); arrival == nil || arrival.StageID != "gate" || arrival.Verdict != "pass" {
+		t.Fatalf("one edge taken twice on the same verdict was not named: %+v", arrival)
 	}
 }

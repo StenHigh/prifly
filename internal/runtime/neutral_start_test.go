@@ -31,7 +31,9 @@ func TestNeutralStartWithoutBriefExecutesAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := driverRun(t, e, started.Receipt.RunID)
-	if r.SchemaVersion != CoreNeutralStateVersion || r.Brief != (ArtifactRef{}) || hasDecisionStateFields(r) {
+	// A project launch seals at least 31, the state whose next answer hands
+	// the Run over; the absent brief is what this test is about.
+	if r.SchemaVersion != CoreStageWorkStateVersion || r.Brief != (ArtifactRef{}) || hasDecisionStateFields(r) {
 		t.Fatalf("neutral Run manufactured task or decision data: %s %+v", r.SchemaVersion, r.Brief)
 	}
 	state := contextContractObject(t, r)
@@ -42,7 +44,7 @@ func TestNeutralStartWithoutBriefExecutesAfterRestart(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(e.Root, artifactMetadataPath(briefID))); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("no-brief start wrote task artifact: %v", err)
 	}
-	if err := validatePublic(t, "CoreRunStateV26", r); err != nil {
+	if err := validatePublic(t, "CoreRunStateV31", r); err != nil {
 		t.Fatal(err)
 	}
 	if validatePublic(t, "CoreRunStateV25", r) == nil {
@@ -65,17 +67,17 @@ func TestNeutralStartWithoutBriefExecutesAfterRestart(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = e.Close() })
 	view, err := e.View(ctx, r.ID)
-	if err != nil || view.SchemaVersion != CoreNeutralReadVersion || view.Run.Brief != (ArtifactRef{}) {
+	if err != nil || view.SchemaVersion != CoreStageWorkReadVersion || view.Run.Brief != (ArtifactRef{}) {
 		t.Fatalf("restart changed absent brief: %+v %v", view, err)
 	}
-	if err := validatePublic(t, "CoreRunViewV26", view); err != nil {
+	if err := validatePublic(t, "CoreRunViewV31", view); err != nil {
 		t.Fatal(err)
 	}
 	next, err := e.Next(ctx, r.ID)
-	if err != nil || next.SchemaVersion != CoreNeutralNextVersion {
+	if err != nil || next.SchemaVersion != CoreHandoffNextVersion {
 		t.Fatalf("neutral next: %+v %v", next, err)
 	}
-	if err := validatePublic(t, "CoreNextViewV26", next); err != nil {
+	if err := validatePublic(t, "CoreNextViewV41", next); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.Drive(ctx, r.ID); err != nil {

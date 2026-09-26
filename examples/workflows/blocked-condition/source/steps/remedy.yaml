@@ -1,0 +1,14 @@
+# The step blocked routes to. It gets the obstacle as an ordinary input and
+# its own effects -- none here: it may record what it saw and what it would
+# need, and it may not change anything. A remedy that may change something
+# declares that effect itself; a blocked report grants no permission.
+authoring: prifly-step/1
+id: example:step/remedy
+version: 1.0.0
+title: Record the obstacle
+kind: worker
+inputs:
+  obstacle: {schema_ref: "{{schema_obstacle}}"}
+executor: {adapter_ref: "{{adapter}}", operation: process}
+effects: {class: none, retry_class: never}
+result_schema_ref: "{{result}}"

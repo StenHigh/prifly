@@ -166,6 +166,14 @@ func Capabilities() CapabilityManifest {
 	profile.ReadVersions = append(profile.ReadVersions, CoreContinuationReadVersion)
 	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionContinuationVersion)
 	profile.Capabilities = append(profile.Capabilities, "workflow_continuation")
+	// Step contract 12 lets a program promise an output for blocked, as 10
+	// lets an assisted step: the reason it could not judge reaches the stage
+	// the author routed blocked to.
+	profile.StepVersions = append(profile.StepVersions, "12")
+	// Next 41 hands a Run to an executor without the history before it: how
+	// it got to its action, its checkpoint, the bounded repeats around it and
+	// what continues it once it has ended. It is an answer, not a record.
+	profile.Capabilities = append(profile.Capabilities, "next_handoff")
 	return manifest
 }
 

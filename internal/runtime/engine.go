@@ -644,6 +644,20 @@ type NextView struct {
 	// stage: a failed or cancelled Run names what stopped it in the read view
 	// instead.
 	Finish *RunFinish `json:"finish,omitempty"`
+	// ArrivedFrom is the accepted result that led to the current action or to
+	// the finish: the stage, the verdict or child outcome it took and its
+	// outputs. Absent when this build cannot name one edge.
+	ArrivedFrom *NextArrival `json:"arrived_from,omitempty"`
+	// Checkpoint is the Run's last accepted checkpoint, where its workflow
+	// declares one.
+	Checkpoint *CheckpointRef `json:"checkpoint,omitempty"`
+	// Repeats are the bounded repeats the current action runs inside,
+	// outermost first.
+	Repeats []RepeatPosition `json:"repeats,omitempty"`
+	// Continuations are, for a completed or cancelled Run, the workflows of
+	// installed packages that declare they continue it. Empty means no
+	// installed package declares one, not that continuing is impossible.
+	Continuations *[]flow.Ref `json:"continuations,omitempty"`
 }
 
 // RunFinish names the place a Run's graph stopped and, where the sealed plan
@@ -877,7 +891,7 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		}
 		// Only the states whose next contract declares the field carry it: a
 		// Run answering an older contract answers exactly what it always did.
-		if nextVersionFor(r.SchemaVersion) == CoreRunFinishNextVersion {
+		if next := nextVersionFor(r.SchemaVersion); next == CoreRunFinishNextVersion || next == CoreHandoffNextVersion {
 			finish = runFinish(r)
 		}
 	case "uncertain":
@@ -936,7 +950,69 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 			next.ResumeRequired = r.admissionsBlockedFor(next.InvocationID) && !r.restrictedFor(next.InvocationID)
 		}
 	}
+	if next.SchemaVersion == CoreHandoffNextVersion {
+		if err := e.handOffNext(ctx, r, kind, work, &next); err != nil {
+			return NextView{}, err
+		}
+	}
 	return next, nil
+}
+
+// handOffNext says what a fresh executor needs to go on without the history of
+// whoever came before: how the Run got to this action, its checkpoint, the
+// bounded repeats it is inside and, once it has ended, what continues it.
+// Everything is read from what the Run and the installed packages already
+// hold; no artifact content is read.
+func (e *Engine) handOffNext(ctx context.Context, r Run, kind, work string, next *NextView) error {
+	invocationID, stageID := next.InvocationID, next.StageID
+	switch kind {
+	case "active", "session_resume", "session_expired":
+		if attempt := r.Attempts[work]; attempt != nil {
+			if activation := r.Activations[attempt.ActivationID]; activation != nil {
+				stageID = activation.StageID
+			}
+		}
+	case "terminal":
+		if next.Finish != nil {
+			invocationID, stageID = next.Finish.InvocationID, next.Finish.StageID
+		}
+	}
+	if invocationID != "" && stageID != "" {
+		p, err := r.planFor(invocationID)
+		if err != nil {
+			return err
+		}
+		next.ArrivedFrom = arrivalAt(r, p, invocationID, stageID)
+		repeats, err := repeatsAround(r, invocationID)
+		if err != nil {
+			return err
+		}
+		if len(repeats) != 0 {
+			next.Repeats = repeats
+		}
+	}
+	if isContinuationState(r.SchemaVersion) {
+		checkpoint, err := lastCheckpoint(r)
+		var rejection *local.Rejection
+		if errors.As(err, &rejection) && rejection.Code == "continuation_source_ambiguous" {
+			checkpoint, err = nil, nil
+		}
+		if err != nil {
+			return err
+		}
+		next.Checkpoint = checkpoint
+	}
+	if kind == "terminal" && (r.Status == "completed" && r.Outcome != nil || r.Status == "cancelled") {
+		continuations, err := e.continuationsOf(ctx, r)
+		if err != nil {
+			return err
+		}
+		next.Continuations = &continuations
+		if len(continuations) != 0 {
+			next.SafeNextActions = append(next.SafeNextActions, "project.continue")
+		}
+	}
+	return nil
 }
 
 // A receipt is read under current access, including on an exact retry: holding

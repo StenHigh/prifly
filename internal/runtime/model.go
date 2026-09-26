@@ -297,6 +297,11 @@ const (
 	// the states that already answer 33, 34 and 35 — which is why a Run
 	// started before this build also answers under it.
 	CoreRunFinishNextVersion = "core-next/36"
+	// 41 hands a Run to a fresh executor: how it got to its action, its
+	// checkpoint, the bounded repeats around it and what continues it once it
+	// has ended. Like 36 it is an answer, not a record, and rides the states
+	// that answered 36.
+	CoreHandoffNextVersion   = "core-next/41"
 	CoreConfigVersion        = "core-configuration/1"
 	CoreContextConfigVersion = "core-configuration/2"
 	MaxDefinitionBytes       = 2 << 20

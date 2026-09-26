@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"slices"
 	"path/filepath"
 	"testing"
 
@@ -122,5 +123,46 @@ func TestAProjectTitleDoesNotLowerTheSealedState(t *testing.T) {
 	}
 	if r := driverRun(t, e, result.Receipt.RunID); r.SchemaVersion != CoreExternalWriteStateVersion || r.ProjectTitle != "A project" {
 		t.Fatalf("sealed at %s with title %q", r.SchemaVersion, r.ProjectTitle)
+	}
+}
+
+// A finished Run handed to a fresh executor says what reached its finish and
+// with which outputs, its checkpoint, and that nothing installed continues it.
+func TestNextHandsTheRunToAFreshExecutor(t *testing.T) {
+	e, runID := checkpointFixture(t)
+	ctx := context.Background()
+	task := handOver(t, e, runID)
+	if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "planned")); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(ctx, runID); err != nil {
+		t.Fatal(err)
+	}
+	r := driverRun(t, e, runID)
+	var plan ArtifactRef
+	for _, step := range r.Steps {
+		plan = step.Outputs["plan"]
+	}
+	next, err := e.Next(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.SchemaVersion != CoreHandoffNextVersion || next.Action != "terminal" {
+		t.Fatalf("a finished Run answered %s %s", next.SchemaVersion, next.Action)
+	}
+	if next.ArrivedFrom == nil || next.ArrivedFrom.StageID != "plan" || next.ArrivedFrom.Verdict != "pass" || next.ArrivedFrom.Outputs["plan"] != plan {
+		t.Fatalf("what reached the finish is not named: %+v", next.ArrivedFrom)
+	}
+	if next.Checkpoint == nil || next.Checkpoint.Ref != plan {
+		t.Fatalf("the checkpoint is not handed over: %+v", next.Checkpoint)
+	}
+	if next.Continuations == nil || len(*next.Continuations) != 0 || slices.Contains(next.SafeNextActions, "project.continue") {
+		t.Fatalf("a Run nothing continues offered a continuation: %+v %v", next.Continuations, next.SafeNextActions)
+	}
+	if next.Repeats != nil {
+		t.Fatalf("an action inside no repeat named one: %+v", next.Repeats)
+	}
+	if err := validatePublic(t, "CoreNextViewV41", next); err != nil {
+		t.Fatalf("next 41 rejects its own answer: %v", err)
 	}
 }
