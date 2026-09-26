@@ -58,3 +58,42 @@ func TestTheVerdictIsDeclaredOnBothSidesItNeeds(t *testing.T) {
 		t.Fatal("the first result contract stopped being published")
 	}
 }
+
+// Four published bundles named assisted-session/8 as the edition a task carries
+// and the engine never emitted it: a real handoff could not satisfy the contract
+// that described it. The version existed as a label for a field, and a field is
+// described by the bundle that adds it, not by an edition nothing reaches.
+//
+// The property held here is the one that was broken: every assisted edition this
+// build declares is one some handoff can carry. A constant nobody emits is how
+// the wrong const reached six bundles.
+func TestEveryAssistedEditionDeclaredIsOneAHandoffCanCarry(t *testing.T) {
+	declared := []string{
+		AssistedSessionVersion, AssistedSessionCostVersion, AssistedSessionWorkspaceVersion,
+		AssistedSessionTreeVersion, AssistedSessionDecisionVersion, AssistedSessionTimingVersion,
+		AssistedSessionRoutedVersion,
+	}
+	// What the driver can assign, written out separately on purpose: a list
+	// derived from the constants agrees with them by construction, which is
+	// exactly how an edition nothing assigns stayed declared.
+	assignable := []string{
+		"assisted-session/1", "assisted-session/2", "assisted-session/3",
+		"assisted-session/4", "assisted-session/5", "assisted-session/6",
+		"assisted-session/7",
+	}
+	if len(declared) != len(assignable) {
+		t.Fatalf("this build declares %d assisted editions and can assign %d", len(declared), len(assignable))
+	}
+	for i, edition := range declared {
+		if edition != assignable[i] {
+			t.Errorf("declared edition %s is not the one the driver assigns at that rank (%s)", edition, assignable[i])
+		}
+	}
+	// And the newest is what a handoff actually carries, measured rather than
+	// assumed: a constant and an emission agreeing on paper is what the six
+	// bundles already did.
+	e, runID, _ := assistedWorkspaceFixture(t, "checkout")
+	if task := handOver(t, e, runID); task.SchemaVersion != AssistedSessionRoutedVersion {
+		t.Fatalf("a handoff carries %q and the newest declared edition is %q", task.SchemaVersion, AssistedSessionRoutedVersion)
+	}
+}

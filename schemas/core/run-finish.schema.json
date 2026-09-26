@@ -9208,7 +9208,7 @@
           "type": "integer"
         },
         "schema_version": {
-          "const": "assisted-session/8"
+          "const": "assisted-session/7"
         },
         "skill_refs": {
           "anyOf": [

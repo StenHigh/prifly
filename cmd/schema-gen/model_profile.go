@@ -42,6 +42,10 @@ func modelProfileConstraints(g *generator) {
 		g.property("runtime_ProfileCapabilities", field, map[string]any{"type": "array", "items": map[string]any{"type": "string", "minLength": 1}, "minItems": 1, "maxItems": 64, "uniqueItems": true})
 	}
 	g.describe("runtime_Attempt", "model_profile_report", "What the host said it did with the model profile this step declared: honoured and which model, unavailable because its platform does not choose, or declined and why. The host's statement about itself, recorded as given. This authority holds no channel to a session that existed before the Run and confirms nothing here.")
-	g.property("runtime_SessionTask", "schema_version", map[string]any{"const": prifly.AssistedSessionModelProfileVersion})
+	// The task carries the declaration on the edition it was already written
+	// under: the profile is sealed in the plan, so no handoff records it and no
+	// stored session moves. Pinning a later edition here described a task this
+	// engine never emits, and every bundle from this one on repeated it.
+	g.property("runtime_SessionTask", "schema_version", map[string]any{"const": prifly.AssistedSessionRoutedVersion})
 	g.describe("runtime_SessionTask", "model_profile", "What this step's author asked of the model that executes it, read from the sealed plan. A profile of work, not a provider or product. Absent means the step asked nothing, never that the host may decide silently. This authority selects no model: an assisted session exists before the Run and it holds no channel to it.")
 }

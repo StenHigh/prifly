@@ -31,13 +31,13 @@ const (
 	AssistedSessionDecisionVersion  = "assisted-session/5"
 	AssistedSessionTimingVersion    = "assisted-session/6"
 	AssistedSessionRoutedVersion    = "assisted-session/7"
-	// AssistedSessionModelProfileVersion is the task contract that can name the
-	// model profile a step declared. It is the answer moving, not the state:
-	// the declaration is sealed in the plan, so no handoff records it and every
-	// stored session stays on the edition it was written under.
-	AssistedSessionModelProfileVersion = "assisted-session/8"
-	ReportedCostVersion                = "reported-cost/1"
-	MaxReportedCosts                   = 8
+	// There is no assisted-session/8. A declaration sealed in the plan needs no
+	// edition of its own, and the one minted for the model profile was named by
+	// four published bundles as the version a task carries -- which no task
+	// ever did. The bundle that adds a field is what describes it; the edition
+	// a task carries is the one its handoff was written under.
+	ReportedCostVersion = "reported-cost/1"
+	MaxReportedCosts    = 8
 
 	SessionAwaiting         = "awaiting_host"
 	SessionReported         = "reported"
