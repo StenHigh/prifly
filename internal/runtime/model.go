@@ -275,6 +275,12 @@ const (
 	// Recovery records source evidence separately from this Run's new work.
 	CoreRecoveryStateVersion = "core-state/38"
 	CoreRecoveryReadVersion  = "core-read/38"
+	// An assisted step may declare that it changes an external system, bounded
+	// by what it named. The handoff carries that permission and its bounds, so
+	// the Run records a fact it did not before -- which is why this mints a
+	// state version rather than riding an existing one.
+	CoreExternalWriteStateVersion = "core-state/39"
+	CoreExternalWriteReadVersion  = "core-read/39"
 	// A terminal Run names where its graph stopped. Both halves were already
 	// held: the finish activation is in the state, and the edge that reached
 	// it is declared in the plan the Run sealed. A host that wanted the reason

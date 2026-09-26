@@ -500,8 +500,18 @@ func buildBuiltins() ([]PinnedDefinition, flow.Registry, error) {
 		version     string
 		depth       int
 		parallelism int
-	}{{"1.0.0", 0, 1}, {"2.0.0", 8, 1}, {"3.0.0", 8, flow.MaxQualifiedParallelism}} {
+		// classes is what this policy edition admits. A Run sealed under an
+		// earlier one admits no external write, whatever a step declares: the
+		// permission is the policy's to give, and the old editions do not.
+		classes []string
+	}{
+		{"1.0.0", 0, 1, []string{"none", "workspace_write"}},
+		{"2.0.0", 8, 1, []string{"none", "workspace_write"}},
+		{"3.0.0", 8, flow.MaxQualifiedParallelism, []string{"none", "workspace_write"}},
+		{"4.0.0", 8, flow.MaxQualifiedParallelism, []string{"none", "workspace_write", "external_write"}},
+	} {
 		policy["version"] = version.version
+		policy["allowed_effect_classes"] = version.classes
 		policy["limits"] = flow.Limits{MaxStepInstances: 256, MaxControlTransitions: 1024, MaxParallelism: version.parallelism, MaxChildDepth: version.depth}
 		b, err := canonical(policy)
 		if err != nil {

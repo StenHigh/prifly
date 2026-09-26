@@ -130,6 +130,9 @@ var profileTranslationPublicContracts []byte
 //go:embed run-finish.schema.json
 var runFinishPublicContracts []byte
 
+//go:embed external-write.schema.json
+var externalWritePublicContracts []byte
+
 //go:embed recovery.schema.json
 var recoveryPublicContracts []byte
 

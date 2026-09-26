@@ -57,6 +57,7 @@ type generator struct {
 	profileTranslations   bool
 	projectTitles         bool
 	runFinish             bool
+	externalWrite         bool
 	recovery              bool
 }
 
@@ -194,6 +195,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.runFinish && runFinishField(t, field.Name) {
 						continue
 					}
+					if !g.externalWrite && externalWriteField(t, field.Name) {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -322,6 +326,7 @@ var profileContracts = []struct {
 	{"project-title", "generate sealed Project title state/read version 37 contracts", func(g *generator) { g.projectTitles = true }},
 	{"run-finish", "generate named Run finish next version 36 contracts", func(g *generator) { g.runFinish = true }},
 	{"recovery", "generate failed-stage recovery state/read version 38 contracts", func(g *generator) { g.recovery = true }},
+	{"external-write", "generate declared external write state/read version 39 contracts", func(g *generator) { g.externalWrite = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -892,6 +897,12 @@ func main() {
 		contracts["RecoveryProvenance"] = reflect.TypeFor[prifly.RecoveryProvenance]()
 		contracts["RecoveryReuse"] = reflect.TypeFor[prifly.RecoveryReuse]()
 	}
+	if g.externalWrite {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreCapabilities"} {
+			contracts[name+"V39"] = contracts[name+"V38"]
+			delete(contracts, name+"V38")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1174,6 +1185,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-recovery:38"
 			bundle["title"] = "Pri-Fly failed-stage recovery contracts"
 			bundle["description"] = "State/read 38 records exact source evidence in a distinct linked Run. Reused gates remain source Attempts, while only work after the failed frontier is executed in the new Run. Previous state, read and event editions remain unchanged."
+		}
+		if g.externalWrite {
+			externalWriteConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-external-write:39"
+			bundle["title"] = "Pri-Fly declared external write contracts"
+			bundle["description"] = "State/read 39 lets an assisted step declare that it changes a system this authority does not observe, and bound what it may change: the system, the changing operations and the exact target. The handoff carries that boundary to the host as the permission it acts under, verbatim -- the engine reaches nothing, receipts nothing and reads no meaning from the values, so nothing here is evidence that the change happened. Operations name changes only; reading the same system is not a change, needs no permission from here, and its absence forbids nothing. A step declaring the class without a boundary is refused, and so is one declaring a repeatable retry class, because a blind second attempt writes twice. Every prior bundle describes the handoff without this field, byte for byte."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

@@ -147,6 +147,15 @@ func Capabilities() CapabilityManifest {
 	// of leaving the reason in the journal.
 	profile.StepVersions = append(profile.StepVersions, "10")
 	profile.Capabilities = append(profile.Capabilities, "blocked_verdict")
+	// An assisted step may declare a bounded change to a system this authority
+	// does not observe. The boundary is the author's, carried to the host
+	// verbatim; the engine reaches nothing and verifies nothing about the
+	// change itself, and says so rather than implying a receipt.
+	profile.StateVersion, profile.ReadVersion = CoreExternalWriteStateVersion, CoreExternalWriteReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreExternalWriteStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreExternalWriteReadVersion)
+	profile.StepVersions = append(profile.StepVersions, "11")
+	profile.Capabilities = append(profile.Capabilities, "declared_external_write")
 	return manifest
 }
 

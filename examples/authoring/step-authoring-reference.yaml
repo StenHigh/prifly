@@ -99,8 +99,23 @@ required_capabilities: [network] # Optional extra capabilities; defaults to [].
 # capabilities`, and publishing from a worker declared `class: none` is a way
 # around the contract rather than through it.
 effects:
-  class: workspace_write # Required: explicitly state none or workspace_write.
+  class: workspace_write # Required: none, workspace_write, or external_write.
   retry_class: never # Required retry contract; it is never inferred.
+# Required when, and only when, class is external_write: an assisted step saying
+# it changes a system this authority cannot observe, and bounding what it may
+# change. The values are opaque here -- they travel to the host as the
+# permission it acts under and nothing reads meaning from them. operations names
+# the permitted CHANGES: reading the same system is not a change, needs no
+# permission from here, and its absence forbids nothing. Such a step declares
+# deduplicated, reconcile_required or never, because a repeated attempt writes
+# twice, and it gets no workspace right from the class: the claimed tree is still
+# compared at submission. Nothing here is evidence the change happened; what the
+# host did is what the host reports, and a mandatory output on pass is how the
+# verified result arrives.
+# external_write:
+#   system: example-system
+#   operations: [record.create]
+#   target: example/target
 # Optional result checks; defaults to []. A workspace-tree step must keep this
 # empty because its native output is sealed atomically by runtime.
 result_check_refs: []

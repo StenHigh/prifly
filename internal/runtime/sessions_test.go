@@ -679,7 +679,11 @@ func TestUnqualifiedEffectClassRefusalNamesBothBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	step := plan.Steps[activation.StageID]
-	step.Effects.Class = "external_write"
+	// destructive is what this profile still does not qualify. external_write
+	// stopped being the example when an assisted step gained the right to
+	// declare a bounded one; the property being held is that an unqualified
+	// class is refused by name, not which class that is today.
+	step.Effects.Class = "destructive"
 	err = validateAssistedStep(plan, step)
 	problem, _ := ProblemFor(err)
 	if problem.Code != "unsupported_effect" {
@@ -691,7 +695,7 @@ func TestUnqualifiedEffectClassRefusalNamesBothBoundaries(t *testing.T) {
 		t.Fatalf("an explanation was put in violations: %+v", problem.Violations)
 	}
 	detail := problem.Message
-	for _, boundary := range []string{"external_write", "workspace_write or none"} {
+	for _, boundary := range []string{"destructive", "external_write"} {
 		if !strings.Contains(detail, boundary) {
 			t.Fatalf("the refusal omits the %s boundary: %s", boundary, detail)
 		}

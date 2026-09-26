@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -272,15 +273,27 @@ func (e *Engine) checkWorkflowCapabilitiesWithBindings(plan *flow.Plan, bindings
 	}
 	supportedPolicy := plan.Workflow.PolicyRef == builtinRef(defs, "core:policy/local") ||
 		plan.Profile == flow.CoreProfile && (plan.Workflow.PolicyRef == builtinVersionRef(defs, "core:policy/local", "2.0.0") ||
-			plan.Workflow.PolicyRef == builtinVersionRef(defs, "core:policy/local", "3.0.0"))
+			plan.Workflow.PolicyRef == builtinVersionRef(defs, "core:policy/local", "3.0.0") ||
+			plan.Workflow.PolicyRef == builtinVersionRef(defs, "core:policy/local", "4.0.0"))
 	if !supportedPolicy {
 		return fault("unsupported_policy", "expected an exact local policy supported by the selected profile")
 	}
 	var policy struct {
-		Limits flow.Limits `json:"limits"`
+		Limits  flow.Limits `json:"limits"`
+		Classes []string    `json:"allowed_effect_classes"`
 	}
 	if err := json.Unmarshal(registry[plan.Workflow.PolicyRef], &policy); err != nil {
 		return err
+	}
+	// The policy has named the effect classes it admits since the first edition
+	// and nothing read the field, so the list bound nothing: a step could
+	// declare a class its own sealed policy does not allow. It is read here,
+	// where the Run is sealed, so the edition a Run pinned is the permission it
+	// actually runs under.
+	for id, step := range plan.Steps {
+		if !slices.Contains(policy.Classes, step.Effects.Class) {
+			return faultf("unsupported_effect", "stage %s declares effects.class %s and the pinned policy %s admits %s", id, step.Effects.Class, plan.Workflow.PolicyRef.Version, strings.Join(policy.Classes, ", "))
+		}
 	}
 	limits := plan.Workflow.Limits
 	if limits.MaxStepInstances > policy.Limits.MaxStepInstances || limits.MaxControlTransitions > policy.Limits.MaxControlTransitions || limits.MaxParallelism > policy.Limits.MaxParallelism || limits.MaxChildDepth > policy.Limits.MaxChildDepth {
@@ -323,7 +336,7 @@ func (e *Engine) checkWorkflowCapabilitiesWithBindings(plan *flow.Plan, bindings
 			return fault("unsupported_executor", "expected pinned core local process adapter")
 		}
 		if step.Effects.Class != "none" && step.Effects.Class != "workspace_write" {
-			return fault("unsupported_effect", "F1 does not qualify external_write or destructive; an assisted session step is narrowed further to workspace_write or none")
+			return fault("unsupported_effect", "this profile does not qualify destructive steps, and a declared external write belongs to an assisted step: a program has no handoff to carry the permission and no report to hold to it")
 		}
 		for _, output := range step.Outputs {
 			if output.Format == "blob" && len(output.MediaTypes) > 1 {
@@ -1263,6 +1276,16 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 				return local.Change{}, local.Reject("unsupported_model_profile", "a declared model profile requires the scoped invocation state")
 			}
 			stateVersion = CoreModelProfileStateVersion
+		}
+		// The handoff of a step declaring an external write records the boundary
+		// it was given, so the state that can hold it is the one this Run seals
+		// at. Declared versions that nothing reaches were this month's defect
+		// twice; the reachability test is what keeps this one honest.
+		if requiresExternalWriteState(plan) {
+			if configurations == nil {
+				return local.Change{}, local.Reject("unsupported_effect", "a declared external write requires the scoped invocation state")
+			}
+			stateVersion = CoreExternalWriteStateVersion
 		}
 		if len(options.ModelProfiles) != 0 {
 			if configurations == nil {

@@ -300,6 +300,18 @@ type WorkflowRevision struct {
 	PolicyRef Ref    `json:"policy_ref"`
 }
 
+// ExternalWriteBoundary is what a step declaring external_write says it may
+// change: the system, the changing operations, and the exact target. Nothing
+// here is interpreted by this authority; it is the author's statement, carried
+// to the host verbatim so the permission a host acts under is the one the step
+// declared. Operations name changes only -- reading the same system is not a
+// change, needs no declaration, and its absence is not a prohibition.
+type ExternalWriteBoundary struct {
+	System     string   `json:"system"`
+	Operations []string `json:"operations"`
+	Target     string   `json:"target"`
+}
+
 type StepDefinition struct {
 	SchemaVersion string                `json:"schema_version"`
 	ID            string                `json:"id"`
@@ -319,6 +331,13 @@ type StepDefinition struct {
 		Class      string `json:"class"`
 		RetryClass string `json:"retry_class"`
 	} `json:"effects"`
+	// ExternalWrite is the boundary of what a step declaring external_write may
+	// change outside this authority. The values are opaque here: the engine
+	// carries them to the host as the permission and its bounds, reaches
+	// nothing itself, and reads no meaning from them. Operations name the
+	// permitted changes only -- reading the same system is not a change and
+	// needs no declaration, so its absence from the list is not a prohibition.
+	ExternalWrite   *ExternalWriteBoundary `json:"external_write,omitempty"`
 	ResultCheckRefs []Ref                  `json:"result_check_refs"`
 	ResultSchemaRef Ref                    `json:"result_schema_ref"`
 	Hooks           map[string]Hook        `json:"hooks,omitempty"`

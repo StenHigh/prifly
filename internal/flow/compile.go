@@ -696,6 +696,11 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 				return step, problem("unsupported", path+"/schema_version", "an output promised for the blocked verdict requires core-workflow/1")
 			}
 			name = "StepDefinitionV10"
+		case "11":
+			if p.Profile != CoreProfile {
+				return step, problem("unsupported", path+"/schema_version", "a declared external write requires core-workflow/1")
+			}
+			name = "StepDefinitionV11"
 		}
 	}
 	if err := validateProtocolValue(name, value, path); err != nil {
@@ -715,8 +720,26 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 	if len(step.ContextRefs) != 0 && p.Resources == nil {
 		return step, problem("unsupported", path+"/context_refs", "F1 accepts explicit inputs; context composition belongs to F2")
 	}
-	if step.Effects.Class != "none" && step.Effects.Class != "workspace_write" {
-		return step, problem("unsupported", path+"/effects/class", "external writes and destructive steps are outside F1 qualification")
+	switch step.Effects.Class {
+	case "none", "workspace_write":
+		if step.ExternalWrite != nil {
+			return step, problem("unsupported", path+"/external_write", "only a step declaring effects.class external_write bounds an external write")
+		}
+	case "external_write":
+		// The boundary is what makes the permission finite. Without it the step
+		// says "I change something outside" and nothing says what, which is not
+		// a permission a host can act under or an owner can review.
+		if step.ExternalWrite == nil {
+			return step, problem("unsupported", path+"/external_write", "a step declaring effects.class external_write declares the system, the changing operations and the target it may change")
+		}
+		// A technical retry of an external write is a second write. The step's
+		// own retry class is what says whether that is safe, and two of the
+		// five say it is -- neither of which may apply here.
+		if RepeatableRetryClasses[step.Effects.RetryClass] {
+			return step, problem("unsupported", path+"/effects/retry_class", "a step that changes an external system declares deduplicated, reconcile_required or never: repeating "+step.Effects.RetryClass+" blindly writes twice")
+		}
+	default:
+		return step, problem("unsupported", path+"/effects/class", "destructive steps are outside F1 qualification")
 	}
 	for _, name := range keys(step.Inputs) {
 		if err := p.checkPort(step.Inputs[name].Port, path+"/inputs/"+escapePointer(name)); err != nil {

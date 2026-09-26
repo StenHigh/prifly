@@ -131,7 +131,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
-		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10",
+		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11",
 		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6",
 	}
 	for name := range defs {
@@ -232,6 +232,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = stepDefinitionV2Schema
 	case "StepDefinitionV10":
 		extension = stepDefinitionV2Schema
+	case "StepDefinitionV11":
+		extension = stepDefinitionV2Schema
 	case "WorkflowRevisionV2":
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV3":
@@ -253,11 +255,12 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		// Each step contract is the previous one plus its own change, so the
 		// requested name is reached by running the mutators in order up to it.
 		// A name outside this list is a base contract and runs none of them.
-		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10"}
+		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11"}
 		stepMutators := []func(){
 			func() { stepDefinitionV3(root) }, func() { stepDefinitionV4(root) }, func() { stepDefinitionV5(root) },
 			func() { stepDefinitionV6(root) }, func() { stepDefinitionV7(root) }, func() { stepDefinitionV8(root) },
 			func() { stepDefinitionV9(root) }, func() { stepDefinitionV10(root, defs) },
+			func() { stepDefinitionV11(root) },
 		}
 		for i := 0; i <= slices.Index(stepContracts, name); i++ {
 			stepMutators[i]()
@@ -702,6 +705,31 @@ func StepContractFor(version string) string {
 		return ""
 	}
 	return "StepDefinitionV" + version
+}
+
+// stepDefinitionV11 lets an assisted step declare that it changes an external
+// system, and bound what it may change. The class was always in the published
+// EffectClass enum and refused by the profile's own gates; what was missing is
+// the boundary, without which the permission would be unbounded.
+func stepDefinitionV11(root map[string]any) {
+	root["$id"] = "urn:prifly:step-definition:11"
+	root["title"] = "Pri-Fly StepDefinition v11: an assisted step declares a bounded external write"
+	properties := root["properties"].(map[string]any)
+	properties["schema_version"].(map[string]any)["const"] = "11"
+	properties["external_write"] = map[string]any{
+		"type": "object", "additionalProperties": false,
+		"required": []any{"system", "operations", "target"},
+		"properties": map[string]any{
+			"system": map[string]any{"type": "string", "minLength": 1, "maxLength": 128},
+			// Changes only. Reading the same system is not a change, needs no
+			// declaration, and its absence from this list forbids nothing.
+			"operations": map[string]any{
+				"type": "array", "minItems": json.Number("1"), "maxItems": json.Number("32"), "uniqueItems": true,
+				"items": map[string]any{"type": "string", "minLength": 1, "maxLength": 128},
+			},
+			"target": map[string]any{"type": "string", "minLength": 1, "maxLength": 1024},
+		},
+	}
 }
 
 // ValidateSchema checks data before a Run exists, using the same pinned schema

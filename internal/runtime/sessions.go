@@ -176,6 +176,20 @@ func requiresSessionState(definitions []PinnedDefinition, p *flow.Plan) bool {
 	return false
 }
 
+// requiresExternalWriteState reports whether any step of this closure declares
+// a bounded external write. The boundary is recorded on the handoff, so it is a
+// fact of the Run and not only of the plan.
+func requiresExternalWriteState(p *flow.Plan) bool {
+	for _, workflow := range workflowPlans(p) {
+		for _, step := range workflow.Steps {
+			if step.ExternalWrite != nil && step.Effects.Class == "external_write" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // requiresModelProfileState reports whether any step of this closure declares
 // a model profile. The declaration itself records nothing, but a step that
 // carries one is a step whose attempt can carry the host's report about it,
@@ -206,11 +220,8 @@ func validateAssistedStep(plan *flow.Plan, step flow.StepDefinition) error {
 	// permission on a shared worktree: two such steps would be kept apart by
 	// convention alone. Both declarations are admitted, and the declaration is
 	// what decides whether a worktree is claimed at all.
-	if step.Effects.Class != "workspace_write" && step.Effects.Class != "none" {
-		// Two boundaries refuse this, and neither is visible in the step's own
-		// declaration: the profile does not qualify the class at all, and the
-		// assisted contract narrows it further.
-		return fault("unsupported_effect", "an assisted session step declares workspace_write or none; this profile qualifies neither external_write nor destructive, and the assisted contract narrows the rest to workspace_write or none")
+	if step.Effects.Class != "workspace_write" && step.Effects.Class != "none" && step.Effects.Class != "external_write" {
+		return fault("unsupported_effect", "an assisted session step declares none, workspace_write or external_write; this profile does not qualify destructive")
 	}
 	if len(step.RequiredCapabilities) > 0 {
 		return fault("unsupported_capability", "the assisted contract supplies no extra capabilities")
@@ -364,6 +375,12 @@ type SessionTask struct {
 	// empty string that reads as false and present at the same time.
 	Deadline         string   `json:"deadline,omitempty"`
 	PermittedEffects []string `json:"permitted_effects"`
+	// ExternalWrite is the boundary the step declared for the one effect this
+	// authority cannot observe. Operations name the changes permitted; reading
+	// the same system is not a change, needs no permission from here, and its
+	// absence from the list forbids nothing. Absent unless the step declares
+	// effects.class external_write.
+	ExternalWrite *flow.ExternalWriteBoundary `json:"external_write,omitempty"`
 }
 
 // SessionTaskFile is the handoff itself, written into the attempt workspace
@@ -589,6 +606,16 @@ func (e *Engine) sessionTaskFrom(ctx context.Context, r Run, view local.ReadView
 			} else {
 				task.PermittedEffects = []string{"write_inside_claimed_worktree", "local_git_commit_on_claimed_base"}
 			}
+		}
+		// The permission and its bounds travel together: a host told it may
+		// change an external system, without being told which one and what,
+		// would be acting on a permission nobody wrote down. The engine reaches
+		// nothing itself and reads no meaning from these values.
+		if step.ExternalWrite != nil && step.Effects.Class == "external_write" {
+			task.PermittedEffects = append(task.PermittedEffects, "change_declared_external_target")
+			boundary := *step.ExternalWrite
+			boundary.Operations = slices.Clone(step.ExternalWrite.Operations)
+			task.ExternalWrite = &boundary
 		}
 		if a.Session.ClaimID != "" {
 			claim, err := e.claim(ctx, a.Session.ClaimID)

@@ -64,6 +64,8 @@ var versionContracts = []versionContract{
 	{CoreProfileTranslationStateVersion, CoreProfileTranslationReadVersion, CoreProfileTranslationStepReadVersion, CoreRunFinishNextVersion},
 	{CoreProjectTitleStateVersion, CoreProjectTitleReadVersion, "", CoreRunFinishNextVersion},
 	{CoreRecoveryStateVersion, CoreRecoveryReadVersion, "", CoreRunFinishNextVersion},
+	// 39 records the declared boundary of an external write on the handoff.
+	{CoreExternalWriteStateVersion, CoreExternalWriteReadVersion, "", CoreRunFinishNextVersion},
 	// 36 mints no state row of its own: it is a next-action answer, so every
 	// state that can describe a finished Run and is still being created takes
 	// it up, the way 31 and 32 took up 33. That includes 31 and 32 themselves,
@@ -92,6 +94,13 @@ func isEffectsState(version string) bool { return atLeast(version, CoreEffectsSt
 func isMaterializedState(version string) bool {
 	return atLeast(version, CoreMaterializedStateVersion)
 }
+
+// isExternalWriteState reports whether a Run's state can record the declared
+// boundary of an external write on its handoff.
+func isExternalWriteState(version string) bool {
+	return atLeast(version, CoreExternalWriteStateVersion)
+}
+
 func isStageWorkState(version string) bool {
 	return atLeast(version, CoreStageWorkStateVersion)
 }
