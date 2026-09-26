@@ -92,10 +92,20 @@ func TestDuplicateContinuationChoiceChangesReviewDigest(t *testing.T) {
 	}
 }
 
-// Nothing in this fixture belongs to a package the engine knows: the tail
-// workflow declares what it continues and where each input comes from, and
-// the continuation takes over the source Run's tree as it was left.
-func TestCLIContinuationTakesOverTheSourceTree(t *testing.T) {
+// continuationCLI is a project with a source workflow of three assisted steps
+// and a tail workflow continuing it. Nothing in it belongs to a package the
+// engine knows: the tail declares what it continues and where each input
+// comes from, and the continuation takes over the source Run's tree.
+type continuationCLI struct {
+	root, authority, base string
+	source                projectStartResult
+	command               func(...string) string
+	refuse                func(string, ...string) string
+	submit                func(map[string]string, []prifly.WorkspaceTreeLocation)
+}
+
+func newContinuationCLI(t *testing.T, tailContinuation string) continuationCLI {
+	t.Helper()
 	root, authority := newProjectFixture(t)
 	writeFixtureFile(t, root, ".prifly/project.yaml", `schema_version: prifly-project-profile/3
 `+projectHostsYAML+`packages:
@@ -147,6 +157,15 @@ workspace_trees:
   - output_port: plan
     capture: {kind: exact_file, path: plans/plan.md}
 `)
+	writeFixtureFile(t, root, ".prifly/workflows/source/steps/polish.yaml", `authoring: prifly-step/1
+id: example:step/polish
+version: 1.0.0
+kind: worker
+executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
+instructions_ref: "{{context_work}}"
+effects: {class: none, retry_class: never}
+result_schema_ref: "{{step_result_schema}}"
+`)
 	writeFixtureFile(t, root, ".prifly/workflows/source/workflow.yaml", `authoring: prifly-project-workflow/1
 package:
   id: example-source:package/source
@@ -164,10 +183,11 @@ refs:
   object: "{{schema_object}}"
   prepare: "{{step_prepare}}"
   draft: "{{step_draft}}"
+  polish: "{{step_polish}}"
   local_policy: "{{local_policy}}"
 inputs: {task: {schema_ref: object}}
 entry: prepare
-limits: {max_step_instances: 2, max_control_transitions: 3}
+limits: {max_step_instances: 3, max_control_transitions: 4}
 policy_ref: local_policy
 stages:
   prepare: {kind: step, step_ref: prepare, on: {pass: draft}, impossible_verdicts: [fail, needs_revision, no_work]}
@@ -175,8 +195,9 @@ stages:
     kind: step
     step_ref: draft
     input_bindings: {handoff: $stages.prepare.handoff}
-    on: {pass: partial}
+    on: {pass: polish}
     impossible_verdicts: [fail, needs_revision, no_work]
+  polish: {kind: step, step_ref: polish, on: {pass: partial}, impossible_verdicts: [fail, needs_revision, no_work]}
   partial: {kind: finish, outcome: partial}
 `)
 	writeFixtureFile(t, root, ".prifly/workflows/tail/steps/verify.yaml", `authoring: prifly-step/1
@@ -219,8 +240,7 @@ inputs:
   draft: {schema_ref: object}
 continuation:
   from_workflows: [example:workflow/source]
-  from_outcomes: [partial]
-  inputs:
+` + tailContinuation + `  inputs:
     task: {source_input: task}
     handoff: {stage: prepare, output: handoff, verdict: pass}
     plan: {stage: draft, output: plan, verdict: pass}
@@ -300,6 +320,14 @@ stages:
 		command("--project", authority, "session", "submit", "--file", path)
 		command("--project", authority, "run", "drive", source.Run.Run.ID)
 	}
+	return continuationCLI{root: root, authority: authority, base: base, source: source, command: command, refuse: refuse, submit: submit}
+}
+
+// The source reaches partial and the tail, continuing partial Runs, takes over
+// its tree with the file its last step left uncommitted.
+func TestCLIContinuationTakesOverTheSourceTree(t *testing.T) {
+	f := newContinuationCLI(t, "  from_outcomes: [partial]\n")
+	root, authority, base, source, command, refuse, submit := f.root, f.authority, f.base, f.source, f.command, f.refuse, f.submit
 	submit(map[string]string{"handoff": "{}\n"}, nil)
 	writeFixtureFile(t, source.WorkspacePath, "feature.txt", "drafted\n")
 	writeFixtureFile(t, source.WorkspacePath, "plans/plan.md", "# Plan\n")
@@ -307,6 +335,7 @@ stages:
 	gitFixture(t, source.WorkspacePath, "commit", "-qm", "draft")
 	drafted := gitFixture(t, source.WorkspacePath, "rev-parse", "HEAD")
 	submit(map[string]string{"draft": "{}\n"}, []prifly.WorkspaceTreeLocation{{OutputPort: "plan", Path: "plans/plan.md"}})
+	submit(map[string]string{}, nil)
 	// Left behind uncommitted, as a step stopped mid-way leaves its work.
 	writeFixtureFile(t, source.WorkspacePath, "unsaved.txt", "work in progress\n")
 
@@ -379,5 +408,61 @@ stages:
 	}
 	if first.ClaimID != source.Workspace.ID || first.ClaimPath != child.Workspace.Path {
 		t.Fatalf("read-only first gate is not bound to the handed-over claim: %+v", first)
+	}
+}
+
+// The case the tree retention exists for: a driver killed mid-Run leaves it
+// cancelled, with no outcome, and the work its steps left in the tree. A tail
+// declaring from_cancelled continues it; one that does not is refused.
+func TestCLIContinuationOfACancelledRun(t *testing.T) {
+	f := newContinuationCLI(t, "  from_cancelled: true\n")
+	f.submit(map[string]string{"handoff": "{}\n"}, nil)
+	writeFixtureFile(t, f.source.WorkspacePath, "plans/plan.md", "# Plan\n")
+	f.submit(map[string]string{"draft": "{}\n"}, []prifly.WorkspaceTreeLocation{{OutputPort: "plan", Path: "plans/plan.md"}})
+	writeFixtureFile(t, f.source.WorkspacePath, "unsaved.txt", "work in progress\n")
+	f.command("--project", f.authority, "run", "cancel", f.source.Run.Run.ID, "--reason", "the driver was killed")
+	f.command("--project", f.authority, "run", "drive", f.source.Run.Run.ID)
+	// The next launch in the same repository must not remove the cancelled
+	// Run's tree: that is where its work is.
+	var other projectLaunchSummary
+	startArgs := []string{"--repository", f.root, "--launch", "source", "--host", "codex-cli", "--workspace", "worktree", "--input", "task=" + filepath.Join(f.root, "task.json")}
+	if err := json.Unmarshal([]byte(f.command(append([]string{"project", "questionnaire", "--prepare"}, startArgs...)...)), &other); err != nil {
+		t.Fatal(err)
+	}
+	f.command("--project", f.authority, "capacity", "set", "--capacity", "2", "--reason", "a second launch beside the cancelled one")
+	f.command(append(append([]string{"project", "start"}, startArgs...), "--expected-launch-digest", other.ReviewDigest)...)
+	if data, err := os.ReadFile(filepath.Join(f.source.WorkspacePath, "unsaved.txt")); err != nil || string(data) != "work in progress\n" {
+		t.Fatalf("the next launch removed the cancelled Run's tree: %q %v", data, err)
+	}
+	continueArgs := []string{"--repository", f.root, "--launch", "tail", "--host", "codex-cli", "--source-run", f.source.Run.Run.ID}
+	var reviewed projectLaunchSummary
+	if err := json.Unmarshal([]byte(f.command(append([]string{"project", "continue", "--prepare"}, continueArgs...)...)), &reviewed); err != nil {
+		t.Fatal(err)
+	}
+	if reviewed.Continuation == nil || reviewed.Continuation.Source.Outcome != "cancelled" || reviewed.Continuation.Source.Claim == nil || reviewed.Continuation.Source.Claim.ID != f.source.Workspace.ID {
+		t.Fatalf("the cancelled Run's tree is not handed over: %+v", reviewed.Continuation)
+	}
+	var child projectStartResult
+	if err := json.Unmarshal([]byte(f.command(append(append([]string{"project", "continue"}, continueArgs...), "--expected-launch-digest", reviewed.ReviewDigest)...)), &child); err != nil {
+		t.Fatal(err)
+	}
+	if child.Workspace == nil || child.Workspace.ID != f.source.Workspace.ID {
+		t.Fatalf("the continuation did not take the cancelled Run's tree: %+v", child.Workspace)
+	}
+	if data, err := os.ReadFile(filepath.Join(child.WorkspacePath, "unsaved.txt")); err != nil || string(data) != "work in progress\n" {
+		t.Fatalf("the cancelled Run's uncommitted work did not reach the continuation: %q %v", data, err)
+	}
+}
+
+// A tail continuing only outcomes does not take a cancelled Run.
+func TestCLIContinuationRefusesACancelledRunItDoesNotDeclare(t *testing.T) {
+	f := newContinuationCLI(t, "  from_outcomes: [partial]\n")
+	f.submit(map[string]string{"handoff": "{}\n"}, nil)
+	writeFixtureFile(t, f.source.WorkspacePath, "plans/plan.md", "# Plan\n")
+	f.submit(map[string]string{"draft": "{}\n"}, []prifly.WorkspaceTreeLocation{{OutputPort: "plan", Path: "plans/plan.md"}})
+	f.command("--project", f.authority, "run", "cancel", f.source.Run.Run.ID, "--reason", "stopped")
+	f.command("--project", f.authority, "run", "drive", f.source.Run.Run.ID)
+	if problem := f.refuse("continuation_source_ineligible", "project", "continue", "--prepare", "--repository", f.root, "--launch", "tail", "--host", "codex-cli", "--source-run", f.source.Run.Run.ID); !strings.Contains(problem, "ended cancelled") {
+		t.Fatalf("the refusal does not say how the source ended: %s", problem)
 	}
 }

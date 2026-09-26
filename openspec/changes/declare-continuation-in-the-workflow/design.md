@@ -61,7 +61,11 @@ continuation:
     resume_from: {checkpoint: true}
 ```
 
-Для стадии `call` вместо `verdict` пишется `outcome`. Всё запечатано в
+Для стадии `call` вместо `verdict` пишется `outcome`. Отменённый Run исхода
+не имеет, поэтому его продолжение — отдельное объявление `from_cancelled:
+true`, а не шестой исход в `from_outcomes`; нужно хотя бы одно из двух.
+Отменённый Run, держащий неразрешённую execution, не продолжается
+(`continuation_source_unsettled`): сначала `run resolve`. Всё запечатано в
 WorkflowRevision и входит в его digest, поэтому review digest prepare и
 повторная проверка при start покрывают объявления без нового механизма.
 Опубликованные схемы заморожены: поля получает только новая

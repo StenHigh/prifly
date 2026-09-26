@@ -20,9 +20,9 @@
 - [x] 4.1 `project continue`: любой launch с объявлением, `project_continue_undeclared` для остальных, передача claim по умолчанию, `--workspace-commit` вместо `--implementation-head`, prepare показывает источник каждого входа и claim; убрать вычисление `implementation` из Git. `project recover`: без выбора commit и условия на `review`. Обновить справку; переписать `TestCLIContinuationFromUnmergedImplementation` и CLI-тесты восстановления на нейтральные пакеты.
 - [x] 4.2 Переписать delta specs активных changes `continue-existing-implementation` и `retry-failed-stage-with-new-package` в нейтральной форме; `openspec validate` обоих `--strict`.
 - [x] 4.3 Обновить `examples/troubleshooting.md`, раздел «Хост убил `run drive`»: дерево отменённого Run сохраняется, продолжение — `project continue`.
-
 - [x] 4.4 CLI компилирует workflow launch один раз: план, из которого читается объявление продолжения, передаётся в проверку запуска.
 - [x] 4.5 Руководство для автора workflow и ИИ-агента в `examples/authoring/`: что такое checkpoint и зачем, как сделать workflow продолжаемым, что делает движок и чего не делает, как проверять дерево первым шагом, как устроены передача claim и хранение деревьев, отказы и что делать с каждым; ссылки из `examples/README.md` и `AGENTS.md`-карты не нужны, если справочник найден через таблицу возможностей.
+- [x] 4.6 Продолжение отменённых Runs: `from_cancelled: true` в ревизии 7 (хотя бы одно из `from_outcomes`/`from_cancelled`), отказ `continuation_source_unsettled` для Run с активной или неразрешённой execution; CLI-тесты: отменённый Run с незакоммиченным файлом продолжается и его дерево переживает следующий запуск, tail без объявления отказывает.
 
 ## 5. Проверка и выпуск
 

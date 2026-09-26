@@ -55,6 +55,7 @@ workflow ничего не знает о своих продолжателях.
 continuation:
   from_workflows: [example:workflow/source]   # какие Runs можно продолжать
   from_outcomes: [partial, rejected]          # с каким исходом
+  from_cancelled: true                        # и отменённые Runs (исхода у них нет)
   inputs:                                      # откуда взять каждый вход
     task:    {source_input: task}                              # вход исходного Run
     notes:   {stage: prepare, output: notes, verdict: pass}    # принятый выход шага корневого вызова
@@ -70,8 +71,16 @@ continuation:
   догадка.
 - Байты проверяются схемой входа **нового** workflow и запечатываются заново;
   исходные ревизии записываются в provenance.
+- Отменённый Run исхода не имеет, поэтому его продолжение объявляется
+  отдельно: `from_cancelled: true`. Нужно хотя бы одно из `from_outcomes` и
+  `from_cancelled`. Типичный случай — хост убил драйвер посреди Run: принятые
+  шаги, checkpoint и дерево с оставленными файлами переходят к продолжению.
+- Отменённый Run, который держит неразрешённую execution (например, была
+  выдана Attempt шага, меняющего дерево), не продолжается:
+  `continuation_source_unsettled`. Сначала `run resolve` — владелец говорит,
+  применился ли эффект.
 - Технический отказ без исхода не продолжают — его восстанавливают
-  (`project recover`). Отменённый Run исхода не имеет и не продолжается.
+  (`project recover`).
 
 ## Первая стадия: что проверить
 
@@ -123,6 +132,7 @@ continue` делает это по объявлению и проверяет т
 | `project_continue_undeclared` | у workflow launch нет `continuation` | выбрать другой launch или объявить |
 | `continuation_source_ineligible` | workflow или исход исходного Run не объявлены | текст называет оба списка |
 | `continuation_source_incomplete` | нет объявленного источника (стадия, выход, checkpoint) | текст называет стадию и порт |
+| `continuation_source_unsettled` | исходный Run держит активную или неразрешённую execution | `run resolve`, затем продолжить |
 | `continuation_source_ambiguous` | два результата с одним временем | продолжение невозможно без решения владельца |
 | `continuation_source_incompatible` | байты не проходят схему входа нового workflow | согласовать схемы |
 | `continuation_source_changed` | исходный Run или его дерево изменились после prepare | повторить `--prepare` |

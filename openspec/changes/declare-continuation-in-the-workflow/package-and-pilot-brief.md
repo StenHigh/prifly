@@ -38,6 +38,7 @@ Runs, завершившихся не `succeeded` / `completed_with_waivers` / `
    continuation:
      from_workflows: [aif:workflow/classic, aif-profiled:workflow/classic]
      from_outcomes: [partial, rejected]
+     from_cancelled: true   # продолжение после убитого драйвера
      inputs:
        task:    {source_input: task}
        handoff: {stage: warmup, output: handoff, verdict: pass}
@@ -71,6 +72,10 @@ Runs, завершившихся не `succeeded` / `completed_with_waivers` / `
   новый движок откажет в `project continue` для старого workflow продолжения
   (`project_continue_undeclared`).
 - Уже идущие Runs продолжения доводятся без изменений.
+- Run, отменённый из-за убитого драйвера, теперь продолжается `project
+  continue`, если workflow продолжения объявил `from_cancelled: true`; дерево
+  с незакоммиченной работой переходит к продолжению. Если отмена оставила
+  неразрешённую execution — сначала `run resolve`.
 - Деревья незавершённых Runs теперь копятся: смотреть `claim list`,
   освобождать `claim release` после того, как нужное сохранено.
 - Восстановление старого failed Run, чьё дерево уже освобождено, даст

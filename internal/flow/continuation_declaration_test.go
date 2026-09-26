@@ -46,6 +46,15 @@ func TestRevisionSevenSealsCheckpointAndContinuation(t *testing.T) {
 	if !strings.Contains(string(plan.Canonical), `"continuation"`) {
 		t.Fatal("the continuation is not part of the sealed bytes, so the digest does not cover it")
 	}
+	// A cancelled Run has no outcome; continuing it is its own statement, and
+	// it may be the only one.
+	source := workflow["continuation"].(map[string]any)
+	delete(source, "from_outcomes")
+	source["from_cancelled"] = true
+	cancelled, err := CompileProfile(encoded(t, workflow), "json", registry, CoreProfile)
+	if err != nil || !cancelled.Workflow.Continuation.FromCancelled || len(cancelled.Workflow.Continuation.FromOutcomes) != 0 {
+		t.Fatalf("a continuation of cancelled Runs was refused or lost: %v", err)
+	}
 	// The checkpoint alone is also a whole declaration: a workflow may keep one
 	// without continuing anything.
 	delete(workflow, "continuation")
@@ -76,6 +85,12 @@ func TestRevisionSevenRefusesWhatItCannotKeep(t *testing.T) {
 		}},
 		{"empty outcome list", "schema_invalid", "", func(w map[string]any) {
 			w["continuation"].(map[string]any)["from_outcomes"] = []any{}
+		}},
+		{"neither outcomes nor cancelled", "schema_invalid", "", func(w map[string]any) {
+			delete(w["continuation"].(map[string]any), "from_outcomes")
+		}},
+		{"cancelled declared false", "schema_invalid", "", func(w map[string]any) {
+			w["continuation"].(map[string]any)["from_cancelled"] = false
 		}},
 		{"a technical failure is not an outcome", "schema_invalid", "", func(w map[string]any) {
 			w["continuation"].(map[string]any)["from_outcomes"] = []any{"failed"}

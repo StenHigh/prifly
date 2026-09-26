@@ -219,11 +219,13 @@ git всё же даёт, называется `claim_worktree_removal_failed` �
 его не освободит явный `claim release`. Раньше следующий claim в том же
 репозитории удалял его вместе с веткой.
 
-**Что нельзя.** Отменённый Run не имеет исхода, поэтому его не продолжает ни
-`project continue` (продолжает только объявленные исходы), ни `project
-recover` (восстанавливает технический отказ), ни `run fork` (`reuse_refs`
-принимает только выходы Run, дошедшего до исхода, — `invalid_reuse`).
-Работа в дереве цела; дальше — по протоколу пакета, руками.
+**Как продолжить.** `project continue` с launch, чей workflow объявил
+`continuation.from_cancelled: true`: продолжение получает принятые шаги,
+checkpoint и само дерево с оставленными файлами. Если отмена оставила
+неразрешённую execution, сначала `run resolve` — иначе
+`continuation_source_unsettled`. `project recover` отменённый Run не берёт
+(восстанавливает технический отказ), `run fork` тоже (`reuse_refs` принимает
+только выходы Run, дошедшего до исхода, — `invalid_reuse`).
 
 **Что сначала.** `claim list` называет сохранённое дерево и его путь.
 Сохранить нужное (`git push origin prifly/<claim>:…`) — и только потом
@@ -238,8 +240,10 @@ recover` (восстанавливает технический отказ), н�
 **Причина.** Продолжение делает только то, что объявил workflow продолжения
 (ревизия 7, блок `continuation`). `project_continue_undeclared` — у workflow
 выбранного launch объявления нет. `continuation_source_ineligible` — workflow
-или исход исходного Run не входят в `from_workflows` / `from_outcomes`;
-текст называет оба списка. `continuation_source_incomplete` — в исходном Run
+исходного Run не входит в `from_workflows`, или его исход не входит в
+`from_outcomes` (отменённый — если нет `from_cancelled`); текст называет
+оба списка. `continuation_source_unsettled` — исходный Run держит активную
+или неразрешённую execution: сначала `run resolve`. `continuation_source_incomplete` — в исходном Run
 нет объявленного источника: стадия не принята с объявленным вердиктом, не
 сообщила объявленный выход, или не принят ни один checkpoint; текст называет
 стадию и порт.

@@ -27,10 +27,12 @@
     },
     "continuation": {
       "description": "Revision 7: which finished Runs this workflow continues and where each input comes from in them.",
-      "type": "object", "additionalProperties": false, "required": ["from_workflows", "from_outcomes", "inputs"],
+      "type": "object", "additionalProperties": false, "required": ["from_workflows", "inputs"],
+      "anyOf": [{"required": ["from_outcomes"]}, {"required": ["from_cancelled"]}],
       "properties": {
         "from_workflows": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
         "from_outcomes": {"type": "array", "items": {"enum": ["succeeded", "rejected", "no_work", "partial", "completed_with_waivers"]}, "minItems": 1, "uniqueItems": true},
+        "from_cancelled": {"const": true, "description": "Also continue a cancelled Run: it has no outcome, and its accepted steps and tree are what it leaves."},
         "inputs": {
           "type": "object", "minProperties": 1,
           "additionalProperties": {"oneOf": [

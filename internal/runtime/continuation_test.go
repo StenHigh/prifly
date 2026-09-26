@@ -76,6 +76,15 @@ func TestContinuationTakesExactlyWhatTheWorkflowDeclares(t *testing.T) {
 		r.Steps["s2"].Settled = late
 	})
 	r.Steps["s2"].Settled = early
+	// A cancelled Run has no outcome and is continued only where the workflow
+	// says so; one still holding an execution nobody resolved is not.
+	r.Status, r.Outcome = "cancelled", nil
+	refuse("continuation_source_ineligible", "a cancelled Run the workflow does not continue", func() {})
+	target.Workflow.Continuation.FromCancelled = true
+	if cancelled, err := continuationRefs(r, 7, target); err != nil || cancelled.Outcome != "cancelled" || cancelled.Inputs["text"].Ref != ref("new-text") {
+		t.Fatalf("a declared cancelled source was not continued: %+v %v", cancelled, err)
+	}
+	refuse("continuation_source_unsettled", "a cancellation with an unresolved effect", func() { r.HasUnresolvedEffects = true })
 	target.Workflow.Continuation = nil
 	if _, err := continuationRefs(r, 7, target); refusalCode(err) != "project_continue_undeclared" {
 		t.Fatalf("an undeclared continuation was served: %v", err)

@@ -319,8 +319,11 @@ type CheckpointDeclaration struct {
 }
 
 type Continuation struct {
-	FromWorkflows []string                      `json:"from_workflows"`
-	FromOutcomes  []string                      `json:"from_outcomes"`
+	FromWorkflows []string `json:"from_workflows"`
+	FromOutcomes  []string `json:"from_outcomes,omitempty"`
+	// FromCancelled admits a source Run that was cancelled: it has no
+	// outcome, and its accepted steps and tree are what it leaves.
+	FromCancelled bool                          `json:"from_cancelled,omitempty"`
 	Inputs        map[string]ContinuationSource `json:"inputs"`
 }
 

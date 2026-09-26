@@ -19,9 +19,10 @@ const ContinuationReason = "project continuation"
 // declared place and reads nothing else: no stage, port or content is known
 // to it beforehand.
 type ContinuationSource struct {
-	RunID      string                       `json:"source_run_id"`
-	RunVersion int64                        `json:"source_run_version"`
-	WorkflowID string                       `json:"source_workflow_id"`
+	RunID      string `json:"source_run_id"`
+	RunVersion int64  `json:"source_run_version"`
+	WorkflowID string `json:"source_workflow_id"`
+	// Outcome is how the source Run ended: its outcome, or cancelled.
 	Outcome    string                       `json:"source_outcome"`
 	Inputs     map[string]ContinuationInput `json:"inputs"`
 	Checkpoint *CheckpointRef               `json:"checkpoint,omitempty"`
@@ -55,17 +56,29 @@ func continuationRefs(r Run, version int64, target *flow.Plan) (ContinuationSour
 	if declared == nil {
 		return ContinuationSource{}, local.Reject("project_continue_undeclared", "workflow "+target.Workflow.ID+" declares no continuation")
 	}
-	if r.Status != "completed" || r.Outcome == nil || !slices.Contains(declared.FromOutcomes, *r.Outcome) {
-		outcome := r.Status
-		if r.Outcome != nil {
-			outcome = *r.Outcome
+	// A Run is continued either for the outcome it reached or, where the
+	// workflow says so, because it was cancelled: it has no outcome then, and
+	// its accepted steps and its tree are what it leaves behind.
+	ended, admitted := r.Status, declared.FromCancelled && r.Status == "cancelled"
+	if r.Status == "completed" && r.Outcome != nil {
+		ended, admitted = *r.Outcome, slices.Contains(declared.FromOutcomes, *r.Outcome)
+	}
+	if !admitted {
+		accepted := slices.Clone(declared.FromOutcomes)
+		if declared.FromCancelled {
+			accepted = append(accepted, "cancelled")
 		}
-		return ContinuationSource{}, local.Reject("continuation_source_ineligible", "source Run ended "+outcome+"; "+target.Workflow.ID+" continues only Runs that ended "+strings.Join(declared.FromOutcomes, ", "))
+		return ContinuationSource{}, local.Reject("continuation_source_ineligible", "source Run ended "+ended+"; "+target.Workflow.ID+" continues only Runs that ended "+strings.Join(accepted, ", "))
+	}
+	// A cancellation that left an effect nobody resolved has not stopped yet:
+	// what happened there is not known, and continuing would act on a guess.
+	if r.HasUnresolvedEffects || len(r.Active) != 0 {
+		return ContinuationSource{}, local.Reject("continuation_source_unsettled", "source Run still holds an active or unresolved execution; resolve it before continuing")
 	}
 	if !slices.Contains(declared.FromWorkflows, r.WorkflowRef.ID) {
 		return ContinuationSource{}, local.Reject("continuation_source_ineligible", "source Run's workflow "+r.WorkflowRef.ID+" is not one "+target.Workflow.ID+" continues: "+strings.Join(declared.FromWorkflows, ", "))
 	}
-	result := ContinuationSource{RunID: r.ID, RunVersion: version, WorkflowID: r.WorkflowRef.ID, Outcome: *r.Outcome, Inputs: map[string]ContinuationInput{}}
+	result := ContinuationSource{RunID: r.ID, RunVersion: version, WorkflowID: r.WorkflowRef.ID, Outcome: ended, Inputs: map[string]ContinuationInput{}}
 	// The checkpoint is read only when a declared input takes it: finding it
 	// compiles the Run's sealed plans, and nothing else here needs them.
 	for _, source := range declared.Inputs {

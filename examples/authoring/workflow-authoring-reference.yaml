@@ -94,8 +94,9 @@ entry: start # Required ID of the first stage.
 #
 # continuation makes this workflow a continuation of finished Runs. It is what
 # `prifly project continue --source-run RUN` reads: the source Run's workflow
-# must be listed and its outcome must be one of from_outcomes (a technical
-# failure is recovered with `project recover`, not continued). Each listed
+# must be listed and its outcome must be one of from_outcomes, or it was
+# cancelled and from_cancelled is true (a technical failure is recovered with
+# `project recover`, not continued). Each listed
 # input is taken from the source Run in exactly one of four ways; inputs not
 # listed are supplied by the launch as usual. The continuation gets the source
 # Run's claimed tree as it was left, uncommitted files included; checking that
@@ -103,6 +104,7 @@ entry: start # Required ID of the first stage.
 # continuation:
 #   from_workflows: [example:workflow/full-reference]
 #   from_outcomes: [partial, rejected]
+#   from_cancelled: true # Also a cancelled Run (no outcome; e.g. its driver was killed). At least one of the two.
 #   inputs:
 #     request: {source_input: request} # An input of the source Run.
 #     attachment: {stage: start, output: archive, verdict: pass} # Accepted output of a root stage; for a call stage write outcome: instead of verdict:.

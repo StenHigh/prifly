@@ -473,6 +473,9 @@ func workflowRevisionV7(root map[string]any) {
 		"properties": map[string]any{
 			"from_workflows": map[string]any{"type": "array", "items": stageName, "minItems": json.Number("1"), "maxItems": json.Number("64"), "uniqueItems": true},
 			"from_outcomes":  map[string]any{"type": "array", "items": map[string]any{"$ref": "#/$defs/Outcome"}, "minItems": json.Number("1"), "maxItems": json.Number("5"), "uniqueItems": true},
+			// A cancelled Run has no outcome, so continuing one is its own
+			// statement rather than a sixth outcome that does not exist.
+			"from_cancelled": map[string]any{"const": true},
 			"inputs": map[string]any{
 				"type": "object", "propertyNames": port, "minProperties": json.Number("1"), "maxProperties": json.Number("256"),
 				"additionalProperties": map[string]any{"oneOf": []any{
@@ -483,7 +486,11 @@ func workflowRevisionV7(root map[string]any) {
 				}},
 			},
 		},
-		"required": []any{"from_workflows", "from_outcomes", "inputs"}, "additionalProperties": false,
+		"required": []any{"from_workflows", "inputs"}, "additionalProperties": false,
+		"anyOf": []any{
+			map[string]any{"required": []any{"from_outcomes"}},
+			map[string]any{"required": []any{"from_cancelled"}},
+		},
 	}
 	defs["StepStage"].(map[string]any)["properties"].(map[string]any)["checkpoint"] = port
 }
