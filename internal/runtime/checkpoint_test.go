@@ -2,8 +2,8 @@ package runtime
 
 import (
 	"context"
-	"slices"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stenhigh/prifly/internal/flow"
