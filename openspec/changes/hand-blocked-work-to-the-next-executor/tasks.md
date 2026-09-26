@@ -23,5 +23,5 @@
 
 ## 5. Проверка и выпуск
 
-- [ ] 5.1 `make check`, `make race`, `make e2e`, `git diff --check`, `openspec validate hand-blocked-work-to-the-next-executor --strict`; CI на Linux после push.
-- [ ] 5.2 Обновить ответ в `SMSPlace/PRIFLY-INFRASTRUCTURE-BLOCKED-REQUIREMENTS.md` по фактическому состоянию и релизу; дать ссылки на справочник и руководство, закреплённые на тег.
+- [x] 5.1 `make check`, `make race`, `make e2e`, `git diff --check`, `openspec validate hand-blocked-work-to-the-next-executor --strict` — зелёные локально 2026-09-27; verify и race на GitHub зелёные для 46248fa; релиз 0.13.59.
+- [x] 5.2 Обновить ответ в `SMSPlace/PRIFLY-INFRASTRUCTURE-BLOCKED-REQUIREMENTS.md` по фактическому состоянию и релизу; дать ссылки на справочник и руководство, закреплённые на тег.
