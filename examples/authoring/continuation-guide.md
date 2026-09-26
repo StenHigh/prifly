@@ -125,6 +125,12 @@ prifly project continue --repository . --launch TAIL --source-run RUN --host HOS
 Не вызывайте `run fork` и не извлекайте refs из JSON вручную: `project
 continue` делает это по объявлению и проверяет то, что показал prepare.
 
+`run next` завершённого или отменённого Run называет в `continuations`
+установленные workflow, объявившие его продолжение, и тогда предлагает
+`project.continue`. Пакет устанавливается при первом запуске его launch, так
+что до этого список может быть пуст. Как процесс пришёл к остановке —
+`arrived_from` того же ответа; см. [`blocked-guide.md`](blocked-guide.md).
+
 ## Отказы
 
 | Код | Что значит | Что делать |

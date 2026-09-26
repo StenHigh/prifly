@@ -101,6 +101,12 @@ prifly capabilities --json | jq -c '{caps:.profiles[1].capabilities, unsupported
   поля `prifly-workflow/1`, восемь видов stages, bindings, limits и comments, а
   также что открывают ревизии 4, 5 и 6: `impossible_verdicts`,
   `technical_retries` и маршрут для `blocked`.
+- [`authoring/blocked-guide.md`](authoring/blocked-guide.md) — как обрабатывать
+  `blocked`: чем он отличается от `fail`, технического сбоя и паузы; как
+  передать причину обещанным выходом у программного и ассистируемого шага; три
+  пути после `blocked` (ограниченный повтор в `repeat`, ожидание в `wait`,
+  остановка и продолжение); права шага устранения; что новый исполнитель читает
+  в `run next`; отказы и приёмка по пунктам.
 - [`authoring/continuation-guide.md`](authoring/continuation-guide.md) — как
   сделать workflow продолжаемым: `checkpoint` (что сохранить),
   `continuation` (от каких Runs и откуда брать входы), проверка первым шагом,
@@ -139,7 +145,9 @@ prifly capabilities --json | jq -c '{caps:.profiles[1].capabilities, unsupported
 
 Для первого запуска без Git и ИИ есть учебный
 [CSV → проверка → отчёт](workflows/csv-report/README.md): YAML и обычный Node.js
-worker. Это пример общего worker protocol, не отраслевой product workflow.
+worker. [Работа по условию](workflows/blocked-condition/README.md) показывает
+`blocked` с причиной, ограниченный повтор, передачу через `run next` и
+продолжение по объявлению — тоже без Git и ИИ. Это пример общего worker protocol, не отраслевой product workflow.
 Сценарии AI Factory
 (`aif-classic`, `aif-fanout`) живут в
 [`StenHigh/prifly-aif-workflows`](https://github.com/StenHigh/prifly-aif-workflows)
