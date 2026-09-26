@@ -131,7 +131,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
-		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11",
+		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11", "StepDefinitionV12",
 		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7",
 	}
 	for name := range defs {
@@ -234,6 +234,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = stepDefinitionV2Schema
 	case "StepDefinitionV11":
 		extension = stepDefinitionV2Schema
+	case "StepDefinitionV12":
+		extension = stepDefinitionV2Schema
 	case "WorkflowRevisionV2":
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV3":
@@ -266,6 +268,15 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		}
 		for i := 0; i <= slices.Index(stepContracts, name); i++ {
 			stepMutators[i]()
+		}
+		// Contract 12 is a branch, not the next link: every contract from 6 on
+		// pins the assisted executor, so the program line ends at 5, and 12 is
+		// 5 with the one widening a program step lacked.
+		if name == "StepDefinitionV12" {
+			for i := 0; i <= slices.Index(stepContracts, "StepDefinitionV5"); i++ {
+				stepMutators[i]()
+			}
+			stepDefinitionV12(root, defs)
 		}
 		revisions := []string{"WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7"}
 		revisionMutators := []func(){
@@ -728,6 +739,26 @@ func stepDefinitionV10(root map[string]any, baseline map[string]any) {
 	root["title"] = "Pri-Fly StepDefinition v10: an output may be promised for the blocked verdict"
 	properties := root["properties"].(map[string]any)
 	properties["schema_version"].(map[string]any)["const"] = "10"
+	promiseOutputOnBlocked(root, baseline)
+}
+
+// stepDefinitionV12 is the program line's answer to v10: a program step may
+// promise an output for the blocked verdict too. It is v5 -- the last contract
+// before the assisted executor was pinned -- with that widening, so none
+// of the session fields of 6 to 11 reach a program by inheritance.
+func stepDefinitionV12(root map[string]any, baseline map[string]any) {
+	root["$id"] = "urn:prifly:step-definition:12"
+	root["title"] = "Pri-Fly StepDefinition v12: a program step may promise an output for the blocked verdict"
+	root["properties"].(map[string]any)["schema_version"].(map[string]any)["const"] = "12"
+	// v5 required workspace trees because they were what that version was
+	// for; a program step promising an output on blocked may have none, as v6
+	// already allowed on the assisted line.
+	root["required"] = slices.DeleteFunc(root["required"].([]any), func(value any) bool { return value == "workspace_trees" })
+	promiseOutputOnBlocked(root, baseline)
+}
+
+// promiseOutputOnBlocked admits blocked in an output port's required_for.
+func promiseOutputOnBlocked(root map[string]any, baseline map[string]any) {
 	// The port lives in the baseline defs at this point, the way the stage does
 	// for a workflow revision: copied, widened, and placed in this contract's
 	// own defs so every earlier one keeps the port it published.
@@ -749,7 +780,7 @@ func stepDefinitionV10(root map[string]any, baseline map[string]any) {
 // StepContracts are the versioned StepDefinition contracts, oldest first. The
 // list the mutators run from is the same one callers ask, so a contract cannot
 // be added to one and missing from the other.
-var StepContracts = []string{"2", "3", "4", "5", "6", "7", "8", "9", "10"}
+var StepContracts = []string{"2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"}
 
 // StepContractFor names the protocol contract a step of this schema_version is
 // validated against, or "" for a version this build does not know. Every caller

@@ -766,6 +766,11 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 				return step, problem("unsupported", path+"/schema_version", "a declared external write requires core-workflow/1")
 			}
 			name = "StepDefinitionV11"
+		case "12":
+			if p.Profile != CoreProfile {
+				return step, problem("unsupported", path+"/schema_version", "an output promised for the blocked verdict requires core-workflow/1")
+			}
+			name = "StepDefinitionV12"
 		}
 	}
 	if err := validateProtocolValue(name, value, path); err != nil {

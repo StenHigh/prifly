@@ -97,14 +97,46 @@ func TestEveryStepContractThisBuildLowersToIsNamed(t *testing.T) {
 	// contract by accident: the caller decides what to do with an unknown one,
 	// and validating it against a contract that merely happens to accept it is
 	// the failure this whole round was.
-	if named := StepContractFor("11"); named != "" {
+	if named := StepContractFor("99"); named != "" {
 		t.Fatalf("an unknown step version mapped to %s", named)
 	}
 	// Every version the authoring path can lower to is one of these. A ladder
 	// row producing a version nothing names is the same defect one step earlier.
-	for _, version := range []string{"2", "5", "6", "7", "8", "9", "10"} {
+	for _, version := range []string{"2", "5", "6", "7", "8", "9", "10", "11", "12"} {
 		if StepContractFor(version) == "" {
 			t.Errorf("the authoring ladder lowers to %s and nothing names its contract", version)
 		}
+	}
+}
+
+// Contract 12 is the program line's: it carries the promise on blocked and
+// nothing the assisted line added after 5. A session field reaching a program
+// by inheritance is what building it as the next link would have done.
+func TestProgramLineContractCarriesOnlyThePromise(t *testing.T) {
+	schema, err := ProtocolSchema("StepDefinitionV12")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(schema, &document); err != nil {
+		t.Fatal(err)
+	}
+	properties := document["properties"].(map[string]any)
+	for _, assisted := range []string{"session_limits", "model_profile", "external_write"} {
+		if _, exists := properties[assisted]; exists {
+			t.Errorf("contract 12 admits the assisted field %s", assisted)
+		}
+	}
+	operation := properties["executor"].(map[string]any)["properties"].(map[string]any)["operation"].(map[string]any)
+	if operation["const"] == "session" {
+		t.Fatal("contract 12 pins the assisted executor")
+	}
+	values := []string{}
+	port := document["$defs"].(map[string]any)["StepOutputPort"].(map[string]any)
+	for _, value := range port["properties"].(map[string]any)["required_for"].(map[string]any)["items"].(map[string]any)["enum"].([]any) {
+		values = append(values, value.(string))
+	}
+	if !slices.Contains(values, "blocked") {
+		t.Fatalf("contract 12 cannot promise an output on blocked: %v", values)
 	}
 }

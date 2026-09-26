@@ -1735,7 +1735,7 @@ func TestDriverWorkerHelper(t *testing.T) {
 	if json.Unmarshal(envelopeBytes, &envelope) != nil {
 		os.Exit(91)
 	}
-	withReport := slices.Contains([]string{"commit-pass", "commit-wait", "commit-consumer", "bad-digest", "bad-json", "mixed-pass", "mixed-check-fail"}, mode)
+	withReport := slices.Contains([]string{"commit-pass", "commit-wait", "commit-consumer", "bad-digest", "bad-json", "mixed-pass", "mixed-check-fail", "blocked-report"}, mode)
 	if mode == "crash-short" || withReport {
 		starts, err := os.OpenFile("worker-starts", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
@@ -1878,6 +1878,11 @@ func TestDriverWorkerHelper(t *testing.T) {
 		}
 	}
 	result := Result{SchemaVersion: "1", RunID: envelope.RunID, StepInstanceID: envelope.StepID, AttemptID: envelope.AttemptID, EnvelopeDigest: os.Getenv("PRIFLY_ENVELOPE_DIGEST"), Verdict: "pass", Outputs: map[string]ArtifactRef{}, EvidenceRefs: []any{}, EffectReceiptRefs: []any{}, Summary: "driver test"}
+	// A program that could not judge: the condition it needs is absent. It
+	// reports the reason as its promised output, or -- silently -- does not.
+	if mode == "blocked-report" || mode == "blocked-silent" {
+		result.Verdict, result.Summary = "blocked", "the condition this step needs is absent"
+	}
 	if strings.HasPrefix(mode, "workspace-") {
 		// The program reports the workspace it was handed on stdout, and in
 		// the write mode leaves a file there that it was not permitted to.

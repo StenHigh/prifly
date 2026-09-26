@@ -198,11 +198,12 @@ func TestAuthoringDerivesTheContractThatCarriesTheVerdict(t *testing.T) {
 	}{
 		// The assisted form reaching 10 is covered by the reference above, which
 		// is written at prifly-step/2 and lowers through the same path. Here:
-		// a program source cannot reach it, because every contract from v6 on
-		// pins the assisted executor. The first writing of this row asserted
-		// the program form lowers to 10 and passed -- it checked the ladder and
-		// never validated the result against the contract the ladder named.
-		{"program source promising it", StepAuthoringVersion, "", []any{"pass", "blocked"}},
+		// the program line reaches 12, its own branch, because every contract
+		// from v6 on pins the assisted executor. An earlier writing of this row
+		// asserted the program form lowers to 10 and passed -- it checked the
+		// ladder and never validated the result against the named contract;
+		// the validation below is what keeps 12 honest.
+		{"program source promising it", StepAuthoringVersion, "12", []any{"pass", "blocked"}},
 		{"program source without it", StepAuthoringVersion, "2", []any{"pass"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -233,9 +234,7 @@ func TestAuthoringDerivesTheContractThatCarriesTheVerdict(t *testing.T) {
 				if err == nil {
 					t.Fatalf("a program source reached %v, a contract it cannot validate against", lowered["schema_version"])
 				}
-				if p := expectProblem(t, err, "schema_invalid"); !strings.Contains(p.Message, StepSessionAuthoringVersion) {
-					t.Fatalf("the refusal does not name the authoring version that can carry it: %s", p.Message)
-				}
+				expectProblem(t, err, "schema_invalid")
 				return
 			}
 			if err != nil {
@@ -250,6 +249,29 @@ func TestAuthoringDerivesTheContractThatCarriesTheVerdict(t *testing.T) {
 				t.Fatalf("lowered to v%s and that contract refuses it: %v", test.want, err)
 			}
 		})
+	}
+}
+
+// A program tree read without capture lives only in v8, which is the assisted
+// line, and a program promise on blocked lives only in v12. The two have no
+// common contract, and the refusal says so instead of naming an adapter.
+func TestProgramBlockedPromiseAndUncapturedTreeHaveNoCommonContract(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("0", 64)
+	ref := map[string]any{"id": "test:schema/out", "version": "1.0.0", "digest": digest}
+	source := map[string]any{
+		"authoring": StepAuthoringVersion, "id": "test:step/both", "version": "1.0.0",
+		"refs":              map[string]any{"out": ref, "adapter": map[string]any{"id": "test:adapter/x", "version": "1.0.0", "digest": digest}, "result": ref},
+		"kind":              "command",
+		"inputs":            map[string]any{"plan": map[string]any{"schema_ref": "out"}},
+		"outputs":           map[string]any{"gate": map[string]any{"schema_ref": "out", "required_for": []any{"blocked"}}},
+		"executor":          map[string]any{"adapter_ref": "adapter", "operation": "process"},
+		"effects":           map[string]any{"class": "none", "retry_class": "never"},
+		"result_schema_ref": "result",
+		"workspace_trees":   []any{map[string]any{"input_port": "plan", "capture": map[string]any{"kind": "exact_file", "path": "plan.md"}}},
+	}
+	_, err := lowerStepAuthoring(source)
+	if p := expectProblem(t, err, "schema_invalid"); !strings.Contains(p.Message, "v12") || !strings.Contains(p.Message, "v8") {
+		t.Fatalf("the refusal does not name both contracts: %s", p.Message)
 	}
 }
 

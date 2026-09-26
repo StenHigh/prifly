@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -224,5 +225,103 @@ func TestTheFinishEdgeIsNamedWhenACallReachesIt(t *testing.T) {
 				t.Fatalf("the edge from a call stage was not named: %+v", finish)
 			}
 		})
+	}
+}
+
+// programBlockedFixture seals the fixture program as contract 12: it may
+// return blocked and promises its report on that verdict. The graph routes
+// blocked to a stage that consumes the report.
+func programBlockedFixture(t *testing.T, mode string) (*Engine, string) {
+	t.Helper()
+	e, workflow := coreDriverFixture(t, mode)
+	definitions, _, err := Builtins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var step flow.StepDefinition
+	readRuntimeJSON(t, filepath.Join(e.Root, "steps/driver.json"), &step)
+	step.SchemaVersion, step.Version = "12", "1.1.0"
+	step.ResultSchemaRef = builtinVersionRef(definitions, "core:schema/step-result", "2.0.0")
+	step.Outputs = map[string]flow.OutputPort{"report": {Port: step.Inputs["source"].Port, RequiredFor: []string{"blocked"}}}
+	data, err := canonical(step)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(e.Root, "steps/blocked.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	ref := flow.Ref{ID: step.ID, Version: step.Version, Digest: rawDigest(data)}
+	var registry RegistryFile
+	readRuntimeJSON(t, filepath.Join(e.Root, "definitions.json"), &registry)
+	registry.Entries = append(registry.Entries, Definition{Ref: ref, Kind: "step", Path: "steps/blocked.json"})
+	writeRuntimeJSON(t, filepath.Join(e.Root, "definitions.json"), registry)
+	workflow.SchemaVersion = flow.WorkflowRevisionBlockedVersion
+	workflow.AllowedOutcomes = []string{"succeeded", "rejected", "partial"}
+	workflow.Limits.MaxStepInstances, workflow.Limits.MaxControlTransitions = 2, 8
+	work := workflow.Definition.Stages["work"]
+	work.StepRef, work.On, work.ImpossibleVerdicts = ref, map[string]string{"pass": "done", "blocked": "consume"}, []string{"fail", "needs_revision", "no_work"}
+	workflow.Definition.Stages["work"] = work
+	workflow.Definition.Stages["consume"] = flow.Stage{Kind: "step", StepRef: ref, InputBindings: map[string]flow.Binding{"source": {From: "stage_output", StageID: "work", Port: "report"}}, On: map[string]string{"pass": "done", "blocked": "stopped"}, ImpossibleVerdicts: []string{"fail", "needs_revision", "no_work"}, OnError: "recovered"}
+	workflow.Definition.Stages["stopped"] = flow.Stage{Kind: "finish", Outcome: "partial", OutputBindings: map[string]flow.Binding{}}
+	writeRuntimeJSON(t, filepath.Join(e.Root, "workflows/driver.json"), workflow)
+	writeRuntimeJSON(t, filepath.Join(e.Root, "prifly.json"), e.Config)
+	id := driverStart(t, e)
+	if r := driverRun(t, e, id); r.Profile != flow.CoreProfile {
+		t.Fatalf("the fixture Run is not on the core profile: %s %s", r.Profile, r.SchemaVersion)
+	}
+	return e, id
+}
+
+// A program step promises its report on blocked and returns it: the report is
+// accepted and reaches the stage the author routed blocked to. Before contract
+// 12 the promise could not be written for a program at all.
+func TestAProgramStepHandsOverWhatBlockedIt(t *testing.T) {
+	e, runID := programBlockedFixture(t, "blocked-report")
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	r := driverRun(t, e, runID)
+	var report ArtifactRef
+	var consumed ArtifactRef
+	for _, activation := range r.Activations {
+		step := r.Steps[activation.StepID]
+		if step == nil {
+			continue
+		}
+		switch activation.StageID {
+		case "work":
+			if step.Verdict != "blocked" {
+				t.Fatalf("the program's blocked was not accepted: %+v", step)
+			}
+			report = step.Outputs["report"]
+		case "consume":
+			consumed = r.Attempts[step.AttemptIDs[0]].Context.Inputs["source"].Ref
+		}
+	}
+	if report == (ArtifactRef{}) {
+		t.Fatal("the promised report was not sealed")
+	}
+	if consumed != report {
+		t.Fatalf("the stage blocked routes to did not receive the report: %v, want %v", consumed, report)
+	}
+	if r.Outcome == nil || *r.Outcome != "partial" {
+		t.Fatalf("the Run did not end where the author routed it: %v %+v", r.Outcome, r.Diagnostics)
+	}
+}
+
+// The promise binds: blocked without the promised report is refused as any
+// missing required output is, and the author's error route takes over.
+func TestAProgramStepThatPromisedAReportMustGiveIt(t *testing.T) {
+	e, runID := programBlockedFixture(t, "blocked-silent")
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatal(err)
+	}
+	r := driverRun(t, e, runID)
+	found := false
+	for _, diagnostic := range r.Diagnostics {
+		found = found || diagnostic.Code == "invalid_output" && strings.Contains(diagnostic.Message, "output_required_missing at /result/outputs/report")
+	}
+	if !found {
+		t.Fatalf("blocked without the promised report was accepted: %+v", r.Diagnostics)
 	}
 }

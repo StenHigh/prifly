@@ -205,8 +205,8 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 		if timed && version != "6" && version != "7" && version != "8" && version != "9" && version != "10" {
 			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6, v7, v8, v9 or v10")
 		}
-		if !timed && version != "2" && version != "5" && version != "8" {
-			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2, v5 or v8")
+		if !timed && version != "2" && version != "5" && version != "8" && version != "12" {
+			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2, v5, v8 or v12")
 		}
 	}
 	refs, err := authorRefs(source["refs"])
@@ -294,12 +294,17 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 			if !slices.Contains(verdicts, any("blocked")) {
 				continue
 			}
-			// The contract that carries this promise is v10, and every contract
-			// from v6 on pins the assisted executor, so a program source cannot
-			// reach it. Refusing here names that; deriving v10 anyway produced a
-			// refusal about the adapter, which reads as a typo in the executor.
+			// Every contract from v6 on pins the assisted executor, so the
+			// program line carries this promise in its own branch, v12: v5 with
+			// the one widening. A program tree read without capture lives only
+			// in v8, which is assisted; the two have no common contract, and
+			// saying so beats a refusal about the adapter.
 			if !timed {
-				return nil, problem("schema_invalid", "/outputs/"+escapePointer(name)+"/required_for", "an output promised for the blocked verdict needs StepDefinition v10, which "+StepSessionAuthoringVersion+" reaches and "+StepAuthoringVersion+" does not: a program step may return the verdict, it may not promise an output on that edge")
+				if schemaVersion == "8" {
+					return nil, problem("schema_invalid", "/outputs/"+escapePointer(name)+"/required_for", "a program step promising an output for the blocked verdict lowers to StepDefinition v12, which carries workspace trees with an output port only; a tree read without capture needs v8, which is the assisted line")
+				}
+				schemaVersion = "12"
+				continue
 			}
 			schemaVersion = "10"
 		}
