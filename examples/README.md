@@ -8,12 +8,102 @@
 имя поля. Если известен только симптом — отказ, диагностика или поведение
 прогона, — начните с [указателя по симптомам](troubleshooting.md).
 
+## Что умеет движок и где это показано
+
+Строка на каждую возможность, которую объявляет `prifly capabilities`. Проверка
+`TestEveryDeclaredCapabilityIsInTheAuthorIndex` держит таблицу и этот список
+равными: возможность без строки и строка без возможности валят ворота, поэтому
+таблица не может отстать молча.
+
+«Справочник» — файл в `authoring/`; `—` значит, что объявлять нечего: это
+поведение чтения или команда CLI, а не поле YAML. Где указана ревизия или
+контракт шага — это минимум, ниже которого поле не примут.
+
+| Возможность | Что для неё объявляет автор | Справочник |
+|---|---|---|
+| `step` | `kind: step` в `stages` | workflow |
+| `finish` | `kind: finish` с `outcome` | workflow |
+| `local_process` | `executor.operation: process` и execution bindings | step, execution-bindings |
+| `state_hook` | `hooks.<имя>.kind: state` с `freshness_ms` | step |
+| `event_hook` | `hooks.<имя>.kind: event` | step |
+| `telemetry.catalog` | `telemetry` у шага; читает `prifly telemetry` | step |
+| `telemetry.records` | то же объявление; записи читает `telemetry` | step |
+| `telemetry.aggregate` | то же объявление; сводку считает `telemetry` | step |
+| `on_error` | `on_error` у стадии | workflow |
+| `json_projection` | `pointer` и `projected_schema_ref` в binding | workflow |
+| `input_configuration` | `configuration` у входного порта | step |
+| `choice` | `kind: choice` с тремя исходами | workflow |
+| `call` | `kind: call` с `workflow_ref` и `on` | workflow |
+| `repeat` | `kind: repeat` с `max_iterations` | workflow |
+| `partial` | `partial` среди `allowed_outcomes` | workflow |
+| `local_workflow_aliases` | `refs` — локальные имена точных ссылок | workflow, step |
+| `context_resources` | `context_refs` у шага | step, context |
+| `full_context` | `instructions_ref` и `context_refs` вместе | step, context |
+| `source_import` | `source` у задачи; импорт — `prifly task` | — |
+| `context_request` | `context_request` в отчёте хоста | — |
+| `automatic_checks` | `result_check_refs` у шага и файлы `checks/` | step, check |
+| `assisted_session` | `authoring: prifly-step/2`, `operation: session` | step |
+| `quality_waivers` | `waivable_check_refs` в политике; `run waive` | — |
+| `parallel` | `kind: parallel` с `branches` и `join` | workflow |
+| `map` | `kind: map` с запечатанной коллекцией | workflow |
+| `wait` | `kind: wait` с корреляцией | workflow |
+| `schedule` | `schedule` у ожидания; `prifly schedule` | workflow |
+| `live_guards` | объявляется при создании Run, не в графе | — |
+| `reported_cost` | `reported_costs` в отчёте хоста | — |
+| `artifact_publication` | `hooks.<имя>.artifact` с `cardinality` | step |
+| `artifact_publication_checks` | `content_check_refs` у artifact-хука | step |
+| `artifact_close` | `cardinality: keyed_many` и закрытие хука | step |
+| `publication_subscription_once` | `from: publication` с `mode: once` | workflow |
+| `publication_subscription_each` | `from: subscription` в `repeat` | workflow |
+| `publication_subscription_new_only` | `new_only` у источника публикации | workflow |
+| `publication_subscription_terminal_failure` | поведение при падении producer'а | — |
+| `publication_subscription_blob` | `format: blob` у публикуемого артефакта | step |
+| `action_intent_proposal` | `prifly action propose`; в графе не объявляется | — |
+| `action_admission` | `prifly action admit` | — |
+| `action_grant_admission` | `prifly action admit --grant` | — |
+| `action_delivery_prepared` | подготовленная граница; доставки в этой сборке нет | — |
+| `run_fork` | `prifly run fork` | — |
+| `workspace_modes` | `workspace: worktree|checkout` в профиле проекта | project-profile |
+| `workspace_tree_artifacts` | `workspace_trees` с `output_port` | step |
+| `decision_catalog` | `decisions` пакета; ответы проекта — `answers` | extension |
+| `neutral_start` | `project start` без RunBrief | project-profile |
+| `execution_bindings` | `execution_bindings` в корне пакета | execution-bindings |
+| `assisted_session_timing` | `session_limits.active_timeout_ms` | step |
+| `declared_technical_retries` | `technical_retries` у шаговой стадии — **ревизия 5** | workflow |
+| `routed_session_verdicts` | `on` у стадии; задача называет маршрутизируемые | workflow |
+| `declared_impossible_verdicts` | `impossible_verdicts` — **ревизия 4** | workflow |
+| `assisted_effects_enforced` | `effects.class`; метка дерева сверяется при приёме | step |
+| `assisted_session_unbounded_work` | `session_limits.active_timeout_ms: null` — контракт 7 | step |
+| `materialize_only_workspace_tree` | `workspace_trees` с `input_port` без `output_port` — контракт 8 | step |
+| `run_failure_named` | поведение чтения: `failure` в `run status` | — |
+| `stage_work_named` | поведение чтения: `stage_work` в `run next` | — |
+| `execution_environment_source` | `environment_from` в execution bindings | execution-bindings |
+| `program_environment_named` | поведение чтения: `program_environment` в `run next` | — |
+| `model_profile_declared` | `model_profile` у шага — контракт 9 | step |
+| `model_profile_translation` | `model_profiles` в профиле проекта | project-profile |
+| `project_title` | `title` в профиле проекта | project-profile |
+| `failed_stage_recovery` | `prifly run reopen` | — |
+| `run_finish_named` | поведение чтения: `finish` в `run explain` | — |
+| `blocked_verdict` | `required_for: [..., blocked]` — контракт 10, маршрут при **ревизии 6**, `result_schema_ref` → `core:schema/step-result@2.0.0` | step, workflow |
+| `declared_external_write` | `effects.class: external_write` и блок `external_write` — контракт 11, только ассистируемый шаг | step |
+
+Полный список того, что сборка о себе говорит, включая неподдерживаемое:
+
+```sh
+prifly capabilities --json | jq -c '{caps:.profiles[1].capabilities, unsupported}'
+```
+
 ## Справочники YAML для авторов сценариев
 
 - [`authoring/workflow-authoring-reference.yaml`](authoring/workflow-authoring-reference.yaml) — все
-  поля `prifly-workflow/1`, восемь видов stages, bindings, limits и comments.
+  поля `prifly-workflow/1`, восемь видов stages, bindings, limits и comments, а
+  также что открывают ревизии 4, 5 и 6: `impossible_verdicts`,
+  `technical_retries` и маршрут для `blocked`.
 - [`authoring/step-authoring-reference.yaml`](authoring/step-authoring-reference.yaml) — все поля
-  `prifly-step/1`, ports, hooks и telemetry с comments.
+  `prifly-step/2` на новейшем контракте шага: ports, hooks, telemetry,
+  `session_limits`, `workspace_trees`, `model_profile`, обещание выхода на
+  `blocked` и объявленная внешняя запись. Программная форма — тот же файл с
+  `authoring: prifly-step/1`.
 - [`authoring/extension-authoring-reference.yaml`](authoring/extension-authoring-reference.yaml) —
   tracked `profile`, `answers` (постоянные ответы проекта на объявленные
   решения: `decision_policy`, `preflight`, `runtime` — источник
