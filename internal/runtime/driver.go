@@ -81,6 +81,19 @@ func (e *Engine) Drive(ctx context.Context, runID string, options ...DriveOption
 		// ready. Nothing fires here on its own - this build owns no timer, and
 		// a deadline is observed when the authority next looks.
 		if isWaitState(r.SchemaVersion) {
+			// An event held for an entered wait is taken before a deadline: it
+			// was delivered while the scope was paused, and a pause must not
+			// turn an answer into a timeout.
+			if waiting, held := r.heldForEnteredWait(); waiting != nil {
+				p, err := r.planFor(waiting.InvocationID)
+				if err != nil {
+					return err
+				}
+				if err := e.resolveWaitWithEvent(ctx, r, v, p, waiting, *held); err != nil {
+					return err
+				}
+				continue
+			}
 			if due := r.dueWait(e.clock.now().UTC); due != nil {
 				p, err := r.planFor(due.InvocationID)
 				if err != nil {

@@ -894,6 +894,16 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		if next := nextVersionFor(r.SchemaVersion); next == CoreRunFinishNextVersion || next == CoreHandoffNextVersion {
 			finish = runFinish(r)
 		}
+	case "idle":
+		// A wait holds no frontier, so the answer is idle -- but a wait whose
+		// held event may now be applied, or whose deadline has passed, moves
+		// only when the driver looks. Without naming that, a host read idle
+		// and left an answered wait unread until it timed out.
+		if isWaitState(r.SchemaVersion) {
+			if waiting, _ := r.heldForEnteredWait(); waiting != nil || r.dueWait(e.clock.now().UTC) != nil {
+				actions = append(actions, "run.drive")
+			}
+		}
 	case "uncertain":
 		// An unresolved execution keeps its slot and nothing retries it blindly,
 		// so the only move that advances the Run is the owner saying what

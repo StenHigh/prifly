@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -265,6 +266,11 @@ func TestWaitExpiresWithoutInventingAnEvent(t *testing.T) {
 	// The deadline is a wall-clock fact, so the test waits for it rather than
 	// pretending time passed.
 	time.Sleep(1100 * time.Millisecond)
+	// Nothing fires by itself, so the answer must tell a host that looking is
+	// now the move; idle alone left a passed deadline unobserved.
+	if next, err := e.Next(context.Background(), runID); err != nil || !slices.Contains(next.SafeNextActions, "run.drive") {
+		t.Fatalf("a passed deadline did not offer run.drive: %+v %v", next, err)
+	}
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)
 	}
@@ -418,5 +424,67 @@ func TestReservationDeadlineIsTheAuthoritysToSet(t *testing.T) {
 	if _, err := e.ReserveWait(context.Background(), ReserveWaitRequest{RunID: runID, InvocationID: root,
 		TargetStageID: "accepted", RequestedExpiresAt: past}); err == nil {
 		t.Fatal("a finish stage was reserved as a wait")
+	}
+}
+
+// An event that arrives while its entered wait is paused is kept, and the
+// pause says the wait may not move now. Once the pause is released the event
+// is what the wait was waiting for: it must resolve it by the event route,
+// not sit unread until the deadline sends the Run down on_timeout -- or, for
+// an indefinite wait, forever.
+func TestAnEventHeldDuringAPauseResolvesTheWaitOnRelease(t *testing.T) {
+	for _, timeout := range []any{int64(3600), nil} {
+		name := "finite"
+		if timeout == nil {
+			name = "indefinite"
+		}
+		t.Run(name, func(t *testing.T) {
+			e, workflow, options := waitRuntimeFixture(t, timeout)
+			ctx := context.Background()
+			runID := choiceStart(t, e, workflow, options)
+			if err := e.Drive(ctx, runID); err != nil {
+				t.Fatal(err)
+			}
+			registration := waitActivation(t, driverRun(t, e, runID)).Wait.RegistrationID
+			held := driverRun(t, e, runID).Waits[registration]
+			if _, err := e.Restrict(ctx, RestrictCommand{SchemaVersion: "1", CommandID: newID("command"), Scope: "run", ScopeID: runID, Kind: "pause", Reason: "owner holds the Run"}); err != nil {
+				t.Fatal(err)
+			}
+			delivered, err := e.DeliverEvent(ctx, DeliverEventRequest{RunID: runID, RegistrationID: registration,
+				EventID: "event:paused", EventType: "approval.granted", Nonce: held.Nonce, Generation: held.Generation,
+				Payload: []byte(`{"decision":"granted"}`)})
+			if err != nil || delivered.Disposition != "held" {
+				t.Fatalf("a delivery to a paused wait did not succeed as held: %+v %v", delivered, err)
+			}
+			if a := waitActivation(t, driverRun(t, e, runID)); a.Wait.Resolution != "" {
+				t.Fatalf("a paused wait resolved: %+v", a.Wait)
+			}
+			paused := driverRun(t, e, runID)
+			stop := paused.Stops[len(paused.Stops)-1]
+			if _, err := e.Release(ctx, ReleaseRequest{CommandID: newID("command"), RunID: runID, ExpectedControlEpoch: paused.ControlEpoch, Stops: []StopGeneration{{ID: stop.ID, Generation: stop.Generation}}, Reason: "owner lets it go on"}); err != nil {
+				t.Fatal(err)
+			}
+			next, err := e.Next(ctx, runID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.Resume(ctx, runID, newID("command"), "owner lets it go on", next.RunVersion); err != nil {
+				t.Fatal(err)
+			}
+			if next, err := e.Next(ctx, runID); err != nil || !slices.Contains(next.SafeNextActions, "run.drive") {
+				t.Fatalf("after the pause nothing tells the host to drive the held event in: %+v %v", next, err)
+			}
+			if err := e.Drive(ctx, runID); err != nil {
+				t.Fatal(err)
+			}
+			r := driverRun(t, e, runID)
+			a := waitActivation(t, r)
+			if a.Wait.Resolution != "event" || r.Waits[registration].Status != "consumed" {
+				t.Fatalf("the event held during the pause was never applied: resolution=%q registration=%s", a.Wait.Resolution, r.Waits[registration].Status)
+			}
+			if r.Status != "completed" || r.Outcome == nil || *r.Outcome != "succeeded" {
+				t.Fatalf("the Run did not take the event route: %s %v", r.Status, r.Outcome)
+			}
+		})
 	}
 }

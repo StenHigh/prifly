@@ -176,6 +176,33 @@ func (e *Engine) enterWait(ctx context.Context, loaded Run, view local.ReadView,
 	return e.resolveWaitWithEvent(ctx, current, next, p, currentActivation, *held)
 }
 
+// heldForEnteredWait finds an entered wait that already holds its event but
+// has not been resolved by it. That happens when the event arrived while the
+// wait's scope was paused: delivery keeps it and the pause forbids the wait
+// to move. Once the scope may move again the event is what the wait was
+// waiting for, and nothing else would ever apply it -- the entry that applies
+// early events has already happened.
+func (r Run) heldForEnteredWait() (*Activation, *InboxEvent) {
+	ids := make([]string, 0, len(r.Activations))
+	for id := range r.Activations {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		a := r.Activations[id]
+		if a == nil || a.Kind != "wait" || a.Status != "waiting" || a.Wait == nil || a.Wait.Resolution != "" || r.restrictedFor(a.InvocationID) {
+			continue
+		}
+		if registration := r.Waits[a.Wait.RegistrationID]; registration == nil || registration.Status != "active" {
+			continue
+		}
+		if held := r.heldEventFor(a.Wait.RegistrationID); held != nil {
+			return a, held
+		}
+	}
+	return nil, nil
+}
+
 // heldEventFor finds the one early event matched to this reservation. An event
 // is applied once: a consumed one is never returned again.
 func (r Run) heldEventFor(registrationID string) *InboxEvent {
@@ -417,6 +444,13 @@ func (e *Engine) DeliverEvent(ctx context.Context, request DeliverEventRequest) 
 	}
 	activation := current.Activations[registration.ActivationID]
 	if activation == nil || activation.Status != "waiting" {
+		return stored, nil
+	}
+	// A paused scope may not move, so the event stays held and the delivery
+	// has succeeded: the sender did its part, and the driver applies the event
+	// once the pause is released. Reporting a refusal here told the sender to
+	// deliver again, and a second delivery is refused as a duplicate.
+	if current.restrictedFor(activation.InvocationID) {
 		return stored, nil
 	}
 	plan, err := current.planFor(registration.InvocationID)
