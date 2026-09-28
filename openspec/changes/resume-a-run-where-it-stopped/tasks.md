@@ -20,7 +20,7 @@
 
 ## 5. Проверка и выпуск
 
-- [ ] 5.1 `make check`, `make race`, `make e2e`, `git diff --check`, `openspec validate --strict`; verify и race на GitHub; релиз.
+- [x] 5.1 `make check`, `make race`, `make e2e`, `git diff --check`, `openspec validate --strict`; verify и race на GitHub; релиз.
 - [ ] 5.2 Сообщить сессии пакета форму объявления, команду и номер релиза.
 
-Локально 2026-09-28: `make check` (с `race`) — exit 0, `workflow-revision-v8` 18991 байт `sha256:99fa3a51…`; `make e2e` — exit 0; `git diff --check` и `openspec validate --strict` — чисто. CI и релиз — после коммита.
+Локально 2026-09-28: `make check` (с `race`) — exit 0, `workflow-revision-v8` 18991 байт `sha256:99fa3a51…`; `make e2e` — exit 0; `git diff --check` и `openspec validate --strict` — чисто. GitHub 2026-09-28 на `6937373`: `verify` 36415827660 — первый прогон красный на `TestCLIProjectSessionLimitsPrepareShowsPinnedPolicies` (очистка TempDir: `directory not empty`, тест изменением не затронут), перезапуск зелёный; `race` 36415829237 — зелёный. Релиз `v0.13.61` — run 36417317953, окружение `release` одобрено, 6 ассетов.
