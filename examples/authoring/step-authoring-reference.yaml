@@ -116,6 +116,13 @@ effects:
 #   system: example-system
 #   operations: [record.create]
 #   target: example/target
+# Declaring this block in prifly-step/2 selects StepDefinition v11; an explicit
+# schema_version below 11 is refused. prifly-step/1 cannot declare it.
+# Optional, independent of external_write: ask for the Run's claimed Git tree
+# to read without workspace-write permission. The launch must select worktree
+# or checkout; no claim is created for a task that omits this field. Declaring
+# it selects StepDefinition v13, so an older explicit schema_version is refused.
+# repository_workspace: read_only
 # Optional result checks; defaults to []. A workspace-tree step must keep this
 # empty because its native output is sealed atomically by runtime.
 result_check_refs: []

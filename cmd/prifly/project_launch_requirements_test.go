@@ -128,6 +128,51 @@ func TestCLIProjectConfigurableInputLaunch(t *testing.T) {
 	}
 }
 
+func TestCLIProjectStepDeclaresReadOnlyClaim(t *testing.T) {
+	root, authority := t.TempDir(), filepath.Join(t.TempDir(), "authority")
+	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", authority, "--host", "codex-cli"); code != 0 {
+		t.Fatalf("init: %s", stderr)
+	}
+	writeProjectLaunchRequirementsFixture(t, root, "3", "none")
+	stepPath := filepath.Join(root, ".prifly/workflows/inspect/steps/inspect.yaml")
+	step, err := os.ReadFile(stepPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step = []byte(strings.Replace(string(step), "authoring: prifly-step/1", "authoring: prifly-step/2\nrepository_workspace: read_only", 1))
+	if err := os.WriteFile(stepPath, step, 0644); err != nil {
+		t.Fatal(err)
+	}
+	profilePath := filepath.Join(root, ".prifly/project.yaml")
+	profile, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile = []byte(strings.Replace(string(profile), "    workflow: .prifly/workflows/inspect/workflow.yaml\n", "    workflow: .prifly/workflows/inspect/workflow.yaml\n    workspace: worktree\n", 1))
+	if err := os.WriteFile(profilePath, profile, 0644); err != nil {
+		t.Fatal(err)
+	}
+	gitFixture(t, root, "init")
+	gitFixture(t, root, "add", ".")
+	gitFixture(t, root, "commit", "-qm", "declare read-only claim")
+	args := []string{"--repository", root, "--launch", "inspect", "--host", "codex-cli"}
+	code, out, stderr := runCLI(t, append([]string{"project", "questionnaire", "--prepare"}, args...)...)
+	var review projectLaunchSummary
+	if code != 0 || json.Unmarshal([]byte(out), &review) != nil || review.Requirements == nil || !review.Requirements.GitWorkspace || review.WorkspaceMode != "worktree" {
+		t.Fatalf("read-only claim not reviewed: %d %s %s", code, out, stderr)
+	}
+	code, out, stderr = runCLI(t, append([]string{"project", "start"}, append(args, "--expected-launch-digest", review.ReviewDigest)...)...)
+	var started projectStartResult
+	if code != 0 || json.Unmarshal([]byte(out), &started) != nil || started.Workspace == nil {
+		t.Fatalf("read-only claim not started: %d %s %s", code, out, stderr)
+	}
+	code, out, stderr = runCLI(t, "--project", authority, "session", "task", "--run", started.Run.Run.ID)
+	var task prifly.SessionTask
+	if code != 0 || json.Unmarshal([]byte(out), &task) != nil || task.RepositoryWorkspace == "" || task.ClaimID == "" || len(task.PermittedEffects) != 1 || task.PermittedEffects[0] != "write_inside_declared_output_slot" {
+		t.Fatalf("read-only task acquired wrong claim or effects: %d %s %s", code, out, stderr)
+	}
+}
+
 func TestCLIProjectAssistedLaunchRequirementsBeforeMutation(t *testing.T) {
 	for _, test := range []struct {
 		name, effects, refusal string

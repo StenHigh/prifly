@@ -131,7 +131,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
-		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11", "StepDefinitionV12",
+		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11", "StepDefinitionV12", "StepDefinitionV13",
 		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7", "WorkflowRevisionV8",
 	}
 	for name := range defs {
@@ -236,6 +236,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = stepDefinitionV2Schema
 	case "StepDefinitionV12":
 		extension = stepDefinitionV2Schema
+	case "StepDefinitionV13":
+		extension = stepDefinitionV2Schema
 	case "WorkflowRevisionV2":
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV3":
@@ -261,12 +263,12 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		// Each step contract is the previous one plus its own change, so the
 		// requested name is reached by running the mutators in order up to it.
 		// A name outside this list is a base contract and runs none of them.
-		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11"}
+		stepContracts := []string{"StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11", "StepDefinitionV13"}
 		stepMutators := []func(){
 			func() { stepDefinitionV3(root) }, func() { stepDefinitionV4(root) }, func() { stepDefinitionV5(root) },
 			func() { stepDefinitionV6(root) }, func() { stepDefinitionV7(root) }, func() { stepDefinitionV8(root) },
 			func() { stepDefinitionV9(root) }, func() { stepDefinitionV10(root, defs) },
-			func() { stepDefinitionV11(root) },
+			func() { stepDefinitionV11(root) }, func() { stepDefinitionV13(root) },
 		}
 		for i := 0; i <= slices.Index(stepContracts, name); i++ {
 			stepMutators[i]()
@@ -810,7 +812,7 @@ func promiseOutputOnBlocked(root map[string]any, baseline map[string]any) {
 // StepContracts are the versioned StepDefinition contracts, oldest first. The
 // list the mutators run from is the same one callers ask, so a contract cannot
 // be added to one and missing from the other.
-var StepContracts = []string{"2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"}
+var StepContracts = []string{"2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"}
 
 // StepContractFor names the protocol contract a step of this schema_version is
 // validated against, or "" for a version this build does not know. Every caller
@@ -847,6 +849,16 @@ func stepDefinitionV11(root map[string]any) {
 			"target": map[string]any{"type": "string", "minLength": 1, "maxLength": 1024},
 		},
 	}
+}
+
+// v13 lets an assisted step explicitly read the Run's claimed Git tree,
+// independently of whether it writes to an external system.
+func stepDefinitionV13(root map[string]any) {
+	root["$id"] = "urn:prifly:step-definition:13"
+	root["title"] = "Pri-Fly StepDefinition v13: assisted read-only repository workspace"
+	properties := root["properties"].(map[string]any)
+	properties["schema_version"].(map[string]any)["const"] = "13"
+	properties["repository_workspace"] = map[string]any{"const": "read_only"}
 }
 
 // ValidateSchema checks data before a Run exists, using the same pinned schema

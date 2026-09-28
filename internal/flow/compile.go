@@ -778,6 +778,11 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 				return step, problem("unsupported", path+"/schema_version", "an output promised for the blocked verdict requires core-workflow/1")
 			}
 			name = "StepDefinitionV12"
+		case "13":
+			if p.Profile != CoreProfile {
+				return step, problem("unsupported", path+"/schema_version", "read-only repository workspace requires core-workflow/1")
+			}
+			name = "StepDefinitionV13"
 		}
 	}
 	if err := validateProtocolValue(name, value, path); err != nil {
@@ -785,6 +790,9 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 	}
 	if err := decodeValue(value, &step); err != nil {
 		return step, err
+	}
+	if step.RepositoryWorkspace != "" && step.Effects.Class == "workspace_write" {
+		return step, problem("unsupported", path+"/repository_workspace", "read_only repository workspace cannot be combined with workspace_write")
 	}
 	if len(step.ResultCheckRefs) != 0 {
 		if p.Checks == nil {

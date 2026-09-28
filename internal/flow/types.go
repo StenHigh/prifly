@@ -385,14 +385,17 @@ type StepDefinition struct {
 	// nothing itself, and reads no meaning from them. Operations name the
 	// permitted changes only -- reading the same system is not a change and
 	// needs no declaration, so its absence from the list is not a prohibition.
-	ExternalWrite   *ExternalWriteBoundary `json:"external_write,omitempty"`
-	ResultCheckRefs []Ref                  `json:"result_check_refs"`
-	ResultSchemaRef Ref                    `json:"result_schema_ref"`
-	Hooks           map[string]Hook        `json:"hooks,omitempty"`
-	Telemetry       []Mapping              `json:"telemetry,omitempty"`
-	WorkspaceTrees  []WorkspaceTreeBinding `json:"workspace_trees,omitempty"`
-	SessionLimits   *SessionLimits         `json:"session_limits,omitempty"`
-	ModelProfile    *ModelProfile          `json:"model_profile,omitempty"`
+	ExternalWrite *ExternalWriteBoundary `json:"external_write,omitempty"`
+	// RepositoryWorkspace requests the Run's claimed Git tree for read-only
+	// assisted work. It does not change the step's permitted effects.
+	RepositoryWorkspace string                 `json:"repository_workspace,omitempty"`
+	ResultCheckRefs     []Ref                  `json:"result_check_refs"`
+	ResultSchemaRef     Ref                    `json:"result_schema_ref"`
+	Hooks               map[string]Hook        `json:"hooks,omitempty"`
+	Telemetry           []Mapping              `json:"telemetry,omitempty"`
+	WorkspaceTrees      []WorkspaceTreeBinding `json:"workspace_trees,omitempty"`
+	SessionLimits       *SessionLimits         `json:"session_limits,omitempty"`
+	ModelProfile        *ModelProfile          `json:"model_profile,omitempty"`
 }
 
 // ModelProfile is what this step wants from the model that executes it. It

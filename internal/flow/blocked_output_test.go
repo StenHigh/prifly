@@ -102,7 +102,7 @@ func TestEveryStepContractThisBuildLowersToIsNamed(t *testing.T) {
 	}
 	// Every version the authoring path can lower to is one of these. A ladder
 	// row producing a version nothing names is the same defect one step earlier.
-	for _, version := range []string{"2", "5", "6", "7", "8", "9", "10", "11", "12"} {
+	for _, version := range []string{"2", "5", "6", "7", "8", "9", "10", "11", "12", "13"} {
 		if StepContractFor(version) == "" {
 			t.Errorf("the authoring ladder lowers to %s and nothing names its contract", version)
 		}

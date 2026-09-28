@@ -603,6 +603,13 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 			treeRelease, handoff.WorkspaceTrees = rollback, trees
 			handoff.ClaimID, handoff.ClaimGeneration, handoff.WorkspaceMode = claim.ID, claim.Generation, claimMode(claim)
 		}
+		if step.RepositoryWorkspace == "read_only" && handoff.ClaimID == "" {
+			claim, err := e.runActiveClaim(ctx, r.ID)
+			if err != nil {
+				return e.failPreparation(ctx, r, v, p, a, err, "repository_workspace_preparation_failed")
+			}
+			handoff.ClaimID, handoff.ClaimGeneration, handoff.WorkspaceMode = claim.ID, claim.Generation, claimMode(claim)
+		}
 		// A step permitted no workspace effect is handed the Run's workspaces
 		// as they stand, so its report can be refused if it left them changed.
 		// Recorded only under the state that enforces it: an older Run keeps

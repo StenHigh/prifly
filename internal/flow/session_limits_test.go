@@ -116,7 +116,7 @@ func TestSessionLimitsAuthoringRefusesInvalidContracts(t *testing.T) {
 		// when a step gained a declared model profile, and 10 when an output
 		// could be promised for the blocked verdict. The number moves with the
 		// newest contract, which is the point of the row.
-		{"unknown machine edition", "kind: worker", "schema_version: '11'\nkind: worker", "schema_invalid"},
+		{"unknown machine edition", "kind: worker", "schema_version: '12'\nkind: worker", "schema_invalid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := strings.Replace(string(sessionLimitSource(StepSessionAuthoringVersion, "")), test.before, test.after, 1)
@@ -273,8 +273,14 @@ func TestSessionLimitsEditorSchemaMatchesAuthoring(t *testing.T) {
 		{StepSessionAuthoringVersion, "schema_version: '8'", true},
 		{StepSessionAuthoringVersion, "schema_version: '9'", true},
 		{StepSessionAuthoringVersion, "schema_version: '10'", true},
-		{StepSessionAuthoringVersion, "schema_version: '11'", false},
+		{StepSessionAuthoringVersion, "schema_version: '11'", true},
+		{StepSessionAuthoringVersion, "schema_version: '13'", true},
+		{StepSessionAuthoringVersion, "repository_workspace: read_only", true},
+		{StepSessionAuthoringVersion, "external_write: {system: local-docker, operations: [compose.project.create], target: owned-projects}", true},
+		{StepSessionAuthoringVersion, "external_write: {system: local-docker, operations: [], target: owned-projects}", false},
 		{StepAuthoringVersion, "session_limits: {}", false},
+		{StepAuthoringVersion, "external_write: {system: local-docker, operations: [compose.project.create], target: owned-projects}", false},
+		{StepAuthoringVersion, "repository_workspace: read_only", false},
 		{StepSessionAuthoringVersion, "session_limits: {active_timeout_ms: 0}", false},
 		{StepSessionAuthoringVersion, "session_limits: {decision_wait_timeout_ms: -1}", false},
 		{StepSessionAuthoringVersion, "session_limits: {active_timeout_ms: 9223372036855}", false},
@@ -287,6 +293,54 @@ func TestSessionLimitsEditorSchemaMatchesAuthoring(t *testing.T) {
 		if err := validator.Validate(value); (err == nil) != test.valid {
 			t.Fatalf("editor disagrees with %s %q: %v", test.marker, test.limits, err)
 		}
+	}
+}
+
+func TestAssistedExternalWriteAuthoringLowersToV11(t *testing.T) {
+	base := strings.Replace(string(sessionLimitSource(StepSessionAuthoringVersion, "")),
+		"effects: {class: none, retry_class: never}",
+		"effects: {class: external_write, retry_class: reconcile_required}", 1)
+	boundary := "external_write: {system: local-docker, operations: [compose.project.create], target: owned-projects}\n"
+	for _, pinned := range []string{"", "schema_version: '11'\n"} {
+		data, err := StepJSONBytes([]byte(pinned+base+boundary), "yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ValidateProtocol("StepDefinitionV11", data); err != nil {
+			t.Fatal(err)
+		}
+		var step StepDefinition
+		if err := json.Unmarshal(data, &step); err != nil {
+			t.Fatal(err)
+		}
+		if step.SchemaVersion != "11" || step.ExternalWrite == nil || step.ExternalWrite.System != "local-docker" {
+			t.Fatalf("external write was not sealed as v11: %+v", step)
+		}
+	}
+	_, err := StepJSONBytes([]byte("schema_version: '10'\n"+base+boundary), "yaml")
+	expectProblem(t, err, "schema_invalid")
+	_, err = StepJSONBytes([]byte(strings.Replace(base+boundary, StepSessionAuthoringVersion, StepAuthoringVersion, 1)), "yaml")
+	expectProblem(t, err, "schema_invalid")
+}
+
+func TestAssistedReadOnlyRepositoryWorkspaceLowersToV13(t *testing.T) {
+	base := string(sessionLimitSource(StepSessionAuthoringVersion, ""))
+	for _, source := range []string{base + "repository_workspace: read_only\n", "schema_version: '13'\n" + base + "repository_workspace: read_only\n"} {
+		data, err := StepJSONBytes([]byte(source), "yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ValidateProtocol("StepDefinitionV13", data); err != nil {
+			t.Fatal(err)
+		}
+		var step StepDefinition
+		if err := json.Unmarshal(data, &step); err != nil || step.SchemaVersion != "13" || step.RepositoryWorkspace != "read_only" {
+			t.Fatalf("read-only workspace did not survive lowering: %+v %v", step, err)
+		}
+	}
+	for _, source := range []string{"schema_version: '11'\n" + base + "repository_workspace: read_only\n", strings.Replace(base+"repository_workspace: read_only\n", StepSessionAuthoringVersion, StepAuthoringVersion, 1)} {
+		_, err := StepJSONBytes([]byte(source), "yaml")
+		expectProblem(t, err, "schema_invalid")
 	}
 }
 

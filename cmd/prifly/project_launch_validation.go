@@ -55,7 +55,7 @@ func projectValidateLaunch(ctx context.Context, engine *prifly.Engine, root stri
 			requirements.EffectClasses[current.Workflow.Definition.Stages[id].StepRef.String()] = step.Effects.Class
 			if step.Executor.AdapterRef == assisted && step.Executor.Operation == "session" {
 				needsHost = true
-				needsWorkspace = needsWorkspace || step.Effects.Class == "workspace_write" || len(step.WorkspaceTrees) != 0
+				needsWorkspace = needsWorkspace || step.Effects.Class == "workspace_write" || len(step.WorkspaceTrees) != 0 || step.RepositoryWorkspace == "read_only"
 			}
 		}
 		for _, child := range current.Calls {

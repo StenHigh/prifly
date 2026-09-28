@@ -59,6 +59,11 @@ result schema и повышенные capabilities остаются явными
 полем StepDefinition, новой runtime-семантикой или способом изменить уже
 закреплённый Run. Полный справочник полей — в
 [`step-authoring-reference.yaml`](../../../examples/authoring/step-authoring-reference.yaml).
+Отдельное `repository_workspace: read_only` в новой редакции StepDefinition
+просит передать ассистируемому шагу путь claimed Git Workspace для чтения; это
+не класс эффекта и не разрешение менять дерево. Оно не зависит от
+`external_write`: шаг может читать Git и менять объявленную внешнюю систему,
+либо выполнять внешнюю задачу вообще без Git.
 Полная форма сценария с комментариями —
 [`workflow-authoring-reference.yaml`](../../../examples/authoring/workflow-authoring-reference.yaml).
 

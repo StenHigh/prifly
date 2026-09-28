@@ -687,6 +687,13 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
+	for _, workflow := range workflowPlans(plan) {
+		for _, step := range workflow.Steps {
+			if step.RepositoryWorkspace == "read_only" && options.WorkspaceClaim == nil {
+				return local.ApplyResult{}, fault("repository_workspace_missing", "a step requesting read_only repository workspace requires a selected claim")
+			}
+		}
+	}
 	var fork *ForkProvenance
 	var recoveryPlan RecoveryPlan
 	var recoverySource Run

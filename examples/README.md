@@ -86,6 +86,7 @@
 | `run_finish_named` | поведение чтения: `finish` в `run explain` | — |
 | `blocked_verdict` | `required_for: [..., blocked]` — контракт 10 у ассистируемого шага, **контракт 12** у программного; маршрут при **ревизии 6**, `result_schema_ref` → `core:schema/step-result@2.0.0` | step, workflow, blocked-guide |
 | `declared_external_write` | `effects.class: external_write` и блок `external_write` — контракт 11, только ассистируемый шаг | step |
+| `repository_workspace_read` | `repository_workspace: read_only` — контракт 13, отдельный от права записи и `external_write` | step |
 | `next_handoff` | поведение чтения: `arrived_from`, `checkpoint`, `repeats`, `continuations` в `run next` | blocked-guide |
 | `workflow_continuation` | `checkpoint` в корне и у шаговой стадии, `continuation` в корне — **ревизия 7**; `prifly project continue` | workflow, continuation-guide |
 | `workflow_resume` | `resumable` в корне — **ревизия 8**; `prifly project continue` тем же launch возобновляет Run с точки остановки | workflow, continuation-guide |

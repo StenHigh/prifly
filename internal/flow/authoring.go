@@ -177,7 +177,7 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	if timed {
 		marker = StepSessionAuthoringVersion
 		allowed = append(allowed, sessionAuthoringFields...)
-		allowed = append(allowed, "model_profile")
+		allowed = append(allowed, "model_profile", "external_write", "repository_workspace")
 	}
 	for key := range source {
 		if slices.Contains(allowed, key) {
@@ -205,8 +205,8 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 		}
 	}
 	if version, exists := source["schema_version"]; exists {
-		if timed && version != "6" && version != "7" && version != "8" && version != "9" && version != "10" {
-			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6, v7, v8, v9 or v10")
+		if timed && version != "6" && version != "7" && version != "8" && version != "9" && version != "10" && version != "11" && version != "13" {
+			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6, v7, v8, v9, v10, v11 or v13")
 		}
 		if !timed && version != "2" && version != "5" && version != "8" && version != "12" {
 			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2, v5, v8 or v12")
@@ -312,6 +312,12 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 			schemaVersion = "10"
 		}
 	}
+	if _, exists := source["external_write"]; exists {
+		schemaVersion = "11"
+	}
+	if _, exists := source["repository_workspace"]; exists {
+		schemaVersion = "13"
+	}
 	if value, exists := source["schema_version"]; exists {
 		schemaVersion = value.(string)
 	}
@@ -350,6 +356,12 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	}
 	if value, exists := source["effects"]; exists {
 		result["effects"] = value
+	}
+	if value, exists := source["external_write"]; exists {
+		result["external_write"] = value
+	}
+	if value, exists := source["repository_workspace"]; exists {
+		result["repository_workspace"] = value
 	}
 	if value, exists := source["hooks"]; exists {
 		hooks, err := authorStepHooks(value, refs)

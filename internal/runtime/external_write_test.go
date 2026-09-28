@@ -2,21 +2,23 @@ package runtime
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/stenhigh/prifly/internal/flow"
+	"github.com/stenhigh/prifly/internal/local"
 )
 
 // externalWriteFixture is one assisted step that changes something outside this
 // authority, declaring what it may change. The names here are placeholders on
 // purpose: which system, which operations and which target are the workflow
 // author's to declare, and this engine knows none of them.
-func externalWriteFixture(t *testing.T, shape func(*flow.StepDefinition)) (*Engine, string, error) {
+func externalWriteFixture(t *testing.T, shape func(*flow.StepDefinition), bindClaim ...bool) (*Engine, string, error) {
 	t.Helper()
-	e, _, _ := assistedWorkspaceFixture(t, "checkout")
+	e, _, claim := assistedWorkspaceFixture(t, "checkout")
 	definitions, _, err := Builtins()
 	if err != nil {
 		t.Fatal(err)
@@ -56,11 +58,46 @@ func externalWriteFixture(t *testing.T, shape func(*flow.StepDefinition)) (*Engi
 		"done":    {Kind: "finish", Outcome: "succeeded", OutputBindings: map[string]flow.Binding{}},
 	}
 	writeRuntimeJSON(t, filepath.Join(e.Root, "workflows/publishing.json"), workflow)
-	result, err := e.Start(context.Background(), StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/publishing.json", BriefFile: "brief.json", Inputs: map[string]string{}, WorkspaceMode: "checkout"})
+	options := StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/publishing.json", BriefFile: "brief.json", Inputs: map[string]string{}, WorkspaceMode: "checkout"}
+	if len(bindClaim) != 0 && bindClaim[0] {
+		options.WorkspaceClaim = &claim
+	}
+	result, err := e.Start(context.Background(), options)
 	if err != nil {
 		return e, "", err
 	}
 	return e, result.Receipt.RunID, nil
+}
+
+func TestExternalWriterMayReadAnExplicitlyClaimedRepository(t *testing.T) {
+	readOnly := func(step *flow.StepDefinition) {
+		step.SchemaVersion = "13"
+		step.RepositoryWorkspace = "read_only"
+	}
+	_, _, err := externalWriteFixture(t, readOnly)
+	if refusalCode(err) != "repository_workspace_missing" {
+		t.Fatalf("read-only step started without a selected claim: %v", err)
+	}
+	e, runID, err := externalWriteFixture(t, readOnly, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := handOver(t, e, runID)
+	if task.ClaimID == "" || task.RepositoryWorkspace == "" || task.WorkspaceMode != "checkout" {
+		t.Fatalf("declared read-only repository workspace was not handed to the host: %+v", task)
+	}
+	if !slices.Contains(task.PermittedEffects, "change_declared_external_target") || slices.Contains(task.PermittedEffects, "write_inside_claimed_workspace") {
+		t.Fatalf("repository read changed the step's write rights: %v", task.PermittedEffects)
+	}
+	changed := filepath.Join(task.RepositoryWorkspace, "read-only-write.txt")
+	if err := os.WriteFile(changed, []byte("unexpected write\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = e.SubmitSession(context.Background(), hostResult(t, e, task, "published"))
+	var rejection *local.Rejection
+	if err == nil || !asRejection(err, &rejection) || rejection.Code != "effect_not_permitted" {
+		t.Fatalf("read-only report changed the claimed tree: %v", err)
+	}
 }
 
 // The step compiles, starts, and its handoff carries the permission with the
