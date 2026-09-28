@@ -21,8 +21,10 @@
 ## 5. Проверка и выпуск
 
 - [x] 5.1 `make check`, `make race`, `make e2e`, `git diff --check`, `openspec validate --strict`; verify и race на GitHub; релиз.
-- [ ] 5.2 Сообщить сессии пакета форму объявления, команду и номер релиза.
+- [x] 5.2 Сообщить сессии пакета форму объявления, команду и номер релиза.
 
 Локально 2026-09-28: `make check` (с `race`) — exit 0, `workflow-revision-v8` 18991 байт `sha256:99fa3a51…`; `make e2e` — exit 0; `git diff --check` и `openspec validate --strict` — чисто. GitHub 2026-09-28 на `6937373`: `verify` 36415827660 — первый прогон красный на `TestCLIProjectSessionLimitsPrepareShowsPinnedPolicies` (очистка TempDir: `directory not empty`, тест изменением не затронут), перезапуск зелёный; `race` 36415829237 — зелёный. Релиз `v0.13.61` — run 36417317953, окружение `release` одобрено, 6 ассетов.
 
 0.13.62 (`de0601c`, 2026-09-28): сессия пакета нашла на 0.13.61, что workflow, меняющий дерево, не возобновляется с launch без `workspace:` (`project_start_workspace_required`, а `--workspace` — `resume_input_override`); у `project recover` та же ловушка. Режим дерева теперь берётся у исходного Run (`TestCLIResumeTakesTheSourceTreeModeWithoutAStandingWorkspace`, красный на 0.13.61). По решению владельца ответы анкеты без переданных ответов берутся из исходного Run (`TestCLIResumeTakesTheSourceRunsAnswers`, красный без изменения). `make check` — exit 0; GitHub `verify` 36420579909 и `race` 36420579906 зелёные с первого раза; релиз — run 36422174861, 6 ассетов.
+
+Пакет подтвердил 2026-09-28: все 12 пунктов получены; на 0.13.62 их CI (e3ec317) зелёный, живое возобновление blocked и cancelled Runs aif-classic проходит без ответов анкеты и без `workspace:` у launch. `--host` при возобновлении обязателен, как у любого запуска с ассистируемыми шагами: хост выбирает исполнитель, из исходного Run он не берётся.
