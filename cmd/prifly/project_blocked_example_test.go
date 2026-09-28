@@ -272,3 +272,41 @@ func TestCLIBlockedExampleAcceptance(t *testing.T) {
 		t.Fatalf("a Run of an undeclared outcome was resumed: exit=%d %s", code, stderr)
 	}
 }
+
+// A resume is decided as its source was: with nothing answered on the command
+// line it takes the source Run's answers, and an answer that differs is
+// refused rather than sealed into a Run whose carried stages were decided
+// otherwise.
+func TestCLIResumeTakesTheSourceRunsAnswers(t *testing.T) {
+	f := newBlockedExample(t)
+	folder := ".prifly/workflows/blocked-condition/"
+	data, err := os.ReadFile(filepath.Join(f.root, folder+"workflow.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, f.root, folder+"workflow.yaml", strings.Replace(string(data), "entry: prepare\n", "decision_catalog: ["+folder+"decisions/subject.yaml]\nentry: prepare\n", 1))
+	writeFixtureFile(t, f.root, folder+"decisions/subject.yaml", `authoring: prifly-run-decision/1
+id: subject
+title: What to work on
+phase: preflight
+choices:
+  - {id: report, title: The report, value: {subject: the report}}
+  - {id: summary, title: The summary, value: {subject: the summary}}
+destination: {kind: launch_input, name: request}
+`)
+	stopped := f.launch(t, "start", "work", "--preflight-answer", `subject={"subject":"the report"}`)
+	if view := f.status(t, stopped.Run.Run.ID); view.Run.Outcome == nil || *view.Run.Outcome != "partial" || view.Run.DecisionSheet == nil {
+		t.Fatalf("the source did not stop partial with its answers sealed: %v", view.Run.Outcome)
+	}
+	if err := os.WriteFile(f.condition, []byte("present\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := runCLI(t, "project", "continue", "--prepare", "--repository", f.root, "--launch", "work", "--allow-execution", "--source-run", stopped.Run.Run.ID, "--preflight-answer", `subject={"subject":"the summary"}`); code == 0 || !strings.Contains(stderr, "recover_context_changed") {
+		t.Fatalf("a resume decided otherwise was prepared: exit=%d %s", code, stderr)
+	}
+	resumed := f.launch(t, "continue", "work", "--source-run", stopped.Run.Run.ID)
+	view := f.status(t, resumed.Run.Run.ID)
+	if view.Run.Outcome == nil || *view.Run.Outcome != "succeeded" || view.Run.Fork == nil || view.Run.Fork.Reason != prifly.ResumeReason {
+		t.Fatalf("the resume without answers did not take the source's: %v %+v", view.Run.Outcome, view.Run.Fork)
+	}
+}

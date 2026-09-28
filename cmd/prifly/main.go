@@ -2425,11 +2425,11 @@ Global: --project DIR  --json  --format text|json|csv
   project continue --repository DIR --launch ID --source-run RUN_ID --prepare [--host HOST] [--workspace worktree|checkout] [--workspace-commit COMMIT] [--from-stage STAGE] [--allow-duplicate-continuation]
   project continue --repository DIR --launch ID --source-run RUN_ID --expected-launch-digest DIGEST [the same reviewed options]
                                    Start a Run of a workflow that declares a continuation from a finished Run: it takes the inputs the workflow names and the source Run's tree as left; COMMIT claims a new tree there instead
-                                   With a launch of the source Run's own workflow, resume it where it stopped, if that workflow declares resumable: accepted stages before that point are carried, the rest runs again with the source's inputs in its tree; STAGE starts from an earlier accepted stage
+                                   With a launch of the source Run's own workflow, resume it where it stopped, if that workflow declares resumable: accepted stages before that point are carried, the rest runs again with the source's inputs in its tree; STAGE starts from an earlier accepted stage; with no answer, profile or policy named, the source Run's sealed answers are taken
                                    An active continuation or resume of the same source refuses another launch unless --allow-duplicate-continuation is reviewed on prepare and start
   project recover --repository DIR --launch ID --source-run RUN_ID --host HOST --prepare [--from-stage STAGE]
   project recover --repository DIR --launch ID --source-run RUN_ID --host HOST --expected-launch-digest DIGEST --allow-execution [--from-stage STAGE]
-                                   Resume a technically failed Run at its failed stage, or STAGE before it, on a new package, in the source Run's own tree; prepare is read-only
+                                   Resume a technically failed Run at its failed stage, or STAGE before it, on a new package, in the source Run's own tree with its sealed answers unless others are named; prepare is read-only
   capabilities                     Implemented contracts/profiles, not permission grants
   exit-codes                       What every exit status of this tool means, for a driver that reads $?
    0 the command was carried out. Waiting is reported this way too: run drive returns 0 while an

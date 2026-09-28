@@ -189,6 +189,28 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	} else if err := projectStartInputs(*details, inputs, refFiles, !neutral); err != nil {
 		return err
 	}
+	// A recovery or resume must be decided as its source was, so with no
+	// answer named here it takes the source Run's own; named ones are still
+	// compared with the source before anything starts.
+	answersFromSource := false
+	if (recovering || continuation) && len(answers) == 0 && len(runtimeAnswers) == 0 && *packageProfile == "" && *decisionPolicy == "" {
+		reader, err := prifly.Open(c.project, true)
+		if err != nil {
+			return err
+		}
+		sourced, found, sourceErr := projectSourceAnswers(ctx, reader, root, launch, *sourceRun, recovering)
+		closeErr := reader.Close()
+		if sourceErr != nil {
+			return sourceErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if found {
+			answers, runtimeAnswers, *packageProfile, *decisionPolicy = sourced.preflight, sourced.runtime, sourced.profile, sourced.policy
+			answersFromSource = true
+		}
+	}
 	preflight, err := projectStartPreflight(root, profile, packageName, *packageProfile, *decisionPolicy, answers, runtimeAnswers)
 	if err != nil {
 		return err
@@ -323,6 +345,8 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				projectCarrySourceInputs(preflight, *details, carried, inputValues)
 				continuation, recovering = false, true
 			}
+		} else if err == nil && continuation && answersFromSource {
+			err = refusal("project_continue_answers_required", "workflow "+launch.plan.Workflow.ID+" continues another Run and does not resume it, so it takes no answers from it; answer the questionnaire")
 		} else if err == nil && continuation && *fromStage != "" {
 			err = refusal("project_continue_from_stage_unsupported", "--from-stage resumes a Run with its own workflow; workflow "+launch.plan.Workflow.ID+" continues another")
 		}
@@ -339,8 +363,18 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			}
 			continuationReview = &review
 		}
+		// A recovery or resume takes the source Run's tree over, so its mode is
+		// that tree's, never the launch's standing one or a flag it refuses.
+		standing := standingWorkspace
+		if err == nil && recovering {
+			standing, err = projectSourceWorkspace(ctx, preflightEngine, *sourceRun)
+		}
 		if err == nil {
-			execution, requirements, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, launch, *host, *workspace, standingWorkspace, *allowExecution || recovering && prepare, inputValues, refs)
+			execution, requirements, err = projectValidateLaunch(ctx, preflightEngine, root, compiled, launch, *host, *workspace, standing, *allowExecution || recovering && prepare, inputValues, refs)
+			var fault *prifly.Fault
+			if recovering && errors.As(err, &fault) && fault.Code == "project_start_workspace_required" {
+				err = refusal("recover_workspace_missing", "the source Run holds no tree, and this workflow needs one to run again")
+			}
 		}
 		if err == nil {
 			*workspace = requirements.WorkspaceMode

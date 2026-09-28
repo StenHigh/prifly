@@ -109,6 +109,13 @@ type continuationCLI struct {
 
 func newContinuationCLI(t *testing.T, tailContinuation string) continuationCLI {
 	t.Helper()
+	return newContinuationCLIResuming(t, tailContinuation, false)
+}
+
+// newContinuationCLIResuming is the same project whose source workflow, when
+// resumable, declares that it resumes its own partial Runs.
+func newContinuationCLIResuming(t *testing.T, tailContinuation string, resumable bool) continuationCLI {
+	t.Helper()
 	root, authority := newProjectFixture(t)
 	writeFixtureFile(t, root, ".prifly/project.yaml", `schema_version: prifly-project-profile/3
 `+projectHostsYAML+`packages:
@@ -169,7 +176,7 @@ instructions_ref: "{{context_work}}"
 effects: {class: none, retry_class: never}
 result_schema_ref: "{{step_result_schema}}"
 `)
-	writeFixtureFile(t, root, ".prifly/workflows/source/workflow.yaml", `authoring: prifly-project-workflow/1
+	sourceWorkflow := `authoring: prifly-project-workflow/1
 package:
   id: example-source:package/source
   version: 1.0.0
@@ -202,7 +209,11 @@ stages:
     impossible_verdicts: [fail, needs_revision, no_work]
   polish: {kind: step, step_ref: polish, on: {pass: partial}, impossible_verdicts: [fail, needs_revision, no_work]}
   partial: {kind: finish, outcome: partial}
-`)
+`
+	if resumable {
+		sourceWorkflow = strings.ReplaceAll(strings.Replace(sourceWorkflow, "entry: prepare\n", "resumable: {from_outcomes: [partial]}\nentry: prepare\n", 1), "needs_revision, no_work]", "needs_revision, no_work, blocked]")
+	}
+	writeFixtureFile(t, root, ".prifly/workflows/source/workflow.yaml", sourceWorkflow)
 	writeFixtureFile(t, root, ".prifly/workflows/tail/steps/verify.yaml", `authoring: prifly-step/1
 id: example:step/verify
 version: 1.0.0
@@ -505,5 +516,38 @@ func TestProjectContinueRefusesAWorkflowThatContinuesNothing(t *testing.T) {
 	var fault *prifly.Fault
 	if _, _, err := projectContinuationPrepare(context.Background(), nil, "", plan, "run:source", "", "", "", true); !errors.As(err, &fault) || fault.Code != "project_continue_undeclared" {
 		t.Fatalf("a workflow without a continuation was accepted: %v", err)
+	}
+}
+
+// A resume takes the source Run's tree over, so the tree's mode is the
+// source's: a launch with no standing workspace must not demand one, which
+// the resume would then refuse to take.
+func TestCLIResumeTakesTheSourceTreeModeWithoutAStandingWorkspace(t *testing.T) {
+	f := newContinuationCLIResuming(t, "  from_outcomes: [partial]\n", true)
+	f.submit(map[string]string{"handoff": "{}\n"}, nil)
+	writeFixtureFile(t, f.source.WorkspacePath, "plans/plan.md", "# Plan\n")
+	f.submit(map[string]string{"draft": "{}\n"}, []prifly.WorkspaceTreeLocation{{OutputPort: "plan", Path: "plans/plan.md"}})
+	f.submit(map[string]string{}, nil)
+	// The launch no longer names a standing workspace.
+	profile, err := os.ReadFile(filepath.Join(f.root, ".prifly/project.yaml"))
+	standing := "source/workflow.yaml\n    workspace: worktree\n"
+	if err != nil || !strings.Contains(string(profile), standing) {
+		t.Fatalf("fixture launch has no standing workspace: %v", err)
+	}
+	writeFixtureFile(t, f.root, ".prifly/project.yaml", strings.Replace(string(profile), standing, "source/workflow.yaml\n", 1))
+	args := []string{"--repository", f.root, "--launch", "source", "--host", "codex-cli", "--source-run", f.source.Run.Run.ID}
+	var review projectLaunchSummary
+	if err := json.Unmarshal([]byte(f.command(append([]string{"project", "continue", "--prepare"}, args...)...)), &review); err != nil {
+		t.Fatal(err)
+	}
+	if review.WorkspaceMode != "worktree" || review.Recovery == nil || review.Recovery.FrontierStageID != "polish" || review.Recovery.Claim == nil || review.Recovery.Claim.ID != f.source.Workspace.ID {
+		t.Fatalf("the resume does not take the source tree in its mode: %s %+v", review.WorkspaceMode, review.Recovery)
+	}
+	var resumed projectStartResult
+	if err := json.Unmarshal([]byte(f.command(append(append([]string{"project", "continue"}, args...), "--expected-launch-digest", review.ReviewDigest)...)), &resumed); err != nil {
+		t.Fatal(err)
+	}
+	if resumed.Workspace == nil || resumed.Workspace.ID != f.source.Workspace.ID || resumed.Run.Run.Fork == nil || resumed.Run.Run.Fork.Reason != prifly.ResumeReason {
+		t.Fatalf("the resumed Run did not take over the source tree: %+v %+v", resumed.Workspace, resumed.Run.Run.Fork)
 	}
 }
