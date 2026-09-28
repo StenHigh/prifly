@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"sort"
@@ -18,7 +19,18 @@ type RecoveryRequest struct {
 	SourceRunID      string `json:"source_run_id"`
 	SourceRunVersion int64  `json:"source_run_version"`
 	ReviewDigest     string `json:"review_digest"`
+	// FromStage names an accepted stage of the source's root invocation, run
+	// before the point the source stopped at, to start again from instead.
+	FromStage string `json:"from_stage,omitempty"`
 }
+
+// RecoveryReason and ResumeReason are the fork reasons of a Run made from a
+// recovery plan: a technical failure run again, or a stopped Run resumed by
+// its own workflow's declaration.
+const (
+	RecoveryReason = "recover_failed_stage"
+	ResumeReason   = "resume_stopped_run"
+)
 
 // CheckRecoveryContext refuses to silently change the decisions or executor
 // profile that made the accepted prefix meaningful.
@@ -60,7 +72,7 @@ type RecoveryPlan struct {
 	Checkpoint        *CheckpointRef                    `json:"checkpoint,omitempty"`
 	Claim             *ContinuationClaim                `json:"claim,omitempty"`
 	FrontierStageID   string                            `json:"frontier_stage_id"`
-	FrontierAttemptID string                            `json:"source_frontier_attempt_id"`
+	FrontierAttemptID string                            `json:"source_frontier_attempt_id,omitempty"`
 	FrontierAction    string                            `json:"frontier_action"`
 	FrontierReason    string                            `json:"frontier_reason"`
 	NextStageID       string                            `json:"next_stage_id,omitempty"`
@@ -119,10 +131,6 @@ func (e *Engine) PlanRecovery(ctx context.Context, request RecoveryRequest, targ
 	if view.Snapshot.Version != request.SourceRunVersion || source.Profile != flow.CoreProfile {
 		return result, local.Reject("recover_source_changed", "source Run version or profile differs from recovery request")
 	}
-	frontier, attempt, err := recoveryFrontier(source)
-	if err != nil {
-		return result, err
-	}
 	oldPlan, err := source.plan()
 	if err != nil {
 		return result, err
@@ -139,7 +147,15 @@ func (e *Engine) PlanRecovery(ctx context.Context, request RecoveryRequest, targ
 		}
 		after = page.Events[len(page.Events)-1].Seq
 	}
-	reused, rootOutputs, err := recoveryTrace(source, oldPlan, target, definitions, resources, events)
+	sequences, err := activationSequences(events)
+	if err != nil {
+		return result, err
+	}
+	point, err := recoveryPointOf(source, oldPlan, target, sequences, request.FromStage)
+	if err != nil {
+		return result, err
+	}
+	reused, rootOutputs, err := recoveryTrace(source, oldPlan, target, definitions, resources, sequences, point)
 	if err != nil {
 		return result, err
 	}
@@ -158,16 +174,21 @@ func (e *Engine) PlanRecovery(ctx context.Context, request RecoveryRequest, targ
 		return result, err
 	}
 	if released {
-		return result, local.Reject("recover_workspace_released", "the source Run's tree was released, so the failed stage has no tree to run in again")
+		return result, local.Reject("recover_workspace_released", "the source Run's tree was released, so the stage has no tree to run in again")
 	}
 	checkpoint, err := lastCheckpoint(source)
 	if err != nil {
 		return result, err
 	}
-	if frontier.InvocationID != source.RootInvocationID {
-		return result, local.Reject("recover_frontier_unsupported", "the first recovery edition supports a root failed step")
+	result = RecoveryPlan{SchemaVersion: "recovery-plan/1", SourceRunID: source.ID, SourceRunVersion: view.Snapshot.Version, TargetWorkflowRef: flow.Ref{ID: target.Workflow.ID, Version: target.Workflow.Version, Digest: target.Digest}, Checkpoint: checkpoint, Claim: claim, FrontierStageID: point.StageID, FrontierAction: "execute", FrontierReason: point.Reason, Reused: reused, RootOutputs: rootOutputs}
+	// Only a failed Attempt can have left a result that passes without
+	// another process; a stage resumed or chosen runs again.
+	attempt := point.Attempt
+	if attempt == nil {
+		return digestRecoveryPlan(result)
 	}
-	result = RecoveryPlan{SchemaVersion: "recovery-plan/1", SourceRunID: source.ID, SourceRunVersion: view.Snapshot.Version, TargetWorkflowRef: flow.Ref{ID: target.Workflow.ID, Version: target.Workflow.Version, Digest: target.Digest}, Checkpoint: checkpoint, Claim: claim, FrontierStageID: frontier.StageID, FrontierAttemptID: attempt.ID, FrontierAction: "execute", FrontierReason: "failed Attempt outputs were not all sealed", Reused: reused, RootOutputs: rootOutputs}
+	result.FrontierAttemptID = attempt.ID
+	frontier := point.Activation
 	candidate, err := recoveryCandidateRef(events, attempt.ID)
 	if err != nil {
 		return RecoveryPlan{}, err
@@ -202,6 +223,10 @@ func (e *Engine) PlanRecovery(ctx context.Context, request RecoveryRequest, targ
 			}
 		}
 	}
+	return digestRecoveryPlan(result)
+}
+
+func digestRecoveryPlan(result RecoveryPlan) (RecoveryPlan, error) {
 	toDigest := result
 	toDigest.ReviewDigest = ""
 	encoded, err := json.Marshal(toDigest)
@@ -242,13 +267,26 @@ func recoveryCommit(value string) bool {
 	return strings.Trim(value, "0123456789abcdef") == ""
 }
 
+// recoveryPoint is where a new Run starts again from a stopped one: the stage,
+// its activation in the source when it had one, the failed Attempt of a
+// technical failure, and the journal sequence before which accepted stages
+// are carried. A stage never activated before the source stopped has no
+// activation, and everything the source accepted is carried.
+type recoveryPoint struct {
+	StageID    string
+	Activation *Activation
+	Attempt    *Attempt
+	Cutoff     int64
+	Reason     string
+}
+
 // recoveryFrontier identifies one settled technical failure. It does not
 // authorize reuse: that decision also needs pinned bytes, route and subject.
 func recoveryFrontier(source Run) (*Activation, *Attempt, error) {
 	if source.Status != "failed" || source.Outcome != nil || source.Settled == nil {
 		return nil, nil, local.Reject("recover_source_ineligible", "recovery requires a technically failed Run without an outcome")
 	}
-	if source.CancelRequested || source.restricted() || source.HasUnresolvedEffects || len(source.Active) != 0 || source.ActiveCheckID != "" || source.PendingAcceptance != nil || source.PendingArtifactPublication != nil || source.PendingDecision != nil {
+	if source.CancelRequested || source.restricted() || recoverySourceUnsettled(source) {
 		return nil, nil, local.Reject("recover_source_unsettled", "source Run holds a stop, active work or unresolved obligation")
 	}
 	frontier := source.brokenStage()
@@ -263,7 +301,118 @@ func recoveryFrontier(source Run) (*Activation, *Attempt, error) {
 	if attempt == nil || attempt.StepID != step.ID || attempt.ActivationID != frontier.ID || attempt.Settled == nil || attempt.ProcessOutcome != nil && attempt.ProcessOutcome.Uncertain {
 		return nil, nil, local.Reject("recover_source_unsettled", "failed Attempt is missing settlement or has an uncertain process")
 	}
+	if frontier.InvocationID != source.RootInvocationID {
+		return nil, nil, local.Reject("recover_frontier_unsupported", "recovery runs again a failed step of the root workflow")
+	}
 	return frontier, attempt, nil
+}
+
+func recoverySourceUnsettled(source Run) bool {
+	return source.HasUnresolvedEffects || len(source.Active) != 0 || source.ActiveCheckID != "" || source.PendingAcceptance != nil || source.PendingArtifactPublication != nil || source.PendingDecision != nil
+}
+
+// recoveryPointOf finds where the source stopped. A technical failure stops at
+// its failed step and needs no declaration. A Run that ended with an outcome,
+// or was cancelled, is resumed only when the target -- a revision of its own
+// workflow -- declares resumable for it: it stopped at the stage whose
+// accepted result led to finish, or at the stage it was cancelled at. An
+// operator may name an accepted root stage run before that point instead.
+func recoveryPointOf(source Run, oldPlan, target *flow.Plan, sequences map[string]int64, fromStage string) (recoveryPoint, error) {
+	var point recoveryPoint
+	if oldPlan == nil || target == nil || oldPlan.Workflow.ID != target.Workflow.ID {
+		return point, local.Reject("recover_prefix_changed", "root workflow changed")
+	}
+	switch {
+	case source.Status == "failed" && source.Outcome == nil:
+		frontier, attempt, err := recoveryFrontier(source)
+		if err != nil {
+			return point, err
+		}
+		point = recoveryPoint{StageID: frontier.StageID, Activation: frontier, Attempt: attempt, Cutoff: sequences[frontier.ID], Reason: "failed Attempt outputs were not all sealed"}
+	case source.Status == "completed" && source.Outcome != nil, source.Status == "cancelled":
+		declared := target.Workflow.Resumable
+		if source.Status == "cancelled" && (declared == nil || !declared.FromCancelled) {
+			return point, local.Reject("resume_undeclared", "workflow "+target.Workflow.ID+" does not declare resumable from_cancelled, so its cancelled Run is not resumed")
+		}
+		if source.Status == "completed" && (declared == nil || !slices.Contains(declared.FromOutcomes, *source.Outcome)) {
+			return point, local.Reject("resume_undeclared", "workflow "+target.Workflow.ID+" does not declare resumable from_outcomes "+*source.Outcome+", so its Run is not resumed")
+		}
+		if source.Settled == nil || recoverySourceUnsettled(source) {
+			return point, local.Reject("recover_source_unsettled", "source Run holds active work or an unresolved obligation")
+		}
+		stopped, err := resumeStop(source, oldPlan, sequences)
+		if err != nil {
+			return point, err
+		}
+		point = stopped
+	default:
+		return point, local.Reject("recover_source_ineligible", "only a technically failed, ended or cancelled Run is run again")
+	}
+	if fromStage != "" {
+		chosen := source.activationForInvocation(source.RootInvocationID, fromStage)
+		if chosen == nil || chosen.Status != "completed" || chosen.Settled == nil || sequences[chosen.ID] == 0 || sequences[chosen.ID] >= point.Cutoff {
+			return recoveryPoint{}, local.Reject("resume_from_stage_invalid", "stage "+fromStage+" is not an accepted stage of the source's root workflow run before "+point.StageID)
+		}
+		point = recoveryPoint{StageID: fromStage, Activation: chosen, Cutoff: sequences[chosen.ID], Reason: "the operator chose to start again from this accepted stage"}
+	}
+	switch target.Workflow.Definition.Stages[point.StageID].Kind {
+	case "step", "call", "repeat":
+	default:
+		return recoveryPoint{}, local.Reject("resume_frontier_unsupported", "the source stopped at "+point.StageID+", which is not a step, call or repeat; name an accepted stage before it with --from-stage")
+	}
+	return point, nil
+}
+
+// resumeStop is where an ended or cancelled Run stopped, read with the same
+// routing the driver used. Two candidates are never guessed between.
+func resumeStop(source Run, p *flow.Plan, sequences map[string]int64) (recoveryPoint, error) {
+	root := source.RootInvocationID
+	ambiguous := local.Reject("resume_frontier_ambiguous", "the stage the source stopped at cannot be named from its record; name an accepted stage with --from-stage")
+	if source.Status == "completed" {
+		for _, a := range source.Activations {
+			if a.InvocationID != root || a.Kind != "finish" || a.Status != "completed" {
+				continue
+			}
+			arrival := arrivalAt(source, p, root, a.StageID)
+			if arrival == nil {
+				return recoveryPoint{}, ambiguous
+			}
+			stopped := source.activationForInvocation(root, arrival.StageID)
+			if stopped == nil {
+				return recoveryPoint{}, ambiguous
+			}
+			return recoveryPoint{StageID: stopped.StageID, Activation: stopped, Cutoff: sequences[stopped.ID], Reason: "the Run ended " + *source.Outcome + " on the result of this stage"}, nil
+		}
+		return recoveryPoint{}, ambiguous
+	}
+	var cancelled, last *Activation
+	for _, a := range source.Activations {
+		if a.InvocationID != root {
+			continue
+		}
+		if a.Status == "cancelled" {
+			if cancelled != nil {
+				return recoveryPoint{}, ambiguous
+			}
+			cancelled = a
+		}
+		if a.Status == "completed" && (last == nil || sequences[a.ID] > sequences[last.ID]) {
+			last = a
+		}
+	}
+	if cancelled != nil {
+		return recoveryPoint{StageID: cancelled.StageID, Activation: cancelled, Cutoff: sequences[cancelled.ID], Reason: "the Run was cancelled at this stage"}, nil
+	}
+	// Cancelled between stages: the next stage was never activated, and it is
+	// where the last accepted one routed.
+	if last == nil {
+		return recoveryPoint{}, ambiguous
+	}
+	_, next, _, ok := routeTaken(source, p, last)
+	if !ok {
+		return recoveryPoint{}, ambiguous
+	}
+	return recoveryPoint{StageID: next, Cutoff: math.MaxInt64, Reason: "the Run was cancelled before this stage started"}, nil
 }
 
 // recoveryCandidateRef reads the immutable result-intake record rather than
@@ -412,17 +561,9 @@ type RecoveryReuse struct {
 	Sequence     int64                  `json:"source_event_sequence"`
 }
 
-// recoveryTrace checks the actual settled path, including nested calls and
-// repeats. It only supports a sequential quality tail; unsupported control
-// shapes fail before any new Run or claim is created.
-func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []PinnedDefinition, newResources []PinnedResource, events []local.Event) ([]RecoveryReuse, map[string]map[string]ArtifactRef, error) {
-	frontier, _, err := recoveryFrontier(source)
-	if err != nil {
-		return nil, nil, err
-	}
-	if oldPlan == nil || newPlan == nil || oldPlan.Workflow.ID != newPlan.Workflow.ID || oldPlan.Workflow.Definition.Entry != newPlan.Workflow.Definition.Entry {
-		return nil, nil, local.Reject("recover_prefix_changed", "root workflow or entry changed")
-	}
+// activationSequences reads when each activation was created from the Run's
+// journal: the order the stages ran in, which the state alone does not keep.
+func activationSequences(events []local.Event) (map[string]int64, error) {
 	sequences := map[string]int64{}
 	for _, event := range events {
 		switch event.Type {
@@ -433,7 +574,7 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 				} `json:"transitions"`
 			}
 			if json.Unmarshal(event.Data, &record) != nil {
-				return nil, nil, local.Reject("recover_trace_invalid", "state transition journal is invalid")
+				return nil, local.Reject("recover_trace_invalid", "state transition journal is invalid")
 			}
 			for _, transition := range record.Transitions {
 				if transition.Kind == "activation" && transition.From == "" && transition.To == "ready" && sequences[transition.ID] == 0 {
@@ -445,10 +586,20 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 				ActivationID string `json:"stage_activation_id"`
 			}
 			if err := json.Unmarshal(event.Data, &record); err != nil || record.ActivationID == "" || sequences[record.ActivationID] != 0 {
-				return nil, nil, local.Reject("recover_trace_invalid", "stage activation journal is ambiguous")
+				return nil, local.Reject("recover_trace_invalid", "stage activation journal is ambiguous")
 			}
 			sequences[record.ActivationID] = event.Seq
 		}
+	}
+	return sequences, nil
+}
+
+// recoveryTrace checks the actual settled path, including nested calls and
+// repeats. It only supports a sequential quality tail; unsupported control
+// shapes fail before any new Run or claim is created.
+func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []PinnedDefinition, newResources []PinnedResource, sequences map[string]int64, point recoveryPoint) ([]RecoveryReuse, map[string]map[string]ArtifactRef, error) {
+	if oldPlan == nil || newPlan == nil || oldPlan.Workflow.ID != newPlan.Workflow.ID || oldPlan.Workflow.Definition.Entry != newPlan.Workflow.Definition.Entry {
+		return nil, nil, local.Reject("recover_prefix_changed", "root workflow or entry changed")
 	}
 	oldPlans, newPlans := map[string]*flow.Plan{source.RootInvocationID: oldPlan}, map[string]*flow.Plan{source.RootInvocationID: newPlan}
 	resolving := map[string]bool{}
@@ -484,7 +635,16 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 	reused := make([]RecoveryReuse, 0, len(source.Activations))
 	rootOutputs := map[string]map[string]ArtifactRef{}
 	for _, activation := range source.Activations {
-		if activation == nil || activation.ID == frontier.ID {
+		if activation == nil {
+			continue
+		}
+		// Only what the source accepted before the point is carried; the
+		// point itself, anything it called and everything after run again.
+		sequence := sequences[activation.ID]
+		if sequence == 0 {
+			return nil, nil, local.Reject("recover_trace_invalid", "accepted stage is missing from the prefix journal")
+		}
+		if sequence >= point.Cutoff {
 			continue
 		}
 		if activation.Status != "completed" || activation.Settled == nil {
@@ -514,10 +674,7 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 		if !bytes.Equal(oldEffective, newEffective) {
 			return nil, nil, local.Reject("recover_prefix_changed", "effective contract changed at stage "+activation.StageID)
 		}
-		entry := RecoveryReuse{InvocationID: activation.InvocationID, ActivationID: activation.ID, StageID: activation.StageID, Kind: activation.Kind, Sequence: sequences[activation.ID]}
-		if entry.Sequence == 0 || entry.Sequence >= sequences[frontier.ID] {
-			return nil, nil, local.Reject("recover_trace_invalid", "accepted stage is missing from the prefix journal")
-		}
+		entry := RecoveryReuse{InvocationID: activation.InvocationID, ActivationID: activation.ID, StageID: activation.StageID, Kind: activation.Kind, Sequence: sequence}
 		if activation.Kind == "step" {
 			step := source.Steps[activation.StepID]
 			if step == nil || step.Status != "completed" || step.Ref != oldStage.StepRef || len(step.AttemptIDs) == 0 {
@@ -527,9 +684,6 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 			attempt := source.Attempts[attemptID]
 			if attempt == nil || attempt.Settled == nil || attempt.Accepted == nil || attempt.Accepted.Verdict != step.Verdict || !reflect.DeepEqual(attempt.Accepted.Outputs, step.Outputs) {
 				return nil, nil, local.Reject("recover_trace_invalid", "accepted Attempt evidence is missing")
-			}
-			if attempt.Session == nil {
-				return nil, nil, local.Reject("recover_topology_unsupported", "reused quality gate must be an accepted assisted session")
 			}
 			entry.StepID, entry.AttemptID, entry.Outputs = step.ID, attemptID, step.Outputs
 		} else if activation.Kind == "call" || activation.Kind == "repeat" {
@@ -544,17 +698,20 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 		}
 		reused = append(reused, entry)
 	}
-	if err := resolveInvocation(frontier.InvocationID); err != nil {
-		return nil, nil, err
+	if len(reused) == 0 {
+		return nil, nil, local.Reject("resume_prefix_empty", "nothing was accepted before "+point.StageID+", so there is nothing to carry; start the workflow anew")
 	}
-	oldFrontier, oldOK := oldPlans[frontier.InvocationID].Workflow.Definition.Stages[frontier.StageID]
-	newFrontier, newOK := newPlans[frontier.InvocationID].Workflow.Definition.Stages[frontier.StageID]
-	if !oldOK || !newOK || oldFrontier.Kind != "step" || newFrontier.Kind != "step" {
-		return nil, nil, local.Reject("recover_frontier_unsupported", "failed step is absent from target workflow")
+	oldFrontier, oldOK := oldPlan.Workflow.Definition.Stages[point.StageID]
+	newFrontier, newOK := newPlan.Workflow.Definition.Stages[point.StageID]
+	if !oldOK || !newOK || oldFrontier.Kind != newFrontier.Kind {
+		return nil, nil, local.Reject("recover_frontier_unsupported", "stage "+point.StageID+" is absent from the target workflow or changed its kind")
 	}
-	// The failed stage may change its result contract; its incoming bindings
-	// and route cannot. Otherwise the old prefix would feed a different action.
+	// The stage run again may change what it runs -- its step or the workflow
+	// it calls; its incoming bindings and route cannot. Otherwise the carried
+	// prefix would feed a different action.
 	oldFrontier.StepRef, newFrontier.StepRef = flow.Ref{}, flow.Ref{}
+	oldFrontier.WorkflowRef, newFrontier.WorkflowRef = flow.Ref{}, flow.Ref{}
+	oldFrontier.BodyWorkflowRef, newFrontier.BodyWorkflowRef = flow.Ref{}, flow.Ref{}
 	oldShape, err := recoveryEffectiveStage(oldFrontier, source.Definitions, source.ContextResources)
 	if err != nil {
 		return nil, nil, err
@@ -564,7 +721,7 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 		return nil, nil, err
 	}
 	if !bytes.Equal(oldShape, newShape) {
-		return nil, nil, local.Reject("recover_frontier_changed", "failed stage bindings or route changed")
+		return nil, nil, local.Reject("recover_frontier_changed", "stage "+point.StageID+" changed its bindings or route")
 	}
 	sort.Slice(reused, func(i, j int) bool {
 		if reused[i].Sequence != reused[j].Sequence {

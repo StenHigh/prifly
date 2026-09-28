@@ -259,13 +259,23 @@ func TestRecoverTraceReusesNestedQualityGatesAndRejectsChangedPrefix(t *testing.
 		data, _ := json.Marshal(map[string]string{"stage_activation_id": id})
 		events = append(events, local.Event{Seq: int64(i + 1), EventInput: local.EventInput{Type: "stage.activated", Data: data}})
 	}
-	reused, outputs, err := recoveryTrace(source, oldPlan, newPlan, newDefs, nil, events)
+	sequences, err := activationSequences(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	point, err := recoveryPointOf(source, oldPlan, newPlan, sequences, "")
+	if err != nil || point.StageID != "tests" {
+		t.Fatalf("the failed step is not the point: %v %+v", err, point)
+	}
+	reused, outputs, err := recoveryTrace(source, oldPlan, newPlan, newDefs, nil, sequences, point)
 	if err != nil || len(reused) != 4 || outputs["review_call"]["gate"] != source.Steps["step:review"].Outputs["gate"] {
 		t.Fatalf("nested gate reuse: %v; reused=%+v outputs=%+v", err, reused, outputs)
 	}
+	// An accepted program result is sealed like an assisted one: carrying it
+	// runs no process again.
 	source.Attempts["attempt:verify"].Session = nil
-	if _, _, err := recoveryTrace(source, oldPlan, newPlan, newDefs, nil, events); err == nil || !strings.Contains(err.Error(), "recover_topology_unsupported") {
-		t.Fatalf("program gate was reused without executor pin: %v", err)
+	if reused, _, err := recoveryTrace(source, oldPlan, newPlan, newDefs, nil, sequences, point); err != nil || len(reused) != 4 {
+		t.Fatalf("an accepted program step was not carried: %v %+v", err, reused)
 	}
 	source.Attempts["attempt:verify"].Session = &SessionHandoff{}
 	changed := *newPlan
@@ -277,7 +287,7 @@ func TestRecoverTraceReusesNestedQualityGatesAndRejectsChangedPrefix(t *testing.
 	stage := changed.Workflow.Definition.Stages["review_call"]
 	stage.On = map[string]string{"succeeded": "other"}
 	changed.Workflow.Definition.Stages["review_call"] = stage
-	if _, _, err := recoveryTrace(source, oldPlan, &changed, newDefs, nil, events); err == nil || !strings.Contains(err.Error(), "recover_prefix_changed") {
+	if _, _, err := recoveryTrace(source, oldPlan, &changed, newDefs, nil, sequences, point); err == nil || !strings.Contains(err.Error(), "recover_prefix_changed") {
 		t.Fatalf("changed route was reused: %v", err)
 	}
 }

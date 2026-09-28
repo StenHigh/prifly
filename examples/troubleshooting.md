@@ -255,6 +255,30 @@ checkpoint и само дерево с оставленными файлами. 
 `checkpoint` исходного Run; `project continue --prepare` показывает, откуда
 будет взят каждый вход, до создания claim и Run.
 
+### `resume_undeclared`, `resume_prefix_empty`, `resume_frontier_ambiguous`, `resume_from_stage_invalid`
+
+**Причина.** `project continue` с launch собственного workflow исходного Run
+возобновляет его, но только по объявлению этого workflow (ревизия 8, поле
+`resumable`). `resume_undeclared` — workflow не объявил исход исходного Run
+(или отмену). `resume_prefix_empty` — до точки остановки ничего не принято, и
+переносить нечего: это новый запуск. `resume_frontier_ambiguous` — из записи
+Run нельзя однозначно назвать стадию, на которой он остановился;
+`resume_frontier_unsupported` — остановился на стадии не `step`/`call`/`repeat`.
+`resume_from_stage_invalid` — `--from-stage` назвал стадию, которая не принята
+в корневом workflow или исполнена не раньше точки. `resume_input_override` —
+возобновлению передали `--input`, `--workspace` или `--workspace-commit`: входы
+и дерево берутся у исходного Run. `recover_context_changed` — ответы анкеты
+или профиль модели отличаются от исходного Run.
+
+**Поле.** `resumable` — в
+[`authoring/continuation-guide.md`](authoring/continuation-guide.md), раздел
+«Возобновить тем же workflow».
+
+**Команда.** `run next RUN` — `arrived_from` называет стадию, приведшую к
+finish, а `continuations` — собственный workflow, если он возобновляет Run;
+`project continue --prepare` показывает в `recovery` точку
+(`frontier_stage_id`), перенос (`reused`) и дерево (`claim`) до создания Run.
+
 ### `cycle` при `on.blocked`, ведущем в ту же стадию или назад по графу
 
 **Причина.** Граф стадий ацикличен: ребро назад компилятор отказывает как

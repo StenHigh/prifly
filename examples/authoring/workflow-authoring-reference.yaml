@@ -122,8 +122,20 @@ entry: start # Required ID of the first stage.
 #     attachment: {stage: start, output: archive, verdict: pass} # Accepted output of a root stage; for a call stage write outcome: instead of verdict:.
 #     repeat_limit: {checkpoint: true} # The source Run's last accepted checkpoint.
 #
-# Both are commented out here because this reference lowers to revision 4, and
-# revision 7 also answers for the verdict blocked on every step stage.
+# Revision 8 (capability workflow_resume): resumable lets this workflow resume
+# its own stopped Runs with `prifly project continue` and the launch the Run
+# was started with. It names which Runs -- ended with one of from_outcomes, or
+# cancelled when from_cancelled is true, at least one of the two -- and maps
+# nothing: the resumed Run takes the source Run's inputs. Stages accepted
+# before the point it stopped at are carried; that stage and everything after
+# it run again in the source Run's tree. The field raises the revision to 8.
+# resumable:
+#   from_outcomes: [partial, rejected]
+#   from_cancelled: true
+#
+# All three are commented out here because this reference lowers to revision
+# 4, and revisions 7 and 8 also answer for the verdict blocked on every step
+# stage.
 
 stages:
   # A worker Step runs one StepDefinition. `on` routes its declared verdicts.

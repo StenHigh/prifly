@@ -53,6 +53,12 @@ try {
       }
       break;
     }
+    case 'prepare': {
+      const { subject } = read('request');
+      output('work', { subject });
+      result.summary = `Prepared ${subject}`;
+      break;
+    }
     case 'remedy': {
       const obstacle = read('obstacle');
       result.summary = `Recorded ${obstacle.reason_code} on ${obstacle.condition_ref}; this step may change nothing`;

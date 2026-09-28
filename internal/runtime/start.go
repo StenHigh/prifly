@@ -729,7 +729,11 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 				return local.ApplyResult{}, local.Reject("recover_inputs_changed", "source input bytes are missing or changed: "+name)
 			}
 		}
-		fork = &ForkProvenance{SchemaVersion: "1", SourceRunID: recoverySource.ID, SourceRunVersion: options.Recovery.SourceRunVersion, CommandID: options.CommandID, Reason: "recover_failed_stage", ReuseRefs: []ArtifactRef{}}
+		reason := RecoveryReason
+		if recoverySource.Status != "failed" {
+			reason = ResumeReason
+		}
+		fork = &ForkProvenance{SchemaVersion: "1", SourceRunID: recoverySource.ID, SourceRunVersion: options.Recovery.SourceRunVersion, CommandID: options.CommandID, Reason: reason, ReuseRefs: []ArtifactRef{}}
 	} else if options.Continuation != nil {
 		current, err := e.ContinuationSource(ctx, options.Continuation.RunID, plan)
 		if err != nil {

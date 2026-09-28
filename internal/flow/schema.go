@@ -132,7 +132,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
 		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11", "StepDefinitionV12",
-		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7",
+		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7", "WorkflowRevisionV8",
 	}
 	for name := range defs {
 		names = append(names, name)
@@ -248,6 +248,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV7":
 		extension = workflowRevisionV2Schema
+	case "WorkflowRevisionV8":
+		extension = workflowRevisionV2Schema
 	}
 	if extension != nil {
 		value, err := Parse(extension, "json")
@@ -278,13 +280,14 @@ func buildProtocolSchema(name string) ([]byte, error) {
 			}
 			stepDefinitionV12(root, defs)
 		}
-		revisions := []string{"WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7"}
+		revisions := []string{"WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7", "WorkflowRevisionV8"}
 		revisionMutators := []func(){
 			func() { workflowRevisionV3(root, defs) },
 			func() { workflowRevisionV4(root, defs) },
 			func() { workflowRevisionV5(root) },
 			func() { workflowRevisionV6(root) },
 			func() { workflowRevisionV7(root) },
+			func() { workflowRevisionV8(root) },
 		}
 		for i := 0; i <= slices.Index(revisions, name); i++ {
 			revisionMutators[i]()
@@ -504,6 +507,33 @@ func workflowRevisionV7(root map[string]any) {
 		},
 	}
 	defs["StepStage"].(map[string]any)["properties"].(map[string]any)["checkpoint"] = port
+}
+
+// workflowRevisionV8 lets a workflow say that its own stopped Runs may be
+// resumed from where they stopped: by outcome, or when cancelled, or both.
+// Nothing maps inputs -- a resumed Run takes its source's. Everything else is
+// v7.
+func workflowRevisionV8(root map[string]any) {
+	root["$id"] = "urn:prifly:workflow-revision:8"
+	defs := root["$defs"].(map[string]any)
+	workflow := defs["WorkflowRevisionV7"].(map[string]any)
+	delete(defs, "WorkflowRevisionV7")
+	defs["WorkflowRevisionV8"] = workflow
+	root["$ref"] = "#/$defs/WorkflowRevisionV8"
+	properties := workflow["properties"].(map[string]any)
+	properties["schema_version"].(map[string]any)["const"] = WorkflowRevisionResumeVersion
+	properties["resumable"] = map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"from_outcomes":  map[string]any{"type": "array", "items": map[string]any{"$ref": "#/$defs/Outcome"}, "minItems": json.Number("1"), "maxItems": json.Number("5"), "uniqueItems": true},
+			"from_cancelled": map[string]any{"const": true},
+		},
+		"additionalProperties": false,
+		"anyOf": []any{
+			map[string]any{"required": []any{"from_outcomes"}},
+			map[string]any{"required": []any{"from_cancelled"}},
+		},
+	}
 }
 
 func workflowRevisionV5(root map[string]any) {

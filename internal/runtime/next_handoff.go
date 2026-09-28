@@ -46,44 +46,8 @@ func arrivalAt(r Run, p *flow.Plan, invocationID, target string) *NextArrival {
 		if a.InvocationID != invocationID || a.StageID == target {
 			continue
 		}
-		taken, next := "", ""
-		var outputs map[string]ArtifactRef
-		switch {
-		case a.StepID != "":
-			step := r.Steps[a.StepID]
-			if step == nil || step.Verdict == "" {
-				continue
-			}
-			routed, err := p.Next(a.StageID, step.Verdict)
-			if err != nil {
-				continue
-			}
-			taken, next, outputs = step.Verdict, routed, step.Outputs
-		case a.Kind == "repeat":
-			// A repeat routes by its last decision: on_limit, on_complete or
-			// on_unknown. Its outputs are those of the body it decided on.
-			if a.Repeat == nil || a.Repeat.LastDecision == nil {
-				continue
-			}
-			decision := a.Repeat.LastDecision
-			taken, next = decision.Route, decision.NextStageID
-			if body := r.Invocations[decision.BodyInvocationID]; body != nil {
-				outputs = body.Outputs
-			}
-		case a.Kind == "call":
-			child := r.childForCall(a.ID)
-			if child == nil || child.Outcome == nil {
-				continue
-			}
-			routed, err := p.NextOutcome(a.StageID, *child.Outcome)
-			if err != nil {
-				continue
-			}
-			taken, next, outputs = *child.Outcome, routed, child.Outputs
-		default:
-			continue
-		}
-		if next != target {
+		taken, next, outputs, ok := routeTaken(r, p, a)
+		if !ok || next != target {
 			continue
 		}
 		if found != nil && (found.StageID != a.StageID || found.Verdict != taken) {
@@ -95,6 +59,47 @@ func arrivalAt(r Run, p *flow.Plan, invocationID, target string) *NextArrival {
 		found = &NextArrival{InvocationID: invocationID, StageID: a.StageID, Verdict: taken, Outputs: outputs}
 	}
 	return found
+}
+
+// routeTaken is where one settled stage's accepted result routed and what it
+// routed by: a step by its verdict, a call by its child's outcome, a repeat by
+// its last decision. A stage that has not settled so, or routes by something
+// else, answers not ok.
+func routeTaken(r Run, p *flow.Plan, a *Activation) (taken, next string, outputs map[string]ArtifactRef, ok bool) {
+	switch {
+	case a.StepID != "":
+		step := r.Steps[a.StepID]
+		if step == nil || step.Verdict == "" {
+			return "", "", nil, false
+		}
+		routed, err := p.Next(a.StageID, step.Verdict)
+		if err != nil {
+			return "", "", nil, false
+		}
+		return step.Verdict, routed, step.Outputs, true
+	case a.Kind == "repeat":
+		// A repeat routes by its last decision: on_limit, on_complete or
+		// on_unknown. Its outputs are those of the body it decided on.
+		if a.Repeat == nil || a.Repeat.LastDecision == nil {
+			return "", "", nil, false
+		}
+		decision := a.Repeat.LastDecision
+		if body := r.Invocations[decision.BodyInvocationID]; body != nil {
+			outputs = body.Outputs
+		}
+		return decision.Route, decision.NextStageID, outputs, true
+	case a.Kind == "call":
+		child := r.childForCall(a.ID)
+		if child == nil || child.Outcome == nil {
+			return "", "", nil, false
+		}
+		routed, err := p.NextOutcome(a.StageID, *child.Outcome)
+		if err != nil {
+			return "", "", nil, false
+		}
+		return *child.Outcome, routed, child.Outputs, true
+	}
+	return "", "", nil, false
 }
 
 // repeatsAround lists the bounded repeats an invocation runs inside, outermost
@@ -123,8 +128,9 @@ func repeatsAround(r Run, invocationID string) ([]RepeatPosition, error) {
 }
 
 // continuationsOf lists the workflows of installed, resolvable packages whose
-// declared continuation takes this Run: its workflow is named, and it ended
-// with a named outcome or was cancelled where cancellation is admitted. It is
+// declared continuation takes this Run -- its workflow is named, and it ended
+// with a named outcome or was cancelled where cancellation is admitted -- and
+// the Run's own workflow where it declares resumable for it. It is
 // an index, not an admission -- project continue checks everything again --
 // so only the two declared fields are read from bytes verified at install.
 func (e *Engine) continuationsOf(ctx context.Context, r Run) ([]flow.Ref, error) {
@@ -147,17 +153,22 @@ func (e *Engine) continuationsOf(ctx context.Context, r Run) ([]flow.Ref, error)
 				return nil, err
 			}
 			var declared struct {
+				ID           string             `json:"id"`
 				Continuation *flow.Continuation `json:"continuation"`
+				Resumable    *flow.Resumable    `json:"resumable"`
 			}
 			if err := json.Unmarshal(data, &declared); err != nil {
 				return nil, err
 			}
-			c := declared.Continuation
-			if c == nil || !slices.Contains(c.FromWorkflows, r.WorkflowRef.ID) {
-				continue
+			admits := func(outcomes []string, cancelled bool) bool {
+				return r.Status == "completed" && r.Outcome != nil && slices.Contains(outcomes, *r.Outcome) || cancelled && r.Status == "cancelled"
 			}
-			ended := r.Status == "completed" && r.Outcome != nil && slices.Contains(c.FromOutcomes, *r.Outcome)
-			if ended || c.FromCancelled && r.Status == "cancelled" {
+			// A workflow continues the Runs of the workflows it names, and
+			// resumes its own.
+			if c := declared.Continuation; c != nil && slices.Contains(c.FromWorkflows, r.WorkflowRef.ID) && admits(c.FromOutcomes, c.FromCancelled) {
+				found = append(found, component.Ref)
+			}
+			if own := declared.Resumable; own != nil && declared.ID == r.WorkflowRef.ID && admits(own.FromOutcomes, own.FromCancelled) {
 				found = append(found, component.Ref)
 			}
 		}

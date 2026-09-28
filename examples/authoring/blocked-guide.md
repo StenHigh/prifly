@@ -83,9 +83,14 @@ stages:
 смотрит на Run.
 
 **Остановиться и продолжить позже.** `on.blocked` → finish с исходом
-(например, `partial`), который выводит причину выходом Run. Workflow,
-объявивший `continuation` от этого workflow и исхода, продолжает Run командой
-`project continue` — см. [`continuation-guide.md`](continuation-guide.md).
+(например, `partial`), который выводит причину выходом Run. Дальше два пути,
+оба командой `project continue`, см. [`continuation-guide.md`](continuation-guide.md):
+
+- **тем же workflow** — он объявляет `resumable` (ревизия 8), и Run
+  возобновляется тем же launch с той стадии, что привела к finish; принятое
+  до неё не повторяется;
+- **другим workflow** — тот объявляет `continuation` от этого workflow и
+  исхода и сам берёт нужные входы.
 
 ## 3. Шаг устранения: свои входы, свои права
 
@@ -109,7 +114,7 @@ stages:
 | `arrived_from` | стадия, чей принятый результат привёл сюда; её вердикт, исход вызова или маршрут `repeat` (`on_limit`); ссылки на её выходы — после `blocked` там причина |
 | `repeats` | в каких `repeat` идёт действие: итерация, действующий лимит, куда при исчерпании |
 | `checkpoint` | последний принятый checkpoint Run, если workflow его объявил |
-| `continuations` | у завершённого или отменённого Run — установленные workflow, объявившие его продолжение; тогда в `safe_next_actions` есть `project.continue` |
+| `continuations` | у завершённого или отменённого Run — установленные workflow, объявившие его продолжение, и собственный workflow, если он объявил `resumable` для этого Run; тогда в `safe_next_actions` есть `project.continue` |
 | `safe_next_actions` | что можно сделать сейчас |
 
 Задание шагу (`session task`) несёт его входы — в том числе артефакт причины —
@@ -159,7 +164,7 @@ Run, созданный проектом, запечатывается не ни
 | 1. условие выполнено — обычный маршрут | `TestCLIBlockedExampleAcceptance` |
 | 2. blocked с обязательным артефактом у обоих исполнителей; без него — отказ | `TestCLIBlockedExampleAcceptance`, `TestAProgramStepHandsOverWhatBlockedIt`, `TestAProgramStepThatPromisedAReportMustGiveIt`, `TestTheEnvelopeCarriesAnOutputPromisedForTheBlockedVerdict` |
 | 3. шаг устранения со своими входами и правами; устранение ≠ успех | `TestCLIBlockedExampleAcceptance` |
-| 4. продолжение без повтора принятых стадий | `TestCLIBlockedExampleAcceptance`, `TestCLIContinuationTakesOverTheSourceTree` |
+| 4. продолжение без повтора принятых стадий | `TestCLIBlockedExampleAcceptance` (продолжение другим workflow и возобновление тем же), `TestCLIContinuationTakesOverTheSourceTree`, `TestAStoppedRunResumesWhereItStoppedOnlyWhenItsWorkflowSaysSo` |
 | 5. лимит по `on_limit`, не общий бюджет | `TestCLIBlockedExampleAcceptance`, `TestRepeatProjectLimitIsPinnedAndOnlyNarrows` |
 | 6. новый исполнитель по публичному интерфейсу | `TestCLIBlockedExampleAcceptance`, `TestNextHandsTheRunToAFreshExecutor` |
 | 7. изменившееся условие не используется молча | `TestCLIBlockedExampleAcceptance` (продолжение проверяет условие заново) |

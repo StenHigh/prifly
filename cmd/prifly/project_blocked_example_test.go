@@ -94,11 +94,16 @@ launches:
 
 func (f blockedExample) start(t *testing.T, launch string, extra ...string) projectStartResult {
 	t.Helper()
-	args := append([]string{"--repository", f.root, "--launch", launch, "--allow-execution"}, extra...)
 	verb := "start"
-	if launch == "continue" {
+	if slices.Contains(extra, "--source-run") {
 		verb = "continue"
 	}
+	return f.launch(t, verb, launch, extra...)
+}
+
+func (f blockedExample) launch(t *testing.T, verb, launch string, extra ...string) projectStartResult {
+	t.Helper()
+	args := append([]string{"--repository", f.root, "--launch", launch, "--allow-execution"}, extra...)
 	prepare := append([]string{"project", "questionnaire", "--prepare"}, args...)
 	if verb == "continue" {
 		prepare = append([]string{"project", "continue", "--prepare"}, args...)
@@ -169,6 +174,9 @@ func TestCLIBlockedExampleAcceptance(t *testing.T) {
 	if len(byStage["remedy"]) != 3 || slices.ContainsFunc(byStage["remedy"], func(v string) bool { return v != "pass" }) {
 		t.Fatalf("the remedy did not run once per blocked attempt: %v", byStage)
 	}
+	if !slices.Equal(byStage["prepare"], []string{"pass"}) {
+		t.Fatalf("the work was not prepared once: %v", byStage)
+	}
 	for _, diagnostic := range view.Run.Diagnostics {
 		if diagnostic.Code == "budget_exhausted" {
 			t.Fatalf("the loop ended on the budget, not its declared limit: %+v", diagnostic)
@@ -216,9 +224,38 @@ func TestCLIBlockedExampleAcceptance(t *testing.T) {
 	if source := f.status(t, blocked.Run.Run.ID); source.Run.Outcome == nil || *source.Run.Outcome != "partial" {
 		t.Fatalf("continuing changed the source Run: %v", source.Run.Outcome)
 	}
-	// Now that its package is installed, run next on the source names it.
-	if next := f.next(t, blocked.Run.Run.ID); next.Continuations == nil || len(*next.Continuations) != 1 || (*next.Continuations)[0].ID != "example:workflow/blocked-condition-continue" || !slices.Contains(next.SafeNextActions, "project.continue") {
+	// Now that its package is installed, run next on the source names it --
+	// and the Run's own workflow, which declares it resumes such a Run.
+	if next := f.next(t, blocked.Run.Run.ID); next.Continuations == nil || len(*next.Continuations) != 2 || (*next.Continuations)[0].ID != "example:workflow/blocked-condition" || (*next.Continuations)[1].ID != "example:workflow/blocked-condition-continue" || !slices.Contains(next.SafeNextActions, "project.continue") {
 		t.Fatalf("run next does not name what continues the stopped Run: %+v", next.Continuations)
+	}
+
+	// The same stopped Run resumed by its own launch: the accepted prepare is
+	// carried and not run again, the attempt it stopped at runs again, and
+	// the Run's own inputs are taken as they were. Resuming from the entry
+	// would carry nothing, which is a new start, not a resume.
+	if code, _, stderr := runCLI(t, "project", "continue", "--prepare", "--repository", f.root, "--launch", "work", "--allow-execution", "--source-run", blocked.Run.Run.ID, "--from-stage", "prepare"); code == 0 || !strings.Contains(stderr, "resume_prefix_empty") {
+		t.Fatalf("a resume carrying nothing was prepared: exit=%d %s", code, stderr)
+	}
+	if code, _, stderr := runCLI(t, "project", "continue", "--prepare", "--repository", f.root, "--launch", "work", "--allow-execution", "--source-run", blocked.Run.Run.ID, "--input", "request="+filepath.Join(f.root, "request.json")); code == 0 || !strings.Contains(stderr, "resume_input_override") {
+		t.Fatalf("a resume took another input: exit=%d %s", code, stderr)
+	}
+	resumed := f.launch(t, "continue", "work", "--source-run", blocked.Run.Run.ID)
+	resumedView := f.status(t, resumed.Run.Run.ID)
+	if resumedView.Run.Outcome == nil || *resumedView.Run.Outcome != "succeeded" {
+		t.Fatalf("the resumed Run did not pass once the condition held: %v %+v", resumedView.Run.Outcome, resumedView.Run.Diagnostics)
+	}
+	if got := verdicts(resumedView); len(got) != 1 || !slices.Equal(got["check"], []string{"pass"}) {
+		t.Fatalf("the resume ran again what was accepted, or not the stage it stopped at: %v", got)
+	}
+	if resumedView.Run.Fork == nil || resumedView.Run.Fork.Reason != prifly.ResumeReason || resumedView.Run.Fork.SourceRunID != blocked.Run.Run.ID {
+		t.Fatalf("the resume lost its source: %+v", resumedView.Run.Fork)
+	}
+	if recovery := resumedView.Run.Recovery; recovery == nil || recovery.FrontierStageID != "attempt" || len(recovery.Reused) != 1 || recovery.Reused[0].StageID != "prepare" {
+		t.Fatalf("the resume did not carry prepare and start at attempt: %+v", recovery)
+	}
+	if source := f.status(t, blocked.Run.Run.ID); source.Run.Outcome == nil || *source.Run.Outcome != "partial" {
+		t.Fatalf("resuming changed the source Run: %v", source.Run.Outcome)
 	}
 
 	// 9: a judgement that the work is wrong is not blocked. Without the
@@ -229,5 +266,9 @@ func TestCLIBlockedExampleAcceptance(t *testing.T) {
 	failedView := f.status(t, failed.Run.Run.ID)
 	if failedView.Run.Outcome == nil || *failedView.Run.Outcome != "rejected" || !slices.Equal(verdicts(failedView)["check"], []string{"fail"}) {
 		t.Fatalf("fail was not kept apart from blocked: %v %v", failedView.Run.Outcome, verdicts(failedView))
+	}
+	// The workflow resumes only what it declared: a rejected Run is not.
+	if code, _, stderr := runCLI(t, "project", "continue", "--prepare", "--repository", f.root, "--launch", "work", "--allow-execution", "--source-run", failed.Run.Run.ID); code == 0 || !strings.Contains(stderr, "resume_undeclared") {
+		t.Fatalf("a Run of an undeclared outcome was resumed: exit=%d %s", code, stderr)
 	}
 }

@@ -33,7 +33,7 @@ func projectCheckActiveContinuation(ctx context.Context, engine *prifly.Engine, 
 
 func projectActiveContinuation(runs []prifly.RunSummary, sourceRunID string) *prifly.RunSummary {
 	for _, run := range runs {
-		if run.ForkSourceRunID == sourceRunID && run.ForkReason == prifly.ContinuationReason && run.Status != "completed" && run.Status != "failed" && run.Status != "cancelled" {
+		if run.ForkSourceRunID == sourceRunID && (run.ForkReason == prifly.ContinuationReason || run.ForkReason == prifly.ResumeReason) && run.Status != "completed" && run.Status != "failed" && run.Status != "cancelled" {
 			return &run
 		}
 	}

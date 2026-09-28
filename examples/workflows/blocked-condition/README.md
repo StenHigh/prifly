@@ -1,11 +1,12 @@
-# Blocked on a condition — retry bounded, stop, continue later
+# Blocked on a condition — retry bounded, stop, resume or continue later
 
-Work that needs one condition before it can be done: a program checks it,
-returns **`blocked`** with the reason when it does not hold, a remedy step
-records the obstacle, a bounded `repeat` tries again, and after three
-attempts the Run stops `partial` with the obstacle as its output. A second
-workflow declares that it **continues** such a Run and goes on once the
-condition holds. No AI, Git or host is needed; the steps are small Node
+Work that needs one condition before it can be done: a program prepares the
+work, another checks the condition and returns **`blocked`** with the reason
+when it does not hold, a remedy step records the obstacle, a bounded `repeat`
+tries again, and after three attempts the Run stops `partial` with the
+obstacle as its output. The same workflow declares that it **resumes** such a
+Run from where it stopped, and a second workflow declares that it
+**continues** it; either goes on once the condition holds. No AI, Git or host is needed; the steps are small Node
 programs.
 
 The condition here is a file whose path the machine sets; in a real workflow
@@ -15,17 +16,18 @@ the verdict, keeps the obstacle, bounds the retries and hands the Run over.
 What `blocked` means and how to handle it in your own workflow:
 [`authoring/blocked-guide.md`](../../authoring/blocked-guide.md).
 
-Needs Pri-Fly with `workflow_continuation` and `next_handoff` in
-`prifly capabilities`.
+Needs Pri-Fly with `workflow_continuation`, `next_handoff` and
+`workflow_resume` in `prifly capabilities`.
 
 ## What is where
 
 | File | What it shows |
 |---|---|
+| `source/steps/prepare.yaml` | the work done once, before the condition matters; a resume carries it |
 | `source/steps/check.yaml` | a program step promising its `obstacle` output on `blocked` (step contract 12) |
 | `source/steps/remedy.yaml` | the step `blocked` routes to: the obstacle is its input, it may change nothing |
 | `source/workflows/attempt.yaml` | one attempt: `on: {pass, blocked, fail}`, `blocked` → remedy → finish `partial` |
-| `source/workflow.yaml` | a `repeat` around the attempt: `continue_on: [partial]`, `max_iterations: 3`, `on_limit` → finish `partial` with the obstacle |
+| `source/workflow.yaml` | `prepare`, then a `repeat` around the attempt: `continue_on: [partial]`, `max_iterations: 3`, `on_limit` → finish `partial` with the obstacle; `resumable: {from_outcomes: [partial]}` (revision 8) |
 | `continue/workflow.yaml` | `continuation`: continues `example:workflow/blocked-condition` ended `partial`, takes its request and last obstacle, checks again |
 | `source/files/worker.mjs` | the programs; the obstacle schema is in `source/schemas/obstacle.yaml` |
 
@@ -89,7 +91,9 @@ prifly --project /absolute/path/to/state run next RUN_ID
 
 `arrived_from` names stage `attempt`, route `on_limit`, and the `obstacle`
 the last attempt handed over; `run status RUN_ID` shows the same obstacle as
-the Run's output. Nobody's memory of the session is needed.
+the Run's output. Nobody's memory of the session is needed. Once the packages
+are installed, `continuations` names both ways on: this workflow itself and
+the continue workflow.
 
 **3. Make the condition hold and continue.**
 
@@ -107,10 +111,29 @@ stage — it does not trust the old obstacle — passes, and ends `succeeded`.
 The source Run stays `partial`; nothing it accepted runs again. From now on
 `run next` on the source lists this workflow in `continuations`.
 
+**3b. Or resume it with the same launch.** The Run's own workflow declared
+`resumable`, so `project continue` with the launch it was started with resumes
+it instead:
+
+```sh
+prifly project continue --prepare --launch work --source-run RUN_ID --allow-execution
+prifly project continue --launch work --source-run RUN_ID --allow-execution \
+  --expected-launch-digest DIGEST
+```
+
+The prepare output's `recovery` names the stage it starts again from
+(`attempt`, the one that led to finish) and what it carries (`prepare`,
+accepted and not run again). The request is the source Run's own; passing
+`--input` is refused. The new Run checks the condition in a fresh `attempt`,
+passes and ends `succeeded`; its `fork.reason` is `resume_stopped_run`.
+`--from-stage prepare` is refused with `resume_prefix_empty`: nothing would be
+carried, which is a new start. A Run that ended `rejected` is refused with
+`resume_undeclared`: the workflow resumes only what it declared.
+
 **4. `fail` is not `blocked`.** Unset the condition path
 (`project local set --env CONDITION_FILE=`) and start again: the check cannot
 work at all, returns `fail`, and the Run ends `rejected` — a judgement, routed
 elsewhere, never retried as if it were an absent condition.
 
-The same four runs are the test `TestCLIBlockedExampleAcceptance`; it copies
+The same runs are the test `TestCLIBlockedExampleAcceptance`; it copies
 these folders into a fresh project and drives them through the public CLI.

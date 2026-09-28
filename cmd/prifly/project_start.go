@@ -83,6 +83,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	sourceRun := f.String("source-run", "", "completed partial or rejected Run to continue")
 	workspaceCommit := f.String("workspace-commit", "", "full commit ID to claim a new tree at instead of taking over the source Run's tree (project continue)")
 	allowDuplicateContinuation := f.Bool("allow-duplicate-continuation", false, "explicitly start another continuation while one from the same source Run is active")
+	fromStage := f.String("from-stage", "", "accepted root stage of the source Run to start again from, before the one it stopped at (resuming project continue, project recover)")
 	command := f.String("command-id", "", "stable command identity for an explicit retry")
 	inputs := bindings{}
 	refFiles := bindings{}
@@ -109,6 +110,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	if *allowDuplicateContinuation && !continuation {
 		return usageError("--allow-duplicate-continuation is only valid for project continue")
+	}
+	if *fromStage != "" && !continuation && !recovering {
+		return usageError("--from-stage is only valid for project continue and project recover")
 	}
 	if *workspace != "" && *workspace != "worktree" && *workspace != "checkout" {
 		return refusal("project_start_invalid_workspace", "use worktree or checkout")
@@ -253,7 +257,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
-		request, carried, prepareErr := projectRecoverySource(ctx, reader, *sourceRun)
+		request, carried, prepareErr := projectRecoverySource(ctx, reader, *sourceRun, *fromStage, false)
 		closeErr := reader.Close()
 		if prepareErr != nil {
 			return prepareErr
@@ -262,22 +266,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return closeErr
 		}
 		recoveryRequest = &request
-		decisionPorts := map[string]bool{}
-		for _, decision := range preflight.Catalog.Decisions {
-			if decision.Destination.Kind == "launch_input" {
-				decisionPorts[decision.Destination.Name] = true
-			}
-		}
-		for _, input := range details.Inputs {
-			if input.Configured {
-				decisionPorts[input.Name] = true
-			}
-		}
-		for name, value := range carried {
-			if !decisionPorts[name] {
-				inputValues[name] = value
-			}
-		}
+		projectCarrySourceInputs(preflight, *details, carried, inputValues)
 	}
 	if err := projectDecisionInputs(preflight, inputValues, refs, neutral); err != nil {
 		return err
@@ -303,6 +292,10 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	var execution *prifly.ExecutionBindings
 	var requirements projectLaunchRequirements
 	var recoveryPlan *prifly.RecoveryPlan
+	// A continuation whose launch runs the source Run's own workflow resumes
+	// that Run: the recovery plan carries what it accepted before where it
+	// stopped, and the rest runs again in its tree with its inputs.
+	resuming := false
 	needsWorkspace := !neutral
 	if neutral {
 		preflightEngine, err := prifly.Open(c.project, true)
@@ -310,6 +303,29 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return err
 		}
 		launch, err := projectCompileLaunch(preflightEngine, compiled, workflowPath)
+		if err == nil && continuation {
+			resuming, err = projectResumes(ctx, preflightEngine, *sourceRun, launch.plan)
+		}
+		if err == nil && resuming {
+			if len(inputs) != 0 || len(refFiles) != 0 || *workspace != "" || *workspaceCommit != "" {
+				err = refusal("resume_input_override", "resuming takes the source Run's inputs as they were and takes over its tree")
+			}
+			if err == nil && !*allowDuplicateContinuation {
+				err = projectCheckActiveContinuation(ctx, preflightEngine, *sourceRun)
+			}
+			var request prifly.RecoveryRequest
+			var carried map[string]json.RawMessage
+			if err == nil {
+				request, carried, err = projectRecoverySource(ctx, preflightEngine, *sourceRun, *fromStage, true)
+			}
+			if err == nil {
+				recoveryRequest = &request
+				projectCarrySourceInputs(preflight, *details, carried, inputValues)
+				continuation, recovering = false, true
+			}
+		} else if err == nil && continuation && *fromStage != "" {
+			err = refusal("project_continue_from_stage_unsupported", "--from-stage resumes a Run with its own workflow; workflow "+launch.plan.Workflow.ID+" continues another")
+		}
 		if err == nil && continuation {
 			var review projectContinuationReview
 			var carried map[string]json.RawMessage
@@ -358,7 +374,18 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
-		checkErr := reader.CheckRecoveryContext(ctx, *recoveryRequest, &preflight.Catalog, &preflight.Sheet, reviewedProfiles)
+		// Compared as the start seals them: no catalog when none is declared,
+		// no profile table when it is empty.
+		var catalog *prifly.DecisionCatalog
+		var sheet *prifly.DecisionSheet
+		if preflight.Declared {
+			catalog, sheet = &preflight.Catalog, &preflight.Sheet
+		}
+		var profiles map[string]prifly.ModelProfileTranslation
+		if len(reviewedProfiles) != 0 {
+			profiles = reviewedProfiles
+		}
+		checkErr := reader.CheckRecoveryContext(ctx, *recoveryRequest, catalog, sheet, profiles)
 		closeErr := reader.Close()
 		if checkErr != nil {
 			return checkErr
@@ -482,7 +509,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			execution.Bindings[index].Config.Executable = summary.Execution[index].Executable
 		}
 	}
-	if continuation && !*allowDuplicateContinuation {
+	if (continuation || resuming) && !*allowDuplicateContinuation {
 		if err := projectCheckActiveContinuation(ctx, engine, *sourceRun); err != nil {
 			return err
 		}
@@ -628,7 +655,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s was not driven: inspect its pinned executors before explicit continuation", started.Receipt.RunID), Cause: err}
 		}
 	}
-	if !recovering {
+	if !recovering || resuming {
 		if err := engine.Drive(ctx, started.Receipt.RunID); err != nil {
 			return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s", started.Receipt.RunID), Cause: err}
 		}
@@ -652,8 +679,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 	}
 	result := projectStartResult{SchemaVersion: "project-start/1", Repository: root, Launch: *launchID, Package: compiled.Package, PackageProfile: selectedProfile, Run: view, Workspace: claim}
-	if recovering {
-		result.SchemaVersion, result.Recovery = "project-recover/1", recoveryPlan
+	result.Recovery = recoveryPlan
+	if recovering && !resuming {
+		result.SchemaVersion = "project-recover/1"
 	}
 	if claim != nil {
 		path, err := engine.ClaimWorkspacePath(*claim)
@@ -663,7 +691,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		result.WorkspacePath = path
 	}
 	if preflight.Declared {
-		if !recovering {
+		if !recovering || resuming {
 			result.SchemaVersion = "project-start/2"
 		}
 		result.DecisionSheet = &preflight.Sheet

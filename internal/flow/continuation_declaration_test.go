@@ -181,3 +181,39 @@ func TestCalledWorkflowKeepsTheCallersCheckpointShape(t *testing.T) {
 		t.Fatalf("the same checkpoint shape was refused: %v", err)
 	}
 }
+
+// Revision 8 seals a workflow's statement that its own stopped Runs may be
+// resumed. It maps nothing: the declaration is which Runs, never what they
+// carry. An empty statement and the field on revision 7 are both refused.
+func TestRevisionEightSealsWhichOwnRunsResume(t *testing.T) {
+	workflow, registry := continuationFixture(t)
+	workflow["schema_version"] = WorkflowRevisionResumeVersion
+	workflow["resumable"] = map[string]any{"from_outcomes": []any{"partial", "rejected"}, "from_cancelled": true}
+	plan, err := CompileProfile(encoded(t, workflow), "json", registry, CoreProfile)
+	if err != nil {
+		t.Fatalf("a complete declaration was refused: %v", err)
+	}
+	if r := plan.Workflow.Resumable; r == nil || !r.FromCancelled || len(r.FromOutcomes) != 2 {
+		t.Fatalf("the declaration did not reach the plan: %+v", r)
+	}
+	if !strings.Contains(string(plan.Canonical), `"resumable"`) {
+		t.Fatal("the declaration is not part of the sealed bytes, so the digest does not cover it")
+	}
+	for name, edit := range map[string]func(map[string]any){
+		"empty":        func(w map[string]any) { w["resumable"] = map[string]any{} },
+		"inputs":       func(w map[string]any) { w["resumable"].(map[string]any)["inputs"] = map[string]any{} },
+		"revision 7":   func(w map[string]any) { w["schema_version"] = WorkflowRevisionContinuationVersion },
+		"cancelled no": func(w map[string]any) { w["resumable"] = map[string]any{"from_cancelled": false} },
+	} {
+		changed, _ := continuationFixture(t)
+		changed["schema_version"] = WorkflowRevisionResumeVersion
+		changed["resumable"] = map[string]any{"from_outcomes": []any{"partial"}}
+		edit(changed)
+		if _, err := CompileProfile(encoded(t, changed), "json", registry, CoreProfile); err == nil {
+			t.Errorf("%s: compiled", name)
+		}
+	}
+	if version := authorSchemaVersion(map[string]any{"resumable": map[string]any{}, "continuation": map[string]any{}}, map[string]any{}, map[string]any{}); version != WorkflowRevisionResumeVersion {
+		t.Errorf("resumable derived revision %s", version)
+	}
+}

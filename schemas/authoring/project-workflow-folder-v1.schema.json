@@ -46,6 +46,15 @@
           ]}
         }
       }
+    },
+    "resumable": {
+      "description": "Revision 8: this workflow's own stopped Runs may be resumed by it from where they stopped -- those ended with one of these outcomes, or cancelled. The resumed Run takes the source Run's inputs; nothing is mapped.",
+      "type": "object", "additionalProperties": false,
+      "anyOf": [{"required": ["from_outcomes"]}, {"required": ["from_cancelled"]}],
+      "properties": {
+        "from_outcomes": {"type": "array", "items": {"enum": ["succeeded", "rejected", "no_work", "partial", "completed_with_waivers"]}, "minItems": 1, "uniqueItems": true},
+        "from_cancelled": {"const": true, "description": "Also resume a cancelled Run from the stage it was stopped at."}
+      }
     }
   },
   "$defs": {

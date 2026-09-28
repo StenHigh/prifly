@@ -91,7 +91,7 @@ func workflowValue(data []byte, format string) (any, bool, error) {
 }
 
 func lowerWorkflowAuthoring(source map[string]any) (map[string]any, error) {
-	allowed := []string{"authoring", "schema_version", "id", "version", "title", "refs", "inputs", "outputs", "allowed_outcomes", "entry", "stages", "limits", "policy_ref", "checkpoint", "continuation"}
+	allowed := []string{"authoring", "schema_version", "id", "version", "title", "refs", "inputs", "outputs", "allowed_outcomes", "entry", "stages", "limits", "policy_ref", "checkpoint", "continuation", "resumable"}
 	for key := range source {
 		if !slices.Contains(allowed, key) {
 			return nil, problem("schema_invalid", "/"+escapePointer(key), "field is not part of "+WorkflowAuthoringVersion)
@@ -163,6 +163,9 @@ func lowerWorkflowAuthoring(source map[string]any) (map[string]any, error) {
 	}
 	if continuation, declared := source["continuation"]; declared {
 		lowered["continuation"] = continuation
+	}
+	if resumable, declared := source["resumable"]; declared {
+		lowered["resumable"] = resumable
 	}
 	return lowered, nil
 }
@@ -819,8 +822,13 @@ func authorSchemaVersion(source, inputs, stages map[string]any) string {
 	// impossible is the one thing only v4 can express, so it alone raises the
 	// version, and with it the completeness the contract requires.
 	//
+	// Resuming a workflow's own Runs is only v8's, and v8 carries everything
+	// v7 does, so it is asked first of all.
+	if _, declared := source["resumable"]; declared {
+		return WorkflowRevisionResumeVersion
+	}
 	// A checkpoint or a continuation is only v7's, and v7 answers for every
-	// verdict, so it is asked first and answers for everything below it.
+	// verdict, so it is asked next and answers for everything below it.
 	if _, declared := source["continuation"]; declared {
 		return WorkflowRevisionContinuationVersion
 	}

@@ -94,6 +94,7 @@ def check(args, generator):
 		("workflow-revision-v5", ["--workflow-revision-v5"], ("schemas/core/workflow-revision-v5.schema.json",)),
 		("workflow-revision-v6", ["--workflow-revision-v6"], ("schemas/core/workflow-revision-v6.schema.json",)),
 		("workflow-revision-v7", ["--workflow-revision-v7"], ("schemas/core/workflow-revision-v7.schema.json",)),
+		("workflow-revision-v8", ["--workflow-revision-v8"], ("schemas/core/workflow-revision-v8.schema.json",)),
         ("publication-source", ["--publication-source"], ("schemas/core/publication-source-v1.schema.json",)),
         ("publication-source-v2", ["--publication-source-v2"], ("schemas/core/publication-source-v2.schema.json",)),
         ("publication-source-v3", ["--publication-source-v3"], ("schemas/core/publication-source-v3.schema.json",)),

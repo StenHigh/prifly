@@ -174,6 +174,11 @@ func Capabilities() CapabilityManifest {
 	// it got to its action, its checkpoint, the bounded repeats around it and
 	// what continues it once it has ended. It is an answer, not a record.
 	profile.Capabilities = append(profile.Capabilities, "next_handoff")
+	// Revision 8 lets a workflow resume its own stopped Runs from where they
+	// stopped: the accepted stages before that point are carried, the rest
+	// runs again in the source's tree. The recovery plan does the carrying.
+	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionResumeVersion)
+	profile.Capabilities = append(profile.Capabilities, "workflow_resume")
 	return manifest
 }
 

@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/stenhigh/prifly/internal/flow"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
@@ -341,7 +343,9 @@ func TestCLIContinuationTakesOverTheSourceTree(t *testing.T) {
 	writeFixtureFile(t, source.WorkspacePath, "unsaved.txt", "work in progress\n")
 
 	continueArgs := []string{"--repository", root, "--launch", "tail", "--host", "codex-cli", "--source-run", source.Run.Run.ID}
-	refuse("project_continue_undeclared", "project", "continue", "--prepare", "--repository", root, "--launch", "source", "--host", "codex-cli", "--source-run", source.Run.Run.ID)
+	// The source's own launch would resume it, which its workflow does not
+	// declare.
+	refuse("resume_undeclared", "project", "continue", "--prepare", "--repository", root, "--launch", "source", "--host", "codex-cli", "--source-run", source.Run.Run.ID)
 	refuse("project_continue_invalid_head", append(append([]string{"project", "continue", "--prepare"}, continueArgs...), "--workspace-commit", "542493c", "--workspace", "worktree")...)
 	refuse("project_continue_invalid_workspace", append(append([]string{"project", "continue", "--prepare"}, continueArgs...), "--workspace-commit", drafted, "--workspace", "checkout")...)
 	refuse("project_continue_input_override", append(append([]string{"project", "continue", "--prepare"}, continueArgs...), "--input", "task="+filepath.Join(root, "task.json"))...)
@@ -490,5 +494,16 @@ func TestCLIContinuationRefusesACancelledRunItDoesNotDeclare(t *testing.T) {
 	}
 	if sourceNext.Continuations == nil || len(*sourceNext.Continuations) != 0 || slices.Contains(sourceNext.SafeNextActions, "project.continue") {
 		t.Fatalf("a Run nothing continues offered a continuation: %+v %v", sourceNext.Continuations, sourceNext.SafeNextActions)
+	}
+}
+
+// A launch of another workflow that declares no continuation is refused before
+// the source Run is read at all.
+func TestProjectContinueRefusesAWorkflowThatContinuesNothing(t *testing.T) {
+	plan := &flow.Plan{}
+	plan.Workflow.ID = "example:workflow/plain"
+	var fault *prifly.Fault
+	if _, _, err := projectContinuationPrepare(context.Background(), nil, "", plan, "run:source", "", "", "", true); !errors.As(err, &fault) || fault.Code != "project_continue_undeclared" {
+		t.Fatalf("a workflow without a continuation was accepted: %v", err)
 	}
 }

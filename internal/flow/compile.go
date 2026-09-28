@@ -88,6 +88,8 @@ func compileWorkflow(data []byte, format string, registry Registry, profile stri
 			contract = "WorkflowRevisionV6"
 		case WorkflowRevisionContinuationVersion:
 			contract = "WorkflowRevisionV7"
+		case WorkflowRevisionResumeVersion:
+			contract = "WorkflowRevisionV8"
 		}
 	}
 	if err := validateProtocolValue(contract, value, ""); err != nil {
@@ -448,7 +450,7 @@ var sealedRevisionVerdicts = []string{"pass", "fail", "needs_revision", "no_work
 // this document deal in" asks this and not StepVerdicts: the global list is
 // what a StepResult may legally carry, which is a different question and grows.
 func VerdictsRequiredBy(workflowVersion string) []string {
-	if workflowVersion == WorkflowRevisionBlockedVersion || workflowVersion == WorkflowRevisionContinuationVersion {
+	if WorkflowRevisionAtLeast(workflowVersion, WorkflowRevisionBlockedVersion) {
 		return StepVerdicts
 	}
 	return sealedRevisionVerdicts
@@ -483,10 +485,15 @@ const WorkflowRevisionBlockedVersion = "6"
 // answers for the same verdicts as revision 6.
 const WorkflowRevisionContinuationVersion = "7"
 
+// WorkflowRevisionResumeVersion is the WorkflowRevision schema_version in
+// which a workflow declares that its own stopped Runs may be resumed. It
+// answers for the same verdicts as revision 6.
+const WorkflowRevisionResumeVersion = "8"
+
 // verdictRevisions are the revisions the completeness rule applies to, in the
 // order they were introduced. Each answers for the set VerdictsRequiredBy gives
 // it, never for the global list.
-var verdictRevisions = []string{WorkflowRevisionVerdictVersion, WorkflowRevisionRetryVersion, WorkflowRevisionBlockedVersion, WorkflowRevisionContinuationVersion}
+var verdictRevisions = []string{WorkflowRevisionVerdictVersion, WorkflowRevisionRetryVersion, WorkflowRevisionBlockedVersion, WorkflowRevisionContinuationVersion, WorkflowRevisionResumeVersion}
 
 // WorkflowRevisionAtLeast answers whether the first revision is the second or
 // newer, by the order they were introduced. A revision this build does not know

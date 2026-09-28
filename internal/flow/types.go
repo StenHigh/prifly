@@ -312,6 +312,15 @@ type WorkflowRevision struct {
 	// each of its inputs comes from in them. The authority takes exactly what
 	// it names and checks nothing it does not.
 	Continuation *Continuation `json:"continuation,omitempty"`
+	// Resumable says which of this workflow's own stopped Runs it may resume
+	// from where they stopped: those that ended with a named outcome, or were
+	// cancelled. The resumed Run takes the source Run's inputs as they were.
+	Resumable *Resumable `json:"resumable,omitempty"`
+}
+
+type Resumable struct {
+	FromOutcomes  []string `json:"from_outcomes,omitempty"`
+	FromCancelled bool     `json:"from_cancelled,omitempty"`
 }
 
 type CheckpointDeclaration struct {

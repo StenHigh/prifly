@@ -95,7 +95,7 @@ function nodeCard(graph,id,object,run) {
 }
 const runKey = run => run.source+'|'+run.run_id;
 function relatedTitle(run,depth) {
- const relation=run.fork_source_run_id?(run.fork_reason==='project continuation'?'Продолжение':run.fork_reason==='recover_failed_stage'?'Восстановление':'Производный Run'):'';
+ const relation=run.fork_source_run_id?(run.fork_reason==='project continuation'?'Продолжение':run.fork_reason==='recover_failed_stage'?'Восстановление':run.fork_reason==='resume_stopped_run'?'Возобновление':'Производный Run'):'';
  const missing=run.missing_parent?`<span class="missing-parent">Исходный Run недоступен: ${esc(run.fork_source_run_id)}</span>`:'';
  const context=run.context?'<span class="run-context">Контекст поиска</span>':'';
  const count=run.children?`${run.descendants} связанных Run · ${run.matches} совпадений в ветви`:'';
