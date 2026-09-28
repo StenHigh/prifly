@@ -97,3 +97,23 @@ func TestEveryAssistedEditionDeclaredIsOneAHandoffCanCarry(t *testing.T) {
 		t.Fatalf("a handoff carries %q and the newest declared edition is %q", task.SchemaVersion, AssistedSessionRoutedVersion)
 	}
 }
+
+// 0.13.63 shipped able to compile step contract 13 and declaring contracts up
+// to 12: the same defect as the workflow revisions above, one list over. A
+// package deciding whether it may declare a read-only repository workspace
+// reads this document and was told it may not.
+func TestTheDocumentDeclaresEveryStepContractThisBuildCompiles(t *testing.T) {
+	declared := Capabilities().Profiles[1].StepVersions
+	for _, version := range flow.StepContracts {
+		if !slices.Contains(declared, version) {
+			t.Errorf("this build compiles step contract %s and its capability document does not declare it", version)
+		}
+	}
+	for _, version := range declared {
+		// Contract 1 is the base StepDefinition, validated without a
+		// versioned name; every later one has its own.
+		if version != "1" && flow.StepContractFor(version) == "" {
+			t.Errorf("the capability document declares step contract %s, which this build does not compile", version)
+		}
+	}
+}

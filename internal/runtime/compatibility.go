@@ -170,6 +170,9 @@ func Capabilities() CapabilityManifest {
 	// lets an assisted step: the reason it could not judge reaches the stage
 	// the author routed blocked to.
 	profile.StepVersions = append(profile.StepVersions, "12")
+	// Step contract 13 lets an assisted step ask to read the Run's claimed Git
+	// tree without any right to change it (repository_workspace_read above).
+	profile.StepVersions = append(profile.StepVersions, "13")
 	// Next 41 hands a Run to an executor without the history before it: how
 	// it got to its action, its checkpoint, the bounded repeats around it and
 	// what continues it once it has ended. It is an answer, not a record.
