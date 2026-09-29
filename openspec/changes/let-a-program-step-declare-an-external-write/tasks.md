@@ -93,7 +93,7 @@
 - [x] 6.1 `make check` и `make ci-check` зелёные по абсолютному пути
       репозитория; записать счётчики (fmt-check, refusal-check) в этот файл в
       день прогона.
-- [ ] 6.2 После push: `gh run list` зелёный на обеих платформах.
+- [x] 6.2 После push: `gh run list` зелёный на обеих платформах.
 - [ ] 6.3 Пилоту: сообщить выпуск; проверить на настоящем Run, что
       `tests.yaml` с `external_write`/`idempotent` компилируется, журнал несёт
       границу, а прерванный шаг возобновляется `project continue` без
@@ -134,3 +134,14 @@ cmd/prifly 66 с, flow 7 с, runtime 282 с; race: cmd/prifly 347 с, flow 35 с
 runtime 833 с; fmt-check 336 файлов; refusal-check 174 файла; staticcheck 9
 пакетов linux + darwin без находок; vuln-check 9 пакетов; schemas-check и
 release-ci-check совпадают. `make e2e` 2026-09-29 — exit 0.
+
+GitHub 2026-09-29 на `53cbeab`: `verify` 36562864397 и `race` 36563906175 —
+зелёные с первого раза. Релиз `v0.13.66` — run 36565574105, окружение
+`release` одобрено, 6 ассетов; `releases/latest` отдаёт манифест 0.13.66.
+Пилоту (`backend-a1`, вопрос в `backend-65`) и сессии пакета сообщено до тега.
+Пакет перевёл aif-classic и aif-profiled на `core:policy/local@4.0.0` (v1.49.0).
+Пакет подтвердил 2026-09-29 на опубликованном 0.13.66 (дайджест = манифест):
+все их ворота зелёные; проектный шаг-программа с `external_write`/`idempotent`,
+вставленный в aif-classic, на v1.49.0 компилируется в контракт 14, и
+`project start` проходит; на v1.48.0 (policy 3.0.0) старт отказывает текстом с
+`core:policy/local@4.0.0`. Проверка прерывания настоящим Run — за пилотом (6.3).
