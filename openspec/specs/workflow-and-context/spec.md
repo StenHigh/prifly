@@ -667,6 +667,7 @@ MUST быть показан через него, а не текстом, ими
   вариантов, чем принимает native question tool host
 - **THEN** host показывает последовательные страницы без скрытого default и
   ждёт explicit selection до mutation
+
 ### Requirement: Project YAML объявляет решения без скрытого control flow
 Project workflow authoring source MUST поддерживать один декларативный каталог
 решений и readable tree для его крупных записей. Каждая запись MUST иметь
@@ -1107,3 +1108,18 @@ WorkflowRevision 8 SHALL позволять workflow объявить `resumable
 #### Scenario: Пустое объявление
 - **WHEN** `resumable` не называет ни исходов, ни `from_cancelled`
 - **THEN** компиляция отказывает
+
+### Requirement: YAML автор внешней записи сохраняет границу шага
+
+`prifly-step/2` MUST принимать `external_write` и опускать его вместе с
+`effects.class: external_write` в StepDefinition v11. Явный pin более ранней
+версии MUST быть отказан; `prifly-step/1` MUST не принимать поле. Отсутствие
+поля MUST оставлять прежние lowered bytes неизменными.
+
+#### Scenario: Автор объявил внешнюю запись
+- **WHEN** assisted YAML step объявляет систему, изменяющие операции и цель
+- **THEN** compiled StepDefinition v11 несёт ту же границу без её интерпретации
+
+#### Scenario: Старый authoring marker
+- **WHEN** `prifly-step/1` содержит `external_write`
+- **THEN** compile отказывает до Run, не удаляя поле молча
