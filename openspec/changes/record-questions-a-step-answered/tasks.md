@@ -22,3 +22,5 @@
 - [x] 5.1 `make ci-check` и `make e2e` зелёные; `git diff --stat -- openspec/changes/archive/` пуст — прошлые release evidence не тронуты.
 
 Ворота 2026-09-30: `make ci-check` и `make e2e` зелёные на одном дереве трёх change (со второго прогона: первый поймал неотформатированный `main.go` и ожидание `core-timing/3` в `test/e2e/verify-context.py`).
+
+Выпущено 2026-09-30 в v0.13.69 (тег на `f867bd3`): GitHub `verify` 36642047819 и `race` 36642084242 зелёные на этом коммите, `release` 36643402546 опубликовал 6 ассетов после подтверждения окружения `release`.
