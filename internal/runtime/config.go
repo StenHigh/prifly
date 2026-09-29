@@ -90,6 +90,13 @@ func decodeState(data []byte, value any) error {
 		return errors.New("invalid state framing")
 	}
 	if r, ok := value.(*Run); ok {
+		// A state this build does not know was written by a newer one. Every
+		// check below would read it by rules that predate it and refuse it for
+		// whichever field it met first, naming that field instead of the cause:
+		// a monitor left running across an update showed exactly that.
+		if r.SchemaVersion != StateVersion && stateRank(r.SchemaVersion) < 0 {
+			return fmt.Errorf("run state %s is newer than this build %s: update prifly and restart processes started before the update, such as the monitor", r.SchemaVersion, Version)
+		}
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal(data, &fields); err != nil {
 			return err

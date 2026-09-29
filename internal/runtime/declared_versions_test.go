@@ -1,7 +1,9 @@
 package runtime
 
 import (
+	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -115,5 +117,22 @@ func TestTheDocumentDeclaresEveryStepContractThisBuildCompiles(t *testing.T) {
 		if version != "1" && flow.StepContractFor(version) == "" {
 			t.Errorf("the capability document declares step contract %s, which this build does not compile", version)
 		}
+	}
+}
+
+// A monitor started before an update kept reading Runs a newer build wrote and
+// refused each with "context contract fields require their new version": the
+// first rule it met, not the reason. A state this build does not know is named
+// as newer, with what to do about it.
+func TestAStateFromANewerBuildIsNamedAsSuch(t *testing.T) {
+	current := versionContracts[len(versionContracts)-1].State
+	data, err := json.Marshal(Run{SchemaVersion: current, ContextResources: []PinnedResource{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = []byte(strings.Replace(string(data), `"schema_version":"`+current+`"`, `"schema_version":"core-state/9999"`, 1))
+	var r Run
+	if err := decodeState(data, &r); err == nil || !strings.Contains(err.Error(), "core-state/9999 is newer than this build") {
+		t.Fatalf("a newer state was not named as newer: %v", err)
 	}
 }
