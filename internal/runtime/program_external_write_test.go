@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -214,5 +215,53 @@ func TestIdempotentDoesNotMakeALostAssistedSessionCertain(t *testing.T) {
 	}
 	if r := driverRun(t, e, runID); r.Status != "uncertain" || !r.HasUnresolvedEffects {
 		t.Fatalf("a lost idempotent session was settled without the owner: %s", r.Status)
+	}
+}
+
+// The declared effect is a readable fact of the Run: the stage, its class, its
+// retry class and the boundary, from the definition the Run sealed. A package
+// changed afterwards does not change what the Run answers.
+func TestARunNamesTheEffectEachStepDeclared(t *testing.T) {
+	e, runID := driverProject(t, "pass", 10000, programExternalWrite("idempotent"))
+	r := driveUntilSettled(t, e, runID)
+	// A later edition of the step on disk declares something else.
+	var registry RegistryFile
+	readRuntimeJSON(t, filepath.Join(e.Root, "definitions.json"), &registry)
+	for _, entry := range registry.Entries {
+		if entry.Kind == "step" {
+			var step flow.StepDefinition
+			readRuntimeJSON(t, filepath.Join(e.Root, entry.Path), &step)
+			step.Effects.Class, step.Effects.RetryClass, step.ExternalWrite = "none", "never", nil
+			writeRuntimeJSON(t, filepath.Join(e.Root, entry.Path), step)
+		}
+	}
+	// Through View, the read run status makes: it strips the sealed
+	// definitions, and an answer computed after that would name nothing.
+	view, err := e.View(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Run.Definitions) != 0 {
+		t.Fatal("the view now dumps raw definitions; the effect list is no longer the only way to read them")
+	}
+	effects := view.StepEffects
+	if len(effects) != 1 || len(r.Steps) != 1 {
+		t.Fatalf("one step ran and %d effects were named: %+v", len(effects), effects)
+	}
+	effect := effects[0]
+	if effect.StageID != "work" || effect.Class != "external_write" || effect.RetryClass != "idempotent" || effect.ExternalWrite == nil || effect.ExternalWrite.Target != "example/target" || !slices.Equal(effect.ExternalWrite.Operations, []string{"stack.up", "stack.down"}) {
+		t.Fatalf("the Run does not name what its step declared: %+v", effect)
+	}
+	// The JSON a host reads: run next and run explain answer 42 with the same
+	// list, and it validates against the published contract.
+	next, err := e.Next(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.SchemaVersion != CoreAwaitingHostNextVersion || len(next.StepEffects) != 1 || next.StepEffects[0].ExternalWrite == nil || next.StepEffects[0].ExternalWrite.System != "example-system" {
+		t.Fatalf("run next does not name the declared boundary: %+v", next)
+	}
+	if err := validatePublic(t, "CoreNextViewV42", next); err != nil {
+		t.Fatalf("next 42 rejects its own answer: %v", err)
 	}
 }

@@ -301,12 +301,18 @@ const (
 	// checkpoint, the bounded repeats around it and what continues it once it
 	// has ended. Like 36 it is an answer, not a record, and rides the states
 	// that answered 36.
-	CoreHandoffNextVersion   = "core-next/41"
-	CoreConfigVersion        = "core-configuration/1"
-	CoreContextConfigVersion = "core-configuration/2"
-	MaxDefinitionBytes       = 2 << 20
-	MaxArtifactBytes         = 16 << 20
-	MaxRunPublications       = 1024
+	CoreHandoffNextVersion = "core-next/41"
+	// 42 names a task waiting for its host as an action of its own rather
+	// than idle, says the command that takes it, and names what each step
+	// declared it may change. A pilot read idle right after its start while
+	// its first task waited, and found its step's external-write boundary in
+	// no read at all. An answer again, riding the states that answered 41.
+	CoreAwaitingHostNextVersion = "core-next/42"
+	CoreConfigVersion           = "core-configuration/1"
+	CoreContextConfigVersion    = "core-configuration/2"
+	MaxDefinitionBytes          = 2 << 20
+	MaxArtifactBytes            = 16 << 20
+	MaxRunPublications          = 1024
 )
 
 // Clock observations are explicit inputs to state transitions. Persisted time
@@ -1010,6 +1016,11 @@ type RunView struct {
 	// Checkpoint is the Run's last accepted checkpoint, derived at read time
 	// from its accepted results and the plans naming which output is one.
 	Checkpoint *CheckpointRef `json:"checkpoint,omitempty"`
+	// StepEffects is what each step declared it may change, read from the
+	// sealed definitions this view strips. It is for the text summary; the
+	// JSON forms of a read are fixed by the Run's state, and next 42 carries
+	// the same list.
+	StepEffects []StepEffect `json:"-"`
 }
 
 // RunFailure is the one diagnostic a reader of a stopped Run needs first: the

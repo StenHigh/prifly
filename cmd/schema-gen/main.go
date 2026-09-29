@@ -60,6 +60,7 @@ type generator struct {
 	externalWrite         bool
 	continuation          bool
 	nextHandoff           bool
+	awaitingHost          bool
 	recovery              bool
 }
 
@@ -206,6 +207,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.nextHandoff && nextHandoffField(t, field.Name) {
 						continue
 					}
+					if !g.awaitingHost && awaitingHostField(t, field.Name) {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -340,6 +344,7 @@ var profileContracts = []struct {
 	{"external-write", "generate declared external write state/read version 39 contracts", func(g *generator) { g.externalWrite = true }},
 	{"continuation", "generate declared continuation state/read version 40 contracts", func(g *generator) { g.continuation = true }},
 	{"next-handoff", "generate next version 41 handoff contracts", func(g *generator) { g.nextHandoff = true }},
+	{"awaiting-host", "generate next version 42 awaiting-host contracts", func(g *generator) { g.awaitingHost = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -929,6 +934,10 @@ func main() {
 		contracts["CoreNextViewV41"] = contracts["CoreNextViewV36"]
 		delete(contracts, "CoreNextViewV36")
 	}
+	if g.awaitingHost {
+		contracts["CoreNextViewV42"] = contracts["CoreNextViewV41"]
+		delete(contracts, "CoreNextViewV41")
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1229,6 +1238,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-next-handoff:41"
 			bundle["title"] = "Pri-Fly next-action handoff contracts"
 			bundle["description"] = "Next 41 hands a Run to an executor that has none of the history before it: the accepted result that led to the current action -- after a blocked, the reason the step handed over -- the Run's last accepted checkpoint, the bounded repeats the action runs inside with the limit this Run applies and where the workflow goes when it is reached, and, once the Run has ended, the installed workflows that declare they continue it. Everything is derived at read time from what the Run and the installed packages already hold, so it mints no state version and the states that answered 36 answer 41. State, read, preview and step read keep the 40 contracts."
+		}
+		if g.awaitingHost {
+			awaitingHostConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-next-awaiting-host:42"
+			bundle["title"] = "Pri-Fly next-action awaiting-host contracts"
+			bundle["description"] = "Next 42 carries everything 41 does and names a task waiting for its host as the action awaiting_host, with the command that takes it, where 41 answered idle. It also names what each step of the Run declared it may change -- effects class, retry class and an external write's boundary -- from the sealed definitions, and what the step of the current action declares. Declarations, never observations. Derived at read time, so it mints no state version: the states that answered 41 answer 42. State, read, preview and step read keep the 40 contracts, and every earlier bundle is unchanged, byte for byte."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

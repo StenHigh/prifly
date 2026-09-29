@@ -386,6 +386,10 @@ func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 	// field where the engine held the text, which reads as work that produced
 	// nothing. A view is therefore the owner's to read, not a document to
 	// forward wholesale: the reported text is worker-authored and unvetted.
+	// What each step declared it may change is read from the sealed
+	// definitions, so before they are stripped. It travels beside the view,
+	// not in it: the published read contracts are fixed by the Run's state.
+	stepEffects := r.StepEffects()
 	r.Definitions = nil
 	r.ContextResources = nil
 	r.Executors = nil
@@ -404,6 +408,7 @@ func (e *Engine) View(ctx context.Context, id string) (RunView, error) {
 		view.Failure = runFailure(r)
 	}
 	view.Checkpoint = checkpoint
+	view.StepEffects = stepEffects
 	return view, nil
 }
 func (e *Engine) Events(ctx context.Context, id string, after int64, limit int) (local.ReadView, error) {
@@ -651,6 +656,15 @@ type NextView struct {
 	// Checkpoint is the Run's last accepted checkpoint, where its workflow
 	// declares one.
 	Checkpoint *CheckpointRef `json:"checkpoint,omitempty"`
+	// NextCommand is the prifly command that takes the work of an
+	// awaiting_host action: the task waiting for its host. Next 42 only.
+	NextCommand string `json:"next_command,omitempty"`
+	// Effects is what the step of the current action declares it may change:
+	// a ready stage's before it runs, a held attempt's while it runs. Next 42.
+	Effects *DeclaredEffect `json:"effects,omitempty"`
+	// StepEffects names what every step instance of the Run declared, with its
+	// stage, from the sealed definitions. Next 42.
+	StepEffects []StepEffect `json:"step_effects,omitempty"`
 	// Repeats are the bounded repeats the current action runs inside,
 	// outermost first.
 	Repeats []RepeatPosition `json:"repeats,omitempty"`
@@ -891,7 +905,7 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 		}
 		// Only the states whose next contract declares the field carry it: a
 		// Run answering an older contract answers exactly what it always did.
-		if next := nextVersionFor(r.SchemaVersion); next == CoreRunFinishNextVersion || next == CoreHandoffNextVersion {
+		if next := nextVersionFor(r.SchemaVersion); next == CoreRunFinishNextVersion || handoffNext(next) {
 			finish = runFinish(r)
 		}
 	case "idle":
@@ -915,15 +929,27 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 	// An attempt awaiting its host is work this driver cannot do, so the action
 	// stays what the driver sees. Reading the handoff is still the move, and
 	// without it the view looks like a Run with nothing left in it.
+	awaiting := ""
 	for _, attemptID := range r.Active {
 		attempt := r.Attempts[attemptID]
 		if attempt != nil && attempt.Session != nil && attempt.Session.HostState == SessionAwaiting && attempt.Settled == nil && kind != "session_expired" {
 			actions = append(actions, "session.task")
+			awaiting = attemptID
 			break
 		}
 	}
+	// idle meant "the driver has nothing to do", and a reader who took it for
+	// "nothing to do" stopped with a task waiting for it. From 42 a waiting
+	// task is an action of its own; the driver still has nothing, and idle is
+	// kept for a Run where nobody waits on anybody.
+	nextCommand := ""
+	if kind == "idle" && awaiting != "" && nextVersionFor(r.SchemaVersion) == CoreAwaitingHostNextVersion {
+		kind, work = "awaiting_host", awaiting
+		nextCommand = "session task --run " + id + " --all"
+	}
 	next := NextView{SchemaVersion: nextVersionFor(r.SchemaVersion), RunID: id, RunVersion: v.Snapshot.Version, Cut: v.Cut, Action: kind, WorkID: work, ReadOnly: true, Admission: false, DriverLive: e.driverLiveFor(id), ControlEpoch: r.ControlEpoch, ResumeRequired: r.ResumeRequired, SafeNextActions: actions, Finish: finish}
 	next.ReasonCode = reason
+	next.NextCommand = nextCommand
 	if reason != "" {
 		next.SafeNextActions = append(next.SafeNextActions, "doctor")
 	}
@@ -938,7 +964,7 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 				next.ProgramEnvironment = e.programEnvironment(r, next.InvocationID, next.StageID)
 			}
 		}
-		if kind == "active" || kind == "session_resume" || kind == "session_expired" {
+		if kind == "active" || kind == "session_resume" || kind == "session_expired" || kind == "awaiting_host" {
 			next.InvocationID = r.Activations[r.Attempts[work].ActivationID].InvocationID
 		}
 		if kind == "check" {
@@ -960,12 +986,53 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 			next.ResumeRequired = r.admissionsBlockedFor(next.InvocationID) && !r.restrictedFor(next.InvocationID)
 		}
 	}
-	if next.SchemaVersion == CoreHandoffNextVersion {
+	if handoffNext(next.SchemaVersion) {
 		if err := e.handOffNext(ctx, r, kind, work, &next); err != nil {
 			return NextView{}, err
 		}
 	}
+	if next.SchemaVersion == CoreAwaitingHostNextVersion {
+		if err := nameEffects(r, kind, work, &next); err != nil {
+			return NextView{}, err
+		}
+	}
 	return next, nil
+}
+
+// handoffNext answers whether a next contract carries the handoff 41 added;
+// every later one does.
+func handoffNext(version string) bool {
+	return version == CoreHandoffNextVersion || version == CoreAwaitingHostNextVersion
+}
+
+// nameEffects says what each step of the Run declared it may change, and what
+// the step of the current action declares: a ready stage's before it runs, a
+// held attempt's while it runs. Declarations from the sealed plan, never an
+// observation of what a step did.
+func nameEffects(r Run, kind, work string, next *NextView) error {
+	next.StepEffects = r.StepEffects()
+	switch kind {
+	case "stage":
+		if next.InvocationID == "" || next.StageID == "" {
+			return nil
+		}
+		p, err := r.planFor(next.InvocationID)
+		if err != nil {
+			return err
+		}
+		if step, ok := p.Steps[next.StageID]; ok {
+			next.Effects = &DeclaredEffect{Class: step.Effects.Class, RetryClass: step.Effects.RetryClass, ExternalWrite: step.ExternalWrite}
+		}
+	case "active", "session_resume", "session_expired", "awaiting_host":
+		if attempt := r.Attempts[work]; attempt != nil {
+			if step := r.Steps[attempt.StepID]; step != nil {
+				if declared, ok := r.declaredEffect(step.Ref); ok {
+					next.Effects = &declared
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // handOffNext says what a fresh executor needs to go on without the history of
@@ -976,7 +1043,7 @@ func (e *Engine) Next(ctx context.Context, id string) (NextView, error) {
 func (e *Engine) handOffNext(ctx context.Context, r Run, kind, work string, next *NextView) error {
 	invocationID, stageID := next.InvocationID, next.StageID
 	switch kind {
-	case "active", "session_resume", "session_expired":
+	case "active", "session_resume", "session_expired", "awaiting_host":
 		if attempt := r.Attempts[work]; attempt != nil {
 			if activation := r.Activations[attempt.ActivationID]; activation != nil {
 				stageID = activation.StageID

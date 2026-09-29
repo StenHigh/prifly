@@ -182,7 +182,16 @@ var projectRunnerSkillTemplateBeforeResume = strings.Replace(projectRunnerSkillT
 
 // A workflow may resume its own stopped Runs, and the host does that with the
 // launch the Run was started with.
-var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerDeclaredContinuationInstructions+projectRunnerHandoffInstructions+projectRunnerResumeInstructions, 1)
+var projectRunnerSkillTemplateBeforeAwaitingHost = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerDeclaredContinuationInstructions+projectRunnerHandoffInstructions+projectRunnerResumeInstructions, 1)
+
+// A host read idle right after its start while its first task waited for it.
+// From next 42 that is awaiting_host, and the host is told what to do with it.
+var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerDeclaredContinuationInstructions+projectRunnerHandoffInstructions+projectRunnerResumeInstructions+projectRunnerAwaitingHostInstructions, 1)
+
+const projectRunnerAwaitingHostInstructions = "When `run next` answers `awaiting_host`, an Attempt is already issued and waits\n" +
+	"for you: run the command in its `next_command` (`session task --run RUN_ID\n" +
+	"--all`) and take that Attempt. `idle` means nobody waits on anybody. The\n" +
+	"answer's `step_effects` names what each step declared it may change.\n\n"
 
 // projectRunnerSkillTemplateBeforeModelProfile is the text as it stood before a
 // task could name the model profile its step declared, derived from the current
@@ -2602,6 +2611,14 @@ func projectRunnerSkillBeforeHandoff(host projectHost) string {
 	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeHandoff, "{{host}}", host.ID), "{{question_tool}}", questionTool)
 }
 
+func projectRunnerSkillBeforeAwaitingHost(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeAwaitingHost, "{{host}}", host.ID), "{{question_tool}}", questionTool)
+}
+
 func projectRunnerSkillBeforeResume(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -2774,7 +2791,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

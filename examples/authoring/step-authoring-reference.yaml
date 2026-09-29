@@ -139,7 +139,9 @@ effects:
 # system is not a change, needs no permission from here, and its absence forbids
 # nothing. The class gives no workspace right: the claimed tree is still
 # compared as for class none. Nothing here is evidence the change happened; a
-# mandatory output on pass is how a verified result arrives.
+# mandatory output on pass is how a verified result arrives. To see what a Run's
+# steps declared, read `run status RUN` (an `effect` line per step) or
+# `step_effects` in `run next --json`.
 # external_write:
 #   system: example-system
 #   operations: [record.create]

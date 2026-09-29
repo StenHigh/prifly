@@ -69,6 +69,13 @@ func (e *Engine) RegistryBudgetAfter(extra int) (RegistryBudget, error) {
 	return registryBudget(len(file.Entries) + len(e.packageEntries()) + extra), nil
 }
 
+// registryLimitFault names the way out. package remove only withdraws trust
+// from an edition, and a host that took it for a deletion refused to run it
+// without the owner: the text says it is undone by package restore.
+func (e *Engine) registryLimitFault(total, packaged int) error {
+	return fault("dependency_limit", fmt.Sprintf("local and package definitions exceed %d entries: %d in total, %d of them from trusted packages%s; removing an edition you no longer run releases its entries with package remove --id ID --version VERSION --reason TEXT, which deletes nothing and is undone by package restore --id ID --version VERSION --reason TEXT; package list shows which editions are still trusted", maxLocalRegistryEntries, total, packaged, heaviestPackage(e.packages)))
+}
+
 // registryBudget names the refusal by the same comparison localRegistry
 // refuses on, so a count exactly at the bound -- which starts -- is not
 // reported as one that would not.
@@ -177,7 +184,7 @@ func (e *Engine) inventoryResources() ([]PinnedDefinition, flow.Registry, []Pinn
 		// on its tenth edition. Naming the limit without naming the release is
 		// a dead end — the way out is one command, and only a trusted edition
 		// occupies the budget at all.
-		return nil, nil, nil, fault("dependency_limit", fmt.Sprintf("local and package definitions exceed %d entries: %d in total, %d of them from trusted packages%s; removing an edition you no longer run releases its entries with package remove --id ID --version VERSION --reason TEXT, and package list shows which editions are still trusted", maxLocalRegistryEntries, len(entries), len(packaged), heaviestPackage(e.packages)))
+		return nil, nil, nil, e.registryLimitFault(len(entries), len(packaged))
 	}
 	identities := make(map[string]bool, len(entries))
 	for _, entry := range entries {

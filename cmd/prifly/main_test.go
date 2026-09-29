@@ -1401,6 +1401,19 @@ func TestCLIHelpDoesNotDenyImplementedCoreOperators(t *testing.T) {
 	if !strings.Contains(help, "sends SIGTERM to the whole group, then SIGKILL to the group") {
 		t.Fatalf("help does not say a stop signals the program's whole process group: %s", help)
 	}
+	// What a weak reader needs to find without knowing the internals: which
+	// stream carries a refusal, where the events sit in JSON, where a step's
+	// declared effect is read, and that package remove is undone.
+	for _, line := range []string{
+		"A refusal certain before the summary (such as dependency_limit) comes alone, with no summary",
+		"With --json the events are in .view.events, not .events: jq '.view.events[]'",
+		"status names what each step declared it may change",
+		"Remove deletes nothing: it withdraws trust",
+	} {
+		if !strings.Contains(help, line) {
+			t.Fatalf("help does not say %q", line)
+		}
+	}
 }
 
 func TestCLIRefCanonicalYAMLAndJSON(t *testing.T) {
@@ -3433,5 +3446,26 @@ func TestCLIProjectRunnersUpdateKeepsTheProjectOverlayAndNamesIt(t *testing.T) {
 	// the protocol starts with.
 	if firstStep := strings.Index(body, "\n## 1. Start"); firstStep < 0 || pointer > firstStep {
 		t.Fatalf("the overlay is named after the protocol starts, not in the first lines: pointer=%d first_step=%d", pointer, firstStep)
+	}
+}
+
+// A pilot declared an external write on its tests step and looked for the
+// boundary in run status and the events: it was sealed, but only as raw
+// definition bytes. The text summary names what each step declared.
+// The list itself is read by View before it strips the definitions; that path
+// is held by TestARunNamesTheEffectEachStepDeclared.
+func TestRunSummaryNamesTheEffectEachStepDeclared(t *testing.T) {
+	var out bytes.Buffer
+	view := prifly.RunView{}
+	view.Run.ID = "run:example"
+	view.Run.Status = "completed"
+	view.Run.Outputs = map[string]prifly.ArtifactRef{}
+	view.StepEffects = []prifly.StepEffect{{StepInstanceID: "step:tests", StageID: "tests", DeclaredEffect: prifly.DeclaredEffect{Class: "external_write", RetryClass: "idempotent", ExternalWrite: &flow.ExternalWriteBoundary{System: "example-system", Operations: []string{"stack.up", "stack.down"}, Target: "example/target"}}}}
+	if err := renderRun(&out, view); err != nil {
+		t.Fatal(err)
+	}
+	want := `effect stage=tests step="step:tests" class=external_write retry_class=idempotent system="example-system" operations=stack.up,stack.down target="example/target"`
+	if !strings.Contains(out.String(), want) {
+		t.Fatalf("the summary does not name the declared effect:\n%s", out.String())
 	}
 }

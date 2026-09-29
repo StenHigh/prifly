@@ -24,19 +24,40 @@ the tool sends you there, not before.
 
 ## 1. Start
 
-For a completed partial or rejected Run whose implementation is saved in Git,
-choose the declared continuation launch from the primary Project checkout.
-If its SHA is not the checkout HEAD, use its full 40-character SHA as
-`--implementation-head SHA` and select `--workspace worktree` on both
-`project continue --prepare --launch ID --source-run RUN_ID` and the start
-call with `--expected-launch-digest DIGEST`. Review the source refs, Git head
-and changed files. An active child is named by `project_continue_active_child`: inspect
-that Run before starting another. Only intentional independent work uses
-`--allow-duplicate-continuation` on both calls. If this installed CLI lacks
-`--implementation-head`, report the blocker; do not merge unverified work or
-change project preflight merely to bypass the missing CLI input. Do not call
-raw `run fork`, extract refs from Run JSON, or start the ordinary implement
-route. After every accepted report, read `run next` and follow its action.
+To continue a finished Run, choose a launch whose workflow declares a
+continuation. Call `project continue --prepare --launch ID --source-run RUN_ID`
+with the selected host and decision answers, and show what it returns: where
+each carried input comes from in the source Run, and the source Run's tree the
+new Run takes over as it was left, with every file its steps left there. Then
+call `project continue --launch ID
+--source-run RUN_ID --expected-launch-digest DIGEST` with the same options.
+`project_continue_undeclared` means that launch's workflow does not continue
+Runs: choose another launch or report it. An active child is named by
+`project_continue_active_child`: inspect that Run before starting another;
+only intentional independent work uses `--allow-duplicate-continuation` on both
+calls. Do not call raw `run fork` or extract refs from Run JSON. After every
+accepted report, read `run next` and follow its action.
+
+When `run next` names `arrived_from`, that is the accepted result that led to
+the current action: after a step returned `blocked`, its outputs there hold
+the reason it handed over. Take the reason from there and from the inputs the
+task gives you, never from an earlier conversation. `repeats` says which
+iteration of a bounded loop this is and where the workflow goes at its limit.
+For a finished Run whose `run next` lists `continuations`, offer `project
+continue` with a launch of one of those workflows.
+
+When `continuations` lists the Run's own workflow, it resumes that Run: call
+`project continue` with the launch the Run was started with. Show what prepare
+returns under `recovery`: the stage it starts again from, the accepted stages
+it carries and the tree it takes over. The source Run's inputs are taken as
+they were; pass no `--input`. `--from-stage STAGE` starts again from an earlier
+accepted stage. `resume_undeclared` means the workflow does not resume this
+Run; `resume_prefix_empty` means nothing would be carried: start anew.
+
+When `run next` answers `awaiting_host`, an Attempt is already issued and waits
+for you: run the command in its `next_command` (`session task --run RUN_ID
+--all`) and take that Attempt. `idle` means nobody waits on anybody. The
+answer's `step_effects` names what each step declared it may change.
 
 
 `PRIFLY_BIN project workflows --repository "$PWD" --json` lists launches. If the

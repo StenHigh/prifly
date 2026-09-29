@@ -147,7 +147,7 @@ func TestNextHandsTheRunToAFreshExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.SchemaVersion != CoreHandoffNextVersion || next.Action != "terminal" {
+	if next.SchemaVersion != CoreAwaitingHostNextVersion || next.Action != "terminal" {
 		t.Fatalf("a finished Run answered %s %s", next.SchemaVersion, next.Action)
 	}
 	if next.ArrivedFrom == nil || next.ArrivedFrom.StageID != "plan" || next.ArrivedFrom.Verdict != "pass" || next.ArrivedFrom.Outputs["plan"] != plan {
@@ -162,7 +162,7 @@ func TestNextHandsTheRunToAFreshExecutor(t *testing.T) {
 	if next.Repeats != nil {
 		t.Fatalf("an action inside no repeat named one: %+v", next.Repeats)
 	}
-	if err := validatePublic(t, "CoreNextViewV41", next); err != nil {
-		t.Fatalf("next 41 rejects its own answer: %v", err)
+	if err := validatePublic(t, "CoreNextViewV42", next); err != nil {
+		t.Fatalf("next 42 rejects its own answer: %v", err)
 	}
 }

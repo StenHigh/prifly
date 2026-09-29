@@ -90,6 +90,7 @@
 | `next_handoff` | поведение чтения: `arrived_from`, `checkpoint`, `repeats`, `continuations` в `run next` | blocked-guide |
 | `workflow_continuation` | `checkpoint` в корне и у шаговой стадии, `continuation` в корне — **ревизия 7**; `prifly project continue` | workflow, continuation-guide |
 | `workflow_resume` | `resumable` в корне — **ревизия 8**; `prifly project continue` тем же launch возобновляет Run с точки остановки | workflow, continuation-guide |
+| `next_awaiting_host` | поведение чтения, `core-next/42`: `run next` отвечает `awaiting_host` и `next_command`, когда выданное задание ждёт хоста (раньше — `idle`); `step_effects` и `effects` называют объявленный эффект шагов; текстовый `run status` печатает строки `effect` | troubleshooting |
 | `program_external_write` | `effects.class: external_write` и блок `external_write` у программы (`prifly-step/1`, `operation: process`) — **контракт 14**. `retry_class` решает судьбу прерванной программы: `idempotent` — `project continue` запускает шаг снова; `deduplicated`, `reconcile_required`, `never` — Run `uncertain` (`external_write_unreconciled`) до `run resolve`; `pure` отказывается | step, continuation-guide, troubleshooting |
 
 Полный список того, что сборка о себе говорит, включая неподдерживаемое:
@@ -189,7 +190,14 @@ prifly project local set --repository . --allow-executable worker=/absolute/path
 prifly project start --repository . --launch NAME --input source=./input.csv --allow-execution
 ```
 
-Замените NAME, executable и input на объявления своего package. Compile не
+Замените NAME, executable и input на объявления своего package. Ответ старта
+начинается с `run_id` и `next_command` — что делать дальше; если для нового
+издания пришлось вывести старые, они перечислены в `retired_editions` с
+командой отмены в `undo`. Дальше: `run list` — Runs этой authority, новые
+первыми; `run next RUN` — следующий ход (`awaiting_host` значит, что задание
+ждёт вас, и `next_command` его берёт); `run status RUN` — статус и строки
+`effect`: что каждый шаг объявил, что меняет (класс, `retry_class`, граница
+`external_write`); `run events RUN` — история по строке на событие. Compile не
 создаёт Run и не исполняет программы. Start требует локальное разрешение и
 `--allow-execution`, закрепляет выбранные programs/argv/files отдельно от inputs.
 Программа получает чистое окружение (`PATH=/usr/bin:/bin`, `LANG`, `TMPDIR`,
@@ -228,9 +236,15 @@ export --ref REF.json --output FILE`, не нужно искать `work/<attemp
 хосту с таймаутом на вызов инструмента (обычно 5 минут) такой Run стоит вести
 в фоне или с таймаутом больше `timeout_ms` привязки. Бюджет определений
 authority (512 записей, `dependency_limit`) виден в `--prepare` как
-`registry_budget` — до отказа, а не после; неиспользуемые издания снимаются
-`package remove`, а издание, снятое откатом неудавшегося старта, следующий
-старт той же сборки берёт снова сам.
+`registry_budget` — до отказа, а не после. Если новое издание не помещается,
+старт сам выводит самые старые издания того же пакета (`registry_retirement`
+в `--prepare` называет их до того, как что-то изменится): не то, на котором ещё
+идёт Run, не то, от которого зависит другой пакет, и не самое новое из
+прежних. Вывод ничего не удаляет и отменяется `package restore --id ID
+--version VERSION --reason TEXT`. Если места не хватает и так, отказ
+`dependency_limit` приходит один, до предстартовой сводки, и называет, какие
+издания остаются и почему. Издание, снятое откатом неудавшегося старта,
+следующий старт той же сборки берёт снова сам.
 RunBrief не создаётся автоматически: если такой документ объявлен required
 typed input, передайте его как соответствующий input. История и results
 сохраняются вне проекта; scratch — не sandbox для недоверенных программ.

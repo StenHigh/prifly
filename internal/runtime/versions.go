@@ -48,31 +48,33 @@ var versionContracts = []versionContract{
 	{CoreRoutedStateVersion, CoreRoutedReadVersion, CoreRoutedStepReadVersion, CoreRoutedNextVersion},
 	{CoreEffectsStateVersion, CoreEffectsReadVersion, CoreEffectsStepReadVersion, CoreEffectsNextVersion},
 	{CoreMaterializedStateVersion, CoreMaterializedReadVersion, CoreMaterializedStepReadVersion, CoreMaterializedNextVersion},
-	{CoreStageWorkStateVersion, CoreStageWorkReadVersion, CoreStageWorkStepReadVersion, CoreHandoffNextVersion},
+	{CoreStageWorkStateVersion, CoreStageWorkReadVersion, CoreStageWorkStepReadVersion, CoreAwaitingHostNextVersion},
 	// 32 adds a field to the sealed executor config alone. The step read is
 	// left empty on purpose: nothing about it changed, so a Run at 32 answers
 	// step reads under the contract 31 already published.
-	{CoreEnvironmentSourceStateVersion, CoreEnvironmentSourceReadVersion, "", CoreHandoffNextVersion},
+	{CoreEnvironmentSourceStateVersion, CoreEnvironmentSourceReadVersion, "", CoreAwaitingHostNextVersion},
 	// 34 records what a host said it did with a declared model profile. It is
 	// the first row past the cap the published capability document set on
 	// these lists; the owner withdrew that compatibility on 2026-09-19, and
 	// the new bundle allows more while every earlier one keeps saying 32.
-	{CoreModelProfileStateVersion, CoreModelProfileReadVersion, CoreModelProfileStepReadVersion, CoreHandoffNextVersion},
+	{CoreModelProfileStateVersion, CoreModelProfileReadVersion, CoreModelProfileStepReadVersion, CoreAwaitingHostNextVersion},
 	// 35 seals what the project says a declared profile name means for its
 	// host, so the Run answers with what it started with rather than with
 	// whatever the machine says now.
-	{CoreProfileTranslationStateVersion, CoreProfileTranslationReadVersion, CoreProfileTranslationStepReadVersion, CoreHandoffNextVersion},
-	{CoreProjectTitleStateVersion, CoreProjectTitleReadVersion, "", CoreHandoffNextVersion},
-	{CoreRecoveryStateVersion, CoreRecoveryReadVersion, "", CoreHandoffNextVersion},
+	{CoreProfileTranslationStateVersion, CoreProfileTranslationReadVersion, CoreProfileTranslationStepReadVersion, CoreAwaitingHostNextVersion},
+	{CoreProjectTitleStateVersion, CoreProjectTitleReadVersion, "", CoreAwaitingHostNextVersion},
+	{CoreRecoveryStateVersion, CoreRecoveryReadVersion, "", CoreAwaitingHostNextVersion},
 	// 39 records the declared boundary of an external write on the handoff.
-	{CoreExternalWriteStateVersion, CoreExternalWriteReadVersion, "", CoreHandoffNextVersion},
+	{CoreExternalWriteStateVersion, CoreExternalWriteReadVersion, "", CoreAwaitingHostNextVersion},
 	// 40 records recovery/2, which takes the source's tree and chooses no
 	// commit, and reads the last accepted checkpoint.
-	{CoreContinuationStateVersion, CoreContinuationReadVersion, "", CoreHandoffNextVersion},
+	{CoreContinuationStateVersion, CoreContinuationReadVersion, "", CoreAwaitingHostNextVersion},
 	// 36 minted no state row of its own: it is a next-action answer, so every
 	// state that could describe a finished Run and was still being created
 	// took it up, the way 31 and 32 took up 33. 41 is the same kind of answer
 	// and the same states take it up in turn: it carries everything 36 did.
+	// 42 does the same over 41: it carries everything 41 did, names a task
+	// waiting for its host as awaiting_host and names each step's effect.
 	// Every earlier state keeps the next contract it was published with.
 }
 

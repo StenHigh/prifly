@@ -51,14 +51,14 @@ func TestEveryStateNamesItsNextContract(t *testing.T) {
 		// being created took it up, the way 31 and 32 took up 33. 33, 34 and
 		// 35 are what a Run sealed before it answers under; nothing rewrites
 		// those.
-		{CoreStageWorkStateVersion, CoreHandoffNextVersion},
-		{CoreEnvironmentSourceStateVersion, CoreHandoffNextVersion},
-		{CoreModelProfileStateVersion, CoreHandoffNextVersion},
-		{CoreProfileTranslationStateVersion, CoreHandoffNextVersion},
-		{CoreProjectTitleStateVersion, CoreHandoffNextVersion},
-		{CoreRecoveryStateVersion, CoreHandoffNextVersion},
-		{CoreExternalWriteStateVersion, CoreHandoffNextVersion},
-		{CoreContinuationStateVersion, CoreHandoffNextVersion},
+		{CoreStageWorkStateVersion, CoreAwaitingHostNextVersion},
+		{CoreEnvironmentSourceStateVersion, CoreAwaitingHostNextVersion},
+		{CoreModelProfileStateVersion, CoreAwaitingHostNextVersion},
+		{CoreProfileTranslationStateVersion, CoreAwaitingHostNextVersion},
+		{CoreProjectTitleStateVersion, CoreAwaitingHostNextVersion},
+		{CoreRecoveryStateVersion, CoreAwaitingHostNextVersion},
+		{CoreExternalWriteStateVersion, CoreAwaitingHostNextVersion},
+		{CoreContinuationStateVersion, CoreAwaitingHostNextVersion},
 	}
 	if len(expected) != len(versionContracts) {
 		t.Fatalf("the ladder has %d rows and this table names %d; a new state version needs its next contract here", len(versionContracts), len(expected))

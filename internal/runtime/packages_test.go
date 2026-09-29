@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -33,6 +34,9 @@ func packageSource(t *testing.T, files map[string]string, components []map[strin
 		}
 		declared = append(declared, map[string]any{"path": path, "digest": rawDigest([]byte(content)), "size_bytes": len(content), "media_type": media, "role": "data"})
 	}
+	// One source is one manifest: the files are declared in path order, not
+	// in the order a map happens to yield them.
+	slices.SortFunc(declared, func(a, b map[string]any) int { return strings.Compare(a["path"].(string), b["path"].(string)) })
 	manifest := map[string]any{
 		"schema_version": "1", "id": "aif:package/pilot", "version": "1.0.0",
 		"description": "Externally authored skills sealed for this installation", "requires_core_protocol": "1",

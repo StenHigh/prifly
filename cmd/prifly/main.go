@@ -789,6 +789,9 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		// missing ID of an operation that does not exist.
 		return operationError("run", args)
 	}
+	if args[0] == "list" {
+		return c.runList(ctx, e, args[1:])
+	}
 	if args[0] == "start" {
 		f := flags("run start")
 		workflow := f.String("workflow", "", "")
@@ -1039,8 +1042,25 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		answer := map[string]any{"schema_version": "foundation-events/1", "view": view}
 		// A partial answer says how to ask for the rest. Reporting only that
 		// more exists leaves the reader to guess the form of the continuation.
+		next := int64(0)
 		if view.More && len(view.Events) != 0 {
-			answer["next_after"] = view.Events[len(view.Events)-1].Seq
+			next = view.Events[len(view.Events)-1].Seq
+			answer["next_after"] = next
+		}
+		// The text form was the JSON indented: a reader who asked for events
+		// got the envelope first and had to know they sit under view.events.
+		// One line per event, and the continuation spelled out.
+		if c.format == "text" {
+			for _, event := range view.Events {
+				if _, err := fmt.Fprintf(c.out, "%d %s actor=%s command=%s\n", event.Seq, event.Type, event.Actor, event.CommandID); err != nil {
+					return err
+				}
+			}
+			if next != 0 {
+				_, err := fmt.Fprintf(c.out, "more: run events %s --after %d\n", id, next)
+				return err
+			}
+			return nil
 		}
 		return c.emit(answer)
 	case "pause", "cancel", "stop":
@@ -2225,6 +2245,91 @@ func (c *cli) step(ctx context.Context, args []string) error {
 	return c.emit(json.RawMessage(data))
 }
 
+// runListVersion is the document run list answers with.
+const runListVersion = "run-list/1"
+
+// defaultRunListLimit keeps the answer to a screen; --limit widens it.
+const defaultRunListLimit = 20
+
+type runListEntry struct {
+	RunID        string  `json:"run_id"`
+	WorkflowID   string  `json:"workflow_id"`
+	Status       string  `json:"status"`
+	Outcome      *string `json:"outcome"`
+	Created      string  `json:"created"`
+	AwaitingHost bool    `json:"awaiting_host"`
+	Subject      string  `json:"subject,omitempty"`
+}
+
+// runList names the Runs of this authority. A pilot needing the id of its own
+// Run found it through capacity show's held slots: run list was refused as
+// "not a run operation", and nothing else listed them outside the monitor. It
+// reads the same summaries the monitor does, so there is one way to list Runs.
+func (c *cli) runList(ctx context.Context, e *prifly.Engine, args []string) error {
+	f := flags("run list")
+	limit := f.Int("limit", defaultRunListLimit, "how many Runs to show, newest first")
+	if err := parse(f, args); err != nil {
+		return err
+	}
+	if *limit < 1 {
+		return usageError("run list --limit takes a positive count")
+	}
+	entries := []runListEntry{}
+	after := ""
+	for {
+		revisions, cursor, err := e.MonitorRevisions(ctx, after)
+		if err != nil {
+			return err
+		}
+		for _, revision := range revisions {
+			summary, err := e.MonitorSummary(ctx, revision.RunID)
+			if err != nil {
+				return err
+			}
+			entries = append(entries, runListEntry{RunID: summary.ID, WorkflowID: summary.WorkflowID, Status: summary.Status, Outcome: summary.Outcome, Created: summary.Created, AwaitingHost: summary.AwaitingHosts > 0, Subject: summary.Subject})
+		}
+		if cursor == "" {
+			break
+		}
+		after = cursor
+	}
+	created := func(entry runListEntry) time.Time {
+		at, _ := time.Parse(time.RFC3339Nano, entry.Created)
+		return at
+	}
+	slices.SortFunc(entries, func(a, b runListEntry) int {
+		if order := created(b).Compare(created(a)); order != 0 {
+			return order
+		}
+		return strings.Compare(a.RunID, b.RunID)
+	})
+	total := len(entries)
+	if len(entries) > *limit {
+		entries = entries[:*limit]
+	}
+	if c.format != "text" {
+		return c.emit(map[string]any{"schema_version": runListVersion, "total": total, "runs": entries})
+	}
+	for _, entry := range entries {
+		outcome := "—"
+		if entry.Outcome != nil {
+			outcome = *entry.Outcome
+		}
+		line := fmt.Sprintf("%s status=%s outcome=%s workflow=%s created=%s", entry.RunID, entry.Status, outcome, entry.WorkflowID, entry.Created)
+		if entry.AwaitingHost {
+			line += " awaiting_host: session task --run " + entry.RunID + " --all"
+		}
+		if _, err := fmt.Fprintln(c.out, line); err != nil {
+			return err
+		}
+	}
+	if total > len(entries) {
+		_, err := fmt.Fprintf(c.out, "%d of %d shown; run list --limit %d shows all\n", len(entries), total, total)
+		return err
+	}
+	return nil
+}
+
 func renderRun(w io.Writer, v prifly.RunView) error {
 	outcome := "—"
 	if v.Run.Outcome != nil {
@@ -2292,6 +2397,18 @@ func renderRun(w io.Writer, v prifly.RunView) error {
 	for _, id := range steps {
 		step := v.Run.Steps[id]
 		if _, err := fmt.Fprintf(w, "step %s status=%s verdict=%s outputs=%d\n", strconv.Quote(id), step.Status, step.Verdict, len(step.Outputs)); err != nil {
+			return err
+		}
+	}
+	// What each step declared it may change, from its sealed definition. The
+	// boundary of an external write was sealed and reachable only as raw
+	// definition bytes: a pilot looking for it here found nothing.
+	for _, effect := range v.StepEffects {
+		line := fmt.Sprintf("effect stage=%s step=%s class=%s retry_class=%s", effect.StageID, strconv.Quote(effect.StepInstanceID), effect.Class, effect.RetryClass)
+		if boundary := effect.ExternalWrite; boundary != nil {
+			line += fmt.Sprintf(" system=%s operations=%s target=%s", strconv.Quote(boundary.System), strings.Join(boundary.Operations, ","), strconv.Quote(boundary.Target))
+		}
+		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
 	}
@@ -2416,7 +2533,8 @@ Global: --project DIR  --json  --format text|json|csv
                 [--runtime-answer ID=JSON] [--allow-execution] [--expected-launch-digest DIGEST]
                                    A runtime answer is sealed before the Run starts: the step that raises that decision gets this value and does not wait
                                    Show a pre-dispatch summary on stderr, then seal and drive; stdout keeps one final result
-                                   On a refusal that summary stays in front of the Problem envelope: read the last document of stderr
+                                   A refusal certain before the summary (such as dependency_limit) comes alone, with no summary; one met
+                                   only after it (the machine's configuration changed meanwhile) is the last document of stderr, exit non-zero
                                    Profile /3 needs host/Git/brief only when declared; Git writes require a workspace: --workspace, else the launch's standing workspace: in project.yaml
                                    A launch's preflight: program in project.yaml runs in the repository before anything is taken; a non-zero exit refuses the launch with its output
                                    Answer the declared questions up front with repeated --preflight-answer; project questionnaire lists them and returns the digest
@@ -2462,10 +2580,17 @@ Global: --project DIR  --json  --format text|json|csv
   run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive] [--grant ID]
 
   run fork --file REQUEST.json      Create a linked Run from exact sealed refs; old Run is unchanged
+  run list [--limit N]              This authority's Runs, newest first: id, workflow, status, outcome, created,
+                                   and whether a task waits for its host; --json answers run-list/1. Reads only
   run status|next|explain|events|timing RUN_ID
                                    events reads one bounded page: --limit N (1..1000) and --after SEQ continue it,
                                    and a partial answer names the next value in next_after, so a reader never
-                                   has to open the authority's own storage to finish reading a Run's history
+                                   has to open the authority's own storage to finish reading a Run's history.
+                                   With --json the events are in .view.events, not .events: jq '.view.events[]'
+                                   status names what each step declared it may change: its effects class,
+                                   retry_class and, for external_write, the system, operations and target
+                                   next answers the move this Run has now. awaiting_host: a task handed to a host waits
+                                   for you, and next_command names the command that takes it; idle: nobody waits
                                    explain on a finished Run names where its graph stopped in finish: the invocation,
                                    the finish stage, the outcome, and the stage and verdict of the edge that reached it
                                    when the sealed plan names exactly one, so the reason for an outcome is read here
@@ -2511,6 +2636,8 @@ Global: --project DIR  --json  --format text|json|csv
                                    Re-read every sealed byte; a mismatch is reported, never repaired
   package remove|quarantine|revoke|restore --id ID --version X.Y.Z --reason TEXT
                                    Remove refuses while a run holds it; revoke also blocks old pins
+                                   Remove deletes nothing: it withdraws trust, frees the edition's registry entries,
+                                   and restore with the same --id and --version undoes it
                                    Remove is the only status that releases this package's inventory pins, and revoke is terminal:
                                    a revoked revision is neither removed nor restored afterwards, so revoking forfeits that release
   claim create --repository DIR --owner ID [--base REF]

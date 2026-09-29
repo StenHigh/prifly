@@ -74,10 +74,10 @@ func TestNeutralStartWithoutBriefExecutesAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	next, err := e.Next(ctx, r.ID)
-	if err != nil || next.SchemaVersion != CoreHandoffNextVersion {
+	if err != nil || next.SchemaVersion != CoreAwaitingHostNextVersion {
 		t.Fatalf("neutral next: %+v %v", next, err)
 	}
-	if err := validatePublic(t, "CoreNextViewV41", next); err != nil {
+	if err := validatePublic(t, "CoreNextViewV42", next); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.Drive(ctx, r.ID); err != nil {

@@ -71,7 +71,7 @@ func TestTerminalRunNamesItsFinishAndTheEdgeThatReachedIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.Action != "terminal" || next.SchemaVersion != CoreHandoffNextVersion {
+	if next.Action != "terminal" || next.SchemaVersion != CoreAwaitingHostNextVersion {
 		t.Fatalf("a finished Run answered under the wrong contract: %s %s", next.Action, next.SchemaVersion)
 	}
 	if next.Finish == nil {

@@ -353,7 +353,7 @@ func TestNextNamesTheBlockedResultThatLedHere(t *testing.T) {
 	// This fixture seals an early core state, which keeps the next contract it
 	// was published with: the answer below is next 41's only for states that
 	// took it up, which TestNextHandsTheRunToAFreshExecutor reads.
-	if next, err := e.Next(ctx, runID); err != nil || next.SchemaVersion == CoreHandoffNextVersion || next.ArrivedFrom != nil {
+	if next, err := e.Next(ctx, runID); err != nil || handoffNext(next.SchemaVersion) || next.ArrivedFrom != nil {
 		t.Fatalf("an early state answered under next 41: %+v %v", next, err)
 	}
 }

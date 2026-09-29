@@ -188,6 +188,9 @@ func Capabilities() CapabilityManifest {
 	// idempotent does; the others leave the Run uncertain for the owner.
 	profile.StepVersions = append(profile.StepVersions, "14")
 	profile.Capabilities = append(profile.Capabilities, "program_external_write")
+	// Next 42 names a task waiting for its host as awaiting_host with the
+	// command that takes it, and names what each step declared it may change.
+	profile.Capabilities = append(profile.Capabilities, "next_awaiting_host")
 	return manifest
 }
 

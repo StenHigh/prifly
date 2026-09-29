@@ -119,6 +119,11 @@ type AuthorityCommand struct {
 	Key             string
 	Payload         json.RawMessage
 	ExpectedVersion *int64
+	// ExpectedRuns is how many Runs the caller counted when it decided. A
+	// decision that depends on which Runs exist -- withdrawing a package no
+	// Run holds -- is refused if a Run appeared meanwhile, in the same
+	// transaction that would have written it.
+	ExpectedRuns *int64
 }
 
 type AuthorityChange struct {
@@ -753,7 +758,10 @@ ALTER TABLE events ADD COLUMN state_packed INTEGER NOT NULL DEFAULT 0;`); err !=
 // queue grow from ten to eleven while reading what looked like a plain refusal,
 // and an owner who raises the limit an hour later would otherwise start every
 // attempt they thought had failed.
-func capacityConflictMessage(capacity, held int64) string {
+//
+// It names the Run, too: it said a Run was created without saying which, and a
+// model reading the refusal hunted for the Run's id through run list.
+func capacityConflictMessage(runID string, capacity, held int64) string {
 	plural := func(n int64, one, many string) string {
 		if n == 1 {
 			return one
@@ -761,9 +769,9 @@ func capacityConflictMessage(capacity, held int64) string {
 		return many
 	}
 	return fmt.Sprintf(
-		"this authority admits %d %s at a time and %d %s already admitted; one attempt is not one Run, because a parallel stage takes a slot per branch; this Run was created and keeps its place in the admission queue, so raising the limit later starts everything already waiting rather than only the next command; raise it with capacity set --capacity N --reason TEXT, and capacity show names what is held and what waits",
+		"this authority admits %d %s at a time and %d %s already admitted; one attempt is not one Run, because a parallel stage takes a slot per branch; this Run (%s) was created and keeps its place in the admission queue, so raising the limit later starts everything already waiting rather than only the next command; raise it with capacity set --capacity N --reason TEXT, and capacity show names what is held and what waits",
 		capacity, plural(capacity, "attempt", "attempts"),
-		held, plural(held, "is", "are"))
+		held, plural(held, "is", "are"), runID)
 }
 
 func (s *Store) admissionTurn(ctx context.Context, conn *sql.Conn, runID string, held, capacity int64) (*Rejection, error) {
@@ -810,7 +818,7 @@ func (s *Store) admissionTurn(ctx context.Context, conn *sql.Conn, runID string,
 		// worktrees since 0.13.0, but an authority still admits one attempt at
 		// a time by default, so the very upgrade that opens parallel work
 		// refuses it until this number is raised.
-		return &Rejection{Code: "capacity_conflict", Message: capacityConflictMessage(capacity, held)}, nil
+		return &Rejection{Code: "capacity_conflict", Message: capacityConflictMessage(runID, capacity, held)}, nil
 	}
 	var aheadRun string
 	var aheadSince int64
@@ -1364,6 +1372,15 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 	if cmd.ExpectedVersion != nil && *cmd.ExpectedVersion != state.Version {
 		rejection = &Rejection{Code: "version_conflict", Message: "expected authority control version differs from current version"}
 	}
+	if rejection == nil && cmd.ExpectedRuns != nil {
+		var runs int64
+		if err := conn.QueryRowContext(ctx, "SELECT count(*) FROM runs").Scan(&runs); err != nil {
+			return out, err
+		}
+		if runs != *cmd.ExpectedRuns {
+			rejection = &Rejection{Code: "runs_changed", Message: "a Run was created or removed after this decision counted them; prepare it again"}
+		}
+	}
 	var change AuthorityChange
 	if rejection == nil {
 		if transform == nil {
@@ -1559,14 +1576,16 @@ func linkedRunCommandDigest(cmd LinkedRunCommand) (string, error) {
 }
 
 func authorityCommandDigest(cmd AuthorityCommand) (string, error) {
-	if !validIdentity(cmd.ID) || !validIdentity(cmd.Actor) || !validAuthorityKey(cmd.Key) || len(cmd.Payload) > MaxCommandBytes || !json.Valid(cmd.Payload) || cmd.ExpectedVersion != nil && (*cmd.ExpectedVersion < 0 || *cmd.ExpectedVersion > 1<<53-1) {
+	if !validIdentity(cmd.ID) || !validIdentity(cmd.Actor) || !validAuthorityKey(cmd.Key) || len(cmd.Payload) > MaxCommandBytes || !json.Valid(cmd.Payload) || cmd.ExpectedVersion != nil && (*cmd.ExpectedVersion < 0 || *cmd.ExpectedVersion > 1<<53-1) || cmd.ExpectedRuns != nil && *cmd.ExpectedRuns < 0 {
 		return "", errors.New("invalid authority command envelope")
 	}
-	b, err := json.Marshal(struct {
-		Key             string          `json:"key"`
-		ExpectedVersion *int64          `json:"expected_version"`
-		Payload         json.RawMessage `json:"payload"`
-	}{cmd.Key, cmd.ExpectedVersion, cmd.Payload})
+	// ExpectedRuns joins the digest only when set, so every command recorded
+	// before it existed keeps the digest it was recorded under.
+	envelope := map[string]any{"key": cmd.Key, "expected_version": cmd.ExpectedVersion, "payload": cmd.Payload}
+	if cmd.ExpectedRuns != nil {
+		envelope["expected_runs"] = *cmd.ExpectedRuns
+	}
+	b, err := json.Marshal(envelope)
 	if err != nil {
 		return "", err
 	}

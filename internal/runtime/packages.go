@@ -172,6 +172,10 @@ type PackageImportRequest struct {
 	Reason    string
 	Origin    PackageOrigin
 	Signature *PackageSignature
+	// Retire withdraws older editions in the same transaction that trusts
+	// this one, when the registry cannot hold both: a plan from
+	// PlanRegistryRetirement. Either both happen or neither does.
+	Retire *RegistryRetirement
 }
 
 // ImportPackage seals a local package directory, verifies every declared byte
@@ -235,10 +239,21 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
 	}
-	command, err := canonical(map[string]any{"operation": "package.trust", "command_id": request.CommandID, "package_ref": ref, "control_intent_ref": intent.Ref(), "approval_refs": []any{}, "reason": request.Reason})
+	commandFields := map[string]any{"operation": "package.trust", "command_id": request.CommandID, "package_ref": ref, "control_intent_ref": intent.Ref(), "approval_refs": []any{}, "reason": request.Reason}
+	authority := local.AuthorityCommand{ID: request.CommandID, Actor: e.owner, Key: AuthorityPackagesKey}
+	if request.Retire != nil {
+		if request.Retire.Edition != ref {
+			return local.AuthorityApplyResult{}, local.Reject("registry_plan_stale", "the registry plan was made for "+request.Retire.Edition.String()+", not "+ref.String()+"; prepare the launch again")
+		}
+		commandFields["retire"] = request.Retire.Retire
+		authority.ExpectedVersion, authority.ExpectedRuns = &request.Retire.PackagesVersion, &request.Retire.Runs
+	}
+	command, err := canonical(commandFields)
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
 	}
+	authority.Payload = command
+	var retired []flow.Ref
 	control, _, err := e.ensureControl(ctx)
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
@@ -261,7 +276,7 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 	} else if len(control.TrustRoots) != 0 {
 		return local.AuthorityApplyResult{}, local.Reject("signature_required", "this installation records trust roots, so a package arrives with a detached signature")
 	}
-	result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: request.CommandID, Actor: e.owner, Key: AuthorityPackagesKey, Payload: command}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
+	result, err := e.Store.ApplyAuthority(ctx, authority, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		record := PackageRecord{SchemaVersion: AuthorityPackagesVersion, AuthorityID: e.Installation.ID, Packages: []PackageEntry{}}
 		if s.Version > 0 {
 			if err := decode(s.Data, &record); err != nil {
@@ -350,6 +365,12 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 			Trust:        PackageTrust{Decision: "local_owner_accepted", ActorID: e.owner, Reason: request.Reason, ControlAdmissionID: admissionID, IntentDigest: rawDigest(intentBytes), SignedBy: signer, Decided: obs},
 			Components:   components, Files: manifest.Files, Imported: obs,
 		})
+		if request.Retire != nil {
+			retired = retiredComponents(record, request.Retire)
+			if err := retireEditions(&record, request.Retire, obs); err != nil {
+				return local.AuthorityChange{}, err
+			}
+		}
 		sort.Slice(record.Packages, func(i, j int) bool { return record.Packages[i].Ref.String() < record.Packages[j].Ref.String() })
 		data, err := canonicalState(record)
 		if err != nil {
@@ -357,6 +378,11 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 		}
 		return local.AuthorityChange{Data: data, Result: ab}, nil
 	})
+	if err == nil && result.Receipt.Rejection == nil {
+		if err := e.releaseInventoryPins(retired); err != nil {
+			return result, err
+		}
+	}
 	if err == nil && result.Receipt.Rejection == nil {
 		// The imported package is available to this engine immediately. Callers
 		// used to close and reopen the authority to see it, which re-verified

@@ -88,6 +88,29 @@ func TestAuthorityControlStateIsAtomicAndDeduplicated(t *testing.T) {
 	}
 }
 
+// A decision that depends on which Runs exist is refused if one appeared
+// after it was counted, before its reducer runs; the count matching lets it
+// through.
+func TestAuthorityCommandRejectsAChangedRunCount(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	one := int64(1)
+	stale, err := s.ApplyAuthority(ctx, AuthorityCommand{ID: "authority:withdraw", Actor: "owner", Key: "packages", Payload: json.RawMessage(`{"operation":"withdraw"}`), ExpectedRuns: &one}, func(AuthoritySnapshot) (AuthorityChange, error) {
+		t.Fatal("a decision counted against other Runs ran")
+		return AuthorityChange{}, nil
+	})
+	if err != nil || stale.Receipt.Rejection == nil || stale.Receipt.Rejection.Code != "runs_changed" {
+		t.Fatalf("a changed Run count was accepted: %+v %v", stale, err)
+	}
+	zero := int64(0)
+	current, err := s.ApplyAuthority(ctx, AuthorityCommand{ID: "authority:withdraw-now", Actor: "owner", Key: "packages", Payload: json.RawMessage(`{"operation":"withdraw"}`), ExpectedRuns: &zero}, func(AuthoritySnapshot) (AuthorityChange, error) {
+		return AuthorityChange{Data: json.RawMessage(`{"withdrawn":true}`)}, nil
+	})
+	if err != nil || current.Receipt.Rejection != nil {
+		t.Fatalf("the current Run count was refused: %+v %v", current, err)
+	}
+}
+
 func TestRunCommandRejectsChangedAdditionalAuthorityPin(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
@@ -1866,17 +1889,17 @@ func TestRecordedNamesHaveAGrammar(t *testing.T) {
 // for "two tasks" would hit it again with nothing left to read. The refusal
 // says so, and says it in words rather than in "1 attempt(s)".
 func TestCapacityRefusalDistinguishesAttemptsFromRuns(t *testing.T) {
-	message := capacityConflictMessage(1, 1)
+	message := capacityConflictMessage("run:queued", 1, 1)
 	for _, expected := range []string{"admits 1 attempt at a time", "1 is already admitted", "one attempt is not one Run", "a slot per branch", "capacity set --capacity N", "capacity show",
 		// A refusal reads as "nothing happened" and here something did: the
 		// Run exists and holds a place, so raising the limit later starts
 		// everything queued rather than only the next command.
-		"was created and keeps its place in the admission queue", "rather than only the next command"} {
+		"this Run (run:queued) was created and keeps its place in the admission queue", "rather than only the next command"} {
 		if !strings.Contains(message, expected) {
 			t.Fatalf("the capacity refusal does not say %q: %s", expected, message)
 		}
 	}
-	many := capacityConflictMessage(3, 5)
+	many := capacityConflictMessage("run:queued", 3, 5)
 	for _, expected := range []string{"admits 3 attempts at a time", "5 are already admitted"} {
 		if !strings.Contains(many, expected) {
 			t.Fatalf("the refusal reads wrong above one: %s", many)

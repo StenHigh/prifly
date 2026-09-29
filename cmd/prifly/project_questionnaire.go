@@ -96,8 +96,14 @@ type projectLaunchSummary struct {
 	// RegistryBudget is how full the authority's definition budget is after
 	// this launch's edition: a project that follows every release fills it by
 	// being diligent, and the refusal came without warning.
-	RegistryBudget *prifly.RegistryBudget       `json:"registry_budget,omitempty"`
-	SessionLimits  []prifly.SessionLimitPreview `json:"session_limits,omitempty"`
+	RegistryBudget *prifly.RegistryBudget `json:"registry_budget,omitempty"`
+	// RegistryRetirement is the older editions of this package the launch
+	// withdraws so its edition fits the registry, and the ones it keeps and
+	// why. Present only when the edition does not fit as things are. The
+	// review digest covers it: a Run or package changed since the review makes
+	// the plan, and the reviewed launch, stale.
+	RegistryRetirement *prifly.RegistryRetirement   `json:"registry_retirement,omitempty"`
+	SessionLimits      []prifly.SessionLimitPreview `json:"session_limits,omitempty"`
 	// ModelProfiles is what this launch would seal as the meaning of each
 	// declared profile name for the selected host. It belongs in the summary
 	// because the Run seals it: without it the digest this summary is checked

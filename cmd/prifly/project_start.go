@@ -17,14 +17,24 @@ import (
 )
 
 type projectStartResult struct {
-	SchemaVersion  string                `json:"schema_version"`
-	Repository     string                `json:"repository"`
-	Launch         string                `json:"launch"`
-	Package        flow.Ref              `json:"package"`
-	AuthorPackage  *projectBuildIdentity `json:"author_package,omitempty"`
-	BuildKey       string                `json:"build_key,omitempty"`
-	PackageProfile string                `json:"package_profile,omitempty"`
-	DecisionSheet  *prifly.DecisionSheet `json:"decision_sheet,omitempty"`
+	SchemaVersion string `json:"schema_version"`
+	// RunID, NextCommand and RetiredEditions lead the document: the full Run
+	// view below runs to tens of kilobytes, and a model reading a started
+	// launch could not find the new Run's id in it and fell back to run list.
+	RunID string `json:"run_id,omitempty"`
+	// NextCommand is what to run next for this Run: the command that takes a
+	// task waiting for its host, otherwise run next.
+	NextCommand string `json:"next_command,omitempty"`
+	// RetiredEditions are the older editions this launch withdrew to fit its
+	// own into the registry; package restore undoes each.
+	RetiredEditions []prifly.RetiredEdition `json:"retired_editions,omitempty"`
+	Repository      string                  `json:"repository"`
+	Launch          string                  `json:"launch"`
+	Package         flow.Ref                `json:"package"`
+	AuthorPackage   *projectBuildIdentity   `json:"author_package,omitempty"`
+	BuildKey        string                  `json:"build_key,omitempty"`
+	PackageProfile  string                  `json:"package_profile,omitempty"`
+	DecisionSheet   *prifly.DecisionSheet   `json:"decision_sheet,omitempty"`
 	// A pointer so an autonomous launch with nothing blocked still reports an
 	// empty list: an absent field would read as "nothing to say" rather than
 	// "the policy can take every declared runtime decision".
@@ -429,6 +439,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 	}
 	var summary projectLaunchSummary
+	var retirement *prifly.RegistryRetirement
 	if neutral {
 		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/3", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true, SessionLimits: requirements.sessionLimits, ModelProfiles: reviewedProfiles}
 		summary.Continuation = continuationReview
@@ -450,12 +461,26 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
+		// Whether the edition fits the registry, and what gives way if it
+		// does not, is decided before the summary: a refusal that is already
+		// certain comes alone, and a withdrawal the start would make is shown
+		// and covered by the digest.
+		preview, err := prifly.Open(c.project, true)
+		if err != nil {
+			return err
+		}
+		retirement, err = projectRegistryRetirement(ctx, preview, compiled)
+		_ = preview.Close()
+		if err != nil {
+			return err
+		}
+		summary.RegistryRetirement = retirement
 		summary.ReviewDigest, err = projectReviewDigest(summary)
 		if err != nil {
 			return err
 		}
 		if *expectedLaunch != "" && *expectedLaunch != summary.ReviewDigest {
-			return refusal("project_start_stale_launch", "sources, inputs, bindings or decisions changed; repeat project questionnaire --prepare and review the new summary")
+			return refusal("project_start_stale_launch", "sources, inputs, bindings, decisions or the registry plan (a Run or a package changed since the review) changed; repeat project questionnaire --prepare and review the new summary")
 		}
 		if prepare {
 			// Read after the digest, never into it.
@@ -479,6 +504,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				return err
 			}
 			summary.Admission = projectAdmissionState(capacity, len(held), len(waiting))
+			// The budget is the registry as this launch leaves it. When it
+			// withdraws older editions to fit, that is after the withdrawal:
+			// the count before it said dependency_limit about a launch that
+			// starts, and a reader taking it for the answer stopped there.
+			if retirement != nil {
+				budget = retirement.After
+			}
 			summary.RegistryBudget = &budget
 			return c.emit(summary)
 		}
@@ -605,7 +637,17 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 	}
 	importedPackage := false
-	if err := projectPackageAvailable(ctx, engine, compiled.Package, *command); err != nil {
+	// A launch without a reviewed summary decides what gives way here, with
+	// the engine it installs through.
+	if !neutral {
+		if retirement, err = projectRegistryRetirement(ctx, engine, compiled); err != nil {
+			if createdClaim {
+				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
+			}
+			return err
+		}
+	}
+	if err := projectPackageAvailable(ctx, engine, compiled.Package, *command, retirement); err != nil {
 		if !errors.Is(err, local.ErrNotFound) {
 			if createdClaim {
 				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
@@ -616,7 +658,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		// launch used to walk on and refuse further down with "package not
 		// installed", naming neither the real reason nor the claim it had
 		// taken. The rejection is the reason, and it stops the launch here.
-		imported, err := engine.ImportPackage(ctx, prifly.PackageImportRequest{CommandID: *command + ":import", Directory: packageDirectory, Reason: "declared project launch " + *launchID})
+		imported, err := engine.ImportPackage(ctx, prifly.PackageImportRequest{CommandID: *command + ":import", Directory: packageDirectory, Reason: "declared project launch " + *launchID, Retire: retirement})
 		if err == nil && imported.Receipt.Rejection != nil {
 			err = recordedRejection(imported.Receipt.Rejection, imported.Receipt.ID)
 		}
@@ -738,6 +780,16 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		result.SchemaVersion = "project-start/3"
 		result.AuthorPackage, result.BuildKey = compiled.AuthorPackage, compiled.BuildKey
 		result.LaunchSummary = &summary
+	}
+	result.RunID = view.Run.ID
+	result.NextCommand = "run next " + view.Run.ID
+	// The Run exists whatever this read answers; a failed read leaves the
+	// command that works for any Run.
+	if next, err := engine.Next(ctx, view.Run.ID); err == nil && next.NextCommand != "" {
+		result.NextCommand = next.NextCommand
+	}
+	if retirement != nil {
+		result.RetiredEditions = retirement.Retire
 	}
 	return c.emit(result)
 }
@@ -1233,7 +1285,24 @@ func projectRegistryBudgetAfter(ctx context.Context, engine *prifly.Engine, comp
 	return engine.RegistryBudgetAfter(len(compiled.Components))
 }
 
-func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flow.Ref, commandID string) error {
+// projectRegistryRetirement is how this launch's edition fits the registry:
+// nil when it fits, the older editions it withdraws when it does not, and
+// dependency_limit when even that is not enough. Counted the way
+// projectRegistryBudgetAfter counts: an edition already trusted adds nothing.
+func projectRegistryRetirement(ctx context.Context, engine *prifly.Engine, compiled projectCompileResult) (*prifly.RegistryRetirement, error) {
+	packages, err := engine.Packages(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range packages.Packages {
+		if entry.Ref == compiled.Package && (entry.Status == "" || entry.Status == prifly.PackageTrusted) {
+			return engine.PlanRegistryRetirement(ctx, compiled.Package, 0)
+		}
+	}
+	return engine.PlanRegistryRetirement(ctx, compiled.Package, len(compiled.Components))
+}
+
+func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flow.Ref, commandID string, retirement *prifly.RegistryRetirement) error {
 	packages, err := engine.Packages(ctx)
 	if err != nil {
 		return err
@@ -1246,7 +1315,7 @@ func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flo
 			return refusal("project_start_package_identity_conflict", "declared package ID and version already name different bytes")
 		}
 		if entry.Status == prifly.PackageRemoved {
-			restored, err := engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: commandID + ":restore-package", ID: ref.ID, Version: ref.Version, Status: prifly.PackageTrusted, Reason: "project start declares this edition again"})
+			restored, err := engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: commandID + ":restore-package", ID: ref.ID, Version: ref.Version, Status: prifly.PackageTrusted, Reason: "project start declares this edition again", Retire: retirement})
 			if err != nil {
 				return err
 			}
@@ -1257,6 +1326,18 @@ func projectPackageAvailable(ctx context.Context, engine *prifly.Engine, ref flo
 		}
 		if entry.Status != "" && entry.Status != prifly.PackageTrusted {
 			return refusal("project_start_package_unavailable", "declared package is "+entry.Status+", not trusted; package restore --id "+ref.ID+" --version "+ref.Version+" --reason TEXT re-trusts it")
+		}
+		// Trusted already, and the registry still overflows: the plan is
+		// applied by recording this edition as trusted again, in the same
+		// transaction that withdraws the older ones.
+		if retirement != nil {
+			kept, err := engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: commandID + ":retire-editions", ID: ref.ID, Version: ref.Version, Status: prifly.PackageTrusted, Reason: "project start keeps this edition and withdraws older ones to fit the registry", Retire: retirement})
+			if err != nil {
+				return err
+			}
+			if kept.Receipt.Rejection != nil {
+				return recordedRejection(kept.Receipt.Rejection, kept.Receipt.ID)
+			}
 		}
 		return nil
 	}

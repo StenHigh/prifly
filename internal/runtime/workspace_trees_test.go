@@ -760,7 +760,7 @@ func TestNextNamesTheWorkAReadyStageHolds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.SchemaVersion != CoreHandoffNextVersion || next.Action != "stage" || next.StageWork != StageWorkAssistedSession {
+	if next.SchemaVersion != CoreAwaitingHostNextVersion || next.Action != "stage" || next.StageWork != StageWorkAssistedSession {
 		t.Fatalf("a ready assisted stage is not named as one: %+v", next)
 	}
 	// Reading names the work; it does not do it.
@@ -773,8 +773,16 @@ func TestNextNamesTheWorkAReadyStageHolds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if handed.Action != "idle" || handed.StageWork != "" || !slices.Contains(handed.SafeNextActions, "session.task") {
+	// From next 42 the handed-out task is the action itself, named with the
+	// command that takes it: idle read as "nothing to do" while it waited.
+	if handed.Action != "awaiting_host" || handed.WorkID != task.AttemptID || handed.NextCommand != "session task --run "+runID+" --all" || handed.StageWork != "" || !slices.Contains(handed.SafeNextActions, "session.task") {
 		t.Fatalf("a handed-out step reports a stage work or hides its handoff: %+v", handed)
+	}
+	if handed.Effects == nil || handed.Effects.Class == "" {
+		t.Fatalf("the waiting step's declared effect is not named: %+v", handed.Effects)
+	}
+	if err := validatePublic(t, "CoreNextViewV42", handed); err != nil {
+		t.Fatalf("next 42 rejects its own awaiting_host answer: %v", err)
 	}
 	writeWorkspaceTreeFile(t, task.RepositoryWorkspace, ".ai-factory/PLAN.md", "# Plan\n")
 	if _, err := e.SubmitSession(context.Background(), treeSubmission(t, task, "plan", []WorkspaceTreeLocation{{OutputPort: "plan", Path: ".ai-factory/PLAN.md"}})); err != nil {

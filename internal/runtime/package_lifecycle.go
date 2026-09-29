@@ -2,11 +2,9 @@ package runtime
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -234,6 +232,9 @@ type PackageLifecycleRequest struct {
 	Version   string
 	Status    string
 	Reason    string
+	// Retire withdraws older editions in the same transaction that restores
+	// this one to trusted, when the registry cannot hold both.
+	Retire *RegistryRetirement
 }
 
 // SetPackageStatus records removal, quarantine or revocation. Removal refuses
@@ -286,11 +287,22 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 			}
 		}
 	}
-	command, err := canonical(map[string]any{"operation": "package.status", "command_id": c.CommandID, "package_id": c.ID, "package_version": c.Version, "status": c.Status, "reason": c.Reason})
+	commandFields := map[string]any{"operation": "package.status", "command_id": c.CommandID, "package_id": c.ID, "package_version": c.Version, "status": c.Status, "reason": c.Reason}
+	authority := local.AuthorityCommand{ID: c.CommandID, Actor: e.owner, Key: AuthorityPackagesKey}
+	if c.Retire != nil {
+		if c.Status != PackageTrusted || c.Retire.Edition.ID != c.ID || c.Retire.Edition.Version != c.Version {
+			return local.AuthorityApplyResult{}, local.Reject("registry_plan_stale", "a registry plan accompanies restoring the edition it was made for; prepare the launch again")
+		}
+		commandFields["retire"] = c.Retire.Retire
+		authority.ExpectedVersion, authority.ExpectedRuns = &c.Retire.PackagesVersion, &c.Retire.Runs
+	}
+	command, err := canonical(commandFields)
 	if err != nil {
 		return local.AuthorityApplyResult{}, err
 	}
-	result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: c.CommandID, Actor: e.owner, Key: AuthorityPackagesKey, Payload: command}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
+	authority.Payload = command
+	var retired []flow.Ref
+	result, err := e.Store.ApplyAuthority(ctx, authority, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		var record PackageRecord
 		if err := decode(s.Data, &record); err != nil {
 			return local.AuthorityChange{}, err
@@ -317,6 +329,12 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 		if !found {
 			return local.AuthorityChange{}, local.Reject("not_found", "no trusted package with this identity")
 		}
+		if c.Retire != nil {
+			retired = retiredComponents(record, c.Retire)
+			if err := retireEditions(&record, c.Retire, e.clock.now()); err != nil {
+				return local.AuthorityChange{}, err
+			}
+		}
 		data, err := canonicalState(record)
 		if err != nil {
 			return local.AuthorityChange{}, err
@@ -333,12 +351,10 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 	// affected — a Run carries its own sealed definitions — and removal already
 	// refuses while any Run still holds the package.
 	if c.Status == PackageRemoved {
-		for _, ref := range removedComponents {
-			name := fmt.Sprintf("%x.json", sha256.Sum256([]byte(ref.ID+"@"+ref.Version)))
-			if err := removeLocal(e.Root, filepath.Join(".prifly/inventory", name)); err != nil {
-				return result, err
-			}
-		}
+		retired = append(retired, removedComponents...)
+	}
+	if err := e.releaseInventoryPins(retired); err != nil {
+		return result, err
 	}
 	if c.Status == PackageTrusted {
 		return result, e.loadPackages()

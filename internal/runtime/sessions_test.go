@@ -297,11 +297,11 @@ func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {
 		t.Fatalf("reported cost used old state/read contracts: %s %s", view.Run.SchemaVersion, view.SchemaVersion)
 	}
 	next, err := e.Next(context.Background(), runID)
-	if err != nil || next.SchemaVersion != CoreHandoffNextVersion {
+	if err != nil || next.SchemaVersion != CoreAwaitingHostNextVersion {
 		t.Fatalf("reported cost used old next contract: %+v %v", next, err)
 	}
 	for name, value := range map[string]any{
-		"CoreRunStateV31": view.Run, "CoreRunViewV31": view, "CoreNextViewV41": next,
+		"CoreRunStateV31": view.Run, "CoreRunViewV31": view, "CoreNextViewV42": next,
 		"SessionTaskV7": task, "SessionSubmissionV7": submission, "ReportedCost": submission.ReportedCosts[0],
 	} {
 		if err := validatePublic(t, name, value); err != nil {
