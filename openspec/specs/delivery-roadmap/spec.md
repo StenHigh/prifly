@@ -153,7 +153,6 @@ runtime contract.
 | Запуск и решения | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md) | 23/24; открыта 3.5 | Доступ к Codex и Claude Code | Завершить generic host guidance, связать UI evidence и сохранить отдельный commit среза |
 | Продолжение и recovery | [`continue-existing-implementation`](../../changes/continue-existing-implementation/tasks.md) | 10/12; открыты 1.4 и 3.3 | Существующие Project CLI, claims и AI Factory package | Добавить CLI integration cases и провести новый Run до terminal quality outcome |
 | Продолжение и recovery | [`retry-failed-stage-with-new-package`](../../changes/retry-failed-stage-with-new-package/tasks.md) | 5/13 | Sealed source Run, новый package edition и доказательства пригодности результатов | Реализовать recovery command/projection, проверить reuse и сквозной Run |
-| Packages | [`auto-retire-unused-package-editions`](../../changes/auto-retire-unused-package-editions/tasks.md) | 0/8 | Package budget, pins и сериализованное admission | Начать с fixture и проверок безопасного выбора editions |
 | Монитор | [`make-monitor-list-human-readable`](../../changes/make-monitor-list-human-readable/tasks.md) | 3/4; открыта 2.1 | Существующий read-only монитор | Выполнить приёмочные проверки |
 | Монитор | [`clarify-run-list-execution-counts`](../../changes/clarify-run-list-execution-counts/tasks.md) | 0/4 | Существующий RunSummary и read-only список | Переименовать и пояснить счётчики StepInstance/Attempt |
 | Монитор | [`explain-terminal-partial-runs`](../../changes/explain-terminal-partial-runs/tasks.md) | 0/4 | Terminal Run outcome и доказанный маршрут | Разделить terminal/live empty-state и объяснить `partial` |
@@ -170,6 +169,9 @@ runtime contract.
 [`group-related-runs-in-monitor`](../../changes/archive/2026-09-23-group-related-runs-in-monitor/tasks.md),
 [`harden-aif-classic-gate-routing`](../../changes/archive/2026-09-23-harden-aif-classic-gate-routing/tasks.md)
 и [`refresh-delivery-backlog-2026-09-23`](../../changes/archive/2026-09-23-refresh-delivery-backlog-2026-09-23/tasks.md).
+Выпуск 0.13.68 (2026-09-29) закрыл
+[`auto-retire-unused-package-editions`](../../changes/archive/2026-09-29-auto-retire-unused-package-editions/tasks.md)
+вместе с [`make-run-reading-plain-for-any-model`](../../changes/archive/2026-09-29-make-run-reading-plain-for-any-model/tasks.md).
 Host UI observations в архивированных `add-native-host-question-ux` и
 `add-run-decision-catalog` отмечены по подтверждению владельца от 2026-09-23,
 а не по независимому release evidence. Пункт 3.5

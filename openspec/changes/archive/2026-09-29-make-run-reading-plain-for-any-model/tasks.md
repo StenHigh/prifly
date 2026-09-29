@@ -65,10 +65,10 @@
 
 ## 8. Ворота и выпуск
 
-- [ ] 8.1 `make ci-check`, `make e2e`, `openspec validate --strict`,
+- [x] 8.1 `make ci-check`, `make e2e`, `openspec validate --strict`,
       `git diff --check`; race — на GitHub. Счётчики записать сюда в день
       прогона.
-- [ ] 8.2 Сессию пакета предупредить до тега: `awaiting_host`, новые поля
+- [x] 8.2 Сессию пакета предупредить до тега: `awaiting_host`, новые поля
       эффекта, `run list`; после выпуска — их ворота на опубликованном бинаре.
 
 ## Холодные заходы (2026-09-29)
@@ -113,3 +113,9 @@ cmd/prifly 73 с, local 7 с, runtime 282 с; fmt-check 342 файла; refusal-
 пакетов; schemas-check совпадает (новый бандл `next-awaiting-host`, прежние
 байт в байт). `make e2e` — exit 0. `openspec validate --strict` и
 `git diff --check` чисты. Race — на GitHub после push (8.1 закрывается им).
+
+GitHub 2026-09-29 на `3ab112c`: `verify` 36614030534 и `race` 36614063302 —
+зелёные с первого раза. Релиз `v0.13.68` — run 36615971241, окружение
+`release` одобрено, 6 ассетов; `releases/latest` отдаёт 0.13.68. Сессии пакета
+сообщено до тега (`awaiting_host`, `step_effects`, поля `project start`,
+вывод изданий); пилоту — нет, по решению владельца.
