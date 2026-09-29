@@ -1391,6 +1391,11 @@ func TestCLIHelpDoesNotDenyImplementedCoreOperators(t *testing.T) {
 	if !strings.Contains(help, "project continue --repository DIR --launch ID --source-run RUN_ID --prepare") {
 		t.Fatalf("help does not describe continuation: %s", help)
 	}
+	// The retry class of an external write decides whether an interrupted
+	// program runs again unattended; an author reading help has to meet that.
+	if !strings.Contains(help, "idempotent (running it\nagain ensures the state by itself") || !strings.Contains(help, "external_write_unreconciled") {
+		t.Fatalf("help does not say what the retry class of an external write decides: %s", help)
+	}
 }
 
 func TestCLIRefCanonicalYAMLAndJSON(t *testing.T) {

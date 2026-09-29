@@ -1004,8 +1004,8 @@ type RunView struct {
 	DriverLive    bool        `json:"driver_live"`
 	Run           Run         `json:"run"`
 	Timing        TimingTree  `json:"timing"`
-	// Failure names what stopped a failed or cancelled Run, derived from its
-	// diagnostics at read time; a completed or unfinished Run carries none.
+	// Failure names what stopped a failed, cancelled or uncertain Run, derived
+	// from its diagnostics at read time; a completed or running Run carries none.
 	Failure *RunFailure `json:"failure,omitempty"`
 	// Checkpoint is the Run's last accepted checkpoint, derived at read time
 	// from its accepted results and the plans naming which output is one.
@@ -1022,9 +1022,11 @@ type RunFailure struct {
 }
 
 // runFailure picks the diagnostic that stopped a Run: the last error the
-// engine recorded, which is the settlement or cancellation that ended it.
+// engine recorded, which is the settlement or cancellation that ended it. An
+// uncertain Run is stopped too, waiting for the owner, and the reader needs
+// its reason as much: run next offers run.resolve without saying why.
 func runFailure(r Run) *RunFailure {
-	if r.Status != "failed" && r.Status != "cancelled" {
+	if r.Status != "failed" && r.Status != "cancelled" && r.Status != "uncertain" {
 		return nil
 	}
 	for index := len(r.Diagnostics) - 1; index >= 0; index-- {

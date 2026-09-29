@@ -2489,7 +2489,7 @@ Global: --project DIR  --json  --format text|json|csv
   run reopen RUN_ID --expected-version N --reason TEXT
                                    Run again the stage a technically failed Run broke on; completed stages keep their sealed outputs and are not re-run. Refused for a Run that reached an outcome: an accepted fail is an answer, not a breakage
   run resolve RUN_ID (--attempt ID | --check ID) --outcome not_applied|applied --reason TEXT [--expected-version N]
-                                   Close one obligation whose outcome the authority never observed, by owner attestation; it frees the slot and never re-runs anything
+                                   Close one obligation whose outcome the authority never observed, by owner attestation; it frees the slot and never re-runs anything. A program declaring external_write lands here when it ends without an accepted result unless its retry_class is idempotent (failure code external_write_unreconciled); after it, project continue runs the step again
   run waive RUN_ID --step STEP --check-id ID --check-version X.Y.Z --check-digest DIGEST --reason TEXT
   run waivers RUN_ID                A waiver is not a pass: the outcome stays completed_with_waivers
   control status                    Enrolled session principal, object access and control stops
@@ -2561,6 +2561,12 @@ Release and resume are separate; neither silently starts a background driver.
 Use --command-id to retry the same command. Exit 0 confirms a command/read,
 not a successful workflow outcome. Read the typed status/outcome/verdict.
 Local executables are trusted and run with your OS rights; this is not a sandbox.
+A step's effects.class external_write and its external_write boundary are its
+author's statement in the Run's record, not a limit on what a program does.
+Its retry_class decides what an interrupted program does: idempotent (running it
+again ensures the state by itself, which nothing checks) is run again by project
+continue; deduplicated, reconcile_required and never leave the Run uncertain
+until run resolve. pure is refused: it means a step without effects.
 Opt in with init --profile core-workflow/1 for on_error, JSON projections,
 declared input defaults, choices, calls and bounded repeat.
 Full context and automatic checks require core-configuration/2 and

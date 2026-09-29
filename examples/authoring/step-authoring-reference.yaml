@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=../../schemas/authoring/step-v2.schema.json
 # Complete reference for one prifly-step/2 assisted source -- session steps only:
 # a program step (executor operation: process) is written as authoring:
-# prifly-step/1, with the same ports, effects and result_schema_ref and no
-# session_limits. Copy only the fields that
+# prifly-step/1, with the same ports, effects, external_write and
+# result_schema_ref and no session_limits. Copy only the fields that
 # describe this step; the compiler inserts the documented safe defaults before
 # it seals StepDefinition v6 or v7. This file is intentionally verbose, not a ready
 # executable package: replace the illustrative exact refs with real definitions.
@@ -94,30 +94,78 @@ required_capabilities: [network] # Optional extra capabilities; defaults to [].
 # difference is refused by name. Where it cannot look, the class stays a
 # declaration -- the program runs with the user's rights, so a network write it
 # makes is neither refused nor receipted, and a green report is not evidence
-# that none happened. An external change belongs in ActionIntent, admission and
-# delivery; a build that does not support delivery says so in `prifly
-# capabilities`, and publishing from a worker declared `class: none` is a way
-# around the contract rather than through it.
+# that none happened. A step that changes something outside its tree declares
+# class external_write with the block below instead of class none: a step
+# declared none that still writes outside leaves a Run record claiming nothing
+# changed, which is the first thing wrong when someone reads it after a failure.
 effects:
   class: workspace_write # Required: none, workspace_write, or external_write.
   retry_class: never # Required retry contract; it is never inferred.
-# Required when, and only when, class is external_write: an assisted step saying
-# it changes a system this authority cannot observe, and bounding what it may
-# change. The values are opaque here -- they travel to the host as the
-# permission it acts under and nothing reads meaning from them. operations names
-# the permitted CHANGES: reading the same system is not a change, needs no
-# permission from here, and its absence forbids nothing. Such a step declares
-# deduplicated, reconcile_required or never, because a repeated attempt writes
-# twice, and it gets no workspace right from the class: the claimed tree is still
-# compared at submission. Nothing here is evidence the change happened; what the
-# host did is what the host reports, and a mandatory output on pass is how the
-# verified result arrives.
+# retry_class is what the authority does when an attempt is interrupted. For an
+# external write it is the decision that matters, so choose it deliberately:
+#
+#   retry_class         after a program ended without an accepted result
+#   ------------------  -------------------------------------------------------
+#   idempotent          attempt fails as usual; project continue (or recover)
+#                       runs the step again with nobody asked. technical_retries
+#                       are allowed. Choose it when running again brings the
+#                       external state to what it should be by itself -- an
+#                       "ensure" (up an environment that may already be up,
+#                       set a value) rather than a "create" (append a record,
+#                       send a message). Nothing checks this: it is your word.
+#   deduplicated        Run turns uncertain (external_write_unreconciled) and
+#   reconcile_required  waits: run next offers run.resolve, project continue is
+#   never               refused. The owner looks at the external system and
+#                       attests `run resolve RUN --attempt ID --outcome
+#                       applied|not_applied --reason TEXT`; the Run then fails
+#                       and project continue runs the step again. For a program
+#                       the three behave alike -- the name is your statement of
+#                       why a repeat needs a person, recorded with the Run.
+#   pure                refused with external_write: it means no effects.
+#
+# A result the authority accepted is never held: the program said what it did,
+# and its verdict routes. A program that never started is not held either. An
+# assisted step differs: a lost session is uncertain for ANY class but none,
+# idempotent included, because nothing proves the session stopped working.
+#
+# Required when, and only when, class is external_write: the step says it
+# changes a system this authority cannot observe, and bounds what it may change.
+# The values are opaque here: nothing reads meaning from them, reaches the
+# named system or checks what was changed. For an assisted step (prifly-step/2)
+# they travel to the host as the permission it acts under; for a program
+# (prifly-step/1, executor operation process) they are sealed in the Run's plan
+# as your statement -- the program runs with the user's rights and the boundary
+# confines nothing it does. operations names CHANGES only: reading the same
+# system is not a change, needs no permission from here, and its absence forbids
+# nothing. The class gives no workspace right: the claimed tree is still
+# compared as for class none. Nothing here is evidence the change happened; a
+# mandatory output on pass is how a verified result arrives.
 # external_write:
 #   system: example-system
 #   operations: [record.create]
 #   target: example/target
-# Declaring this block in prifly-step/2 selects StepDefinition v11; an explicit
-# schema_version below 11 is refused. prifly-step/1 cannot declare it.
+# Declaring this block selects the contract that carries it: StepDefinition v11
+# under prifly-step/2 (an explicit schema_version below 11 is refused), v14
+# under prifly-step/1 (only for executor operation process; pin 14 or leave
+# schema_version out). An assisted step under prifly-step/1 is refused and sent
+# to prifly-step/2. A program with a tree read without capture cannot declare
+# it: that binding lives only in the assisted v8.
+# The same declaration on a program, as a project writes it:
+#   authoring: prifly-step/1
+#   id: example:step/integration-tests
+#   version: 1.0.0
+#   kind: worker
+#   executor: {adapter_ref: local_process, operation: process}
+#   effects: {class: external_write, retry_class: idempotent}
+#   external_write:
+#     system: example-container-runtime
+#     operations: [environment.ensure, environment.remove]
+#     target: example-environment
+#   result_schema_ref: result_schema
+# idempotent is right here only because the program ensures the environment
+# (brings it up if absent, reuses it if present) and removes it at the end; a
+# program that created a fresh one on every run would declare
+# reconcile_required and accept that an interruption waits for the owner.
 # Optional, independent of external_write: ask for the Run's claimed Git tree
 # to read without workspace-write permission. The launch must select worktree
 # or checkout; no claim is created for a task that omits this field. Declaring

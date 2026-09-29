@@ -173,11 +173,11 @@ func lowerWorkflowAuthoring(source map[string]any) (map[string]any, error) {
 func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	timed := source["authoring"] == StepSessionAuthoringVersion
 	marker := StepAuthoringVersion
-	allowed := []string{"authoring", "schema_version", "id", "version", "title", "refs", "kind", "inputs", "outputs", "executor", "instructions_ref", "context_refs", "required_capabilities", "effects", "result_check_refs", "result_schema_ref", "hooks", "telemetry", "workspace_trees"}
+	allowed := []string{"authoring", "schema_version", "id", "version", "title", "refs", "kind", "inputs", "outputs", "executor", "instructions_ref", "context_refs", "required_capabilities", "effects", "result_check_refs", "result_schema_ref", "hooks", "telemetry", "workspace_trees", "external_write"}
 	if timed {
 		marker = StepSessionAuthoringVersion
 		allowed = append(allowed, sessionAuthoringFields...)
-		allowed = append(allowed, "model_profile", "external_write", "repository_workspace")
+		allowed = append(allowed, "model_profile", "repository_workspace")
 	}
 	for key := range source {
 		if slices.Contains(allowed, key) {
@@ -200,16 +200,28 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 	if timed {
 		if executor, ok := source["executor"].(map[string]any); ok {
 			if operation, ok := executor["operation"].(string); ok && operation != "session" {
-				return nil, problem("schema_invalid", "/executor/operation", StepSessionAuthoringVersion+" describes an assisted session step; a program step (operation: "+operation+") is written as authoring: "+StepAuthoringVersion)
+				return nil, problem("schema_invalid", "/executor/operation", StepSessionAuthoringVersion+" describes an assisted session step; a program step (operation: "+operation+") is written as authoring: "+StepAuthoringVersion+", which also carries a program's external_write")
 			}
+		}
+	}
+	// A program bounds its external write in v14, its own branch; an assisted
+	// step does it in v11, which only prifly-step/2 lowers to.
+	_, declaresExternalWrite := source["external_write"]
+	if declaresExternalWrite && !timed {
+		executor, _ := source["executor"].(map[string]any)
+		if operation, _ := executor["operation"].(string); operation != "process" {
+			return nil, problem("schema_invalid", "/external_write", "under "+StepAuthoringVersion+" only a program step (executor operation: process) declares external_write; an assisted step declares it as authoring: "+StepSessionAuthoringVersion)
+		}
+		if version, exists := source["schema_version"]; exists && version != "14" {
+			return nil, problem("schema_invalid", "/schema_version", "a program step declaring external_write lowers to StepDefinition v14; pin 14 or leave schema_version out")
 		}
 	}
 	if version, exists := source["schema_version"]; exists {
 		if timed && version != "6" && version != "7" && version != "8" && version != "9" && version != "10" && version != "11" && version != "13" {
 			return nil, problem("schema_invalid", "/schema_version", StepSessionAuthoringVersion+" lowers only to StepDefinition v6, v7, v8, v9, v10, v11 or v13")
 		}
-		if !timed && version != "2" && version != "5" && version != "8" && version != "12" {
-			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2, v5, v8 or v12")
+		if !timed && version != "2" && version != "5" && version != "8" && version != "12" && version != "14" {
+			return nil, problem("schema_invalid", "/schema_version", StepAuthoringVersion+" lowers only to StepDefinition v2, v5, v8, v12 or v14")
 		}
 	}
 	refs, err := authorRefs(source["refs"])
@@ -312,8 +324,16 @@ func lowerStepAuthoring(source map[string]any) (map[string]any, error) {
 			schemaVersion = "10"
 		}
 	}
-	if _, exists := source["external_write"]; exists {
+	if declaresExternalWrite {
+		// v14 is v12 with the boundary, so a program's other declarations stay
+		// carried; a tree read without capture lives only in the assisted v8.
+		if !timed && schemaVersion == "8" {
+			return nil, problem("schema_invalid", "/external_write", "a program step declaring external_write lowers to StepDefinition v14, which carries workspace trees with an output port only; a tree read without capture needs v8, which is the assisted line")
+		}
 		schemaVersion = "11"
+		if !timed {
+			schemaVersion = "14"
+		}
 	}
 	if _, exists := source["repository_workspace"]; exists {
 		schemaVersion = "13"

@@ -133,14 +133,15 @@ func TestAnAssistedStepPublishesUnderADeclaredBoundary(t *testing.T) {
 	}
 }
 
-// Three refusals, each for a reason an author can act on.
+// Three refusals, each for a reason an author can act on. idempotent is not
+// one of them: it is the author's statement that repeating is safe by itself.
 func TestADeclaredExternalWriteIsRefusedWithoutItsBounds(t *testing.T) {
 	for _, test := range []struct {
 		name, contains string
 		shape          func(*flow.StepDefinition)
 	}{
 		{"no boundary at all", "system", func(s *flow.StepDefinition) { s.ExternalWrite = nil }},
-		{"a retry that would write twice", "twice", func(s *flow.StepDefinition) { s.Effects.RetryClass = "idempotent" }},
+		{"a retry class that says there is no effect", "pure", func(s *flow.StepDefinition) { s.Effects.RetryClass = "pure" }},
 		{"a boundary without the class", "external_write", func(s *flow.StepDefinition) {
 			s.Effects.Class, s.Effects.RetryClass = "none", "never"
 		}},
@@ -178,7 +179,7 @@ func TestAnEarlierPolicyEditionDoesNotAdmitAnExternalWrite(t *testing.T) {
 	if err == nil {
 		t.Fatal("an edition that admits none and workspace_write admitted an external write")
 	}
-	if !strings.Contains(err.Error(), "admits") {
+	if !strings.Contains(err.Error(), "admits") || !strings.Contains(err.Error(), "core:policy/local@4.0.0") {
 		t.Fatalf("the refusal does not name what the pinned edition allows: %v", err)
 	}
 }

@@ -131,7 +131,7 @@ func ProtocolSchemaNames() ([]string, error) {
 		"PublicationSourceDefinition", "PublicationSourceDefinitionV2", "PublicationSourceDefinitionV3",
 		"PublicationSourceDefinitionV4", "PublicationSourceDefinitionV5", "PublicationSourceDefinitionV6",
 		"PublicationSourceDefinitionV7", "PublicationSourceDefinitionV8",
-		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11", "StepDefinitionV12", "StepDefinitionV13",
+		"StepDefinitionV2", "StepDefinitionV3", "StepDefinitionV4", "StepDefinitionV5", "StepDefinitionV6", "StepDefinitionV7", "StepDefinitionV8", "StepDefinitionV9", "StepDefinitionV10", "StepDefinitionV11", "StepDefinitionV12", "StepDefinitionV13", "StepDefinitionV14",
 		"WorkflowRevisionV2", "WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7", "WorkflowRevisionV8",
 	}
 	for name := range defs {
@@ -238,6 +238,8 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		extension = stepDefinitionV2Schema
 	case "StepDefinitionV13":
 		extension = stepDefinitionV2Schema
+	case "StepDefinitionV14":
+		extension = stepDefinitionV2Schema
 	case "WorkflowRevisionV2":
 		extension = workflowRevisionV2Schema
 	case "WorkflowRevisionV3":
@@ -276,11 +278,16 @@ func buildProtocolSchema(name string) ([]byte, error) {
 		// Contract 12 is a branch, not the next link: every contract from 6 on
 		// pins the assisted executor, so the program line ends at 5, and 12 is
 		// 5 with the one widening a program step lacked.
-		if name == "StepDefinitionV12" {
+		if name == "StepDefinitionV12" || name == "StepDefinitionV14" {
 			for i := 0; i <= slices.Index(stepContracts, "StepDefinitionV5"); i++ {
 				stepMutators[i]()
 			}
 			stepDefinitionV12(root, defs)
+		}
+		// Contract 14 continues the program branch: 12 with the external write
+		// boundary 11 gave the assisted line.
+		if name == "StepDefinitionV14" {
+			stepDefinitionV14(root)
 		}
 		revisions := []string{"WorkflowRevisionV3", "WorkflowRevisionV4", "WorkflowRevisionV5", "WorkflowRevisionV6", "WorkflowRevisionV7", "WorkflowRevisionV8"}
 		revisionMutators := []func(){
@@ -812,7 +819,7 @@ func promiseOutputOnBlocked(root map[string]any, baseline map[string]any) {
 // StepContracts are the versioned StepDefinition contracts, oldest first. The
 // list the mutators run from is the same one callers ask, so a contract cannot
 // be added to one and missing from the other.
-var StepContracts = []string{"2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"}
+var StepContracts = []string{"2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"}
 
 // StepContractFor names the protocol contract a step of this schema_version is
 // validated against, or "" for a version this build does not know. Every caller
@@ -835,7 +842,13 @@ func stepDefinitionV11(root map[string]any) {
 	root["title"] = "Pri-Fly StepDefinition v11: an assisted step declares a bounded external write"
 	properties := root["properties"].(map[string]any)
 	properties["schema_version"].(map[string]any)["const"] = "11"
-	properties["external_write"] = map[string]any{
+	properties["external_write"] = externalWriteBoundarySchema()
+}
+
+// externalWriteBoundarySchema is the one boundary both lines declare: the
+// assisted step in 11 and the program in 14 bound the same kind of change.
+func externalWriteBoundarySchema() map[string]any {
+	return map[string]any{
 		"type": "object", "additionalProperties": false,
 		"required": []any{"system", "operations", "target"},
 		"properties": map[string]any{
@@ -849,6 +862,22 @@ func stepDefinitionV11(root map[string]any) {
 			"target": map[string]any{"type": "string", "minLength": 1, "maxLength": 1024},
 		},
 	}
+}
+
+// stepDefinitionV14 lets a program step declare that it changes an external
+// system, bounded as an assisted step bounds it in 11. A program has no
+// handoff: the boundary is sealed in the Run's plan as the author's statement,
+// and nothing here confines what the program, running with the user's rights,
+// actually does.
+func stepDefinitionV14(root map[string]any) {
+	root["$id"] = "urn:prifly:step-definition:14"
+	root["title"] = "Pri-Fly StepDefinition v14: a program step declares a bounded external write"
+	properties := root["properties"].(map[string]any)
+	properties["schema_version"].(map[string]any)["const"] = "14"
+	properties["external_write"] = externalWriteBoundarySchema()
+	// The branch is the program's: an assisted step bounds its write in 11,
+	// where the handoff carries the boundary to its host.
+	properties["executor"].(map[string]any)["properties"].(map[string]any)["operation"] = map[string]any{"const": "process"}
 }
 
 // v13 lets an assisted step explicitly read the Run's claimed Git tree,

@@ -77,7 +77,13 @@
         }
       }
     }},
-    "else": {"not": {"anyOf": [{"required": ["session_limits"]}, {"required": ["model_profile"]}, {"required": ["external_write"]}, {"required": ["repository_workspace"]}]}}
+    "else": {"not": {"anyOf": [{"required": ["session_limits"]}, {"required": ["model_profile"]}, {"required": ["repository_workspace"]}]}}
+  }, {
+    "if": {"properties": {"authoring": {"const": "prifly-step/1"}}, "required": ["external_write"]},
+    "then": {"required": ["executor"], "properties": {
+      "schema_version": {"const": "14"},
+      "executor": {"required": ["operation"], "properties": {"operation": {"const": "process"}}}
+    }}
   }],
   "$defs": {
     "reference": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "object"}]},

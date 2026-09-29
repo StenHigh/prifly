@@ -182,6 +182,12 @@ func Capabilities() CapabilityManifest {
 	// runs again in the source's tree. The recovery plan does the carrying.
 	profile.WorkflowVersions = append(profile.WorkflowVersions, flow.WorkflowRevisionResumeVersion)
 	profile.Capabilities = append(profile.Capabilities, "workflow_resume")
+	// Step contract 14 lets a program declare a bounded external write, as 11
+	// lets an assisted step. Its retry class then decides whether a program
+	// that ended without an accepted result runs again unattended: only
+	// idempotent does; the others leave the Run uncertain for the owner.
+	profile.StepVersions = append(profile.StepVersions, "14")
+	profile.Capabilities = append(profile.Capabilities, "program_external_write")
 	return manifest
 }
 
@@ -365,8 +371,11 @@ func planRef(p *flow.Plan) flow.Ref {
 
 func requiresInvocationState(p *flow.Plan) bool {
 	// A wait stops its own invocation rather than the Run, so it needs the
-	// scoped frontier even when it is the only operator in the workflow.
-	return requiresContextState(p) || requiresArtifactPublicationState(p) || len(p.Calls) != 0 || len(p.Repeats) != 0 || len(p.Branches) != 0 || len(p.Maps) != 0 || requiresWaitState(p) || slices.Contains(p.Workflow.AllowedOutcomes, "partial")
+	// scoped frontier even when it is the only operator in the workflow. An
+	// external write seals the state that records its boundary, which is a
+	// scoped one: a flat program Run keyed its executor by the flat key and
+	// was then read under the scoped one, and its program never started.
+	return requiresContextState(p) || requiresArtifactPublicationState(p) || requiresExternalWriteState(p) || len(p.Calls) != 0 || len(p.Repeats) != 0 || len(p.Branches) != 0 || len(p.Maps) != 0 || requiresWaitState(p) || slices.Contains(p.Workflow.AllowedOutcomes, "partial")
 }
 
 // CompileCore is the explicit context/check semantics opt-in. The preceding

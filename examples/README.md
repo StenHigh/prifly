@@ -85,11 +85,12 @@
 | `failed_stage_recovery` | `prifly run reopen` | — |
 | `run_finish_named` | поведение чтения: `finish` в `run explain` | — |
 | `blocked_verdict` | `required_for: [..., blocked]` — контракт 10 у ассистируемого шага, **контракт 12** у программного; маршрут при **ревизии 6**, `result_schema_ref` → `core:schema/step-result@2.0.0` | step, workflow, blocked-guide |
-| `declared_external_write` | `effects.class: external_write` и блок `external_write` — контракт 11, только ассистируемый шаг | step |
+| `declared_external_write` | `effects.class: external_write` и блок `external_write` у ассистируемого шага (`prifly-step/2`) — контракт 11; программа объявляет то же по `program_external_write` | step |
 | `repository_workspace_read` | `repository_workspace: read_only` — контракт 13, отдельный от права записи и `external_write` | step |
 | `next_handoff` | поведение чтения: `arrived_from`, `checkpoint`, `repeats`, `continuations` в `run next` | blocked-guide |
 | `workflow_continuation` | `checkpoint` в корне и у шаговой стадии, `continuation` в корне — **ревизия 7**; `prifly project continue` | workflow, continuation-guide |
 | `workflow_resume` | `resumable` в корне — **ревизия 8**; `prifly project continue` тем же launch возобновляет Run с точки остановки | workflow, continuation-guide |
+| `program_external_write` | `effects.class: external_write` и блок `external_write` у программы (`prifly-step/1`, `operation: process`) — **контракт 14**. `retry_class` решает судьбу прерванной программы: `idempotent` — `project continue` запускает шаг снова; `deduplicated`, `reconcile_required`, `never` — Run `uncertain` (`external_write_unreconciled`) до `run resolve`; `pure` отказывается | step, continuation-guide, troubleshooting |
 
 Полный список того, что сборка о себе говорит, включая неподдерживаемое:
 

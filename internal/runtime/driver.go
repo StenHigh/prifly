@@ -1765,6 +1765,26 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 			pending = nil
 			failure = "result_candidate_changed"
 		}
+		// A program that started and ended without an accepted result left the
+		// external system in a state nobody observed. Its group being empty
+		// proves it stopped, not what it had changed, so unless its author said
+		// running it again is safe by itself, the Run waits for the owner.
+		if accepted == nil && pending == nil && planErr == nil && (current.Started != nil || outcome != nil && outcome.Started) {
+			if step := p.Steps[activation.StageID]; externalWriteNeedsAttestation(step) {
+				current.Status = "uncertain"
+				r.Steps[current.StepID].Status = "uncertain"
+				r.Activations[current.ActivationID].Status = "uncertain"
+				if err := r.setInvocationStatus(activation.InvocationID, "uncertain", nil); err != nil {
+					return local.Change{}, err
+				}
+				r.HasUnresolvedEffects = true
+				message := "Stage " + activation.StageID + " changes an external system and declares retry_class " + step.Effects.RetryClass + ": it ended without an accepted result, and running it again waits for the owner to attest with run resolve whether its change was applied or not_applied"
+				if err := diagnosticDetail(r, commandID, attemptID, "external_write_unreconciled", "settlement", message, "the program ended "+failure+unreconciledDetail(detail), obs); err != nil {
+					return local.Change{}, err
+				}
+				return local.Change{}, nil
+			}
+		}
 		current.Settled = &obs
 		if timedSession(current) {
 			current.Session.Timing.SlotHeld = false
@@ -1845,6 +1865,21 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 		return change, nil
 	})
 	return err
+}
+
+// externalWriteNeedsAttestation answers whether an interrupted program of this
+// step may be run again only after the owner attests what it changed. Only
+// idempotent says repeating it is safe by itself; the assisted line is not
+// asked here, because a lost session is uncertain whatever its retry class.
+func externalWriteNeedsAttestation(step flow.StepDefinition) bool {
+	return step.Executor.Operation == "process" && step.Effects.Class == "external_write" && step.Effects.RetryClass != "idempotent"
+}
+
+func unreconciledDetail(detail string) string {
+	if detail == "" {
+		return ""
+	}
+	return ": " + detail
 }
 
 // resultSchemaRefFor labels a stored result with the contract its own step

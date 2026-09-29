@@ -725,6 +725,14 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 	}
 	name := "StepDefinition"
 	if object, ok := value.(map[string]any); ok {
+		// A step contract this build does not know was written for a newer
+		// one. Validated against the base contract it was refused as "the
+		// declared value is 1", which sends the reader to downgrade the step.
+		if version, _ := object["schema_version"].(string); version != "1" && StepContractFor(version) == "" {
+			if number, err := strconv.Atoi(version); err == nil && number > 1 {
+				return step, problem("unsupported_contract", path+"/schema_version", "step contract "+version+" is newer than this build, which knows up to "+StepContracts[len(StepContracts)-1]+": update prifly")
+			}
+		}
 		switch object["schema_version"] {
 		case "2":
 			name = "StepDefinitionV2"
@@ -783,6 +791,11 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 				return step, problem("unsupported", path+"/schema_version", "read-only repository workspace requires core-workflow/1")
 			}
 			name = "StepDefinitionV13"
+		case "14":
+			if p.Profile != CoreProfile {
+				return step, problem("unsupported", path+"/schema_version", "a declared external write requires core-workflow/1")
+			}
+			name = "StepDefinitionV14"
 		}
 	}
 	if err := validateProtocolValue(name, value, path); err != nil {
@@ -817,11 +830,14 @@ func (p *Plan) loadStep(ref Ref, path string) (StepDefinition, error) {
 		if step.ExternalWrite == nil {
 			return step, problem("unsupported", path+"/external_write", "a step declaring effects.class external_write declares the system, the changing operations and the target it may change")
 		}
-		// A technical retry of an external write is a second write. The step's
-		// own retry class is what says whether that is safe, and two of the
-		// five say it is -- neither of which may apply here.
-		if RepeatableRetryClasses[step.Effects.RetryClass] {
-			return step, problem("unsupported", path+"/effects/retry_class", "a step that changes an external system declares deduplicated, reconcile_required or never: repeating "+step.Effects.RetryClass+" blindly writes twice")
+		// pure says the step leaves nothing behind, which an external write
+		// contradicts. idempotent is the author's statement that running the
+		// step again brings the external state to what it should be without
+		// changing it twice -- an ensure, not a create. Nothing here checks
+		// that statement; it decides whether an interrupted program is run
+		// again without an owner's attestation.
+		if step.Effects.RetryClass == "pure" {
+			return step, problem("unsupported", path+"/effects/retry_class", "retry_class pure means a step without effects, and this step changes an external system: declare idempotent if running it again is safe by itself (it ensures a state rather than creating anew), otherwise deduplicated, reconcile_required or never, which stop an interrupted run until the owner attests what happened")
 		}
 	default:
 		return step, problem("unsupported", path+"/effects/class", "destructive steps are outside F1 qualification")

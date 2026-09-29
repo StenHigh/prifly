@@ -323,6 +323,10 @@ func recoveryPointOf(source Run, oldPlan, target *flow.Plan, sequences map[strin
 		return point, local.Reject("recover_prefix_changed", "root workflow changed")
 	}
 	switch {
+	case source.Status == "uncertain":
+		// Not ineligible: it becomes eligible the moment its owner says what
+		// the unresolved execution did, and that is the one step to name.
+		return point, local.Reject("recover_source_unsettled", "source Run holds an execution whose outcome nobody observed; attest it with run resolve --outcome applied|not_applied, then run it again")
 	case source.Status == "failed" && source.Outcome == nil:
 		frontier, attempt, err := recoveryFrontier(source)
 		if err != nil {

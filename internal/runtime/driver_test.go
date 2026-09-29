@@ -27,7 +27,15 @@ import (
 
 // These integration fixtures launch this actual Go test executable through
 // stdin/fd3 and the OS process-group runner. No fake executor substitutes for it.
-func driverProject(t testing.TB, mode string, timeoutMS int64) (*Engine, string) {
+// driverShape bends the fixture's step and workflow before they are sealed,
+// for a test that needs one declaration the modes do not make.
+type driverShape struct {
+	Engine   func(*Engine)
+	Step     func(*flow.StepDefinition)
+	Workflow func(*flow.WorkflowRevision)
+}
+
+func driverProject(t testing.TB, mode string, timeoutMS int64, shapes ...driverShape) (*Engine, string) {
 	t.Helper()
 	e := artifactEngine(t)
 	defs, _, err := Builtins()
@@ -95,6 +103,14 @@ func driverProject(t testing.TB, mode string, timeoutMS int64) (*Engine, string)
 	if withReport {
 		step.Outputs["report"] = flow.OutputPort{Port: step.Inputs["source"].Port, RequiredFor: []string{"pass"}}
 	}
+	for _, shape := range shapes {
+		if shape.Engine != nil {
+			shape.Engine(e)
+		}
+		if shape.Step != nil {
+			shape.Step(&step)
+		}
+	}
 	stepBytes, err := canonical(step)
 	if err != nil {
 		t.Fatal(err)
@@ -153,6 +169,11 @@ func driverProject(t testing.TB, mode string, timeoutMS int64) (*Engine, string)
 		w.Definition.Stages["done"].OutputBindings["report"] = flow.Binding{From: "stage_output", StageID: "after_check", Port: "report"}
 		w.AllowedOutcomes = append(w.AllowedOutcomes, "rejected")
 		w.Limits.MaxStepInstances, w.Limits.MaxControlTransitions = 5, 12
+	}
+	for _, shape := range shapes {
+		if shape.Workflow != nil {
+			shape.Workflow(&w)
+		}
 	}
 	workflow, err := canonical(w)
 	if err != nil {

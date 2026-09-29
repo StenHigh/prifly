@@ -64,6 +64,17 @@ result schema и повышенные capabilities остаются явными
 не класс эффекта и не разрешение менять дерево. Оно не зависит от
 `external_write`: шаг может читать Git и менять объявленную внешнюю систему,
 либо выполнять внешнюю задачу вообще без Git.
+`effects.class: external_write` с границей `external_write` (система,
+изменяющие операции, цель) объявляет и ассистируемый шаг (`prifly-step/2`,
+StepDefinition v11), и шаг-программа (`prifly-step/1`, StepDefinition v14).
+Граница — это заявление автора в журнале Run, а не ограничение того, что делает
+программа. Retry-класс такого шага решает, что делать с программой, которая
+завершилась без принятого результата: `idempotent` (заявление автора, что повтор
+сам приводит внешнее состояние к нужному) исполняется снова при
+`project continue`; `deduplicated`, `reconcile_required` и `never` оставляют Run
+`uncertain` (`external_write_unreconciled`) до `run resolve`. `pure` для внешней
+записи отказывается. Потерянная ассистируемая сессия с любым эффектом, кроме
+`none`, остаётся `uncertain` при любом retry-классе.
 Полная форма сценария с комментариями —
 [`workflow-authoring-reference.yaml`](../../../examples/authoring/workflow-authoring-reference.yaml).
 

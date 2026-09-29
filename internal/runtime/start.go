@@ -293,7 +293,14 @@ func (e *Engine) checkWorkflowCapabilitiesWithBindings(plan *flow.Plan, bindings
 	// actually runs under.
 	for id, step := range plan.Steps {
 		if !slices.Contains(policy.Classes, step.Effects.Class) {
-			return faultf("unsupported_effect", "stage %s declares effects.class %s and the pinned policy %s admits %s", id, step.Effects.Class, plan.Workflow.PolicyRef.Version, strings.Join(policy.Classes, ", "))
+			// The policy belongs to the workflow, often a package's, and a
+			// project step inserted into it cannot change it: the refusal names
+			// the edition that admits the class, for whoever owns the workflow.
+			admitting := ""
+			if step.Effects.Class == "external_write" {
+				admitting = "; the workflow that admits it pins core:policy/local@4.0.0 or later"
+			}
+			return faultf("unsupported_effect", "stage %s declares effects.class %s and the pinned policy %s admits %s%s", id, step.Effects.Class, plan.Workflow.PolicyRef.Version, strings.Join(policy.Classes, ", "), admitting)
 		}
 	}
 	limits := plan.Workflow.Limits
@@ -336,8 +343,11 @@ func (e *Engine) checkWorkflowCapabilitiesWithBindings(plan *flow.Plan, bindings
 		if !fullContext && step.Executor.AdapterRef != builtinRef(defs, "core:adapter/local-process") || step.Executor.Operation != "process" {
 			return fault("unsupported_executor", "expected pinned core local process adapter")
 		}
-		if step.Effects.Class != "none" && step.Effects.Class != "workspace_write" {
-			return fault("unsupported_effect", "this profile does not qualify destructive steps, and a declared external write belongs to an assisted step: a program has no handoff to carry the permission and no report to hold to it")
+		// A program's external write is sealed in the plan as its author's
+		// statement; the program runs with the user's rights, so the boundary
+		// confines nothing it does.
+		if step.Effects.Class != "none" && step.Effects.Class != "workspace_write" && step.Effects.Class != "external_write" {
+			return fault("unsupported_effect", "a program step declares none, workspace_write or external_write; this profile does not qualify destructive")
 		}
 		for _, output := range step.Outputs {
 			if output.Format == "blob" && len(output.MediaTypes) > 1 {
