@@ -241,4 +241,4 @@ Run, если тот объявил `resumable` для него, — и тогд
 | `project_continue_answers_required` | launch продолжает, а не возобновляет Run, а ответов не передано: чужие ответы продолжению не подставляются | ответить на анкету |
 | `project_continue_from_stage_unsupported` | `--from-stage` с launch другого workflow | `--from-stage` только для возобновления |
 | `recover_context_changed` | ответы анкеты или профиль модели не те, что у исходного Run | ответить так же |
-| `recover_prefix_changed`, `recover_frontier_changed` | в новой редакции изменилась перенесённая стадия или вход/маршрут точки | текст называет стадию |
+| `recover_prefix_changed`, `recover_frontier_changed` | в новой редакции изменилась перенесённая стадия или вход/маршрут точки | `recover_prefix_changed` называет первую изменившуюся стадию и подсказывает `--from-stage` с ней: она и всё после неё исполнятся заново |

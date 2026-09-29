@@ -2561,6 +2561,11 @@ Release and resume are separate; neither silently starts a background driver.
 Use --command-id to retry the same command. Exit 0 confirms a command/read,
 not a successful workflow outcome. Read the typed status/outcome/verdict.
 Local executables are trusted and run with your OS rights; this is not a sandbox.
+A program runs in its own process group. Stopping it (timeout, cancel, a lost
+driver) sends SIGTERM to the whole group, then SIGKILL to the group after its
+grace_ms (at most 5000); the attempt ends only when the group is empty. Cleanup
+the program starts is killed with it, so a program that needs longer finishes
+its cleanup on its next run rather than moving it out of the group.
 A step's effects.class external_write and its external_write boundary are its
 author's statement in the Run's record, not a limit on what a program does.
 Its retry_class decides what an interrupted program does: idempotent (running it

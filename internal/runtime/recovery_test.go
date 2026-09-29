@@ -290,6 +290,18 @@ func TestRecoverTraceReusesNestedQualityGatesAndRejectsChangedPrefix(t *testing.
 	if _, _, err := recoveryTrace(source, oldPlan, &changed, newDefs, nil, sequences, point); err == nil || !strings.Contains(err.Error(), "recover_prefix_changed") {
 		t.Fatalf("changed route was reused: %v", err)
 	}
+	// Two changed stages: the refusal names the first, where a restart has to
+	// begin, and says how. The activations sit in a map, so one read could
+	// name the right one by chance; many reads cannot.
+	first := changed.Workflow.Definition.Stages["verify_call"]
+	first.On = map[string]string{"succeeded": "other"}
+	changed.Workflow.Definition.Stages["verify_call"] = first
+	for range 50 {
+		_, _, err := recoveryTrace(source, oldPlan, &changed, newDefs, nil, sequences, point)
+		if refusalCode(err) != "recover_prefix_changed" || !strings.Contains(err.Error(), "stage verify_call") || !strings.Contains(err.Error(), "--from-stage verify_call") {
+			t.Fatalf("the refusal does not name the first changed stage and the way out: %v", err)
+		}
+	}
 }
 
 // recovery/1 chose its tree by a commit and keeps saying so; recovery/2 takes

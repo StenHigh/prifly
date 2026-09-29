@@ -1396,6 +1396,11 @@ func TestCLIHelpDoesNotDenyImplementedCoreOperators(t *testing.T) {
 	if !strings.Contains(help, "idempotent (running it\nagain ensures the state by itself") || !strings.Contains(help, "external_write_unreconciled") {
 		t.Fatalf("help does not say what the retry class of an external write decides: %s", help)
 	}
+	// Whether cleanup a program starts survives a stop depends on who is
+	// signalled; an author sizing grace_ms has to know it is the group.
+	if !strings.Contains(help, "sends SIGTERM to the whole group, then SIGKILL to the group") {
+		t.Fatalf("help does not say a stop signals the program's whole process group: %s", help)
+	}
 }
 
 func TestCLIRefCanonicalYAMLAndJSON(t *testing.T) {

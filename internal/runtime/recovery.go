@@ -2,9 +2,11 @@ package runtime
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
@@ -638,7 +640,26 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 	}
 	reused := make([]RecoveryReuse, 0, len(source.Activations))
 	rootOutputs := map[string]map[string]ArtifactRef{}
-	for _, activation := range source.Activations {
+	// In journal order, so a changed prefix is reported at its first changed
+	// stage: that is the one a restart has to begin from, and a map order
+	// named any of them.
+	activations := slices.Collect(maps.Values(source.Activations))
+	slices.SortFunc(activations, func(a, b *Activation) int {
+		if a == nil || b == nil {
+			return 0
+		}
+		return cmp.Compare(sequences[a.ID], sequences[b.ID])
+	})
+	// changed names the way out: a root stage can be started again from, a
+	// nested one only from a root stage before it.
+	changed := func(activation *Activation, what string, present bool) error {
+		hint := "; resume from an accepted root stage before it with --from-stage"
+		if present && activation.InvocationID == source.RootInvocationID {
+			hint = "; resume with --from-stage " + activation.StageID + " to run it and everything after it again"
+		}
+		return local.Reject("recover_prefix_changed", what+activation.StageID+hint)
+	}
+	for _, activation := range activations {
 		if activation == nil {
 			continue
 		}
@@ -665,7 +686,7 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 		oldStage, oldOK := oldPlans[activation.InvocationID].Workflow.Definition.Stages[activation.StageID]
 		newStage, newOK := newPlans[activation.InvocationID].Workflow.Definition.Stages[activation.StageID]
 		if !oldOK || !newOK || oldStage.Kind != activation.Kind || newStage.Kind != activation.Kind {
-			return nil, nil, local.Reject("recover_prefix_changed", "stage is missing or changed: "+activation.StageID)
+			return nil, nil, changed(activation, "stage is missing or changed: ", newOK && newStage.Kind == activation.Kind)
 		}
 		oldEffective, err := recoveryEffectiveStage(oldStage, source.Definitions, source.ContextResources)
 		if err != nil {
@@ -676,7 +697,7 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 			return nil, nil, err
 		}
 		if !bytes.Equal(oldEffective, newEffective) {
-			return nil, nil, local.Reject("recover_prefix_changed", "effective contract changed at stage "+activation.StageID)
+			return nil, nil, changed(activation, "effective contract changed at stage ", true)
 		}
 		entry := RecoveryReuse{InvocationID: activation.InvocationID, ActivationID: activation.ID, StageID: activation.StageID, Kind: activation.Kind, Sequence: sequence}
 		if activation.Kind == "step" {

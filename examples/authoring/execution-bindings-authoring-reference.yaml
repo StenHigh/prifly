@@ -23,7 +23,11 @@ execution_bindings:
       files: # Optional map, default {}; key is scratch destination, value is source inside this workflow folder.
         report-worker.sh: workers/report-worker.sh # Confined regular file; bytes are sealed, not executed at compile.
       timeout_ms: 30000 # Required execution deadline, 1..3600000 ms.
-      grace_ms: 100 # Required termination grace, 1..5000 ms.
+      # Required termination grace, 1..5000 ms: after a stop's SIGTERM to the
+      # program's whole process group, how long before SIGKILL to the group.
+      # Cleanup the program starts is in that group and dies with it; a
+      # program that needs longer finishes its cleanup on its next run.
+      grace_ms: 100
       max_output_bytes: 1048576 # Required output bound, 1..16777216 bytes.
       # Optional exact context profile; omit for the existing executor default.
       # The zero digest is illustrative and must be replaced before compilation.
