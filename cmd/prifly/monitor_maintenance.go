@@ -61,6 +61,9 @@ func monitorMaintenance(mux *http.ServeMux, catalog *monitorCatalog) {
 			http.Error(w, "source changed; refresh catalog", http.StatusConflict)
 			return
 		}
+		// The monitor's own reads finish first; only another process refuses.
+		catalog.engines.Lock()
+		defer catalog.engines.Unlock()
 		var e *prifly.Engine
 		if err == nil {
 			e, err = prifly.OpenMonitorMaintenance(source.Root, input.Action == "preview")

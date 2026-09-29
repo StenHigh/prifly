@@ -128,7 +128,9 @@ func (m *monitorCatalog) measureStorage(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		m.engines.RLock()
 		measured, size := monitorMeasure(ctx, source, seen)
+		m.engines.RUnlock()
 		next.Sources = append(next.Sources, measured)
 		next.Bytes += size
 	}

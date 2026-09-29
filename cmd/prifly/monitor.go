@@ -169,6 +169,8 @@ func monitorMux(catalog *monitorCatalog) http.Handler {
 	mux.HandleFunc("/api/storage", catalog.storageHTTP)
 	scoped := func(path string, handler func(http.ResponseWriter, *http.Request, *prifly.Engine)) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			catalog.engines.RLock()
+			defer catalog.engines.RUnlock()
 			engine, err := catalog.open(r.URL.Query().Get("source"))
 			if err != nil {
 				write(w, nil, err)

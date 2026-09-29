@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stenhigh/prifly/internal/local"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
@@ -214,5 +215,85 @@ func TestMonitorStorageCountsHardlinksAndSkipsSymlinks(t *testing.T) {
 	_, duplicate := monitorMeasure(context.Background(), source, seen)
 	if duplicate != 0 {
 		t.Fatal("duplicate inode counted", duplicate)
+	}
+}
+
+// The owner's cleanup was refused storage_busy while the only process holding
+// the authority was the monitor itself: its own read -- a re-index, an open
+// Run panel -- held the shared lock the cleanup needs exclusively, and a file
+// lock does not tell one process's descriptors apart. Cleanup now waits for
+// the monitor's reads and is refused only by another process.
+func TestMonitorCleanupWaitsForTheMonitorsOwnRead(t *testing.T) {
+	ctx := context.Background()
+	root, _ := filepath.EvalSymlinks(t.TempDir())
+	id := monitorFixture(t, root)
+	writer, err := prifly.Open(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Drive(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	writer.Close()
+	catalog := newMonitorCatalog(t.TempDir(), []string{root})
+	catalog.add(root)
+	catalog.refresh(ctx)
+	handler := monitorHost("127.0.0.1:7781")(monitorMux(catalog))
+	token := func() string {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/maintenance-token", nil)
+		req.Host = "127.0.0.1:7781"
+		handler.ServeHTTP(rec, req)
+		var credential struct {
+			Token string `json:"token"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &credential); err != nil {
+			t.Fatal(err)
+		}
+		return credential.Token
+	}()
+	// A read of the monitor's own, open the way its panels and re-index hold
+	// one, released a moment after the cleanup arrives.
+	catalog.engines.RLock()
+	reader, err := catalog.open(monitorSourceID(root))
+	if err != nil {
+		catalog.engines.RUnlock()
+		t.Fatal(err)
+	}
+	released := make(chan struct{})
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		reader.Close()
+		catalog.engines.RUnlock()
+		close(released)
+	}()
+	body, _ := json.Marshal(map[string]string{"source": monitorSourceID(root), "run": id, "action": "preview"})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/maintenance", bytes.NewBuffer(body))
+	req.Host = "127.0.0.1:7781"
+	req.Header.Set("Origin", "http://127.0.0.1:7781")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-PriFly-Maintenance", token)
+	handler.ServeHTTP(rec, req)
+	<-released
+	if rec.Code != 200 {
+		t.Fatalf("cleanup was refused by the monitor's own read: %d %s", rec.Code, rec.Body.String())
+	}
+	// Another process still refuses it, named as busy: that is the one holder
+	// cleanup cannot wait for.
+	other, err := prifly.Open(root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest("POST", "/api/maintenance", bytes.NewBuffer(body))
+	req.Host = "127.0.0.1:7781"
+	req.Header.Set("Origin", "http://127.0.0.1:7781")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-PriFly-Maintenance", token)
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 409 || !bytes.Contains(rec.Body.Bytes(), []byte("storage_busy")) {
+		t.Fatalf("a holder outside the monitor did not refuse cleanup: %d %s", rec.Code, rec.Body.String())
 	}
 }

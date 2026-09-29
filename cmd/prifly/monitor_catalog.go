@@ -63,6 +63,14 @@ type monitorDiscovery struct {
 type monitorCatalog struct {
 	storage monitorStorage
 	mu      sync.RWMutex
+	// engines orders this process's own opens of an authority. Each read
+	// holds a shared lock on the authority's installation file and cleanup
+	// needs an exclusive one, and a file lock does not tell this process's
+	// descriptors from another's: cleanup was refused storage_busy by the
+	// monitor's own re-index or open Run panel. Reads hold it shared for the
+	// life of their engine and cleanup exclusively, so cleanup waits for the
+	// monitor and is refused only by another process. Taken before mu.
+	engines sync.RWMutex
 	// registryMark is the sources directory's mtime and size at the last read.
 	registryMark string
 	sources      map[string]monitorSource
@@ -447,6 +455,7 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 			continue
 		}
 		next := map[string]monitorRun{}
+		m.engines.RLock()
 		engine, err := prifly.Open(s.Root, true)
 		if err == nil {
 			s.Project = engine.Config.ID
@@ -490,6 +499,7 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 			}
 			_ = engine.Close()
 		}
+		m.engines.RUnlock()
 		s.Error = ""
 		s.Indexed = err == nil
 		if err != nil {
