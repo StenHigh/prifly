@@ -17,6 +17,11 @@ import (
 // declaration: the ladder has the row, the bundle exists, the capability is
 // listed. None asked what a Run was actually stamped with. This one reads the
 // Run.
+//
+// Since 41 every project Run with an assisted step is sealed there, and a model
+// profile is only ever declared by an assisted step: 34 and 35 are now what
+// Runs sealed before 41 carry. What stays checked is that the Run carrying
+// either fact is sealed at a version whose bundle has a place for it.
 func TestAStateVersionDeclaredForARecordedFactIsReached(t *testing.T) {
 	e, _, _ := assistedWorkspaceFixture(t, "checkout")
 	ctx := context.Background()
@@ -78,31 +83,34 @@ func TestAStateVersionDeclaredForARecordedFactIsReached(t *testing.T) {
 			t.Fatal(err)
 		}
 		r := driverRun(t, e, result.Receipt.RunID)
-		if r.SchemaVersion != CoreModelProfileStateVersion {
-			t.Fatalf("a Run whose step declares a model profile is sealed at %s, not %s", r.SchemaVersion, CoreModelProfileStateVersion)
+		if r.SchemaVersion != CoreQuestionStateVersion {
+			t.Fatalf("a Run whose step declares a model profile is sealed at %s, not %s", r.SchemaVersion, CoreQuestionStateVersion)
 		}
-		if err := validatePublic(t, "CoreRunStateV34", r); err != nil {
+		if err := validateInBundle(t, questionPublicContracts, "CoreRunStateV41", r); err != nil {
 			t.Fatalf("the bundle of the version this Run names rejects it: %v", err)
 		}
 	})
 
 	t.Run("a sealed translation reaches its own state", func(t *testing.T) {
 		r := start(t, map[string]ModelProfileTranslation{"careful-review": {Values: map[string]string{"model": "opus"}, Source: "package"}})
-		if r.SchemaVersion != CoreProfileTranslationStateVersion {
-			t.Fatalf("a Run sealing a profile translation is sealed at %s, not %s", r.SchemaVersion, CoreProfileTranslationStateVersion)
+		if r.SchemaVersion != CoreQuestionStateVersion {
+			t.Fatalf("a Run sealing a profile translation is sealed at %s, not %s", r.SchemaVersion, CoreQuestionStateVersion)
 		}
 		if len(r.ModelProfileTranslations) == 0 {
 			t.Fatal("the fixture sealed no translation, so this proves nothing about the version that carries one")
 		}
-		if err := validatePublic(t, "CoreRunStateV35", r); err != nil {
+		if err := validateInBundle(t, questionPublicContracts, "CoreRunStateV41", r); err != nil {
 			t.Fatalf("the bundle of the version this Run names rejects it: %v", err)
 		}
 	})
 
-	t.Run("a Run carrying neither is unchanged", func(t *testing.T) {
+	t.Run("an assisted project Run records its questions", func(t *testing.T) {
 		r := start(t, nil)
-		if r.SchemaVersion != CoreStageWorkStateVersion {
-			t.Fatalf("a Run that records neither fact moved to %s", r.SchemaVersion)
+		if r.SchemaVersion != CoreQuestionStateVersion {
+			t.Fatalf("a project Run with an assisted step is sealed at %s, not %s", r.SchemaVersion, CoreQuestionStateVersion)
+		}
+		if err := validateInBundle(t, questionPublicContracts, "CoreRunStateV41", r); err != nil {
+			t.Fatalf("the bundle of the version this Run names rejects it: %v", err)
 		}
 	})
 }

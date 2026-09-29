@@ -1,6 +1,7 @@
 'use strict';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels = {running:'В работе',completed:'Завершён',failed:'Ошибка',cancelled:'Отменён',uncertain:'Неопределённость',waiting:'Ожидание',pending:'Ожидает',ready:'Готов',succeeded:'Выполнен',rejected:'Отклонён',stopping:'Останавливается',awaiting_host:'Ожидает агента',reported:'Результат получен',disconnected:'Связь потеряна',settled:'Завершено',future:'Ещё не выполнен',unchosen:'Ветвь не выбрана',not_taken:'Не выполнен в этом исполнении',workflow_invocation:'WorkflowInvocation',stage_activation:'StageActivation',step_instance:'StepInstance',attempt:'Attempt',run:'Run',check_execution:'Проверка',step:'Шаг',choice:'Развилка',parallel:'Параллельные ветви',call:'Вложенный workflow',repeat:'Повтор',map:'Обработка элементов',wait:'Ожидание события',finish:'Завершение',elapsed:'Общее время',executor:'Работа исполнителя',queue:'Ожидание допуска',active:'Активное время',quality:'Качество измерения',measured:'Измерено',estimated:'Оценка',partial:'Частично',unknown:'Неизвестно',not_applicable:'Не применимо',unavailable:'Недоступно',incomparable_clock_domains:'Разные сессии часов',calendar_suspend_coverage_unqualified:'Сон машины не учтён достоверно',authority_wall_estimate:'Оценка по календарным часам authority',executor_time:'Работа исполнителя',executor_sum:'Сумма времени исполнителей',executor_active_union:'Интервалы активности исполнителей',check_executor_sum:'Сумма времени проверок',check_executor_active_union:'Интервалы активности проверок',ready_queue:'Ожидание в очереди',restricted_time:'Время ограничений',dispatch_latency:'Задержка передачи',result_to_acceptance:'От результата до приёмки',post_execution_settlement:'Завершение после исполнения',output_contracts:'Требования к результату',subject:'Задача',desired_outcome:'Ожидаемый результат',in_scope:'Входит в задачу',out_of_scope:'За пределами задачи',completion_criteria:'Критерии завершения',source_refs:'Источники',assumptions:'Предположения',confirmation:'Подтверждение',summary:'Описание результата',verdict:'Вердикт',outputs:'Выходы',inputs:'Входы',instructions:'Инструкции',context:'Контекст',description:'Описание',status:'Состояние',reason:'Причина',message:'Сообщение',code:'Код',severity:'Важность',phase:'Фаза',observed:'Зафиксировано',actor:'Автор',actor_id:'Автор',amount:'Сумма',currency:'Валюта',source:'Источник',reported_costs:'Заявленная стоимость',permitted_effects:'Разрешённые действия',workspace:'Рабочая папка',skill_refs:'Навыки',host_state:'Состояние агента',deadline:'Срок',process_outcome:'Итог процесса',error:'Ошибка',evidence_refs:'Свидетельства',effect_receipt_refs:'Подтверждения эффектов'};
+Object.assign(labels,{host_take_not_recorded:'агент не отметил, когда взял задание (session take)',decision_request_time_not_recorded:'момент вопроса не записан в этом Run',host_work_needs_session_and_wait:'нужны время сессии и ожидание ответа',difference_of_intervals:'разность интервалов',executor_start_not_observed:'старт исполнителя не наблюдался'});
 Object.assign(labels,{ready:'Подготовлен к выдаче Attempt',pending:'Attempt передан агенту',running:'Исполнение начато',future:'Может быть выполнен',skipped:'Будет пропущен',reused:'Из исходного Run',revalidated:'Перепроверен без запуска',no_work:'Нет работы'});
 const label = s => labels[s] || s;
 const badge = s => `<span class="badge ${/^[a-z_]+$/.test(s || '') ? s : ''}">${esc(label(s) || 'Не записано')}</span>`;
@@ -110,7 +111,87 @@ function runStatus(run) {
  return `${current}<div class="branch-tip"><small>Последний производный Run · ${esc(date(tip.last_observed))}</small><a href="#${esc(hash)}">${badge(tip.outcome || tip.status)} <span>${esc(short(tip.run_id))}</span></a><small>Состояние: ${esc(label(tip.status))}</small></div>`;
 }
 const expandedRuns = new Set();
-if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus};
+// What a step was handed and what is expected of it, read only from the stored
+// Run. Nothing is inferred from the current project, profile or catalog: a fact
+// the Run does not hold is returned as null and shown as not recorded.
+const answerSources={actor:'ответ владельца при запуске',project_default:'значение проекта по умолчанию',package_default:'значение пакета по умолчанию',autonomous_policy:'автономная политика',unanswered:'ещё без ответа',launch:'указано при запуске'};
+const questionBases={decision:'объявленное решение Run',input:'вход шага',instructions:'инструкции шага',person:'человек в сессии',judgement:'решение агента'};
+const sameValue=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+function definitionBytes(run,ref) {return parseMaybe((run.definitions||[]).find(d=>ref && d.ref?.digest===ref.digest)?.bytes);}
+function activationWorkflow(run,activation) {const ref=run.invocations?.[activation?.workflow_invocation_id]?.workflow_ref||run.workflow_ref;return definitionBytes(run,ref)||parseMaybe(run.workflow);}
+function catalogDecision(run,id) {return (run.decision_catalog?.decisions||[]).find(d=>d.id===id);}
+function choiceTitle(definition,value) {return (definition?.choices||[]).find(c=>sameValue(c.value,value))?.title||null;}
+function stateNumber(run) {return Number(/^core-state\/(\d+)$/.exec(run?.schema_version||'')?.[1]||0);}
+function stepReceipt(run,attempt) {
+ const activation=run.activations?.[attempt.stage_activation_id],stageID=activation?.stage_id||'';
+ const stage=activationWorkflow(run,activation)?.definition?.stages?.[stageID]||{};
+ const step=run.steps?.[attempt.step_instance_id],definition=definitionBytes(run,step?.definition_ref)||{};
+ const inputs=Object.keys({...(definition.inputs||{}),...(attempt.context?.inputs||{})}).sort().map(port=>{
+  const given=attempt.context?.inputs?.[port],binding=stage.input_bindings?.[port];
+  const origin=binding?.from==='workflow_input'?{kind:'workflow_input',port:binding.port}:binding?.from==='stage_output'?{kind:'stage_output',stage:binding.stage_id,port:binding.port}:binding?{kind:binding.from}:null;
+  return {port,ref:given?.ref||null,origin};
+ });
+ const session=attempt.session||null;
+ let decisions=null;
+ if(session?.decision_context){
+  const catalog=run.decision_catalog?.decisions||[];
+  decisions=Object.entries(session.decision_context).map(([name,value])=>{
+   const d=name==='core:package_profile'?catalog.find(x=>x.destination?.kind==='package_profile'):catalog.find(x=>x.destination?.kind==='session_context'&&x.destination?.name===name);
+   const record=[...(run.decision_ledger||[])].reverse().find(r=>r.definition_id===d?.id&&(!r.attempt_id||r.attempt_id===attempt.id));
+   return {name,id:d?.id||name,title:d?.title||name,phase:d?.phase||'',value,choice:choiceTitle(d,value),source:name==='core:package_profile'?run.decision_sheet?.profile_source:record?.source||null,during:!!record?.attempt_id};
+  });
+ }
+ const refs=session?.skill_refs||[definition.instructions_ref,...(definition.context_refs||[])].filter(Boolean);
+ const texts=refs.map(ref=>{const resource=(run.context_resources||[]).find(x=>x.ref?.digest===ref.digest);return {ref,role:ref.digest===definition.instructions_ref?.digest?'instructions':'context',text:resource?.bytes??null};});
+ const expects={outputs:Object.entries(definition.outputs||{}).map(([port,o])=>({port,schema:o.schema_ref?.id||o.format||'',requiredFor:o.required_for||[]})),verdicts:Object.keys(stage.on||{}),effect:definition.effects||null,externalWrite:definition.external_write||null,trees:(session?.workspace_trees||[]).map(t=>t.capture?.path||t.output_port).filter(Boolean)};
+ const asked=(run.decision_ledger||[]).filter(r=>r.attempt_id===attempt.id).map(r=>{const d=catalogDecision(run,r.definition_id);return {id:r.definition_id,title:d?.title||r.definition_id,options:(d?.choices||[]).map(c=>c.title),value:r.value,choice:choiceTitle(d,r.value),status:r.status,source:r.source,requested:r.requested?.utc||'',answered:r.status==='pending'?'':r.observed?.utc||''};});
+ const pending=run.pending_decision?.attempt_id===attempt.id?run.pending_decision.decision_id:'';
+ // A report is owed from state 41; before it no list was kept, which is not
+ // the same as a host saying there were no questions.
+ const reported=attempt.question_report?attempt.question_report.questions:null;
+ return {stage:stageID,program:!session,inputs,decisions,texts,expects,asked,pending,reported,reportsKept:stateNumber(run)>=41};
+}
+// Launch inputs and every decision of the sealed sheet, with who gave each
+// answer. A decision the profile excludes is named as such, not left out.
+function launchInputs(run,inputValues={}) {
+ const configured=run.effective_configuration?.inputs||{};
+ const inputs=Object.entries(inputValues||{}).map(([port,value])=>({port,value,source:configured[port]?.source||'launch'}));
+ const sheet=run.decision_sheet,records=sheet?.records||[];
+ const decisions=(run.decision_catalog?.decisions||[]).map(d=>{
+  const record=records.find(r=>r.definition_id===d.id)||[...(run.decision_ledger||[])].reverse().find(r=>r.definition_id===d.id&&r.status!=='pending');
+  const profiles=d.when?.profiles,answers=d.when?.answers||{};
+  const excluded=!record&&((profiles&&!profiles.includes(sheet?.package_profile))||Object.entries(answers).some(([id,want])=>!records.some(r=>r.definition_id===id&&sameValue(r.value,want))));
+  const value=d.destination?.kind==='package_profile'&&!record?sheet?.package_profile:record?.value;
+  return {id:d.id,title:d.title,phase:d.phase,answered:!!record||d.destination?.kind==='package_profile'&&!!sheet,value,choice:choiceTitle(d,value),source:record?.source||(d.destination?.kind==='package_profile'?sheet?.profile_source:null),excluded};
+ });
+ return {inputs,decisions,profile:sheet?.package_profile||'',profileSource:sheet?.profile_source||'',policy:sheet?.decision_policy||''};
+}
+// Where the Run's time went, from the timing tree the engine computed. Nothing
+// here subtracts observations: every number is one the calculator published.
+const amount=d=>d?.value_ms??d?.estimate_ms??d?.known_ms??null;
+function timeBreakdown(timing) {
+ const root=timing?.root,metrics=root?.metrics||{};
+ if(!metrics.idle)return null;
+ const categories=[['host_work_sum','Работа агентов'],['host_pickup_sum','Ожидание, пока агент возьмёт задание'],['decision_wait_sum','Ожидание ответа на вопрос'],['executor_sum','Работа программ'],['check_executor_sum','Проверки'],['idle','Ничего не выполнялось']]
+  .map(([key,title])=>({key,title,d:metrics[key]})).filter(c=>c.d&&c.d.quality!=='not_applicable');
+ const stages=new Map();
+ for(const invocation of root.children||[])for(const node of invocation.children||[]){
+  if(node.kind!=='stage_activation'||node.stage_kind==='finish')continue;
+  const row=stages.get(node.stage_id)||{stage:node.stage_id,count:0,ms:0,agentMs:0,unknown:false};
+  row.count++;const value=amount(node.metrics?.elapsed);if(value==null)row.unknown=true;else row.ms+=value;
+  const agent=amount(node.metrics?.host_work_sum);if(agent!=null)row.agentMs+=agent;
+  stages.set(node.stage_id,row);
+ }
+ return {elapsed:metrics.elapsed,categories,stages:[...stages.values()].sort((a,b)=>b.ms-a.ms)};
+}
+function attemptPhases(node,assisted) {
+ const m={...(node?.metrics||{})};
+ // An assisted attempt has no process, so its executor time is not a phase of it.
+ if(assisted)delete m.executor_time;
+ return [['host_pickup','Ждал, пока агент возьмёт задание'],['host_work','Агент работал'],['decision_wait','Ждал ответа на вопрос'],['executor_time','Программа работала'],['result_to_acceptance','Приёмка результата']]
+  .map(([key,title])=>({key,title,d:m[key]})).filter(p=>p.d&&p.d.quality!=='not_applicable');
+}
+if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='',graphFocus='';
@@ -141,6 +222,64 @@ function preserve(box,html) {
  if(focus) [...box.querySelectorAll('[data-focus]')].find(e=>e.dataset.focus===focus)?.focus({preventScroll:true});
 }
 
+function plainValue(value) {return typeof value==='string'?value:JSON.stringify(value,null,2);}
+function shownValue(value,key) {
+ const text=plainValue(value);
+ if(text==='')return '<span class="muted">(пусто)</span>';
+ if(text.length<=140&&!text.includes('\n'))return `<code>${esc(text)}</code>`;
+ return `<details class="long-value" data-key="${esc(key)}"><summary>${esc(text.replace(/\s+/g,' ').slice(0,110))}…</summary><pre class="raw" data-scroll="${esc(key)}">${esc(text)}</pre></details>`;
+}
+function launchValue(value,key) {
+ if(value&&typeof value==='object'&&typeof value.title==='string')return `<b>${esc(value.title)}</b>${value.reference?` <a href="${esc(value.reference)}" target="_blank" rel="noopener">${esc(value.reference)}</a>`:''}${value.description?shownValue(value.description,key+':description'):''}`;
+ return shownValue(value,key);
+}
+function stageLink(run,stage) {const activation=values(run.activations).filter(a=>a.stage_id===stage).at(-1);return activation?`<button type="button" data-node="${esc(activation.id)}">${esc(stage)}</button>`:`<b>${esc(stage)}</b>`;}
+function receiptHTML(run,attempt,inputValues,phases,note='') {
+ const r=stepReceipt(run,attempt),key='receipt:'+attempt.id,row=(title,body)=>`<div class="receipt-row"><div class="receipt-key">${title}</div><div>${body}</div></div>`;
+ let html=`<section class="receipt"><h4>Что получил шаг${r.stage?` · ${esc(r.stage)}`:''}</h4>${note?`<p class="muted">${esc(note)}</p>`:''}`;
+ if(phases.length)html+=`<h5>Время шага</h5>`+phases.map(p=>row(esc(p.title),esc(amount(p.d)==null?duration(p.d,true):duration(p.d))+(p.key==='host_work'&&p.d.reasons?.includes('host_take_not_recorded')?'<br><small class="muted">включает время до того, как агент взял задание</small>':''))).join('');
+ html+='<h5>Входы</h5>'+(r.inputs.length?r.inputs.map(i=>{
+  const from=i.origin?.kind==='workflow_input'?`вход запуска <code>${esc(i.origin.port)}</code>${inputValues&&Object.hasOwn(inputValues,i.origin.port)?launchValue(inputValues[i.origin.port],key+':in:'+i.port):''}`:i.origin?.kind==='stage_output'?`результат шага ${stageLink(run,i.origin.stage)}, выход <code>${esc(i.origin.port)}</code>`:i.origin?`источник ${esc(i.origin.kind)}`:'<span class="muted">происхождение в закреплённом workflow не найдено</span>';
+  return row(`<code>${esc(i.port)}</code>`,from+(i.ref?artifact(i.ref,'Содержимое, переданное шагу'):'<p class="muted">Артефакт не передан</p>'));
+ }).join(''):'<p class="muted">У шага нет входов.</p>');
+ if(r.program)html+='<h5>Решения и инструкции</h5><p class="muted">Шаг исполняет программа: ответы решений и тексты инструкций такому шагу не передаются.</p>';
+ else{
+  html+='<h5>Решения, переданные агенту</h5>'+(r.decisions===null?'<p class="muted">В этом Run не записано, какие ответы переданы агенту.</p>':r.decisions.length?r.decisions.map(d=>row(`${esc(d.title)}<br><small class="muted">${esc(d.id)}${d.phase==='runtime'?' · вопрос навыка':''}</small>`,`${d.choice?`<b>${esc(d.choice)}</b> `:''}${shownValue(d.value,key+':d:'+d.name)}<br><small class="muted">${esc(answerSources[d.source]||d.source||'источник не записан')}${d.phase==='runtime'?' · ответ дан заранее':''}</small>`)).join(''):'<p class="muted">Агенту не передано ни одного ответа.</p>');
+  html+='<h5>Инструкции и навыки</h5>'+(r.texts.length?r.texts.map(t=>row(`${t.role==='instructions'?'Инструкции шага':'Контекст'}<br><small class="muted">${esc(t.ref.id)}</small>`,t.text==null?'<p class="muted">Текст не закреплён в Run</p>':`<details class="long-value" data-key="${esc(key+':t:'+t.ref.digest)}"><summary>${esc(Math.round(t.text.length/1024))} КБ текста</summary><pre class="raw" data-scroll="${esc(key+':t:'+t.ref.digest)}">${esc(t.text)}</pre></details>`)).join(''):'<p class="muted">Текстов не передано.</p>');
+  html+='<h5>Вопросы шага</h5>';
+  if(r.pending)html+=row('Ждёт ответа',`<b>${esc(catalogDecision(run,r.pending)?.title||r.pending)}</b> <code>${esc(r.pending)}</code>`);
+  html+=r.asked.map(q=>row(`${esc(q.title)}<br><small class="muted">${esc(q.id)} · задан через Pri-Fly</small>`,q.status==='pending'?'<span class="muted">ответа ещё нет</span>':`${q.choice?`<b>${esc(q.choice)}</b> `:''}${shownValue(q.value,key+':q:'+q.id)}<br><small class="muted">${esc(answerSources[q.source]||q.source)}${q.answered?' · '+esc(date(q.answered)):''}${q.options.length?' · варианты: '+esc(q.options.join(' / ')):''}</small>`)).join('');
+  if(r.reported===null)html+=`<p class="muted">${r.reportsKept?'Агент ещё не отчитался о вопросах этого шага.':'В этом Run вопросы, на которые агент ответил сам, не записывались.'}</p>`;
+  else if(!r.reported.length)html+='<p class="muted">Агент заявил: вопросов не было.</p>';
+  else html+='<p class="muted">Заявление агента в отчёте; Pri-Fly проверяет форму и ссылки, но не правдивость.</p>'+r.reported.map((q,index)=>row(`${esc(q.question)}${q.asked_by?`<br><small class="muted">спросил: ${esc(q.asked_by)}</small>`:''}`,`${shownValue(q.answer,key+':r:'+index)}<br><small class="muted">основание: ${esc(questionBases[q.basis]||q.basis)}${q.decision_id?` <code>${esc(q.decision_id)}</code>`:''}${q.port?` <code>${esc(q.port)}</code>`:''}${q.options?.length?' · варианты: '+esc(q.options.join(' / ')):''}</small>`)).join('');
+ }
+ const e=r.expects;
+ html+='<h5>Что шаг должен вернуть</h5>'+row('Выходы',e.outputs.length?e.outputs.map(o=>`<code>${esc(o.port)}</code> <small class="muted">${esc(o.schema)}${o.requiredFor.length?' · обязателен при '+esc(o.requiredFor.join(', ')):''}</small>`).join('<br>'):'<span class="muted">нет</span>')
+  +row('Вердикты с продолжением',e.verdicts.length?e.verdicts.map(v=>`<code>${esc(v)}</code>`).join(' '):'<span class="muted">не объявлены</span>')
+  +(e.effect?row('Что шаг может менять',`<code>${esc(e.effect.class)}</code> · повтор: <code>${esc(e.effect.retry_class)}</code>${e.externalWrite?` · ${esc(e.externalWrite.system)}: ${esc((e.externalWrite.operations||[]).join(', '))} → ${esc(e.externalWrite.target)}`:''}`):'')
+  +(e.trees.length?row('Забирается из рабочей копии',e.trees.map(t=>`<code>${esc(t)}</code>`).join(' ')):'');
+ return html+'</section>';
+}
+function launchHTML(run,inputValues) {
+ const l=launchInputs(run,inputValues);
+ if(!l.inputs.length&&!l.decisions.length)return '';
+ const row=(title,body)=>`<div class="receipt-row"><div class="receipt-key">${title}</div><div>${body}</div></div>`;
+ let html='<details class="facts-section receipt" data-key="launch" open><summary>Входы и решения запуска</summary><div class="facts-body">';
+ if(l.profile)html+=row('Профиль пакета',`<b>${esc(l.profile)}</b> <small class="muted">${esc(answerSources[l.profileSource]||l.profileSource)}${l.policy?' · политика: '+esc(l.policy):''}</small>`);
+ html+=l.inputs.map(i=>row(`Вход <code>${esc(i.port)}</code>`,`${launchValue(i.value,'launch:in:'+i.port)}<br><small class="muted">${esc(answerSources[i.source]||i.source)}</small>`)).join('');
+ html+=l.decisions.map(d=>row(`${esc(d.title)}<br><small class="muted">${esc(d.id)}${d.phase==='runtime'?' · вопрос во время работы':''}</small>`,d.excluded?'<span class="muted">не применяется к этому профилю</span>':!d.answered?'<span class="muted">не отвечено до запуска</span>':`${d.choice?`<b>${esc(d.choice)}</b> `:''}${shownValue(d.value,'launch:d:'+d.id)}<br><small class="muted">${esc(answerSources[d.source]||d.source||'источник не записан')}</small>`)).join('');
+ return html+'</div></details>';
+}
+function timeHTML(timing) {
+ const t=timeBreakdown(timing);
+ if(!t)return '';
+ const total=amount(t.elapsed)||0,share=d=>total&&amount(d)!=null?Math.min(100,Math.round(amount(d)*100/total)):0;
+ let html=`<details class="facts-section" data-key="time" open><summary>Куда ушло время</summary><div class="facts-body"><p>Всего: <b>${esc(duration(t.elapsed))}</b></p><div class="time-bars">`;
+ html+=t.categories.map(c=>`<div class="time-bar"><span>${esc(c.title)}</span><progress max="100" value="${share(c.d)}" aria-label="${esc(c.title)}"></progress><span>${esc(amount(c.d)==null?duration(c.d,true):duration(c.d))}</span></div>`).join('');
+ html+='</div><p class="muted">Суммы по попыткам; параллельные ветви пересекаются, поэтому сумма может быть больше общего времени. «Оценка» — по часам authority между разными процессами.</p>';
+ if(t.stages.length)html+='<table class="time-stages"><thead><tr><th>Стадия</th><th>Раз</th><th>Время</th><th>Из него агент</th></tr></thead><tbody>'+t.stages.map(s=>`<tr><td>${esc(s.stage)}</td><td>${s.count>1?'×'+s.count:'1'}</td><td>${s.unknown?'не менее ':''}${esc(ms(s.ms))}</td><td>${s.agentMs?esc(ms(s.agentMs)):'—'}</td></tr>`).join('')+'</tbody></table>';
+ return html+'</div></details>';
+}
 function raw(value,key) {return `<details class="facts-section" data-key="raw:${esc(key)}"><summary>Исходные сохранённые данные</summary><pre class="raw" data-scroll="${esc(key)}">${esc(JSON.stringify(value,null,2))}</pre></details>`;}
 function artifact(ref,title) {return `<details class="artifact" data-key="artifact:${esc(ref.digest)}" data-ref="${esc(JSON.stringify(ref))}"><summary>${esc(title || ref.artifact_id)} <small>Ревизия ${esc(ref.revision)} · ${esc(short(ref.digest))}</small></summary><div class="artifact-content">Откройте для чтения содержимого</div></details>`;}
 function readable(value,key='',depth=0) {
@@ -262,6 +401,8 @@ function renderNode() {
  const run=state.run,object=nodeObject(run,nodeID),timing=timingNode(state.timing?.root,nodeID);
  const activation=run.activations?.[object?.stage_activation_id||object?.activation_id||nodeID],stageID=activation?.stage_id||object?.stage_id||nodeID,graph=graphData(parseMaybe(currentWorkflow(run)),run,definition?definitionInvocation(run,definition):invocation,state.choices,state.input_values);
  let html=nodeCard(graph,stageID,object,run),role=executionRole(object,parseMaybe(currentWorkflow(run))?.definition?.stages?.[stageID]);
+ const received=run.attempts?.[nodeID]||(object?values(run.steps).filter(s=>s.stage_activation_id===object.id).flatMap(s=>s.attempt_ids||[]).map(id=>run.attempts?.[id]).filter(Boolean).at(-1):null);
+ if(received)html+=receiptHTML(run,received,state.input_values,attemptPhases(timingNode(state.timing?.root,received.id),!!received.session),received.id===nodeID?'':'Последнее исполнение этой стадии: '+short(received.id));
  if(!object) {
   const stage=parseMaybe(currentWorkflow(run))?.definition?.stages?.[nodeID];
   $('node-title').textContent=stage ? nodeID+' · '+label(stage.kind) : 'Выберите шаг или попытку';
@@ -304,7 +445,7 @@ function renderDetail() {
  const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Прогон';
  $('detail-id').textContent=run.project_id+' · '+run.id;$('permalink').href=location.hash;
  const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run);
- preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div><h3>Сейчас</h3>${activity.length?activity.map(a=>`<p>${a.node?`<button data-node="${esc(a.node)}">${esc(a.title)}</button>`:a.run?`<a href="#${esc(new URLSearchParams({source,run:a.run}))}">${esc(a.title)}</a>`:`<b>${esc(a.title)}</b>`} <span class="muted">${esc(a.detail)}</span></p>`).join(''):'<p class="muted">Активная работа и ожидания не записаны.</p>'}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
+ preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div><h3>Сейчас</h3>${activity.length?activity.map(a=>`<p>${a.node?`<button data-node="${esc(a.node)}">${esc(a.title)}</button>`:a.run?`<a href="#${esc(new URLSearchParams({source,run:a.run}))}">${esc(a.title)}</a>`:`<b>${esc(a.title)}</b>`} <span class="muted">${esc(a.detail)}</span></p>`).join(''):'<p class="muted">Активная работа и ожидания не записаны.</p>'}${timeHTML(state.timing)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
  const invs=values(run.invocations);if(!invocation && !definition)invocation=run.root_workflow_invocation_id || '';
  $('invocation').innerHTML=invs.map(i=>`<option value="${esc(i.id)}">${esc(i.workflow_ref.id)} · ${esc(i.branch_id || '')}${i.iteration?' · итерация '+i.iteration:''} · ${esc(short(i.id))}</option>`).join('')+(!invs.length?'<option value="">Корневой workflow</option>':'')+definitions(run).map(d=>`<option value="def:${esc(d.id)}">План: ${esc(d.title || d.id)}</option>`).join('');
  $('invocation').value=definition?'def:'+definition:invocation;

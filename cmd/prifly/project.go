@@ -186,7 +186,45 @@ var projectRunnerSkillTemplateBeforeAwaitingHost = strings.Replace(projectRunner
 
 // A host read idle right after its start while its first task waited for it.
 // From next 42 that is awaiting_host, and the host is told what to do with it.
-var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerDeclaredContinuationInstructions+projectRunnerHandoffInstructions+projectRunnerResumeInstructions+projectRunnerAwaitingHostInstructions, 1)
+var projectRunnerSkillTemplateBeforeQuestions = strings.Replace(projectRunnerSkillTemplateBeforeContinuation, "## 1. Start\n", "## 1. Start\n"+projectRunnerDeclaredContinuationInstructions+projectRunnerHandoffInstructions+projectRunnerResumeInstructions+projectRunnerAwaitingHostInstructions, 1)
+
+// From state 41 a report lists the questions its step answered. The old rule
+// for an undeclared native question ended in "do not claim that Pri-Fly
+// recorded the answer"; the host's statement is now recorded, so the rule says
+// where it goes instead.
+var projectRunnerSkillTemplate = strings.NewReplacer(
+	"\n## 3. Finish\n", "\n"+projectRunnerQuestionInstructions+"## 3. Finish\n",
+	projectRunnerNativeQuestionRuleBeforeQuestions, projectRunnerNativeQuestionRule,
+).Replace(projectRunnerSkillTemplateBeforeQuestions)
+
+const projectRunnerQuestionInstructions = "When the task names `take_command`, run it once as you take the task, before\n" +
+	"the work: reading a task records nothing, and without it the operator cannot\n" +
+	"tell the time the task waited for you from your working time.\n\n" +
+	"When the task says `question_report: required`, the report carries\n" +
+	"`answered_questions`: every question the step met during this attempt and\n" +
+	"what the work went on with -- a question the pinned skill asks in its own chat\n" +
+	"included, and a declared decision you took from `decision_context` included.\n" +
+	"Each entry has `question` as it was asked, the `answer` you went on with, and\n" +
+	"`basis`: `decision` with `decision_id` (a decision this Run declares), `input`\n" +
+	"with `port` (a step input, such as a handoff, that settled it), `instructions`\n" +
+	"(the step's instructions or context said so), `person` (someone answered in\n" +
+	"this session) or `judgement` (you decided). Add `asked_by` (the skill or step\n" +
+	"that asked) and `options` when there were any. An empty list says the step\n" +
+	"met no question: it is a statement, not a default, and the operator reads this\n" +
+	"list after the Run to see where the work was steered. A report without it is\n" +
+	"refused as `answered_questions_missing`.\n\n"
+
+const projectRunnerNativeQuestionRuleBeforeQuestions = "Pri-Fly does not intercept native questions automatically.\n" +
+	"For an undeclared native skill question, stop that task, explain the limitation and ask the\n" +
+	"developer; do not choose a hidden model answer, invent a decision ID, or claim\n" +
+	"that Pri-Fly recorded the answer."
+
+const projectRunnerNativeQuestionRule = "Pri-Fly does not intercept native questions automatically.\n" +
+	"For an undeclared native skill question that neither the step's inputs nor its\n" +
+	"instructions settle, stop that task, explain the limitation and ask the\n" +
+	"developer; do not choose a hidden model answer or invent a decision ID. Every\n" +
+	"question the step met goes into `answered_questions` with the basis it really\n" +
+	"had: that list, not the chat, is what the operator reads after the Run."
 
 const projectRunnerAwaitingHostInstructions = "When `run next` answers `awaiting_host`, an Attempt is already issued and waits\n" +
 	"for you: run the command in its `next_command` (`session task --run RUN_ID\n" +
@@ -2619,6 +2657,14 @@ func projectRunnerSkillBeforeAwaitingHost(host projectHost) string {
 	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeAwaitingHost, "{{host}}", host.ID), "{{question_tool}}", questionTool)
 }
 
+func projectRunnerSkillBeforeQuestions(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeQuestions, "{{host}}", host.ID), "{{question_tool}}", questionTool)
+}
+
 func projectRunnerSkillBeforeResume(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -2791,7 +2837,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

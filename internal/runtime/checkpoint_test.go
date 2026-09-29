@@ -55,7 +55,7 @@ func checkpointFixture(t *testing.T) (*Engine, string) {
 func TestAcceptedCheckpointIsNamedOnTheRunRead(t *testing.T) {
 	e, runID := checkpointFixture(t)
 	ctx := context.Background()
-	if r := driverRun(t, e, runID); r.SchemaVersion != CoreContinuationStateVersion {
+	if r := driverRun(t, e, runID); r.SchemaVersion != CoreQuestionStateVersion {
 		t.Fatalf("sealed at %s, not the state whose read names a checkpoint", r.SchemaVersion)
 	}
 	task := handOver(t, e, runID)
@@ -86,7 +86,7 @@ func TestAcceptedCheckpointIsNamedOnTheRunRead(t *testing.T) {
 	for _, step := range r.Steps {
 		reported = step.Outputs["plan"]
 	}
-	if view.SchemaVersion != CoreContinuationReadVersion || view.Checkpoint == nil || view.Checkpoint.Ref != reported || view.Checkpoint.StageID != "plan" || view.Checkpoint.InvocationID != r.RootInvocationID {
+	if view.SchemaVersion != CoreQuestionReadVersion || view.Checkpoint == nil || view.Checkpoint.Ref != reported || view.Checkpoint.StageID != "plan" || view.Checkpoint.InvocationID != r.RootInvocationID {
 		t.Fatalf("the read does not name the accepted checkpoint %v: %+v", reported, view.Checkpoint)
 	}
 	// A continuation declaring the checkpoint as an input takes exactly it.
@@ -101,8 +101,8 @@ func TestAcceptedCheckpointIsNamedOnTheRunRead(t *testing.T) {
 	if err != nil || carried.Inputs["resume"].Ref != reported || carried.Checkpoint == nil || carried.Checkpoint.StageID != "plan" {
 		t.Fatalf("the continuation did not take the accepted checkpoint: %+v %v", carried, err)
 	}
-	for name, value := range map[string]any{"CoreRunStateV40": r, "CoreRunViewV40": view} {
-		if err := validatePublic(t, name, value); err != nil {
+	for name, value := range map[string]any{"CoreRunStateV41": r, "CoreRunViewV41": view} {
+		if err := validateInBundle(t, questionPublicContracts, name, value); err != nil {
 			t.Fatalf("%s rejected the Run: %v", name, err)
 		}
 	}
@@ -121,7 +121,7 @@ func TestAProjectTitleDoesNotLowerTheSealedState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r := driverRun(t, e, result.Receipt.RunID); r.SchemaVersion != CoreExternalWriteStateVersion || r.ProjectTitle != "A project" {
+	if r := driverRun(t, e, result.Receipt.RunID); r.SchemaVersion != CoreQuestionStateVersion || r.ProjectTitle != "A project" {
 		t.Fatalf("sealed at %s with title %q", r.SchemaVersion, r.ProjectTitle)
 	}
 }

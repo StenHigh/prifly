@@ -69,6 +69,9 @@ var versionContracts = []versionContract{
 	// 40 records recovery/2, which takes the source's tree and chooses no
 	// commit, and reads the last accepted checkpoint.
 	{CoreContinuationStateVersion, CoreContinuationReadVersion, "", CoreAwaitingHostNextVersion},
+	// 41 records the questions a host says its step answered, and when a
+	// runtime decision was requested.
+	{CoreQuestionStateVersion, CoreQuestionReadVersion, "", CoreAwaitingHostNextVersion},
 	// 36 minted no state row of its own: it is a next-action answer, so every
 	// state that could describe a finished Run and was still being created
 	// took it up, the way 31 and 32 took up 33. 41 is the same kind of answer
@@ -112,6 +115,8 @@ func isRecoveryState(version string) bool { return atLeast(version, CoreRecovery
 func isContinuationState(version string) bool {
 	return atLeast(version, CoreContinuationStateVersion)
 }
+
+func isQuestionState(version string) bool { return atLeast(version, CoreQuestionStateVersion) }
 
 // higherState is whichever of two known states is later in the ladder. A Run
 // needing several features is sealed at the highest of them, which carries

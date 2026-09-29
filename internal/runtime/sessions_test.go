@@ -115,7 +115,7 @@ func TestWorkspaceCheckoutHandoffKeepsScratchOutsideRepository(t *testing.T) {
 	e, runID, claim := assistedWorkspaceFixture(t, "checkout")
 	task := handOver(t, e, runID)
 	r := driverRun(t, e, runID)
-	if r.SchemaVersion != CoreStageWorkStateVersion || task.SchemaVersion != AssistedSessionRoutedVersion || task.WorkspaceMode != "checkout" || task.RepositoryWorkspace != claim.Repository.Toplevel || task.Workspace == task.RepositoryWorkspace {
+	if r.SchemaVersion != CoreQuestionStateVersion || task.SchemaVersion != AssistedSessionRoutedVersion || task.WorkspaceMode != "checkout" || task.RepositoryWorkspace != claim.Repository.Toplevel || task.Workspace == task.RepositoryWorkspace {
 		t.Fatalf("checkout handoff did not keep workspace identities separate: run=%s task=%+v claim=%+v", r.SchemaVersion, task, claim)
 	}
 	if _, err := os.Stat(filepath.Join(task.RepositoryWorkspace, "context")); !os.IsNotExist(err) {
@@ -125,8 +125,8 @@ func TestWorkspaceCheckoutHandoffKeepsScratchOutsideRepository(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, value := range map[string]any{"CoreRunStateV31": r, "CoreRunViewV31": view, "SessionTaskV7": task} {
-		if err := validatePublic(t, name, value); err != nil {
+	for name, value := range map[string]any{"CoreRunStateV41": r, "CoreRunViewV41": view, "SessionTaskV7": task} {
+		if err := validateInBundle(t, questionPublicContracts, name, value); err != nil {
 			t.Fatalf("%s rejected checkout state: %v", name, err)
 		}
 	}
@@ -164,6 +164,16 @@ func handOver(t *testing.T, e *Engine, runID string) SessionTask {
 	return task
 }
 
+// noQuestions is a host saying its step met no question, in a Run whose task
+// asks for the list; nil where the task does not ask, so older states see the
+// report they always did.
+func noQuestions(task SessionTask) *[]AnsweredQuestion {
+	if task.QuestionReport != QuestionReportRequired {
+		return nil
+	}
+	return &[]AnsweredQuestion{}
+}
+
 func hostResult(t *testing.T, e *Engine, task SessionTask, summary string) SessionSubmission {
 	t.Helper()
 	r, _, err := e.load(context.Background(), task.RunID)
@@ -189,7 +199,7 @@ func hostResult(t *testing.T, e *Engine, task SessionTask, summary string) Sessi
 	if err != nil {
 		t.Fatal(err)
 	}
-	return SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: encoded}
+	return SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: encoded, AnsweredQuestions: noQuestions(task)}
 }
 
 // The pilot measured a working window that had already been running for 32 ms
@@ -254,7 +264,7 @@ func TestAssistedAttemptPublishesItsWorkingWindowWithoutSubtraction(t *testing.T
 			t.Fatal(err)
 		}
 		attempt := view.Run.Attempts[task.AttemptID]
-		if view.Timing.CalculatorRevision != TimingCalculatorRevisionContext || attempt.Admitted.Session == attempt.Settled.Session {
+		if view.Timing.CalculatorRevision != TimingCalculatorRevisionSessions || attempt.Admitted.Session == attempt.Settled.Session {
 			t.Fatalf("fixture no longer crosses a clock session: revision=%s %+v", view.Timing.CalculatorRevision, attempt.Admitted)
 		}
 		elapsed := timingFind(t, view.Timing.Root, task.AttemptID).Metrics["elapsed"]
@@ -293,7 +303,7 @@ func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {
 	if !reflect.DeepEqual(attempt.ReportedCosts, submission.ReportedCosts) {
 		t.Fatalf("reported amounts were reconciled or changed: got %+v want %+v", attempt.ReportedCosts, submission.ReportedCosts)
 	}
-	if view.Run.SchemaVersion != CoreStageWorkStateVersion || view.SchemaVersion != CoreStageWorkReadVersion {
+	if view.Run.SchemaVersion != CoreQuestionStateVersion || view.SchemaVersion != CoreQuestionReadVersion {
 		t.Fatalf("reported cost used old state/read contracts: %s %s", view.Run.SchemaVersion, view.SchemaVersion)
 	}
 	next, err := e.Next(context.Background(), runID)
@@ -301,10 +311,10 @@ func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {
 		t.Fatalf("reported cost used old next contract: %+v %v", next, err)
 	}
 	for name, value := range map[string]any{
-		"CoreRunStateV31": view.Run, "CoreRunViewV31": view, "CoreNextViewV42": next,
+		"CoreRunStateV41": view.Run, "CoreRunViewV41": view, "CoreNextViewV42": next,
 		"SessionTaskV7": task, "SessionSubmissionV7": submission, "ReportedCost": submission.ReportedCosts[0],
 	} {
-		if err := validatePublic(t, name, value); err != nil {
+		if err := validateInBundle(t, questionPublicContracts, name, value); err != nil {
 			t.Fatalf("%s rejected an actual value: %v", name, err)
 		}
 	}
@@ -981,6 +991,16 @@ func TestSubmissionTemplateIsTheReportTheHostOnlyFillsIn(t *testing.T) {
 	if skeleton.Result, err = canonical(result); err != nil {
 		t.Fatal(err)
 	}
+	// Which questions the step met is the host's to say, like the verdict:
+	// the skeleton cannot answer it, and an empty list it filled in would be
+	// an answer nobody gave.
+	if skeleton.AnsweredQuestions != nil {
+		t.Fatalf("the skeleton answered the questions for the host: %+v", *skeleton.AnsweredQuestions)
+	}
+	if _, err := e.SubmitSession(context.Background(), skeleton); refusalCode(err) != "answered_questions_missing" {
+		t.Fatalf("a report without its questions was not refused by name: %v", err)
+	}
+	skeleton.AnsweredQuestions = &[]AnsweredQuestion{}
 	if _, err := e.SubmitSession(context.Background(), skeleton); err != nil {
 		t.Fatalf("the filled skeleton was not an acceptable report: %v", err)
 	}

@@ -145,7 +145,7 @@ func submitProposal(t *testing.T, e *Engine, runID, attemptID string) {
 		t.Fatal(err)
 	}
 	if _, err := e.SubmitSession(ctx, SessionSubmission{SchemaVersion: task.SchemaVersion,
-		RunID: runID, AttemptID: attemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result}); err != nil {
+		RunID: runID, AttemptID: attemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result, AnsweredQuestions: noQuestions(task)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.Drive(ctx, runID); err != nil {

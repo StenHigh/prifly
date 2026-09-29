@@ -323,7 +323,7 @@ stages:
 		if err != nil {
 			t.Fatal(err)
 		}
-		submission, err := json.Marshal(prifly.SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result, WorkspaceTrees: trees})
+		submission, err := json.Marshal(prifly.SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result, WorkspaceTrees: trees, AnsweredQuestions: noQuestions(task)})
 		if err != nil {
 			t.Fatal(err)
 		}

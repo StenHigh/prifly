@@ -61,6 +61,7 @@ type generator struct {
 	continuation          bool
 	nextHandoff           bool
 	awaitingHost          bool
+	questions             bool
 	recovery              bool
 }
 
@@ -210,6 +211,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.awaitingHost && awaitingHostField(t, field.Name) {
 						continue
 					}
+					if !g.questions && questionField(t, field.Name) {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -345,6 +349,7 @@ var profileContracts = []struct {
 	{"continuation", "generate declared continuation state/read version 40 contracts", func(g *generator) { g.continuation = true }},
 	{"next-handoff", "generate next version 41 handoff contracts", func(g *generator) { g.nextHandoff = true }},
 	{"awaiting-host", "generate next version 42 awaiting-host contracts", func(g *generator) { g.awaitingHost = true }},
+	{"questions", "generate answered-questions state/read version 41 contracts", func(g *generator) { g.questions = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -938,6 +943,12 @@ func main() {
 		contracts["CoreNextViewV42"] = contracts["CoreNextViewV41"]
 		delete(contracts, "CoreNextViewV41")
 	}
+	if g.questions {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreCapabilities"} {
+			contracts[name+"V41"] = contracts[name+"V40"]
+			delete(contracts, name+"V40")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1244,6 +1255,12 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-next-awaiting-host:42"
 			bundle["title"] = "Pri-Fly next-action awaiting-host contracts"
 			bundle["description"] = "Next 42 carries everything 41 does and names a task waiting for its host as the action awaiting_host, with the command that takes it, where 41 answered idle. It also names what each step of the Run declared it may change -- effects class, retry class and an external write's boundary -- from the sealed definitions, and what the step of the current action declares. Declarations, never observations. Derived at read time, so it mints no state version: the states that answered 41 answer 42. State, read, preview and step read keep the 40 contracts, and every earlier bundle is unchanged, byte for byte."
+		}
+		if g.questions {
+			questionConstraints(&g)
+			bundle["$id"] = "urn:prifly:core-questions:41"
+			bundle["title"] = "Pri-Fly answered-questions contracts"
+			bundle["description"] = "State/read 41 records, for every assisted report of a project Run, the questions the step met during the attempt and how each was answered: the question, the answer and its basis -- a decision the Run declares, an input of the step, the instructions it was handed, a person in the session or the executor's own judgement. The task says question_report required and a report without answered_questions is refused; an empty list is the host saying there were none. The list is the host's statement, kept on the attempt apart from the decision journal: it is no DecisionRecord, no Approval and no evidence of who answered. A runtime decision's record also keeps when it was requested, so the wait for its answer is measured. Next keeps 42 and every earlier bundle is unchanged, byte for byte."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

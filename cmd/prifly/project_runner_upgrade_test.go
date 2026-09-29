@@ -55,9 +55,9 @@ func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
 // projectKnownRunnerSkills leaves every installed runner unreplaceable.
 func TestProjectRunnerTextIsPinned(t *testing.T) {
 	pinned := map[string]string{
-		"codex-cli":   "sha256:700da2a5a09330a72fbb26c08e795dc03218b8b382992ab8fd8313ca611ce226",
-		"codex-app":   "sha256:3254092ad127f5d9ba94416221e20c2968f97314805df1a5e961c42826931ced",
-		"claude-code": "sha256:6cdfca2c2fc0aef0cd1e7d31cc105e20bcdf15736d8d7f80824d4801d2e81332",
+		"codex-cli":   "sha256:7700474f4a8de08cc1a3d0a06136114887a4b89c87f50657266018d905daaf0c",
+		"codex-app":   "sha256:9ae1cdd3077ad2215d2cc048602af7dbc4d033cc57f173d82e598291e267b21d",
+		"claude-code": "sha256:f6a3a121e884731a45869a4ca1abcb518260accf029f0d81f71c2de8efde88a3",
 	}
 	for _, host := range projectHosts {
 		sum := sha256.Sum256([]byte(projectRunnerSkill(host)))
@@ -97,6 +97,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:eb3d3687c9fb77e496974110b4346da406f62927c2aa0efd1d51d7baf9a950fd",
 			"sha256:aa81ac096d59950fb6f37884132a40aebaf3f17d8ceb3bac3126ac57e2642936",
 			"sha256:eaafe072c3e126e7fc04926a4466047e4b129c07e174a0b466d2447d7d3bea97",
+			"sha256:700da2a5a09330a72fbb26c08e795dc03218b8b382992ab8fd8313ca611ce226",
 		},
 		"codex-app": {
 			"sha256:0fecbf3f6b3b67b2347896025b6f0e28f64d7cf6002b5151790bcb8352623376",
@@ -122,6 +123,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:bc5b71c2eb231ac279544a6db348d6f3959e5187141633ae6a781ef07a6c089b",
 			"sha256:12b4515bc158881046904bbd975a9f6ebb45dd63b280a5dd3728ef1a366868e1",
 			"sha256:41f096b08729282ee4f8fdd8954662a9d9dccae00cdafa418e29a573dc28cf0b",
+			"sha256:3254092ad127f5d9ba94416221e20c2968f97314805df1a5e961c42826931ced",
 		},
 		"claude-code": {
 			"sha256:416af8429794e5adef4b7180427c3b74b517404b44f36be226f752aa0f61196d",
@@ -147,6 +149,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:963552769956552c78710cb09274a5a978c36d24c7fcde133a3ccf610d191464",
 			"sha256:f34cb1c398448973e76fc9d3b21355ed4135be65ed1cbcfd76bb8200224e64c0",
 			"sha256:3cf20ad44f41a19c60eec471065d4e92b24d71e7574767e61b9c448861b5390a",
+			"sha256:6cdfca2c2fc0aef0cd1e7d31cc105e20bcdf15736d8d7f80824d4801d2e81332",
 		},
 	}
 	for _, host := range projectHosts {
@@ -179,7 +182,11 @@ func TestProjectCurrentRunnerIsWorkflowNeutral(t *testing.T) {
 				"Respect declared defaults", "not a guessed value", "Prepare is read-only",
 				"same selected host", "exactly the prepared arguments", "never drop a stale-digest check",
 				"session task --run RUN_ID --all", "permitted_effects", "pending_request_digest",
-				"For an undeclared native skill question, stop that task", "do not choose a hidden model answer",
+				"For an undeclared native skill question that neither", "stop that task", "do not choose a hidden model answer",
+				// From 41 a report lists the questions its step answered; the old
+				// rule said Pri-Fly recorded no answer, and now it records the
+				// host's statement.
+				"`question_report: required`", "`answered_questions`", "answered_questions_missing", "it is a statement, not a default", "`take_command`",
 				"not present actor provenance as proof", "local owner and host can share the same OS",
 				"launch_summary when present and decision ledger", "project_profile_version",
 				"For legacy /2, do not pass --prepare or --expected-launch-digest",

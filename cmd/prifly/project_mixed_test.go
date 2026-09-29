@@ -181,7 +181,7 @@ destination: {kind: session_context, name: multiplier}
 	originalEnvelope := bytes.Clone(run.Attempts[task.AttemptID].Envelope)
 	var remainingMS int64
 	if timed {
-		if run.SchemaVersion != prifly.CoreStageWorkStateVersion || task.SchemaVersion != prifly.AssistedSessionRoutedVersion || task.Delivery == nil || task.Delivery.Timing.RemainingMS != 3600000 {
+		if run.SchemaVersion != prifly.CoreQuestionStateVersion || task.SchemaVersion != prifly.AssistedSessionRoutedVersion || task.Delivery == nil || task.Delivery.Timing.RemainingMS != 3600000 {
 			t.Fatalf("mixed fixture did not enter the new timed contract: %+v", task)
 		}
 	}
@@ -305,7 +305,7 @@ destination: {kind: session_context, name: multiplier}
 	if err != nil {
 		t.Fatal(err)
 	}
-	command("--project", authority, "session", "submit", "--file", writeJSON(prifly.SessionSubmission{SchemaVersion: resumed.SchemaVersion, RunID: runID, AttemptID: resumed.AttemptID, EnvelopeDigest: resumed.EnvelopeDigest, Result: result}))
+	command("--project", authority, "session", "submit", "--file", writeJSON(prifly.SessionSubmission{SchemaVersion: resumed.SchemaVersion, RunID: runID, AttemptID: resumed.AttemptID, EnvelopeDigest: resumed.EnvelopeDigest, Result: result, AnsweredQuestions: noQuestions(resumed)}))
 	var final prifly.RunView
 	for i := 0; i < 3; i++ {
 		decode(command("--project", authority, "run", "drive", runID), &final)

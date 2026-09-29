@@ -35,6 +35,35 @@ func validatePublic(t *testing.T, name string, value any) error {
 	}
 	return flow.ValidateSchema(flow.Registry{ref: schema}, ref, data)
 }
+
+// validateInBundle validates against one named bundle. A contract name such as
+// SessionTaskV7 is published by every bundle since routed sessions, each with
+// the fields of its own state; PublicSchema answers with the first, so a value
+// from a later state is checked against the bundle of that state instead.
+func validateInBundle(t *testing.T, content []byte, name string, value any) error {
+	t.Helper()
+	var bundle map[string]json.RawMessage
+	if err := json.Unmarshal(content, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	ref, _ := json.Marshal("#/$defs/" + name)
+	bundle["$ref"] = ref
+	schema, err := json.Marshal(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := flow.Digest(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned := flow.Ref{ID: "test:schema/" + name, Version: "1.0.0", Digest: digest}
+	return flow.ValidateSchema(flow.Registry{pinned: schema}, pinned, data)
+}
+
 func TestPublicSchemasMatchActualReadViewsAndRejectExtensions(t *testing.T) {
 	copy, err := os.ReadFile("../../schemas/foundation/public.schema.json")
 	if err != nil {

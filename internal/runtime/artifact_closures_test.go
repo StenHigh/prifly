@@ -70,7 +70,7 @@ func TestArtifactClosureSealsExactManifestBeforeProducerSettlement(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.SchemaVersion != CoreStageWorkStateVersion || len(r.ArtifactClosures) != 1 || len(r.ArtifactPublications) != 2 || after.RunVersion != before.RunVersion {
+	if r.SchemaVersion != CoreQuestionStateVersion || len(r.ArtifactClosures) != 1 || len(r.ArtifactPublications) != 2 || after.RunVersion != before.RunVersion {
 		t.Fatalf("close changed lifecycle or failed to record one exact cut: state=%s publications=%d closures=%d versions=%d/%d", r.SchemaVersion, len(r.ArtifactPublications), len(r.ArtifactClosures), before.RunVersion, after.RunVersion)
 	}
 	producer := r.Attempts[producerTask.AttemptID]
@@ -92,12 +92,17 @@ func TestArtifactClosureSealsExactManifestBeforeProducerSettlement(t *testing.T)
 	if len(manifestArtifact.Provenance) != 0 {
 		t.Fatalf("manifest duplicated its unbounded item list into bounded ArtifactRevision provenance: %+v", manifestArtifact.Provenance)
 	}
+	// The preview is read before the Run exists and keeps the contract it was
+	// published with; the state it previews is what moved to 41.
+	if err := validatePublic(t, "CorePreviewV31", preview); err != nil {
+		t.Fatalf("CorePreviewV31 rejects the live preview: %v", err)
+	}
 	for name, value := range map[string]any{
-		"CoreRunStateV31": r, "CoreRunViewV31": after, "CoreNextViewV42": next, "CorePreviewV31": preview,
-		"CoreWorkflowInvocationV31": r.Invocations[r.RootInvocationID], "ArtifactManifest": manifest,
-		"ArtifactClosure": closure, "PublishStepPublicationCommandV3": command, "CoreCapabilitiesV35": Capabilities(),
+		"CoreRunStateV41": r, "CoreRunViewV41": after, "CoreNextViewV42": next,
+		"CoreWorkflowInvocationV36": r.Invocations[r.RootInvocationID], "ArtifactManifest": manifest,
+		"ArtifactClosure": closure, "PublishStepPublicationCommandV3": command, "CoreCapabilitiesV41": Capabilities(),
 	} {
-		if err := validatePublic(t, name, value); err != nil {
+		if err := validateInBundle(t, questionPublicContracts, name, value); err != nil {
 			t.Fatalf("%s rejects the live closure value: %v", name, err)
 		}
 	}

@@ -1354,6 +1354,12 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			}
 			stateVersion = higherState(stateVersion, CoreContinuationStateVersion)
 		}
+		// A project Run with an assisted step records what each host says
+		// about the questions its step answered, so the operator can see after
+		// the Run where the work was steered and on what basis.
+		if configurations != nil && requiresSessionState(defs, plan) {
+			stateVersion = higherState(stateVersion, CoreQuestionStateVersion)
+		}
 		if fork != nil && !isForkState(stateVersion) {
 			stateVersion = CoreForkStateVersion
 		}

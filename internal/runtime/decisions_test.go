@@ -122,7 +122,7 @@ func TestPackageProfileAnswerIsOneOfTheDeclaredAnswers(t *testing.T) {
 	if task.DecisionSheet == nil || task.DecisionSheet.PackageProfile != "fast" {
 		t.Fatalf("the profile stopped arriving on the channel packages already read: %+v", task.DecisionSheet)
 	}
-	if err := validatePublic(t, "SessionTaskV7", task); err != nil {
+	if err := validateInBundle(t, questionPublicContracts, "SessionTaskV7", task); err != nil {
 		t.Fatalf("the reserved answer name broke the published task contract: %v", err)
 	}
 }

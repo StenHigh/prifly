@@ -54,7 +54,7 @@ func TestCheckTimingScopesAndNoProducerDoubleCounting(t *testing.T) {
 	r.Stops = []Stop{{ID: "stop:child", Scope: "invocation", ScopeID: "child", Kind: "pause", Status: "released", Created: timingObservation(13500), Released: timingPoint(14000)}}
 	before, _ := json.Marshal(r)
 	report := Timing(r, r.LastObserved, false)
-	if report.CalculatorRevision != TimingCalculatorRevisionContext || report.Root.AttemptCount != 1 {
+	if report.CalculatorRevision != TimingCalculatorRevisionSessions || report.Root.AttemptCount != 1 {
 		t.Fatal("checks changed the producer Attempt population or used the old calculator")
 	}
 	check := timingFind(t, report.Root, "check:output")

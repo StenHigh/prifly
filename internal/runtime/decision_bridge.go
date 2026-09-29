@@ -64,6 +64,16 @@ func decisionApplies(definition DecisionDefinition, profile string, records []De
 // or shadow this key.
 const packageProfileContext = "core:package_profile"
 
+// requestedAt is when an attempt asked, kept on its record from state 41 so the
+// wait for the answer is measured; earlier states have no place for it.
+func requestedAt(r Run, observed Observation) *Observation {
+	if !isQuestionState(r.SchemaVersion) {
+		return nil
+	}
+	requested := observed
+	return &requested
+}
+
 func decisionSessionContext(catalog *DecisionCatalog, sheet *DecisionSheet) map[string]json.RawMessage {
 	if catalog == nil || sheet == nil {
 		return nil
@@ -311,7 +321,7 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 			if err := advanceDecisionDelivery(attempt, definition.Destination.Name, value, observed); err != nil {
 				return local.Change{}, err
 			}
-			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "answered", Source: source, Value: value, Observed: &observed})
+			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "answered", Source: source, Value: value, Observed: &observed, Requested: requestedAt(*r, observed)})
 			data, err := canonical(map[string]any{"request": request, "request_digest": digest, "observation": observed, "source": source})
 			return local.Change{Events: []local.EventInput{{Type: "decision.answered", Version: 1, Data: data}}}, err
 		}
@@ -326,7 +336,7 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 			if err := advanceDecisionDelivery(attempt, definition.Destination.Name, value, observed); err != nil {
 				return local.Change{}, err
 			}
-			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "defaulted", Source: "autonomous_policy", Value: value, Observed: &observed})
+			r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "defaulted", Source: "autonomous_policy", Value: value, Observed: &observed, Requested: requestedAt(*r, observed)})
 			data, err := canonical(map[string]any{"request": request, "request_digest": digest, "observation": observed, "source": "autonomous_policy"})
 			return local.Change{Events: []local.EventInput{{Type: "decision.defaulted", Version: 1, Data: data}}}, err
 		}
@@ -344,7 +354,7 @@ func (e *Engine) RequestDecision(ctx context.Context, request DecisionRequest) (
 			}
 			releaseSlot = attempt.ID
 		}
-		r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "pending", Source: "unanswered", Observed: &observed})
+		r.DecisionLedger = append(r.DecisionLedger, DecisionRecord{SchemaVersion: recordVersion, DefinitionID: definition.ID, DefinitionDigest: definitionDigest, AttemptID: attempt.ID, Status: "pending", Source: "unanswered", Observed: &observed, Requested: requestedAt(*r, observed)})
 		data, err := canonical(map[string]any{"request": request, "request_digest": digest, "observation": observed})
 		return local.Change{ReleaseSlot: releaseSlot, Events: []local.EventInput{{Type: "decision.requested", Version: 1, Data: data}}}, err
 	})

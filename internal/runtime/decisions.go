@@ -80,6 +80,9 @@ type DecisionRecord struct {
 	Value            json.RawMessage `json:"value,omitempty"`
 	Observed         *Observation    `json:"observed,omitempty"`
 	ClosureReason    string          `json:"closure_reason,omitempty"`
+	// Requested is when an attempt asked this runtime decision, kept on its
+	// record in a Run sealed at 41 so the wait for the answer is measured.
+	Requested *Observation `json:"requested,omitempty"`
 }
 
 // DecisionSheet is the immutable set of preflight choices delivered to a Run.

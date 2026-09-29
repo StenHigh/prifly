@@ -201,7 +201,7 @@ func sessionPass(t *testing.T, task SessionTask, outputs map[string]ArtifactRef)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result}
+	return SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result, AnsweredQuestions: noQuestions(task)}
 }
 
 func sessionFail(t *testing.T, task SessionTask) SessionSubmission {
@@ -214,7 +214,7 @@ func sessionFail(t *testing.T, task SessionTask) SessionSubmission {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result}
+	return SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result, AnsweredQuestions: noQuestions(task)}
 }
 
 func TestOncePublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
@@ -224,7 +224,7 @@ func TestOncePublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := driverRun(t, e, runID)
-	if before.SchemaVersion != CoreStageWorkStateVersion || len(before.Active) != 1 {
+	if before.SchemaVersion != CoreQuestionStateVersion || len(before.Active) != 1 {
 		t.Fatalf("terminal-failure source did not establish current-session producer overlap: state=%s active=%v", before.SchemaVersion, before.Active)
 	}
 	producer, err := e.SessionTask(ctx, runID, before.Active[0])
@@ -251,7 +251,7 @@ func TestOncePublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
 	if registration == nil || registration.Status != "interrupted" {
 		t.Fatalf("once producer failure retained an active or expired registration: %+v", registration)
 	}
-	if err := validatePublic(t, "CoreRunStateV31", after); err != nil {
+	if err := validateInBundle(t, questionPublicContracts, "CoreRunStateV41", after); err != nil {
 		t.Fatalf("current session state rejects the terminal-failure interruption: %v", err)
 	}
 }
@@ -478,7 +478,7 @@ func TestNewOnlyOncePublicationRejectsItemsBeforeItsAuthorityCut(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := driverRun(t, e, runID)
-	if r.SchemaVersion != CoreStageWorkStateVersion {
+	if r.SchemaVersion != CoreQuestionStateVersion {
 		t.Fatalf("new-only source did not select the current session state: %s", r.SchemaVersion)
 	}
 	root, err := r.plan()
@@ -509,7 +509,7 @@ func TestNewOnlyOncePublicationRejectsItemsBeforeItsAuthorityCut(t *testing.T) {
 	if _, _, matched, err := publicationWait(&r, root, registration, publication); err != nil || !matched {
 		t.Fatalf("new-only once source refused its first later publication: matched=%v err=%v", matched, err)
 	}
-	if err := validatePublic(t, "CoreRunStateV31", r); err != nil {
+	if err := validateInBundle(t, questionPublicContracts, "CoreRunStateV41", r); err != nil {
 		t.Fatalf("current session state rejects the persisted once cut: %v", err)
 	}
 }

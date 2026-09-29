@@ -384,6 +384,35 @@ Record `/2` дополнительно сохраняет `cancelled` или `ex
 ответа, с `closure_reason`. Эта edition относится только к runtime-решению
 timed Attempt; preflight и legacy records остаются `/1`.
 
+В Run состояния 41 запись runtime-решения, запрошенного Attempt, хранит и
+`requested` — момент запроса, чтобы ожидание ответа было измеримо.
+
+<a id="question-report"></a>
+### Question report — Отчёт о вопросах шага
+
+Заявление host в отчёте assisted-сессии (`answered_questions`, хранится как
+`question_report` на Attempt, `question-report/1`): какие вопросы шаг встретил
+за Attempt — в том числе native-вопросы skill в чате агента, — какой ответ
+принят и на чём он основан: `decision` (объявленное решение Run по
+`decision_id`), `input` (вход шага по `port`), `instructions`, `person`,
+`judgement`. В Run состояния 41 задача несёт `question_report: required`,
+отчёт без списка отклоняется `answered_questions_missing`, пустой список —
+заявление «вопросов не было». Движок проверяет только форму и ссылки, не
+правдивость. Это не DecisionRecord, не Approval и не доказательство, что
+ответил человек; журнал решений от него не меняется.
+
+<a id="session-take"></a>
+### Session take — Взятие задания хостом
+
+Явная запись (`session take`, событие `attempt.session_taken`) о том, когда
+host взял выданное задание; хранится один раз как `session.taken` и не
+сдвигается повторной выдачей. Чтение задачи (`session task`) остаётся чтением
+и ничего не пишет, поэтому без этой записи ожидание хоста неотделимо от его
+работы. Калькулятор `core-timing/4` строит по ней `host_pickup`, а
+`host_work` отсчитывает от неё; без неё `host_pickup` недоступен
+(`host_take_not_recorded`). Задача называет команду в `take_command`, пока
+задание не взято.
+
 <a id="interaction-policy"></a>
 ### Attended / autonomous / unattended Run — Режим участия владельца
 
@@ -1544,6 +1573,12 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [DecisionCatalog](#decision-catalog) | `internal/runtime/decisions.go` | `runtime.DecisionCatalog` | — |
 | [DecisionCatalog](#decision-catalog) | `internal/runtime/decisions.go` | `runtime.DecisionDefinition` | — |
 | [DecisionCatalog](#decision-catalog) | `internal/runtime/model.go` | `runtime.Run.DecisionCatalog` | `decision_catalog` |
+| [Session take](#session-take) | `internal/runtime/sessions.go` | `runtime.SessionHandoff.Taken` | `taken` |
+| [Session take](#session-take) | `internal/runtime/sessions.go` | `runtime.SessionTask.TakeCommand` | `take_command` |
+| [Question report](#question-report) | `internal/runtime/questions.go` | `runtime.QuestionReport` | — |
+| [Question report](#question-report) | `internal/runtime/model.go` | `runtime.Attempt.QuestionReport` | `question_report` |
+| [Question report](#question-report) | `internal/runtime/sessions.go` | `runtime.SessionSubmission.AnsweredQuestions` | `answered_questions` |
+| [Question report](#question-report) | `internal/runtime/sessions.go` | `runtime.SessionTask.QuestionReport` | `question_report` |
 | [DecisionSheet](#decision-sheet) | `internal/runtime/decisions.go` | `runtime.DecisionSheet` | — |
 | [DecisionSheet](#decision-sheet) | `internal/runtime/model.go` | `runtime.Run.DecisionSheet` | `decision_sheet` |
 | [DecisionSheet](#decision-sheet) | `internal/runtime/sessions.go` | `runtime.SessionTask.DecisionSheet` | `decision_sheet` |

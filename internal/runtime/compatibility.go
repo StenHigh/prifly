@@ -191,6 +191,13 @@ func Capabilities() CapabilityManifest {
 	// Next 42 names a task waiting for its host as awaiting_host with the
 	// command that takes it, and names what each step declared it may change.
 	profile.Capabilities = append(profile.Capabilities, "next_awaiting_host")
+	// State 41: every assisted report in a project Run says which questions
+	// its step answered and on what basis, and a runtime decision records when
+	// it was requested so the wait for its answer is measured.
+	profile.StateVersion, profile.ReadVersion = CoreQuestionStateVersion, CoreQuestionReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreQuestionStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreQuestionReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "answered_questions")
 	return manifest
 }
 
@@ -237,11 +244,19 @@ func supportedRun(r Run) bool {
 	if !isWorkspaceState(r.SchemaVersion) && hasWorkspaceStateFields(r) {
 		return false
 	}
+	for _, record := range r.DecisionLedger {
+		if record.Requested != nil && !isQuestionState(r.SchemaVersion) {
+			return false
+		}
+	}
 	for _, attempt := range r.Attempts {
 		if attempt == nil {
 			continue
 		}
 		if validateReportedCosts(attempt.ReportedCosts) != nil {
+			return false
+		}
+		if (attempt.QuestionReport != nil || attempt.Session != nil && attempt.Session.Taken != nil) && !isQuestionState(r.SchemaVersion) {
 			return false
 		}
 		if attempt.Session != nil {

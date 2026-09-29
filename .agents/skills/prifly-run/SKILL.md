@@ -170,6 +170,24 @@ so. Start the step's session with it and answer `honoured` with the model you
 actually used. Without it nobody has decided yet: do the work here and answer
 `unavailable`, which is the truth and costs nothing.
 
+When the task names `take_command`, run it once as you take the task, before
+the work: reading a task records nothing, and without it the operator cannot
+tell the time the task waited for you from your working time.
+
+When the task says `question_report: required`, the report carries
+`answered_questions`: every question the step met during this attempt and
+what the work went on with -- a question the pinned skill asks in its own chat
+included, and a declared decision you took from `decision_context` included.
+Each entry has `question` as it was asked, the `answer` you went on with, and
+`basis`: `decision` with `decision_id` (a decision this Run declares), `input`
+with `port` (a step input, such as a handoff, that settled it), `instructions`
+(the step's instructions or context said so), `person` (someone answered in
+this session) or `judgement` (you decided). Add `asked_by` (the skill or step
+that asked) and `options` when there were any. An empty list says the step
+met no question: it is a statement, not a default, and the operator reads this
+list after the Run to see where the work was steered. A report without it is
+refused as `answered_questions_missing`.
+
 ## 3. Finish
 
 Continue only while the Run permits progress; respect pause, stop, cancel and
@@ -215,9 +233,11 @@ delivery -- write no more files and submit no result for it. It is cooperative
 transfer, not suspension of an external process.
 
 Pri-Fly does not intercept native questions automatically.
-For an undeclared native skill question, stop that task, explain the limitation and ask the
-developer; do not choose a hidden model answer, invent a decision ID, or claim
-that Pri-Fly recorded the answer.
+For an undeclared native skill question that neither the step's inputs nor its
+instructions settle, stop that task, explain the limitation and ask the
+developer; do not choose a hidden model answer or invent a decision ID. Every
+question the step met goes into `answered_questions` with the basis it really
+had: that list, not the chat, is what the operator reads after the Run.
 
 ## Installing a workflow
 

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus}=require('./monitor.js');
+const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases}=require('./monitor.js');
 assert.equal(esc(`<img src='x' onerror="evil()">&`),'&lt;img src=&#39;x&#39; onerror=&quot;evil()&quot;&gt;&amp;');
 assert.equal(label('ready'),'Подготовлен к выдаче Attempt');
 assert.equal(label('pending'),'Attempt передан агенту');
@@ -77,6 +77,68 @@ assert.match(branchStatus,/href="#source=authority&amp;run=run%3Arecovery"/);
 const recovered={root_workflow_invocation_id:'root',recovery:{source_run_id:'run:source',frontier_stage_id:'tests',reused:[{stage_id:'verify'}],root_output_refs:{verify:{implementation:{artifact_id:'artifact:old'}}}}};
 assert.equal(graphData({definition:{entry:'verify',stages:{verify:{kind:'call',on:{succeeded:'tests'}},tests:{kind:'step'}}}},recovered,'root').nodes[0].state,'reused');
 assert.match(activityRows(recovered)[0].detail,/1 узлов взято/);
+
+// What a step received: every fact comes from the stored Run, and one it does
+// not hold reads as not recorded rather than as an empty answer.
+{
+ const catalog={decisions:[
+  {id:'plan_profile',title:'Planning depth',phase:'preflight',choices:[{title:'Fast',value:'fast'}],destination:{kind:'package_profile'}},
+  {id:'improve_apply',title:'Apply improvements',phase:'runtime',choices:[{title:'All',value:'all'},{title:'None',value:'none'}],destination:{kind:'session_context',name:'improve_apply'}},
+  {id:'plan_docs',title:'Docs checkpoint',phase:'preflight',choices:[{title:'Require',value:true}],destination:{kind:'session_context',name:'plan_docs'},when:{profiles:['full']}},
+ ]};
+ const step={id:'aif:step/plan',instructions_ref:{id:'bridge',digest:'d:bridge'},context_refs:[{id:'skill',digest:'d:skill'}],inputs:{task:{},handoff:{}},outputs:{plan:{schema_ref:{id:'plan-schema'},required_for:['pass']}},effects:{class:'workspace_write',retry_class:'never'}};
+ const workflowDef={definition:{stages:{plan:{kind:'step',on:{pass:'done',fail:'done'},input_bindings:{task:{from:'workflow_input',port:'task'},handoff:{from:'stage_output',stage_id:'warmup',port:'handoff'}}}}}};
+ const run={schema_version:'core-state/41',workflow_ref:{digest:'d:wf'},definitions:[{ref:{digest:'d:wf'},bytes:JSON.stringify(workflowDef)},{ref:{digest:'d:step'},bytes:JSON.stringify(step)}],
+  context_resources:[{ref:{digest:'d:bridge'},bytes:'Bridge text'},{ref:{digest:'d:skill'},bytes:'Skill text'}],
+  decision_catalog:catalog,decision_sheet:{package_profile:'fast',profile_source:'actor',decision_policy:'autonomous',records:[{definition_id:'improve_apply',source:'project_default',value:'all'}]},
+  decision_ledger:[{definition_id:'improve_apply',source:'project_default',status:'answered',value:'all'}],
+  activations:{act:{id:'act',stage_id:'plan'},warm:{id:'warm',stage_id:'warmup'}},steps:{s:{id:'s',definition_ref:{digest:'d:step'},stage_activation_id:'act',attempt_ids:['a']}},
+  attempts:{a:{id:'a',stage_activation_id:'act',step_instance_id:'s',context:{inputs:{task:{ref:{artifact_id:'artifact:task',revision:1,digest:'d:task'}},handoff:{ref:{artifact_id:'artifact:h',revision:1,digest:'d:h'}}}},
+   session:{decision_context:{'core:package_profile':'fast',improve_apply:'all'},skill_refs:[{id:'bridge',digest:'d:bridge'},{id:'skill',digest:'d:skill'}],workspace_trees:[{capture:{path:'.ai-factory/PLAN.md'}}]},
+   question_report:{questions:[{question:'Which runner?',answer:'phpunit',basis:'instructions'},{question:'Apply?',answer:'all',basis:'decision',decision_id:'improve_apply'}]}}}};
+ const r=stepReceipt(run,run.attempts.a);
+ assert.deepEqual(r.inputs.map(i=>[i.port,i.origin.kind,i.origin.stage||i.origin.port]),[['handoff','stage_output','warmup'],['task','workflow_input','task']]);
+ assert.deepEqual(r.decisions.map(d=>[d.id,d.choice,d.source]),[['plan_profile','Fast','actor'],['improve_apply','All','project_default']]);
+ assert.deepEqual(r.texts.map(t=>[t.role,t.text]),[['instructions','Bridge text'],['context','Skill text']]);
+ assert.deepEqual(r.expects.verdicts,['pass','fail']);
+ assert.deepEqual(r.expects.trees,['.ai-factory/PLAN.md']);
+ assert.equal(r.reported.length,2);
+ assert.equal(r.program,false);
+ // A Run written before 41 kept no list and no delivered answers: both read
+ // as not recorded, never as "none".
+ const older=JSON.parse(JSON.stringify(run));older.schema_version='core-state/40';delete older.attempts.a.question_report;delete older.attempts.a.session.decision_context;
+ const o=stepReceipt(older,older.attempts.a);
+ assert.equal(o.reported,null);assert.equal(o.reportsKept,false);assert.equal(o.decisions,null);
+ // An empty report is the host's statement that there were none.
+ const empty=JSON.parse(JSON.stringify(run));empty.attempts.a.question_report={questions:[]};
+ assert.deepEqual(stepReceipt(empty,empty.attempts.a).reported,[]);
+ // A program step is handed no answers and no instructions.
+ const program=JSON.parse(JSON.stringify(run));delete program.attempts.a.session;
+ assert.equal(stepReceipt(program,program.attempts.a).program,true);
+ // A question asked through Pri-Fly during the attempt, and one still waiting.
+ const asked=JSON.parse(JSON.stringify(run));asked.decision_ledger.push({definition_id:'improve_apply',attempt_id:'a',status:'answered',source:'actor',value:'none',requested:{utc:'2026-09-30T10:00:00Z'},observed:{utc:'2026-09-30T10:05:00Z'}});asked.pending_decision={attempt_id:'a',decision_id:'improve_apply'};
+ const q=stepReceipt(asked,asked.attempts.a);
+ assert.deepEqual(q.asked.map(x=>[x.id,x.choice,x.source]),[['improve_apply','None','actor']]);
+ assert.equal(q.pending,'improve_apply');
+ const launch=launchInputs(run,{task:{title:'Split files'},security_enabled:false});
+ assert.deepEqual(launch.decisions.map(d=>[d.id,d.answered,d.excluded,d.source]),[['plan_profile',true,false,'actor'],['improve_apply',true,false,'project_default'],['plan_docs',false,true,null]]);
+ assert.deepEqual(launch.inputs.map(i=>[i.port,i.source]),[['task','launch'],['security_enabled','launch']]);
+}
+// Where time went: only numbers the engine published, sorted by stage.
+{
+ const d=(ms,q='measured')=>q==='measured'?{quality:q,value_ms:ms}:{quality:q,estimate_ms:ms};
+ const timing={root:{metrics:{elapsed:d(10000,'estimated'),host_work_sum:d(6000,'estimated'),idle:d(1000,'estimated'),executor_sum:{quality:'not_applicable'}},children:[{kind:'workflow_invocation',children:[
+  {kind:'stage_activation',stage_id:'verify',metrics:{elapsed:d(2000),host_work_sum:d(1500)}},
+  {kind:'stage_activation',stage_id:'verify',metrics:{elapsed:d(1000),host_work_sum:d(800)}},
+  {kind:'stage_activation',stage_id:'implement',metrics:{elapsed:d(5000),host_work_sum:d(4000)}},
+  {kind:'stage_activation',stage_id:'done',stage_kind:'finish',metrics:{elapsed:d(0)}},
+ ]}]}};
+ const t=timeBreakdown(timing);
+ assert.deepEqual(t.categories.map(c=>c.key),['host_work_sum','idle']);
+ assert.deepEqual(t.stages.map(s=>[s.stage,s.count,s.ms,s.agentMs]),[['implement',1,5000,4000],['verify',2,3000,2300]]);
+ assert.equal(timeBreakdown({root:{metrics:{elapsed:d(1)}}}),null);
+ assert.deepEqual(attemptPhases({metrics:{host_work:d(1),executor_time:{quality:'unavailable'}}},true).map(p=>p.key),['host_work']);
+}
 console.log('monitor UI: status wording, escaping, timing quality, graph paths/ports/parallel/repeat/cycles, file evidence passed');
 
 // Exercise the actual pre-paint script, including browsers that deny storage.

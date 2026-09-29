@@ -757,6 +757,9 @@ func (c timingCalculator) attempt(a *Attempt) TimingNode {
 	} else {
 		c.interval(&n, "post_execution_settlement", timingSpan{a.ExecutorEnd, end, timingRef("attempt", a.ID, "executor_end"), endRef, a.Settled == nil}, true, false)
 	}
+	if a.Session != nil && isContextState(c.r.SchemaVersion) {
+		c.sessionPhases(&n, a)
+	}
 	return n
 }
 
@@ -776,6 +779,9 @@ func (c timingCalculator) rollup(node *TimingNode) {
 	}
 	sort.Strings(node.attempts)
 	node.AttemptCount = len(node.attempts)
+	if isContextState(c.r.SchemaVersion) {
+		c.rollupSessions(node)
+	}
 	var parts []Duration
 	var segments []clockSegment
 	basis := ""
@@ -905,7 +911,7 @@ func Timing(r Run, asOf Observation, driverLive bool) TimingTree {
 	if isInvocationState(r.SchemaVersion) {
 		revision = TimingCalculatorRevisionCore
 		if isContextState(r.SchemaVersion) {
-			revision = TimingCalculatorRevisionContext
+			revision = TimingCalculatorRevisionSessions
 		}
 		seen := map[string]bool{}
 		if invocation, ok := c.invocation(r.RootInvocationID, seen); ok {
@@ -931,6 +937,9 @@ func Timing(r Run, asOf Observation, driverLive bool) TimingTree {
 		root.Children = append(root.Children, invocation)
 	}
 	c.rollup(&root)
+	if isContextState(r.SchemaVersion) {
+		root.Metrics["idle"] = c.idleTime(&root)
+	}
 	if isContextState(r.SchemaVersion) && len(root.checks) != len(r.CheckExecutions) {
 		root.Reasons = append(root.Reasons, "check_tree_incomplete")
 	}

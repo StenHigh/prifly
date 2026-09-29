@@ -20,6 +20,15 @@ import (
 // singleLaunchFixture is a project with one launch whose workflow is one
 // assisted step, committed. Changing the step's context text and committing
 // makes a new edition of the package.
+// noQuestions is a scripted host saying its step met no question, where the
+// task asks for the list.
+func noQuestions(task prifly.SessionTask) *[]prifly.AnsweredQuestion {
+	if task.QuestionReport != prifly.QuestionReportRequired {
+		return nil
+	}
+	return &[]prifly.AnsweredQuestion{}
+}
+
 func singleLaunchFixture(t *testing.T) (root, authority string) {
 	t.Helper()
 	root, authority = newProjectFixture(t)
@@ -182,7 +191,7 @@ func finishSingle(t *testing.T, authority, runID string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	submission, err := json.Marshal(prifly.SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result})
+	submission, err := json.Marshal(prifly.SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result, AnsweredQuestions: noQuestions(task)})
 	if err != nil {
 		t.Fatal(err)
 	}

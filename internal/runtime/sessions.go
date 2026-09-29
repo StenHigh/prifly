@@ -122,6 +122,10 @@ type SessionHandoff struct {
 	DeadlineTrust string       `json:"deadline_trust"`
 	Handed        Observation  `json:"handed"`
 	Reported      *Observation `json:"reported,omitempty"`
+	// Taken is when the host said it took this task (session take), kept once:
+	// a redelivery after an answer does not move it. Reading a task writes
+	// nothing, so without it the wait for a host is inside the host's time.
+	Taken *Observation `json:"taken,omitempty"`
 }
 
 func hasSessionStateFields(r Run) bool {
@@ -381,6 +385,13 @@ type SessionTask struct {
 	// absence from the list forbids nothing. Absent unless the step declares
 	// effects.class external_write.
 	ExternalWrite *flow.ExternalWriteBoundary `json:"external_write,omitempty"`
+	// QuestionReport is "required" when this attempt's report must list the
+	// questions the step answered (answered_questions). Absent in a Run sealed
+	// before reports carried them.
+	QuestionReport string `json:"question_report,omitempty"`
+	// TakeCommand is the command that records the host taking this task, until
+	// it has; absent before 41 and once taken.
+	TakeCommand string `json:"take_command,omitempty"`
 }
 
 // SessionTaskFile is the handoff itself, written into the attempt workspace
@@ -411,6 +422,11 @@ type SessionSubmission struct {
 	// that the answer is true, only that the host gave one, and silence is
 	// not an answer.
 	ModelProfile *ModelProfileStatement `json:"model_profile,omitempty"`
+	// AnsweredQuestions lists the questions the step met during this attempt
+	// and how each was answered. Required when the task says question_report
+	// is required; an empty list says there were none, and absent says
+	// nothing, so absent is refused there.
+	AnsweredQuestions *[]AnsweredQuestion `json:"answered_questions,omitempty"`
 }
 
 // ModelProfileStatement is the host speaking about itself. Outcome is one of
@@ -587,6 +603,12 @@ func (e *Engine) sessionTaskFrom(ctx context.Context, r Run, view local.ReadView
 		}
 		if a.Session.SchemaVersion == AssistedSessionRoutedVersion {
 			task.RoutedVerdicts = routedVerdicts(p, activation.StageID)
+		}
+		if isQuestionState(r.SchemaVersion) {
+			task.QuestionReport = QuestionReportRequired
+			if a.Session.Taken == nil {
+				task.TakeCommand = "session take --run " + r.ID + " --attempt " + a.ID
+			}
 		}
 		if step.ModelProfile != nil {
 			// The declaration is the step's and comes from the plan; the
@@ -855,7 +877,7 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	}
 	if submission.DecisionRequest != nil {
 		request := submission.DecisionRequest
-		if submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && submission.SchemaVersion != AssistedSessionRoutedVersion || len(submission.Result) != 0 || len(submission.ReportedCosts) != 0 || len(submission.WorkspaceTrees) != 0 || request.RunID != submission.RunID || request.AttemptID != submission.AttemptID || request.EnvelopeDigest != submission.EnvelopeDigest {
+		if submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && submission.SchemaVersion != AssistedSessionRoutedVersion || len(submission.Result) != 0 || len(submission.ReportedCosts) != 0 || len(submission.WorkspaceTrees) != 0 || submission.AnsweredQuestions != nil || request.RunID != submission.RunID || request.AttemptID != submission.AttemptID || request.EnvelopeDigest != submission.EnvelopeDigest {
 			return local.ApplyResult{}, submissionProblem("/decision_request", "a decision request is the only submission that carries no result, and it must name its delivery")
 		}
 		return e.RequestDecision(ctx, *request)
@@ -928,6 +950,9 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if err := checkModelProfileStatement(step.ModelProfile, submission.ModelProfile); err != nil {
 		return local.ApplyResult{}, err
 	}
+	if err := checkAnsweredQuestions(r, step, submission.AnsweredQuestions); err != nil {
+		return local.ApplyResult{}, err
+	}
 	if submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && submission.SchemaVersion != AssistedSessionRoutedVersion && len(submission.WorkspaceTrees) != 0 {
 		return local.ApplyResult{}, &flow.Problem{Code: "submission_trees_unsupported", Path: "/workspace_trees", Message: "this assisted-session version cannot report workspace trees"}
 	}
@@ -979,6 +1004,22 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 		commandID = derivedID("command", submission.AttemptID, "session-report-v2", submission.EnvelopeDigest, rawDigest(canonicalResult), costDigest)
 		payload["reported_costs_digest"] = costDigest
 	}
+	// A corrected list is a new report, not a replay of the first: the list is
+	// part of what the host said, so it is part of the identity.
+	var answered []AnsweredQuestion
+	if submission.AnsweredQuestions != nil {
+		answered = slices.Clone(*submission.AnsweredQuestions)
+		if answered == nil {
+			answered = []AnsweredQuestion{}
+		}
+		questionBytes, err := canonical(answered)
+		if err != nil {
+			return local.ApplyResult{}, err
+		}
+		questionDigest := rawDigest(questionBytes)
+		commandID = derivedID("command", commandID, "answered-questions", questionDigest)
+		payload["answered_questions_digest"] = questionDigest
+	}
 	result, err := e.apply(ctx, e.owner, commandID, r.ID, "attempt.result_candidate", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		current := r.Attempts[submission.AttemptID]
 		if current == nil || current.Session == nil {
@@ -1014,6 +1055,9 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 				Outcome: submission.ModelProfile.Outcome, Named: submission.ModelProfile.Named,
 				Reason: submission.ModelProfile.Reason, Reported: obs,
 			}
+		}
+		if answered != nil {
+			current.QuestionReport = &QuestionReport{SchemaVersion: QuestionReportVersion, Questions: answered, Reported: obs}
 		}
 		data, err := canonical(map[string]any{"observation": obs, "attempt_id": current.ID, "envelope_digest": current.EnvelopeDigest, "source": "assisted_session", "candidate_digest": rawDigest(canonicalResult)})
 		if err != nil {
@@ -1062,6 +1106,53 @@ func (e *Engine) settleAssisted(ctx context.Context, runID, attemptID string) er
 		return applyErr
 	}
 	return nil
+}
+
+// TakeSession records when the host took a handed task. It is a separate write
+// on purpose: session task stays a read, so a host fetches its work while
+// another process holds the Run, and the many re-reads of one task never pass
+// for a new start. Only the first take is kept.
+func (e *Engine) TakeSession(ctx context.Context, runID, attemptID string) (local.ApplyResult, error) {
+	if e.ReadOnly {
+		return local.ApplyResult{}, local.ErrReadOnly
+	}
+	run, view, err := e.load(ctx, runID)
+	if err != nil {
+		return local.ApplyResult{}, err
+	}
+	if !isQuestionState(run.SchemaVersion) {
+		return local.ApplyResult{}, local.Reject("session_take_unsupported", "this Run was sealed before a host could record taking its task; nothing to do")
+	}
+	commandID := derivedID("command", attemptID, "session-take")
+	// The first take is the one kept; a later one is answered with its
+	// receipt rather than a second command, whose request would differ in
+	// nothing but the Run version it was read at.
+	if current := run.Attempts[attemptID]; current != nil && current.Session != nil && current.Session.Taken != nil {
+		receipt, err := e.Store.LookupReceipt(ctx, e.owner, commandID)
+		if err != nil {
+			return local.ApplyResult{}, err
+		}
+		return local.ApplyResult{Receipt: receipt, Duplicate: true}, nil
+	}
+	return e.apply(ctx, e.owner, commandID, runID, "attempt.session_taken", map[string]any{"attempt_id": attemptID}, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+		current := r.Attempts[attemptID]
+		if current == nil || current.Session == nil {
+			return local.Change{}, local.Reject("not_found", "no assisted attempt with this identity")
+		}
+		if current.Session.PrincipalID != e.owner {
+			return local.Change{}, local.Reject("session_identity_conflict", "this attempt was handed to a different session principal")
+		}
+		if current.Settled != nil || current.Session.Reported != nil {
+			return local.Change{}, local.Reject("session_state_conflict", "this task is already reported; there is nothing left to take")
+		}
+		if current.Session.Taken != nil {
+			return local.Change{}, local.Reject("session_state_conflict", "this task was taken already")
+		}
+		taken := obs
+		current.Session.Taken = &taken
+		data, err := canonical(map[string]any{"observation": obs, "attempt_id": current.ID})
+		return local.Change{Events: []local.EventInput{{Type: "attempt.session_taken", Version: 1, Data: data}}}, err
+	})
 }
 
 // MarkSessionDisconnected records that a handed attempt passed its deadline

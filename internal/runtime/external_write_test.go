@@ -110,7 +110,7 @@ func TestAnAssistedStepPublishesUnderADeclaredBoundary(t *testing.T) {
 		t.Fatalf("a step declaring a bounded external write did not start: %v", err)
 	}
 	r := driverRun(t, e, runID)
-	if r.SchemaVersion != CoreExternalWriteStateVersion {
+	if r.SchemaVersion != CoreQuestionStateVersion {
 		t.Fatalf("sealed at %s, not the state that records the boundary", r.SchemaVersion)
 	}
 	task := handOver(t, e, runID)

@@ -107,7 +107,7 @@ func TestStartPinsProjectTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 	run := driverRun(t, e, started.Receipt.RunID)
-	if run.ProjectTitle != options.ProjectTitle || run.SchemaVersion != CoreProjectTitleStateVersion {
+	if run.ProjectTitle != options.ProjectTitle || run.SchemaVersion != CoreQuestionStateVersion {
 		t.Fatalf("project title was not pinned: %+v", run)
 	}
 	row, err := e.MonitorSummary(context.Background(), run.ID)

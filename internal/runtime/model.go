@@ -287,6 +287,11 @@ const (
 	// both halves are new facts in the contract.
 	CoreContinuationStateVersion = "core-state/40"
 	CoreContinuationReadVersion  = "core-read/40"
+	// An assisted step reports the questions it answered and on what basis,
+	// and a runtime decision records when it was requested, so the wait for
+	// its answer can be measured. Both are facts the Run did not hold before.
+	CoreQuestionStateVersion = "core-state/41"
+	CoreQuestionReadVersion  = "core-read/41"
 	// A terminal Run names where its graph stopped. Both halves were already
 	// held: the finish activation is in the state, and the edge that reached
 	// it is declared in the plan the Run sealed. A host that wanted the reason
@@ -601,6 +606,10 @@ type Attempt struct {
 	// nothing more: this authority holds no channel to a session that existed
 	// before the Run and cannot observe what it ran on.
 	ModelProfileReport *ModelProfileReport `json:"model_profile_report,omitempty"`
+	// QuestionReport is what the host said about the questions its step
+	// answered during this attempt. Present on every accepted report in a Run
+	// sealed at 41; an empty list is the host saying there were none.
+	QuestionReport *QuestionReport `json:"question_report,omitempty"`
 }
 
 // ModelProfileReport records one of three answers a host gives about a

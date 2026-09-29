@@ -329,7 +329,7 @@ var mutatingCommands = map[string][]string{
 	// refusal, so it looked implemented and answered read_only to everyone
 	// who called it.
 	"claim":    {"create", "create-set", "release", "heartbeat"},
-	"session":  {"publish", "action", "submit", "disconnect"},
+	"session":  {"publish", "action", "submit", "take", "disconnect"},
 	"action":   {"propose", "admit"},
 	"capacity": {"set"},
 	"artifact": {"import", "export"},
@@ -1564,6 +1564,19 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 			return err
 		}
 		return c.commandResult(result)
+	case "take":
+		attempt := f.String("attempt", "", "")
+		if err := parse(f, args[1:]); err != nil {
+			return err
+		}
+		if *run == "" || *attempt == "" {
+			return usageError("session take requires --run RUN_ID --attempt ATTEMPT_ID")
+		}
+		result, err := e.TakeSession(ctx, *run, *attempt)
+		if err != nil {
+			return err
+		}
+		return c.commandResult(result)
 	case "disconnect":
 		attempt := f.String("attempt", "", "")
 		if err := parse(f, args[1:]); err != nil {
@@ -2412,7 +2425,55 @@ func renderRun(w io.Writer, v prifly.RunView) error {
 			return err
 		}
 	}
+	if err := renderQuestions(w, v.Run); err != nil {
+		return err
+	}
 	return renderTiming(w, v.Timing, v.Cut)
+}
+
+// renderQuestions prints what each host said about the questions its step
+// answered, in the order the attempts were admitted. They were reachable only
+// as a field of the stored attempt, and the operator reading this summary is
+// the one who has to see where the work was steered and on what basis.
+func renderQuestions(w io.Writer, r prifly.Run) error {
+	attempts := make([]*prifly.Attempt, 0, len(r.Attempts))
+	for _, attempt := range r.Attempts {
+		if attempt != nil && attempt.QuestionReport != nil {
+			attempts = append(attempts, attempt)
+		}
+	}
+	slices.SortFunc(attempts, func(a, b *prifly.Attempt) int {
+		if order := strings.Compare(a.Admitted.UTC, b.Admitted.UTC); order != 0 {
+			return order
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	for _, attempt := range attempts {
+		stage := ""
+		if activation := r.Activations[attempt.ActivationID]; activation != nil {
+			stage = activation.StageID
+		}
+		if len(attempt.QuestionReport.Questions) == 0 {
+			if _, err := fmt.Fprintf(w, "questions stage=%s attempt=%s none (the host said the step met no question)\n", stage, strconv.Quote(attempt.ID)); err != nil {
+				return err
+			}
+			continue
+		}
+		for _, q := range attempt.QuestionReport.Questions {
+			line := fmt.Sprintf("question stage=%s attempt=%s basis=%s", stage, strconv.Quote(attempt.ID), q.Basis)
+			if q.DecisionID != "" {
+				line += " decision=" + q.DecisionID
+			}
+			if q.Port != "" {
+				line += " input=" + q.Port
+			}
+			line += " question=" + strconv.Quote(q.Question) + " answer=" + strconv.Quote(q.Answer)
+			if _, err := fmt.Fprintln(w, line); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func decisionProfile(sheet *prifly.DecisionSheet) string {
@@ -2421,26 +2482,59 @@ func decisionProfile(sheet *prifly.DecisionSheet) string {
 	}
 	return sheet.PackageProfile
 }
+
+// timingValue leads with the value that covers the whole span and names the
+// clock it came from. A known part is the prefix one clock session could
+// measure, not the time the node took: printed bare it reported 0 ms for
+// seventeen minutes of work.
+func timingValue(duration prifly.Duration) string {
+	switch {
+	case duration.ValueMS != nil:
+		return strconv.FormatInt(*duration.ValueMS, 10) + "ms measured"
+	case duration.EstimateMS != nil:
+		return "~" + strconv.FormatInt(*duration.EstimateMS, 10) + "ms by wall clock"
+	case duration.KnownMS != nil:
+		return "at least " + strconv.FormatInt(*duration.KnownMS, 10) + "ms measured"
+	}
+	return "unknown"
+}
+
+// timeSummary is the one line an operator reads for where the time went.
+// Empty for a Run whose calculator publishes none of these.
+func timeSummary(root prifly.TimingNode) string {
+	parts := []string{}
+	for _, metric := range []struct{ name, label string }{
+		{"elapsed", "elapsed"}, {"host_work_sum", "host_work"}, {"host_pickup_sum", "waiting_for_host"},
+		{"decision_wait_sum", "waiting_for_answer"}, {"executor_sum", "programs"}, {"check_executor_sum", "checks"}, {"idle", "nothing_running"},
+	} {
+		d, ok := root.Metrics[metric.name]
+		if !ok || d.Quality == "not_applicable" {
+			continue
+		}
+		parts = append(parts, metric.label+"="+strconv.Quote(timingValue(d)))
+	}
+	if _, ok := root.Metrics["idle"]; !ok {
+		return ""
+	}
+	return "time " + strings.Join(parts, " ")
+}
+
 func renderTiming(w io.Writer, t prifly.TimingTree, cut int64) error {
 	if _, err := fmt.Fprintf(w, "Timing %s cut=%d as_of=%s\n", t.CalculatorRevision, cut, t.AsOf.UTC); err != nil {
 		return err
 	}
+	// Where the Run's time went, as sums over its attempts: from revision 4 the
+	// time with a host, the waits inside it and the time nothing ran are
+	// numbers of their own. Sums, not a partition: parallel work overlaps.
+	if line := timeSummary(t.Root); line != "" {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
 	var visit func(prifly.TimingNode, int) error
 	visit = func(n prifly.TimingNode, depth int) error {
 		duration := n.Metrics["elapsed"]
-		value := "unknown"
-		// A known part is the prefix one clock session could measure, not the
-		// time the node took: printed bare it reported 0 ms for seventeen
-		// minutes of work. Lead with the value that covers the whole span and
-		// name the clock it came from.
-		switch {
-		case duration.ValueMS != nil:
-			value = strconv.FormatInt(*duration.ValueMS, 10) + "ms measured"
-		case duration.EstimateMS != nil:
-			value = "~" + strconv.FormatInt(*duration.EstimateMS, 10) + "ms by wall clock"
-		case duration.KnownMS != nil:
-			value = "at least " + strconv.FormatInt(*duration.KnownMS, 10) + "ms measured"
-		}
+		value := timingValue(duration)
 		if _, err := fmt.Fprintf(w, "%s%s %s status=%s elapsed=%s quality=%s\n", strings.Repeat("  ", depth), n.Kind, strconv.Quote(n.ID), n.Status, value, duration.Quality); err != nil {
 			return err
 		}
@@ -2588,7 +2682,9 @@ Global: --project DIR  --json  --format text|json|csv
                                    has to open the authority's own storage to finish reading a Run's history.
                                    With --json the events are in .view.events, not .events: jq '.view.events[]'
                                    status names what each step declared it may change: its effects class,
-                                   retry_class and, for external_write, the system, operations and target
+                                   retry_class and, for external_write, the system, operations and target;
+                                   question lines say which questions each assisted step answered, the answer and
+                                   its basis, as the host reported them (.run.attempts[].question_report in --json)
                                    next answers the move this Run has now. awaiting_host: a task handed to a host waits
                                    for you, and next_command names the command that takes it; idle: nobody waits
                                    explain on a finished Run names where its graph stopped in finish: the invocation,
@@ -2655,10 +2751,18 @@ Global: --project DIR  --json  --format text|json|csv
                                    Consume exact approvals and retain ActionAdmission; this never delivers it
   session action --file COMMAND.json
                                    Backward-compatible alias for action propose
+  session take --run RUN_ID --attempt ATTEMPT_ID
+                                   Record that you took this task, once, when you start it (the task's take_command).
+                                   Reading a task writes nothing, so without it the monitor cannot tell the time the
+                                   task waited for you from your own working time. A second take changes nothing
   session submit --file SUBMISSION.json
                                    Report for exactly the attempt and envelope that were handed over
+                                   When the task says question_report: required, the report carries answered_questions:
+                                   every question the step met -- a skill's own chat questions included -- with the answer
+                                   and its basis (decision + decision_id, input + port, instructions, person, judgement);
+                                   [] when there was none. Without it the report is refused as answered_questions_missing
   session submit --template --run RUN_ID [--attempt ATTEMPT_ID]
-                                   The skeleton of that report: identities and admitted output slots filled, verdict, summary and digests left blank
+                                   The skeleton of that report: identities and admitted output slots filled, verdict, summary, digests and answered_questions left to the host
   session disconnect --run RUN_ID --attempt ATTEMPT_ID
                                    Record an expired handoff as unknown; it never becomes success
   approval policy --operation OP --quorum N --independence RULE --reason TEXT

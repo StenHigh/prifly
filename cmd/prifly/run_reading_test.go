@@ -138,3 +138,36 @@ func TestRunListNamesTheAuthoritysRunsNewestFirst(t *testing.T) {
 		t.Fatalf("the refusal of an unknown run operation does not name list: %s", errout.String())
 	}
 }
+
+// The questions a host said its step answered were reachable only as a field
+// of the stored attempt. The operator reading the summary sees each one with
+// its answer and basis, and an empty report reads as the host's "none" rather
+// than as nothing recorded.
+func TestRunStatusPrintsTheQuestionsEachStepAnswered(t *testing.T) {
+	view := prifly.RunView{Run: prifly.Run{
+		ID: "run:questions",
+		Activations: map[string]*prifly.Activation{
+			"activation:plan":    {StageID: "plan"},
+			"activation:improve": {StageID: "improve"},
+		},
+		Attempts: map[string]*prifly.Attempt{
+			"attempt:plan": {ID: "attempt:plan", ActivationID: "activation:plan", Admitted: prifly.Observation{UTC: "2026-09-30T10:00:00Z"}, QuestionReport: &prifly.QuestionReport{SchemaVersion: prifly.QuestionReportVersion, Questions: []prifly.AnsweredQuestion{}}},
+			"attempt:improve": {ID: "attempt:improve", ActivationID: "activation:improve", Admitted: prifly.Observation{UTC: "2026-09-30T10:05:00Z"}, QuestionReport: &prifly.QuestionReport{SchemaVersion: prifly.QuestionReportVersion, Questions: []prifly.AnsweredQuestion{
+				{Question: "Apply these improvements?", Answer: "all", Basis: "decision", DecisionID: "improve_apply"},
+				{Question: "Where does work start?", Answer: "app/Services", Basis: "input", Port: "handoff"},
+			}}},
+			"attempt:program": {ID: "attempt:program", ActivationID: "activation:plan", Admitted: prifly.Observation{UTC: "2026-09-30T09:00:00Z"}},
+		},
+	}}
+	var out bytes.Buffer
+	if err := renderQuestions(&out, view.Run); err != nil {
+		t.Fatal(err)
+	}
+	want := `questions stage=plan attempt="attempt:plan" none (the host said the step met no question)
+question stage=improve attempt="attempt:improve" basis=decision decision=improve_apply question="Apply these improvements?" answer="all"
+question stage=improve attempt="attempt:improve" basis=input input=handoff question="Where does work start?" answer="app/Services"
+`
+	if out.String() != want {
+		t.Fatalf("the questions read\n%s\nwant\n%s", out.String(), want)
+	}
+}

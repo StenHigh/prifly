@@ -189,7 +189,7 @@ func treeSubmission(t *testing.T, task SessionTask, summary string, locations []
 	if err != nil {
 		t.Fatal(err)
 	}
-	return SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result, WorkspaceTrees: locations}
+	return SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: task.RunID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, Result: result, WorkspaceTrees: locations, AnsweredQuestions: noQuestions(task)}
 }
 
 func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testing.T) {
@@ -262,7 +262,7 @@ func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testi
 				t.Fatal(err)
 			}
 			r := driverRun(t, e, runID)
-			if r.SchemaVersion != CoreStageWorkStateVersion || r.Status != "completed" {
+			if r.SchemaVersion != CoreQuestionStateVersion || r.Status != "completed" {
 				t.Fatalf("tree run did not use and settle the v24 contract: %+v", r)
 			}
 			ref := r.Attempts[third.AttemptID].Accepted.Outputs["final"]
@@ -632,7 +632,7 @@ func TestMaterializeOnlyTreeHandsAReadOnlyStepTheCapturedPlan(t *testing.T) {
 					t.Fatal(err)
 				}
 				r := driverRun(t, e, runID)
-				if r.SchemaVersion != CoreStageWorkStateVersion || r.Status != "completed" || len(r.Attempts[verify.AttemptID].Accepted.Outputs) != 0 {
+				if r.SchemaVersion != CoreQuestionStateVersion || r.Status != "completed" || len(r.Attempts[verify.AttemptID].Accepted.Outputs) != 0 {
 					t.Fatalf("the read-only step did not settle without an output: %+v", r)
 				}
 				for path := range test.files {
@@ -734,7 +734,7 @@ func TestRunViewNamesTheFailureOfAStoppedRun(t *testing.T) {
 	}
 	// A resolution of not_applied ends the Run failed rather than cancelled
 	// (see examples/troubleshooting.md); either way the view names the stop.
-	if view.SchemaVersion != CoreStageWorkReadVersion || view.Run.Status != "failed" && view.Run.Status != "cancelled" || view.Failure == nil || view.Failure.DiagnosticID == "" {
+	if view.SchemaVersion != CoreQuestionReadVersion || view.Run.Status != "failed" && view.Run.Status != "cancelled" || view.Failure == nil || view.Failure.DiagnosticID == "" {
 		t.Fatalf("a stopped Run does not name its failure: %+v %+v", view.Run.Status, view.Failure)
 	}
 	last := view.Run.Diagnostics[len(view.Run.Diagnostics)-1]
