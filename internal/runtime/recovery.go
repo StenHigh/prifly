@@ -206,19 +206,25 @@ func (e *Engine) PlanRecovery(ctx context.Context, request RecoveryRequest, targ
 			return RecoveryPlan{}, local.Reject("recover_candidate_invalid", "candidate evidence does not belong to the failed Attempt")
 		}
 		sealed := reported.Outputs != nil && attempt.ProcessOutcome != nil && attempt.ProcessOutcome.ExitCode != nil && *attempt.ProcessOutcome.ExitCode == 0 && !attempt.ProcessOutcome.Uncertain && attempt.ProcessOutcome.StopReason == ""
-		for _, ref := range reported.Outputs {
-			if _, _, err := e.Artifact(ref); err != nil {
+		output := func(port string, ref ArtifactRef) ([]byte, error) {
+			return e.recoveryOutputBytes(source, attempt.ID, port, ref)
+		}
+		for port, ref := range reported.Outputs {
+			if _, err := output(port, ref); err != nil {
 				sealed = false
 			}
 		}
-		if sealed {
-			if err := e.recoveryValidateCandidate(target, frontier.StageID, reported, data); err != nil {
-				return RecoveryPlan{}, err
-			}
-			next := target.Workflow.Definition.Stages[frontier.StageID].On[reported.Verdict]
-			if next == "" || target.Workflow.Definition.Stages[next].Kind == "" {
-				return RecoveryPlan{}, local.Reject("recover_candidate_route_invalid", "sealed candidate verdict has no declared target route")
-			}
+		// A candidate the corrected contract still refuses, or whose verdict the
+		// target no longer routes, is no reason to refuse the recovery: the
+		// stage runs again, which is what recovery does without a candidate.
+		next := target.Workflow.Definition.Stages[frontier.StageID].On[reported.Verdict]
+		switch {
+		case !sealed:
+		case e.recoveryValidateCandidate(target, frontier.StageID, reported, data, output) != nil:
+			result.FrontierReason = "the sealed candidate fails the target contract, so the stage runs again"
+		case next == "" || target.Workflow.Definition.Stages[next].Kind == "":
+			result.FrontierReason = "the sealed candidate's verdict has no route in the target, so the stage runs again"
+		default:
 			result.FrontierAction, result.FrontierReason, result.NextStageID = "revalidate", "sealed candidate bytes pass the target contract without another process", next
 			if len(reported.Outputs) != 0 {
 				result.RootOutputs[frontier.StageID] = reported.Outputs
@@ -239,7 +245,32 @@ func digestRecoveryPlan(result RecoveryPlan) (RecoveryPlan, error) {
 	return result, err
 }
 
-func (e *Engine) recoveryValidateCandidate(target *flow.Plan, stageID string, reported Result, data []byte) error {
+// recoveryOutputBytes is what a failed Attempt produced on one port: the
+// accepted artifact when it was published, else the bytes it left in its own
+// output slot -- taken only when they are exactly the bytes its result named.
+// A refused result is never published, so a Run that failed on its output
+// contract keeps its outputs nowhere else; this is the case recovery exists
+// for, and without it the stage always ran again.
+func (e *Engine) recoveryOutputBytes(source Run, attemptID, port string, ref ArtifactRef) ([]byte, error) {
+	if _, data, err := e.Artifact(ref); err == nil {
+		return data, nil
+	}
+	a := source.Attempts[attemptID]
+	if a == nil || a.Workspace == "" {
+		return nil, local.Reject("recover_candidate_invalid", "the failed Attempt left no workspace for output "+port)
+	}
+	slot, declared := a.Context.Outputs[port]
+	if !declared || slot.ArtifactID != ref.ArtifactID || slot.Revision != ref.Revision {
+		return nil, local.Reject("recover_candidate_invalid", "the result names an output the Attempt was not given: "+port)
+	}
+	data, err := readLocal(a.Workspace, slot.Path, MaxArtifactBytes)
+	if err != nil || rawDigest(data) != ref.Digest {
+		return nil, local.Reject("recover_candidate_invalid", "the bytes left for output "+port+" are not the ones its result named")
+	}
+	return data, nil
+}
+
+func (e *Engine) recoveryValidateCandidate(target *flow.Plan, stageID string, reported Result, data []byte, read func(string, ArtifactRef) ([]byte, error)) error {
 	step, exists := target.Steps[stageID]
 	if !exists || step.Effects.Class != "none" || len(step.WorkspaceTrees) != 0 || len(step.ResultCheckRefs) != 0 || len(reported.EvidenceRefs) != 0 || len(reported.EffectReceiptRefs) != 0 || target.ValidateJSON(step.ResultSchemaRef, data) != nil {
 		return local.Reject("recover_candidate_invalid", "sealed result candidate fails the target result contract")
@@ -254,7 +285,7 @@ func (e *Engine) recoveryValidateCandidate(target *flow.Plan, stageID string, re
 		if !ok || len(output.ContentCheckRefs) != 0 {
 			return local.Reject("recover_candidate_invalid", "sealed candidate has an undeclared output: "+name)
 		}
-		_, bytes, err := e.Artifact(ref)
+		bytes, err := read(name, ref)
 		if err != nil || output.Format == "json" && target.ValidateJSON(*output.SchemaRef, bytes) != nil {
 			return local.Reject("recover_candidate_invalid", "sealed candidate output fails the target contract: "+name)
 		}

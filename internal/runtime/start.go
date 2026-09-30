@@ -938,6 +938,9 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	var recoveryOutputs map[string]map[string]ArtifactRef
 	if options.Recovery != nil {
 		recoveryOutputs = map[string]map[string]ArtifactRef{}
+		// A revalidated stage's outputs were never published: its result was
+		// refused. They are read from the failed Attempt's slots, by the same
+		// digest check the plan made.
 		for stageID, ports := range recoveryPlan.RootOutputs {
 			recoveryOutputs[stageID] = map[string]ArtifactRef{}
 			declared := plan.StageOutputs(stageID)
@@ -946,12 +949,21 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 				if !exists {
 					return local.ApplyResult{}, local.Reject("recover_prefix_changed", "reused output port is absent from target: "+stageID+"."+name)
 				}
-				_, data, err := e.Artifact(sourceRef)
+				var data []byte
+				derivedFrom := []ArtifactRef{sourceRef}
+				if recoveryPlan.FrontierAction == "revalidate" && stageID == recoveryPlan.FrontierStageID {
+					// The source output was never published; what it derives
+					// from is the published candidate that named its bytes.
+					data, err = e.recoveryOutputBytes(recoverySource, recoveryPlan.FrontierAttemptID, name, sourceRef)
+					derivedFrom = []ArtifactRef{*recoveryPlan.CandidateRef}
+				} else {
+					_, data, err = e.Artifact(sourceRef)
+				}
 				if err != nil {
 					return local.ApplyResult{}, err
 				}
 				id := derivedID("artifact", options.CommandID, "recovery", stageID, name)
-				copy, err := e.putArtifact(data, port.Format, port.SchemaRef, id, map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": name}, []ArtifactRef{sourceRef}, plan.Registry, portMedia(port.Port))
+				copy, err := e.putArtifact(data, port.Format, port.SchemaRef, id, map[string]any{"kind": "authority", "authority_id": e.Installation.ID, "command_id": options.CommandID, "port": name}, derivedFrom, plan.Registry, portMedia(port.Port))
 				if err != nil {
 					return local.ApplyResult{}, err
 				}

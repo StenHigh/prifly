@@ -751,7 +751,10 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s was not driven: inspect its pinned executors before explicit continuation", started.Receipt.RunID), Cause: err}
 		}
 	}
-	if !recovering || resuming {
+	// A recovery is driven like every other launch: its review already named
+	// the programs it runs and was approved with --allow-execution, and
+	// leaving it ready sent a host to run drive for a step nothing blocked.
+	{
 		if err := engine.Drive(ctx, started.Receipt.RunID); err != nil {
 			// The Run exists; what stopped the first drive is the cause, and a
 			// reader needs its code -- driver_already_active, storage_busy --

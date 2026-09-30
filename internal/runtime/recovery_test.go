@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -112,18 +114,22 @@ func TestRecoverSealedCandidateRevalidatesWithoutProcess(t *testing.T) {
 	}
 	result := Result{SchemaVersion: "1", RunID: "run:source", StepInstanceID: "step:source", AttemptID: "attempt:source", EnvelopeDigest: "sha256:" + strings.Repeat("a", 64), Verdict: "pass", Outputs: map[string]ArtifactRef{"report": artifact.Ref()}, EvidenceRefs: []any{}, EffectReceiptRefs: []any{}, Summary: "sealed"}
 	encoded, _ := json.Marshal(result)
-	if err := e.recoveryValidateCandidate(plan, "work", result, encoded); err != nil {
+	published := func(_ string, ref ArtifactRef) ([]byte, error) {
+		_, data, err := e.Artifact(ref)
+		return data, err
+	}
+	if err := e.recoveryValidateCandidate(plan, "work", result, encoded, published); err != nil {
 		t.Fatalf("sealed candidate: %v", err)
 	}
 	step.Effects.Class = "workspace_write"
 	plan.Steps["work"] = step
-	if err := e.recoveryValidateCandidate(plan, "work", result, encoded); err == nil {
+	if err := e.recoveryValidateCandidate(plan, "work", result, encoded, published); err == nil {
 		t.Fatal("workspace effect was silently skipped")
 	}
 	step.Effects.Class = "none"
 	plan.Steps["work"] = step
 	result.Outputs["report"] = ArtifactRef{ArtifactID: "artifact:missing", Revision: 1, Digest: artifact.Digest}
-	if err := e.recoveryValidateCandidate(plan, "work", result, encoded); err == nil {
+	if err := e.recoveryValidateCandidate(plan, "work", result, encoded, published); err == nil {
 		t.Fatal("missing sealed bytes were accepted")
 	}
 }
@@ -372,5 +378,49 @@ func TestRecoveryFindsTheSourceTree(t *testing.T) {
 	}
 	if held, released, err := e.recoveryClaim(ctx, runID); err != nil || held != nil || !released {
 		t.Fatalf("a released tree was not reported released: %+v %v %v", held, released, err)
+	}
+}
+
+// A refused result's outputs are read from the failed Attempt's slots only
+// when they are exactly the bytes the result named.
+func TestRecoveryOutputBytesComeOnlyFromTheNamedSlot(t *testing.T) {
+	t.Parallel()
+	e := artifactEngine(t)
+	workspace := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspace, "outputs"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("report bytes\n")
+	if err := os.WriteFile(filepath.Join(workspace, "outputs/report"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	ref := ArtifactRef{ArtifactID: "artifact:slot", Revision: 1, Digest: rawDigest(data)}
+	source := Run{Attempts: map[string]*Attempt{"attempt:failed": {ID: "attempt:failed", Workspace: workspace, Context: ContextManifest{Outputs: map[string]OutputSlot{"report": {ArtifactID: "artifact:slot", Revision: 1, Path: "outputs/report"}}}}}}
+	if got, err := e.recoveryOutputBytes(source, "attempt:failed", "report", ref); err != nil || string(got) != string(data) {
+		t.Fatalf("the named slot was not read: %q %v", got, err)
+	}
+	for name, bad := range map[string]func() (Run, string, string, ArtifactRef){
+		"other digest": func() (Run, string, string, ArtifactRef) {
+			r := ref
+			r.Digest = rawDigest([]byte("other"))
+			return source, "attempt:failed", "report", r
+		},
+		"other artifact": func() (Run, string, string, ArtifactRef) {
+			r := ref
+			r.ArtifactID = "artifact:elsewhere"
+			return source, "attempt:failed", "report", r
+		},
+		"undeclared port": func() (Run, string, string, ArtifactRef) { return source, "attempt:failed", "summary", ref },
+		"no attempt":      func() (Run, string, string, ArtifactRef) { return source, "attempt:missing", "report", ref },
+	} {
+		if _, err := e.recoveryOutputBytes(bad()); err == nil {
+			t.Errorf("%s: bytes were taken", name)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "outputs/report"), []byte("tampered\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.recoveryOutputBytes(source, "attempt:failed", "report", ref); err == nil {
+		t.Fatal("changed bytes in the slot were taken")
 	}
 }
