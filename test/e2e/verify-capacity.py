@@ -70,7 +70,7 @@ printf '{{"schema_version":"1","run_id":"%s","step_instance_id":"%s","attempt_id
     # asking the question changed its answer, which is why nothing compared this
     # refusal between releases.
     idle = cli("capacity", "show")
-    assert idle == {"schema_version": "1", "capacity": 1, "held": {}, "waiting": {}, "available": 1, "would_refuse": ""}, f"a fresh authority does not admit exactly one attempt: {idle}"
+    assert idle == {"schema_version": "1", "capacity": 1, "held": {}, "waiting": {}, "available": 1, "would_refuse": "", "resources": {}}, f"a fresh authority does not admit exactly one attempt: {idle}"
 
     holder = subprocess.Popen([str(binary), "--project", str(target), "--json", "run", "start", "--workflow", "workflows/shell.json",
                                "--brief", "brief.json", "--command-id", "command:capacity-holder", "--drive"],
@@ -89,24 +89,17 @@ printf '{{"schema_version":"1","run_id":"%s","step_instance_id":"%s","attempt_id
         assert full["available"] == 0 and full["would_refuse"] == "capacity_conflict", f"a full authority did not name the refusal: {full}"
         assert full["waiting"] == {}, f"reading the capacity joined the admission queue: {full['waiting']}"
 
-        # The refusal a reader meets first. It used to arrive with no message,
-        # pointing at doctor and run status, neither of which reports a driver
-        # lock — and raising capacity does not lift one either.
+        # A second Run is no longer held back by the first one's driver: until
+        # 0.13.71 one driver lock served the whole authority and this start was
+        # refused as driver_already_active. It now reaches admission, which
+        # refuses on the single slot -- and says the Run was created and waits.
         refused = cli("run", "start", "--workflow", "workflows/shell.json", "--brief", "brief.json",
-                      "--command-id", "command:capacity-second", "--drive", expect=USAGE_REFUSAL, timeout=60)
-        assert refused["code"] == "driver_already_active", refused
-        assert refused["safe_next_actions"] == ["run.status", "run.events"], refused["safe_next_actions"]
-        # An engine-authored refusal keeps its own words even when it wraps a
-        # cause, and it keeps them in `message`: violations names places in a
-        # document the caller supplied, and there is no such place here. Both
-        # fields carried explanations until 0.13.8, so a reader could not know
-        # which to read.
+                      "--command-id", "command:capacity-second", "--drive", expect=STATE_REFUSAL, timeout=60)
+        assert refused["code"] == "capacity_conflict", refused
         assert refused["violations"] == [], refused["violations"]
         detail = refused["message"]
-        assert "violations" not in detail, f"the message points elsewhere instead of explaining: {detail}"
-        assert "one authority drives one Run at a time" in detail, detail
-        assert "capacity set does not lift it" in detail, detail
-        assert "run:" in detail, f"the refusal does not name the Run holding the driver: {detail}"
+        assert "admits 1 attempt at a time" in detail, detail
+        assert "was created and keeps its place in the admission queue" in detail, detail
         assert "flock" not in detail and "resource temporarily unavailable" not in detail.lower(), f"the cause's own text leaked: {detail}"
     finally:
         holder.wait(timeout=HOLD_SECONDS + 60)
