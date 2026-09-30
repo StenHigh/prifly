@@ -29,3 +29,5 @@
 
 - [x] 7.1 `basis: decision` с `decision_id: core:package_profile` отклонялся: хост видит решение только по ключу `decision_context`, а проверка знала лишь id каталога. Теперь принимается и ключ, под которым ответ передан этой попытке; запись хранит id каталога; отказ перечисляет и id, и переданные ключи. Проверка: `TestADecisionIsNamedByTheKeyItWasHandedUnder`; текст `prifly-run` называет оба имени, прежний текст заморожен.
 - [x] 7.2 `session submit --template` не говорил, что `answered_questions` обязателен. Поле по-прежнему не заполняется шаблоном; при `question_report: required` в stderr печатается, что и где добавить. Проверка: ассерт в `TestSessionTaskLeavesTheHandoffAndItsReportShapeInReach`, красный без подсказки.
+
+Выпущено 2026-09-30 в v0.13.70 (тег на `272ec70` через `scripts/tag-release.py`: verify и qualify зелёные на этом коммите), release run 36652499849 опубликовал 6 ассетов.
