@@ -16,4 +16,6 @@
 ## 4. Документация и ворота
 
 - [x] 4.1 Справочники профиля и расширения, строка возможности, troubleshooting, словарь. Проверка: `TestEveryDeclaredCapabilityIsInTheAuthorIndex`, `TestGlossaryBindings`.
-- [ ] 4.2 `make ci-check`, затем на GitHub `verify` и `qualify`.
+- [x] 4.2 `make ci-check`, затем на GitHub `verify` и `qualify`.
+
+Выпущено 2026-09-30 в v0.13.71 (тег на `cc3a661` через `scripts/tag-release.py`). Первый `qualify` на `898bd62` упал на e2e: `test/e2e/verify-capacity.py` ждал `driver_already_active` от второго Run и точный вывод `capacity show` без `resources`; исправлено в `cc3a661`, `verify` и `qualify` зелёные, release run 36718915788 опубликовал 6 ассетов.
