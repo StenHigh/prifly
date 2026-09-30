@@ -118,6 +118,7 @@ func changePublicationRun(t *testing.T, e *Engine, c PublishCommand, fn func(*Ru
 
 // PUB-AC-02: one CAS winner; no merge, duplicate revision or refreshed receipt.
 func TestPublicationStateCASReplacementAndDurableRetry(t *testing.T) {
+	t.Parallel()
 	e, token, c := publicationFixture(t, nil)
 	ctx := context.Background()
 	if _, err := e.Publish(ctx, token, c); err != nil {
@@ -189,6 +190,7 @@ func TestPublicationStateCASReplacementAndDurableRetry(t *testing.T) {
 // PUB-AC-01/03: names are declarative, scope is authenticated, application
 // status values never mutate the engine's status or become trusted evidence.
 func TestPublicationDeclarationAndOwnerScope(t *testing.T) {
+	t.Parallel()
 	e, token, c := publicationFixture(t, nil)
 	for _, test := range []struct {
 		name, code string
@@ -228,6 +230,7 @@ func TestPublicationDeclarationAndOwnerScope(t *testing.T) {
 }
 
 func TestPublicationLogicalEventDedupAndWarnings(t *testing.T) {
+	t.Parallel()
 	e, token, c := publicationFixture(t, nil)
 	c.Hook, c.Kind, c.EventKey, c.ExpectedStateVersion = "warning_raised", "event", "event:one", nil
 	first, err := e.Publish(context.Background(), token, c)
@@ -266,6 +269,7 @@ func TestPublicationLogicalEventDedupAndWarnings(t *testing.T) {
 }
 
 func TestPublicationCounterOmissionCannotReset(t *testing.T) {
+	t.Parallel()
 	e, token, c := publicationFixture(t, nil)
 	for i, value := range []string{`{"phase":"working","completed":10}`, `{"phase":"finished"}`} {
 		version := int64(i)
@@ -286,6 +290,7 @@ func TestPublicationCounterOmissionCannotReset(t *testing.T) {
 }
 
 func TestPublicationScalarHookValues(t *testing.T) {
+	t.Parallel()
 	e, token, c := publicationFixture(t, nil)
 	c.Hook = "ready_changed"
 	for i, value := range []string{"false", "true"} {
@@ -304,6 +309,7 @@ func TestPublicationScalarHookValues(t *testing.T) {
 // PUB-AC-04: pause/cancel permits only declared bounded shutdown publications;
 // frozen namespaces stay frozen, and receipt reads still require current access.
 func TestPublicationStopFreezeAndCurrentReceiptAccess(t *testing.T) {
+	t.Parallel()
 	e, token, c := publicationFixture(t, nil)
 	if _, err := e.Publish(context.Background(), token, c); err != nil {
 		t.Fatal(err)
@@ -342,6 +348,7 @@ func TestPublicationStopFreezeAndCurrentReceiptAccess(t *testing.T) {
 }
 
 func TestPublicationCountRateAndControlReserve(t *testing.T) {
+	t.Parallel()
 	for _, limit := range []string{"count", "rate"} {
 		t.Run(limit, func(t *testing.T) {
 			e, token, c := publicationFixture(t, func(step *flow.StepDefinition) {
@@ -394,6 +401,7 @@ func TestPublicationCountRateAndControlReserve(t *testing.T) {
 }
 
 func TestPublisherStatusFreshnessIsReadOnly(t *testing.T) {
+	t.Parallel()
 	e, token, c := publicationFixture(t, nil)
 	initial, err := e.publisherStatus(context.Background(), token, c)
 	if err != nil || initial.Hooks[c.Hook].Availability != "unpublished" || initial.Hooks[c.Hook].LatestState != nil {
@@ -431,6 +439,7 @@ func TestPublisherStatusFreshnessIsReadOnly(t *testing.T) {
 }
 
 func TestPublicationHTTPClosedContractAndScopedStatus(t *testing.T) {
+	t.Parallel()
 	e, token, c := publicationFixture(t, nil)
 	socket, stop, err := e.serveSteps()
 	if err != nil {
@@ -534,6 +543,7 @@ func TestPublicationHTTPClosedContractAndScopedStatus(t *testing.T) {
 }
 
 func TestSlowPublisherClientsCannotHoldControlWriter(t *testing.T) {
+	t.Parallel()
 	e, token, c := publicationFixture(t, nil)
 	socket, stop, err := e.serveSteps()
 	if err != nil {

@@ -28,6 +28,7 @@ func phaseValue(t *testing.T, node TimingNode, metric string) int64 {
 // the attempt's executor start is never observed. Its phases are known from what
 // the Run holds -- when it was handed, taken, asked, answered and reported.
 func TestAnAssistedAttemptNamesWhereItsTimeWent(t *testing.T) {
+	t.Parallel()
 	report := Timing(phasesFixture(), timingObservation(22000), false)
 	if report.CalculatorRevision != TimingCalculatorRevisionSessions {
 		t.Fatalf("calculator %s", report.CalculatorRevision)
@@ -58,6 +59,7 @@ func TestAnAssistedAttemptNamesWhereItsTimeWent(t *testing.T) {
 // was kept, leave what they did not record unknown -- never zero, never a
 // shorter number that reads as progress.
 func TestUnrecordedPhasesStayUnknown(t *testing.T) {
+	t.Parallel()
 	r := phasesFixture()
 	r.Attempts["attempt"].Session.Taken = nil
 	attempt := timingFind(t, Timing(r, timingObservation(22000), false).Root, "attempt")

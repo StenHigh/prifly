@@ -27,6 +27,7 @@ func aliasAuthor(t *testing.T, w WorkflowRevision, selectors map[string]string) 
 }
 
 func TestWorkflowAliasesResolveNestedCalls(t *testing.T) {
+	t.Parallel()
 	root, registry := callWorkflow(t, "test:workflow/alias-root")
 	middle, _ := callWorkflow(t, "test:workflow/alias-middle")
 	leaf, _ := callWorkflow(t, "test:workflow/alias-leaf")
@@ -62,6 +63,7 @@ func TestWorkflowAliasesResolveNestedCalls(t *testing.T) {
 }
 
 func TestWorkflowAliasCyclesAndConflicts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, code string
 		edit       func(*WorkflowRevision, *WorkflowRevision, *WorkflowRevision, Registry, map[string][]byte) []byte
@@ -133,6 +135,7 @@ func TestWorkflowAliasCyclesAndConflicts(t *testing.T) {
 }
 
 func TestWorkflowAliasesDoNotRewriteDataOrUnchangedRoots(t *testing.T) {
+	t.Parallel()
 	root, registry := callWorkflow(t, "test:workflow/data-alias")
 	root.Limits.MaxChildDepth = 0
 	schema := []byte(`true`)
@@ -165,6 +168,7 @@ func TestWorkflowAliasesDoNotRewriteDataOrUnchangedRoots(t *testing.T) {
 }
 
 func TestWorkflowAliasInventoryAndDepthBounds(t *testing.T) {
+	t.Parallel()
 	root, registry := callWorkflow(t, "test:workflow/alias-bounds")
 	aliases := make(map[string][]byte)
 	for i := 0; i < 1025; i++ {

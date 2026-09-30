@@ -132,6 +132,7 @@ func choiceHistory(t *testing.T, e *Engine, runID string) (local.ReadView, []loc
 }
 
 func TestChoiceRunsOnlySelectedWorker(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := choiceFixture(t, `{"flag":true}`, "commit-pass")
 	runID := choiceStart(t, e, workflow, options)
 	// The caller's mutable source changes after Start; routing uses sealed input.
@@ -199,6 +200,7 @@ func TestChoiceRunsOnlySelectedWorker(t *testing.T) {
 }
 
 func TestChoiceDurableSelection(t *testing.T) {
+	t.Parallel()
 	exists := func(pointer string) map[string]any {
 		return map[string]any{"op": "exists", "ref": map[string]any{"from": "workflow_input", "port": "control", "pointer": pointer}}
 	}
@@ -282,6 +284,7 @@ func TestChoiceDurableSelection(t *testing.T) {
 }
 
 func TestChoiceErrorsAndMissingHandlers(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, input, code string
 		branches          []map[string]any
@@ -374,6 +377,7 @@ func TestChoiceErrorsAndMissingHandlers(t *testing.T) {
 }
 
 func TestChoiceUnavailableArtifactIsNotUnknown(t *testing.T) {
+	t.Parallel()
 	for _, fault := range []string{"missing", "corrupt"} {
 		t.Run(fault, func(t *testing.T) {
 			e, workflow, options := choiceFixture(t, `{"flag":true}`, "")
@@ -432,6 +436,7 @@ func TestChoiceUnavailableArtifactIsNotUnknown(t *testing.T) {
 }
 
 func TestChoiceReadsAcceptedProducerOutputOrItsAbsence(t *testing.T) {
+	t.Parallel()
 	for _, input := range []string{`{"flag":true}`, `{"flag":false}`} {
 		t.Run(input, func(t *testing.T) {
 			e, workflow, options := choiceFixture(t, input, "pass")
@@ -511,6 +516,7 @@ func TestChoiceReadsAcceptedProducerOutputOrItsAbsence(t *testing.T) {
 }
 
 func TestChoiceProducerHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("CHOICE_PRODUCER_HELPER") != "1" {
 		return
 	}
@@ -543,6 +549,7 @@ func TestChoiceProducerHelper(t *testing.T) {
 }
 
 func TestChoiceCommitReceiptAndCAS(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := choiceFixture(t, `{"flag":true}`, "")
 	runID := choiceStart(t, e, workflow, options)
 	ctx := context.Background()
@@ -590,6 +597,7 @@ func TestChoiceCommitReceiptAndCAS(t *testing.T) {
 }
 
 func TestChoiceConcurrentWritersCommitOnce(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := choiceFixture(t, `{"flag":true}`, "")
 	runID := choiceStart(t, e, workflow, options)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -638,6 +646,7 @@ func TestChoiceConcurrentWritersCommitOnce(t *testing.T) {
 }
 
 func TestChoiceCommitHonorsPauseAndCancel(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"pause", "cancel"} {
 		t.Run(kind, func(t *testing.T) {
 			e, workflow, options := choiceFixture(t, `{"flag":true}`, "commit-pass")
@@ -741,6 +750,7 @@ func choiceCrashDriver(t *testing.T, helper, environment, root, runID string) (*
 }
 
 func TestChoiceCrashAfterCommitBeforeWorkerAdmission(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := choiceFixture(t, `{"flag":true}`, "commit-pass")
 	runID := choiceStart(t, e, workflow, options)
 	_, crash := choiceCrashDriver(t, "TestChoiceCommitHelper", "CHOICE_COMMIT_HELPER", e.Root, runID)
@@ -790,6 +800,7 @@ func TestChoiceCrashAfterCommitBeforeWorkerAdmission(t *testing.T) {
 }
 
 func TestChoiceCommitHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("CHOICE_COMMIT_HELPER") != "1" {
 		return
 	}
@@ -829,6 +840,7 @@ func TestChoiceCommitHelper(t *testing.T) {
 }
 
 func TestChoiceLostDriverDoesNotAdvancePastUncertainWorker(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := choiceFixture(t, `{"flag":true}`, "crash-short")
 	stages := choiceStages(workflow)
 	for _, name := range []string{"work", "other"} {

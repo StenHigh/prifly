@@ -84,6 +84,7 @@ func waitActivation(t *testing.T, r Run) *Activation {
 // A wait holds no worker and no attempt. Its whole point is that nothing
 // executes while it waits, so the run stops with the registration in hand.
 func TestWaitHoldsNoWorkerWhileItWaits(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := waitRuntimeFixture(t, int64(3600))
 	runID := choiceStart(t, e, workflow, options)
 	if err := e.Drive(context.Background(), runID); err != nil {
@@ -112,6 +113,7 @@ func TestWaitHoldsNoWorkerWhileItWaits(t *testing.T) {
 // An event delivered for the entered wait resolves it exactly once, and its
 // payload is exported as an artifact of the declared schema.
 func TestWaitResolvesOnceOnItsEvent(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := waitRuntimeFixture(t, int64(3600))
 	runID := choiceStart(t, e, workflow, options)
 	if err := e.Drive(context.Background(), runID); err != nil {
@@ -173,6 +175,7 @@ func TestWaitResolvesOnceOnItsEvent(t *testing.T) {
 // A delivery that does not match the registration opens nothing. Each refusal
 // keeps its own reason, because "wrong signal" and "no signal" differ.
 func TestWaitRefusesSignalsThatAreNotItsOwn(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, eventType, nonce, reason string }{
 		{"an event of another type", "approval.denied", "", "event_type_mismatch"},
 		{"a correlation it never issued", "approval.granted", "not-the-nonce", "correlation_mismatch"},
@@ -211,6 +214,7 @@ func TestWaitRefusesSignalsThatAreNotItsOwn(t *testing.T) {
 
 // A payload that does not satisfy the declared event schema is not an event.
 func TestWaitRefusesAPayloadItCannotRead(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := waitRuntimeFixture(t, int64(3600))
 	runID := choiceStart(t, e, workflow, options)
 	if err := e.Drive(context.Background(), runID); err != nil {
@@ -227,6 +231,7 @@ func TestWaitRefusesAPayloadItCannotRead(t *testing.T) {
 // An indefinite wait declares that it will not expire, and it does not: no
 // deadline is pinned and nothing in the driver moves it on.
 func TestIndefiniteWaitPinsNoDeadline(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := waitRuntimeFixture(t, nil)
 	runID := choiceStart(t, e, workflow, options)
 	if err := e.Drive(context.Background(), runID); err != nil {
@@ -254,6 +259,7 @@ func TestIndefiniteWaitPinsNoDeadline(t *testing.T) {
 // Nothing fires here on its own: this build owns no timer, so the deadline is
 // observed the next time the authority looks, which is what "waiting" means.
 func TestWaitExpiresWithoutInventingAnEvent(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := waitRuntimeFixture(t, int64(1))
 	runID := choiceStart(t, e, workflow, options)
 	if err := e.Drive(context.Background(), runID); err != nil {
@@ -307,6 +313,7 @@ var _ = flow.CoreProfile
 // external job is started, the answer lands in the inbox, and it is applied
 // exactly once at the moment the wait is actually entered - not before.
 func TestReservedWaitHoldsAnAnswerThatArrivesFirst(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := waitBeforeFixture(t, true)
 	runID := choiceStart(t, e, workflow, options)
 	root := driverRun(t, e, runID).RootInvocationID
@@ -373,6 +380,7 @@ func TestReservedWaitHoldsAnAnswerThatArrivesFirst(t *testing.T) {
 // answer too: their events must not wait on a route that will never be taken.
 func TestUnreachedReservationIsRetiredWithItsScope(t *testing.T) {
 	// The choice will route past the wait, so the promise is never kept.
+	t.Parallel()
 	e, workflow, options := waitBeforeFixture(t, false)
 	runID := choiceStart(t, e, workflow, options)
 	root := driverRun(t, e, runID).RootInvocationID
@@ -406,6 +414,7 @@ func TestUnreachedReservationIsRetiredWithItsScope(t *testing.T) {
 // A reservation cannot outlive what this build is prepared to hold, and one
 // that has already lapsed promises nothing.
 func TestReservationDeadlineIsTheAuthoritysToSet(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := waitBeforeFixture(t, true)
 	runID := choiceStart(t, e, workflow, options)
 	root := driverRun(t, e, runID).RootInvocationID
@@ -433,6 +442,7 @@ func TestReservationDeadlineIsTheAuthoritysToSet(t *testing.T) {
 // not sit unread until the deadline sends the Run down on_timeout -- or, for
 // an indefinite wait, forever.
 func TestAnEventHeldDuringAPauseResolvesTheWaitOnRelease(t *testing.T) {
+	t.Parallel()
 	for _, timeout := range []any{int64(3600), nil} {
 		name := "finite"
 		if timeout == nil {

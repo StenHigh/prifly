@@ -90,6 +90,7 @@ func guardTruths(g *GuardRegistration) []string {
 // the first stage has produced it. The scope waits in between, with the reason
 // written down, and the activation it was holding is opened exactly once.
 func TestStartGuardWaitsForAFactAndThenOpensOneActivation(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := guardFixture(t, `{"flag":true}`)
 	options.Guards = []GuardDeclaration{{Kind: "start", TargetStageID: "gate", Predicate: guardPredicate(guardVerdict("/flag"), true)}}
 	runID := choiceStart(t, e, workflow, options)
@@ -134,6 +135,7 @@ func TestStartGuardWaitsForAFactAndThenOpensOneActivation(t *testing.T) {
 // A false start guard holds its stage without an activation, without an
 // attempt and without a worker slot, and says which fact it read.
 func TestStartGuardHoldsItsScopeWithoutHoldingAWorker(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := guardFixture(t, `{"flag":false}`)
 	options.Guards = []GuardDeclaration{{Kind: "start", TargetStageID: "gate", Predicate: guardPredicate(guardVerdict("/flag"), true)}}
 	runID := choiceStart(t, e, workflow, options)
@@ -170,6 +172,7 @@ func TestStartGuardHoldsItsScopeWithoutHoldingAWorker(t *testing.T) {
 // exists the work has started, and the guard going false does not take it
 // back: withdrawing started work is what a stop guard is for.
 func TestStartGuardFalseAfterOpeningDoesNotWithdrawTheWork(t *testing.T) {
+	t.Parallel()
 	g := &GuardRegistration{SchemaVersion: GuardRegistrationVersion, ID: "guard:one", RunID: "run:one", Kind: "start",
 		InvocationID: "invocation:root", TargetStageID: "gate", Actor: "actor", Status: "observing", Cursor: 1,
 		Observations: []GuardObservation{{Sequence: 0, Truth: string(flow.TruthFalse), Reason: "facts_false", Processed: true}}}
@@ -187,6 +190,7 @@ func TestStartGuardFalseAfterOpeningDoesNotWithdrawTheWork(t *testing.T) {
 // Firing creates the ordinary durable stop, scoped to the invocation and
 // carrying the control epoch, not a second stop mechanism of its own.
 func TestStopGuardFiresAnOrdinaryScopedRestrict(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := guardFixture(t, `{"flag":true}`)
 	options.Guards = []GuardDeclaration{{Kind: "stop", Predicate: guardPredicate(guardControl("/flag"), true), Action: "pause_scope", OnUnknown: "cancel_scope"}}
 	runID := choiceStart(t, e, workflow, options)
@@ -221,6 +225,7 @@ func TestStopGuardFiresAnOrdinaryScopedRestrict(t *testing.T) {
 // on_unknown is mandatory and is itself a restriction. A fact this Run does
 // not hold produces the declared reaction, never a permissive default.
 func TestStopGuardActsOnUnknownRatherThanFailingOpen(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := guardFixture(t, `{"flag":true}`)
 	options.Guards = []GuardDeclaration{{Kind: "stop", Predicate: guardPredicate(guardControl("/absent"), true), Action: "pause_scope", OnUnknown: "cancel_scope"}}
 	runID := choiceStart(t, e, workflow, options)
@@ -246,6 +251,7 @@ func TestStopGuardActsOnUnknownRatherThanFailingOpen(t *testing.T) {
 // A declaration that omits either reaction is refused. There is no default
 // that could be chosen here without choosing it on the author's behalf.
 func TestStopGuardWithoutADeclaredReactionIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, declaration := range []GuardDeclaration{
 		{Kind: "stop", Predicate: guardPredicate(guardControl("/flag"), true), Action: "pause_scope"},
 		{Kind: "stop", Predicate: guardPredicate(guardControl("/flag"), true), OnUnknown: "pause_scope"},
@@ -265,6 +271,7 @@ func TestStopGuardWithoutADeclaredReactionIsRefused(t *testing.T) {
 // REA-008: a true observed while the cursor is behind it must survive a false
 // that arrives after it. All three observations are read, not just the last.
 func TestGuardLatchKeepsATrueThatALaterFalseFollowed(t *testing.T) {
+	t.Parallel()
 	g := &GuardRegistration{SchemaVersion: GuardRegistrationVersion, ID: "guard:one", RunID: "run:one", Kind: "stop",
 		InvocationID: "invocation:root", Action: "pause_scope", OnUnknown: "pause_scope", Actor: "actor", Status: "observing",
 		Observations: []GuardObservation{
@@ -302,6 +309,7 @@ func TestGuardLatchKeepsATrueThatALaterFalseFollowed(t *testing.T) {
 // Recovered facts do not lift a stop, and neither does releasing it while the
 // condition still reads true: release lifts the record, not the condition.
 func TestFiredStopGuardKeepsRefusingWhileItsConditionHolds(t *testing.T) {
+	t.Parallel()
 	g := &GuardRegistration{SchemaVersion: GuardRegistrationVersion, ID: "guard:one", RunID: "run:one", Kind: "stop",
 		InvocationID: "invocation:root", Action: "pause_scope", OnUnknown: "pause_scope", Actor: "actor",
 		Status: "fired", Latched: true, StopID: "stop:one", Cursor: 1,
@@ -325,6 +333,7 @@ func TestFiredStopGuardKeepsRefusingWhileItsConditionHolds(t *testing.T) {
 // has a declared reaction and lending it to a fault would let a broken guard
 // take whichever of the two happened to be the permissive one.
 func TestGuardTypeMismatchIsAnErrorAndKeepsRefusing(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := guardFixture(t, `{"flag":"yes"}`)
 	options.Guards = []GuardDeclaration{{Kind: "start", TargetStageID: "gate", Predicate: guardPredicate(guardControl("/flag"), true)}}
 	runID := choiceStart(t, e, workflow, options)
@@ -350,6 +359,7 @@ func TestGuardTypeMismatchIsAnErrorAndKeepsRefusing(t *testing.T) {
 // Two literals of different types are an authoring mistake fully visible in
 // the declaration, so the registration is refused before the Run exists.
 func TestGuardLiteralTypeMismatchIsRefusedAtRegistration(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := guardFixture(t, `{"flag":true}`)
 	options.Guards = []GuardDeclaration{{Kind: "start", TargetStageID: "gate", Predicate: flow.Predicate{Op: "eq",
 		Left:  &flow.Operand{Kind: "literal", Value: json.RawMessage(`"one"`)},
@@ -366,6 +376,7 @@ func TestGuardLiteralTypeMismatchIsRefusedAtRegistration(t *testing.T) {
 // A reference to a port the guarded workflow does not declare, and one this
 // build cannot resolve for a guard at all, are both refused at registration.
 func TestGuardFieldReferenceIsCheckedAgainstThePinnedPlan(t *testing.T) {
+	t.Parallel()
 	for _, ref := range []flow.FieldRef{
 		{From: "workflow_input", Port: "absent"},
 		{From: "stage_output", StageID: "probe", Port: "absent"},

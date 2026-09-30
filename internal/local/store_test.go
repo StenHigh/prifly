@@ -52,6 +52,7 @@ func applyChange(t *testing.T, s *Store, cmd Command, change Change) ApplyResult
 }
 
 func TestAuthorityControlStateIsAtomicAndDeduplicated(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	command := AuthorityCommand{ID: "authority:grant", Actor: "owner", Key: "authority:controls", Payload: json.RawMessage(`{"operation":"grant.issue"}`)}
@@ -92,6 +93,7 @@ func TestAuthorityControlStateIsAtomicAndDeduplicated(t *testing.T) {
 // after it was counted, before its reducer runs; the count matching lets it
 // through.
 func TestAuthorityCommandRejectsAChangedRunCount(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	one := int64(1)
@@ -112,6 +114,7 @@ func TestAuthorityCommandRejectsAChangedRunCount(t *testing.T) {
 }
 
 func TestRunCommandRejectsChangedAdditionalAuthorityPin(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	if _, err := s.ApplyAuthority(ctx, AuthorityCommand{ID: "authority:packages-one", Actor: "owner", Key: "packages", Payload: json.RawMessage(`{"operation":"trust"}`)}, func(AuthoritySnapshot) (AuthorityChange, error) {
@@ -150,6 +153,7 @@ func TestRunCommandRejectsChangedAdditionalAuthorityPin(t *testing.T) {
 }
 
 func TestRunCommandCanAtomicallyMutatePinnedAuthorityControl(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	if _, err := s.ApplyAuthority(ctx, AuthorityCommand{ID: "authority:seed", Actor: "owner", Key: "control", Payload: json.RawMessage(`{"operation":"seed"}`)}, func(AuthoritySnapshot) (AuthorityChange, error) {
@@ -222,6 +226,7 @@ func TestRunCommandCanAtomicallyMutatePinnedAuthorityControl(t *testing.T) {
 // command proves that version is known before verification, instead of the
 // database being verified under v1 rules and rejecting its own shared cut.
 func TestStoreReopensAfterAnAuthorityCommand(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	ctx := context.Background()
 	if _, err := s.ApplyAuthority(ctx, AuthorityCommand{ID: "command:control", Actor: "owner", Key: "control", Payload: json.RawMessage(`{"operation":"test"}`)}, func(AuthoritySnapshot) (AuthorityChange, error) {
@@ -247,6 +252,7 @@ func TestStoreReopensAfterAnAuthorityCommand(t *testing.T) {
 }
 
 func TestStoreMigratesV1ForAuthorityControls(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
 	// Rewinding the marker is not enough: a genuine v1 database also lacks the
@@ -277,6 +283,7 @@ func TestStoreMigratesV1ForAuthorityControls(t *testing.T) {
 // Qualification reads every live pool connection rather than trusting the DSN
 // or the one connection used by Open. The rejected writes hit the real schema.
 func TestStoreQualifiedConnectionsAndForeignKeys(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	first := applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
@@ -366,6 +373,7 @@ func TestStoreQualifiedConnectionsAndForeignKeys(t *testing.T) {
 }
 
 func TestStoreReadOnlyQueriesHaveNoMaintenanceWithActiveWriter(t *testing.T) {
+	t.Parallel()
 	writer, dir := testStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -484,6 +492,7 @@ func TestStoreReadOnlyQueriesHaveNoMaintenanceWithActiveWriter(t *testing.T) {
 }
 
 func TestStoreAtomicDedupCASAndDurableRejections(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	cmd := storeCommand("create", "run-a", 0)
 	cmd.Payload = json.RawMessage(`{"b":2,"a":1}`)
@@ -534,6 +543,7 @@ func TestStoreAtomicDedupCASAndDurableRejections(t *testing.T) {
 }
 
 func TestStorePublicationsSamplesAndFixedCuts(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	first := applyChange(t, s, storeCommand("first", "run-a", 0), storeChange(`{"value":1}`))
 	pub := storeCommand("pub", "run-a", 0)
@@ -583,6 +593,7 @@ func TestStorePublicationsSamplesAndFixedCuts(t *testing.T) {
 }
 
 func TestStorePublicationAssignmentAdvancesRunVersion(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	first := applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
 	command := storeCommand("assign", "run-a", 0)
@@ -601,6 +612,7 @@ func TestStorePublicationAssignmentAdvancesRunVersion(t *testing.T) {
 }
 
 func TestStoreGuardedTransitionAndHistoricalReceipts(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	first := applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"attempt":"a","paused":false}`))
 	stop := storeCommand("pause", "run-a", 0)
@@ -637,6 +649,7 @@ func TestStoreGuardedTransitionAndHistoricalReceipts(t *testing.T) {
 }
 
 func TestStoreReceiptOnlyPublication(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	first := applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
 	cmd := storeCommand("event-receipt", "run-a", 0)
@@ -694,6 +707,7 @@ func TestStoreReceiptOnlyPublication(t *testing.T) {
 }
 
 func TestStoreSoftBudgetRollsBackOptionalWorkButPreservesControl(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "authority")
 	opts := storeTestOptions
 	opts.SoftLimitBytes = 128 << 10
@@ -799,6 +813,7 @@ func TestStoreSoftBudgetRollsBackOptionalWorkButPreservesControl(t *testing.T) {
 }
 
 func TestStoreSampleBudgetAfterActualSQLiteAllocation(t *testing.T) {
+	t.Parallel()
 	opts := storeTestOptions
 	opts.SoftLimitBytes = 128 << 10
 	s, err := OpenStore(filepath.Join(t.TempDir(), "authority"), opts)
@@ -824,6 +839,7 @@ func TestStoreSampleBudgetAfterActualSQLiteAllocation(t *testing.T) {
 // from `after` let a later commit into an earlier report, so the same cut
 // answered differently depending on when it was asked.
 func TestReadEventsOfTypeStopsAtTheNamedBound(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	first := applyChange(t, s, storeCommand("one", "run:bounded", 0), storeChange(`{"value":1}`))
@@ -842,6 +858,7 @@ func TestReadEventsOfTypeStopsAtTheNamedBound(t *testing.T) {
 // exactly the diagnostics the allowance refused, and the next command is
 // measured against storage the budget believes it rejected.
 func TestOverBudgetCommandSamplesDoNotCommitWithTheirCommand(t *testing.T) {
+	t.Parallel()
 	opts := storeTestOptions
 	opts.SoftLimitBytes = 256 << 10
 	s, err := OpenStore(filepath.Join(t.TempDir(), "authority"), opts)
@@ -877,6 +894,7 @@ func TestOverBudgetCommandSamplesDoNotCommitWithTheirCommand(t *testing.T) {
 }
 
 func TestStoreReceiptPopulationIsNotLimitedToOnePage(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	for i := 0; i < 1005; i++ {
 		cmd := storeCommand(fmt.Sprintf("reject-%d", i), "run:none", 0)
@@ -895,6 +913,7 @@ func TestStoreReceiptPopulationIsNotLimitedToOnePage(t *testing.T) {
 }
 
 func TestStoreGlobalAdmissionSlot(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	first := storeChange(`{"attempt":"attempt-a"}`)
 	first.AcquireSlot = "attempt-a"
@@ -928,6 +947,7 @@ func TestStoreGlobalAdmissionSlot(t *testing.T) {
 }
 
 func TestStoreConcurrentCAS(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":0}`))
 	other, err := OpenStore(dir, storeTestOptions)
@@ -977,6 +997,7 @@ func TestStoreConcurrentCAS(t *testing.T) {
 }
 
 func TestStoreRollbackBusyAndDiskFull(t *testing.T) {
+	t.Parallel()
 	t.Run("write-rollback", func(t *testing.T) {
 		s, _ := testStore(t)
 		if _, err := s.db.Exec(`CREATE TRIGGER refuse_receipt BEFORE INSERT ON commands BEGIN SELECT RAISE(ABORT,'injected receipt persistence failure'); END`); err != nil {
@@ -1046,6 +1067,7 @@ func TestStoreRollbackBusyAndDiskFull(t *testing.T) {
 }
 
 func TestStoreSemanticRejectAndInfrastructureFailure(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	r, err := s.Apply(context.Background(), storeCommand("reject", "run-a", 0), func(Snapshot) (Change, error) { return Change{}, Reject("policy_denied", "not allowed") })
 	if err != nil || r.Receipt.Rejection == nil || r.Receipt.Rejection.Code != "policy_denied" {
@@ -1061,6 +1083,7 @@ func TestStoreSemanticRejectAndInfrastructureFailure(t *testing.T) {
 }
 
 func TestStoreRefusesCorruptionAndNewVersions(t *testing.T) {
+	t.Parallel()
 	for _, mutation := range []struct {
 		name, sql string
 		want      error
@@ -1094,6 +1117,7 @@ func TestStoreRefusesCorruptionAndNewVersions(t *testing.T) {
 }
 
 func TestStoreReadOnlyAndRelocation(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	applyChange(t, s, storeCommand("first", "run-a", 0), storeChange(`{"value":1}`))
 	if err := s.Close(); err != nil {
@@ -1139,6 +1163,7 @@ func TestStoreReadOnlyAndRelocation(t *testing.T) {
 }
 
 func TestStoreCrashRecovery(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"before-commit", "after-commit"} {
 		t.Run(point, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "authority")
@@ -1170,6 +1195,7 @@ func TestStoreCrashRecovery(t *testing.T) {
 }
 
 func TestStoreCrashHelper(t *testing.T) {
+	t.Parallel()
 	dir := os.Getenv("PRIFLY_STORE_CRASH_DIR")
 	if dir == "" {
 		return
@@ -1194,6 +1220,7 @@ func TestStoreCrashHelper(t *testing.T) {
 // Racing admissions must therefore produce one holder of the single slot and
 // explainable refusals for the rest, not two runs believing they were admitted.
 func TestConcurrentAdmissionsNeverExceedTheSlot(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	const racers = 8
 	results := make(chan *Rejection, racers)
@@ -1254,6 +1281,7 @@ func TestConcurrentAdmissionsNeverExceedTheSlot(t *testing.T) {
 // many attempts and no more, and the migration from a single slot keeps the
 // capacity it had so an upgraded installation admits what it admitted before.
 func TestSlotCapacityBoundsConcurrentAdmissions(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	capacity, err := s.SlotCapacity(ctx)
@@ -1309,6 +1337,7 @@ func TestSlotCapacityBoundsConcurrentAdmissions(t *testing.T) {
 // and the recorded reason can never describe different numbers. A capacity the
 // authority is already exceeding is refused rather than applied and repaired.
 func TestAdmissionCapacityChangesWithItsOwnDecision(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	setCapacity := func(id string, capacity int64) (AuthorityApplyResult, error) {
@@ -1376,6 +1405,7 @@ func admitRun(t *testing.T, s *Store, command, runID, attempt string) *Rejection
 // happens to ask at a luckier moment. Without that rule a busy authority can
 // starve a run indefinitely while others keep taking the slot it is waiting for.
 func TestFreedSlotServesTheLongestWaitingRun(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	if rejection := admitRun(t, s, "admit-holder", "run-holder", "attempt-holder"); rejection != nil {
@@ -1421,6 +1451,7 @@ func TestFreedSlotServesTheLongestWaitingRun(t *testing.T) {
 // waiter from an abandoned one, so a run that stops asking must stop blocking
 // everyone else rather than hold the authority forever.
 func TestAnAbandonedWaiterStopsHoldingTheQueue(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	if rejection := admitRun(t, s, "admit-holder", "run-holder", "attempt-holder"); rejection != nil {
@@ -1457,6 +1488,7 @@ func TestAnAbandonedWaiterStopsHoldingTheQueue(t *testing.T) {
 // The queue is bounded. Beyond the bound an admission is refused for that
 // reason, rather than the queue growing without limit behind a bounded slot set.
 func TestAdmissionQueueIsBounded(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	if rejection := admitRun(t, s, "admit-holder", "run-holder", "attempt-holder"); rejection != nil {
 		t.Fatal(rejection)
@@ -1481,6 +1513,7 @@ func TestAdmissionQueueIsBounded(t *testing.T) {
 // A shorter patience would evict a waiting run after a single round of other
 // runs asking, and would make the queue bound unreachable.
 func TestQueuePatienceOutlastsAFullRoundOfWaiters(t *testing.T) {
+	t.Parallel()
 	if SlotWaiterPatience <= MaxSlotWaiters {
 		t.Fatalf("patience %d does not outlast a full queue of %d", SlotWaiterPatience, MaxSlotWaiters)
 	}
@@ -1505,6 +1538,7 @@ func TestQueuePatienceOutlastsAFullRoundOfWaiters(t *testing.T) {
 }
 
 func TestCreateLinkedRunChecksSourceAndPreservesIt(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	zero := int64(0)
@@ -1570,6 +1604,7 @@ func TestCreateLinkedRunChecksSourceAndPreservesIt(t *testing.T) {
 }
 
 func TestRecoverSourcePinChecksAndDeduplicatesWithoutRewritingSource(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	applyChange(t, s, storeCommand("command:source", "run:source", 0), storeChange(`{"source":true}`))
@@ -1613,6 +1648,7 @@ func TestRecoverSourcePinChecksAndDeduplicatesWithoutRewritingSource(t *testing.
 // authority written by an earlier release answered every read with a
 // persistence failure instead of its Runs.
 func TestStoreReadsAnUnmigratedDatabaseReadOnly(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	ctx := context.Background()
 	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
@@ -1659,6 +1695,7 @@ func TestStoreReadsAnUnmigratedDatabaseReadOnly(t *testing.T) {
 // how far it has checked and continues from there; a database that predates
 // the mark still verifies everything once.
 func TestStoreVerifiesIncrementallyFromItsRecordedCut(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	ctx := context.Background()
 	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
@@ -1718,6 +1755,7 @@ func TestStoreVerifiesIncrementallyFromItsRecordedCut(t *testing.T) {
 
 // Corruption written after the recorded mark is still refused at open.
 func TestStoreOpenRefusesCorruptionAfterTheVerifiedCut(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
 	if err := s.Close(); err != nil {
@@ -1743,6 +1781,7 @@ func TestStoreOpenRefusesCorruptionAfterTheVerifiedCut(t *testing.T) {
 // records a state. Those strings are stored once and referenced, and what is
 // read back is the exact document that was written.
 func TestStoreSharesPinnedBytesAcrossSnapshots(t *testing.T) {
+	t.Parallel()
 	s, dir := testStore(t)
 	ctx := context.Background()
 	pinned := strings.Repeat("A", 32<<10)
@@ -1805,6 +1844,7 @@ func TestStoreSharesPinnedBytesAcrossSnapshots(t *testing.T) {
 // Reading the current population is a read of the runs table, and a historical
 // cut uses the partial index instead of scanning every event.
 func TestReadAllPlansAvoidFullEventScans(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	applyChange(t, s, storeCommand("create", "run-a", 0), storeChange(`{"value":1}`))
@@ -1852,6 +1892,7 @@ ORDER BY e.run_id LIMIT ?`, 1, 1, 10)
 // and printed to people, so each has a shape. Every type this build declares
 // has to satisfy the one it belongs to.
 func TestRecordedNamesHaveAGrammar(t *testing.T) {
+	t.Parallel()
 	for _, code := range []string{"not_found", "capacity_conflict", "unsupported_storage_version", "a"} {
 		if !validCode(code) {
 			t.Fatalf("a documented refusal code was refused: %s", code)
@@ -1889,6 +1930,7 @@ func TestRecordedNamesHaveAGrammar(t *testing.T) {
 // for "two tasks" would hit it again with nothing left to read. The refusal
 // says so, and says it in words rather than in "1 attempt(s)".
 func TestCapacityRefusalDistinguishesAttemptsFromRuns(t *testing.T) {
+	t.Parallel()
 	message := capacityConflictMessage("run:queued", 1, 1)
 	for _, expected := range []string{"admits 1 attempt at a time", "1 is already admitted", "one attempt is not one Run", "a slot per branch", "capacity set --capacity N", "capacity show",
 		// A refusal reads as "nothing happened" and here something did: the
@@ -1913,6 +1955,7 @@ func TestCapacityRefusalDistinguishesAttemptsFromRuns(t *testing.T) {
 // until then the authority was blocked by a Run that would never ask again.
 // A settled Run now leaves the queue in the same transaction that settles it.
 func TestASettledRunLeavesTheAdmissionQueueImmediately(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	if rejection := admitRun(t, s, "admit-holder", "run-holder", "attempt-holder"); rejection != nil {

@@ -859,6 +859,24 @@ func (e *Engine) PublishSessionArtifact(ctx context.Context, command PublishComm
 	return e.PublishSessionPublication(ctx, command)
 }
 
+// reportLevelFields belong to the submission, beside result. A host that put
+// one inside result met a bare schema_invalid with no pointer, and a weaker
+// model cannot tell from that that the field is right and only misplaced.
+var reportLevelFields = []string{"answered_questions", "reported_costs", "model_profile", "workspace_trees"}
+
+func misplacedReportField(result []byte) error {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(result, &fields) != nil {
+		return nil
+	}
+	for _, name := range reportLevelFields {
+		if _, inside := fields[name]; inside {
+			return submissionProblem("/result/"+name, name+" belongs to the report itself, beside result, not inside it: move it to the top level of the submission")
+		}
+	}
+	return nil
+}
+
 // SubmitSession accepts a host report for exactly the attempt it was handed.
 // submissionProblem names the field of a malformed report, so a host corrects
 // that field instead of reading the runtime's own schemas to find it.
@@ -925,6 +943,9 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	// schema narrows it below, which is where a step that referenced the first
 	// contract is still held to four verdicts. Validating the narrow contract
 	// here refused a verdict the task itself had just told the host it routes.
+	if err := misplacedReportField(canonicalResult); err != nil {
+		return local.ApplyResult{}, err
+	}
 	if err := flow.ValidateProtocol("StepResultV2", canonicalResult); err != nil {
 		return local.ApplyResult{}, err
 	}

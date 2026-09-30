@@ -11,6 +11,7 @@ import (
 )
 
 func TestAcceptanceProducerSettlementKeepsStorageReserve(t *testing.T) {
+	t.Parallel()
 	e, options := acceptanceProject(t, []string{"step_output", "step_result"}, "", "pass", false)
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
@@ -106,6 +107,7 @@ func TestAcceptanceProducerSettlementKeepsStorageReserve(t *testing.T) {
 }
 
 func TestAcceptancePassedRecoveryAfterStorageRefusal(t *testing.T) {
+	t.Parallel()
 	for _, continuation := range []string{"resume", "cancel"} {
 		t.Run(continuation, func(t *testing.T) {
 			e, options := acceptanceProject(t, []string{"step_output", "step_result"}, "", "pass", false)

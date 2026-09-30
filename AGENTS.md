@@ -18,6 +18,8 @@
 - Transform команды — чистая функция снимка и своего payload. Не читай файлы и blob'ы и не запускай процессы внутри write-транзакции: всё нужное вычисляй до применения команды. Guard `internal/purity` валит тест на нарушении.
 - Драйвер хранения не протекает в runtime и CLI: `make vet` собирает их с `CGO_ENABLED=0`, поэтому пакет с типами driver в собственных контрактах перестанет проходить проверку.
 - Фазы и приёмку веди по `openspec/specs/delivery-roadmap/`; наличие определения или пройденная проверка документа не означает реализацию F2 либо закрытие продуктового gate.
+- Проверки идут в три уровня, чтобы выпуск не держал пилот. Во время работы — `make test-changed` (затронутые пакеты, всё, что их импортирует, и тесты, читающие изменённые файлы по пути) или `make check-fast`; полные ворота `make ci-check` — один раз, перед коммитом, а не после каждой правки. На push GitHub `verify` гоняет то же параллельными задачами. Race-детектор и полный e2e — только перед релизом: `gh workflow run qualify.yml --ref main` на коммит релиза, затем `python3 scripts/tag-release.py vX.Y.Z` — он откажет, если на коммите нет зелёных `verify` и `qualify`.
+- Новый тест помечай `t.Parallel()`, если он не трогает окружение процесса (`t.Setenv`, `os.Setenv`), не пишет переменную пакета и не читает дельту общего счётчика (`planCompilations.Load()` и т. п.). `internal/testguard` валит параллельный тест, нарушающий это; `t.Setenv` в параллельном тесте Go отвергает сам.
 - Нормативное изменение начинай с OpenSpec change. Перед правкой сверяйся с [картой источников](openspec/SOURCE-OF-TRUTH.md): до явного переноса capability старый source set остаётся единственной правдой. OpenSpec управляет документацией Pri-Fly, а не входит в его runtime или YAML authoring contract.
 
 ## Структура репозитория
@@ -45,7 +47,7 @@ openspec/          спецификации, changes, карта источни�
 |---|---|
 | `cmd/prifly/main.go` | диспетчер команд, Problem-конверт и exit-коды |
 | `internal/flow/protocol.schema.json` | источник истины опубликованного контракта |
-| `Makefile` | ворота: `check`, `ci-check`, `race`, `e2e`, `schemas-check` |
+| `Makefile` | ворота: `test-changed`, `check-fast`, `ci-check`, `qualify` (`race` + `e2e`), `schemas-check` |
 | `openspec/SOURCE-OF-TRUTH.md` | где сегодня меняется каждое правило |
 
 AI-контекст: `AGENTS.md` (этот файл, Codex) и `CLAUDE.md` (Claude Code, импортирует

@@ -29,6 +29,7 @@ const programBoundary = "external_write: {system: example-system, operations: [s
 // the pilot's tests step had to declare class none, and the Run's journal said
 // nothing changed while the program created and removed containers.
 func TestAProgramExternalWriteLowersToV14(t *testing.T) {
+	t.Parallel()
 	for _, pinned := range []string{"", "schema_version: '14'\n"} {
 		source := programSource(pinned + "effects: {class: external_write, retry_class: idempotent}\n" + programBoundary)
 		data, err := StepJSONBytes([]byte(source), "yaml")
@@ -59,6 +60,7 @@ func TestAProgramExternalWriteLowersToV14(t *testing.T) {
 
 // Each refusal names what the author should write instead.
 func TestAProgramExternalWriteIsRefusedWhereItCannotBeCarried(t *testing.T) {
+	t.Parallel()
 	effects := "effects: {class: external_write, retry_class: idempotent}\n"
 	for _, test := range []struct {
 		name, source, path, names string
@@ -85,6 +87,7 @@ func TestAProgramExternalWriteIsRefusedWhereItCannotBeCarried(t *testing.T) {
 
 // The editor schema is what the author sees first; it must agree with the tool.
 func TestProgramExternalWriteEditorSchemaMatchesAuthoring(t *testing.T) {
+	t.Parallel()
 	effects := "effects: {class: external_write, retry_class: idempotent}\n"
 	for _, test := range []struct {
 		name, source string
@@ -144,6 +147,7 @@ func TestProgramExternalWriteEditorSchemaMatchesAuthoring(t *testing.T) {
 // Contract 14 is the program branch: 12 plus the boundary, no session field,
 // and the boundary is the same schema the assisted line declares in 11.
 func TestContract14IsTheProgramBranchWithTheBoundary(t *testing.T) {
+	t.Parallel()
 	read := func(name string) map[string]any {
 		schema, err := ProtocolSchema(name)
 		if err != nil {
@@ -177,6 +181,7 @@ func TestContract14IsTheProgramBranchWithTheBoundary(t *testing.T) {
 // newer than the build. Builds before this one keep the old text: a step
 // contract 14 read by 0.13.64 is refused, but not by this name.
 func TestAStepContractNewerThanThisBuildIsNamedNewer(t *testing.T) {
+	t.Parallel()
 	data, err := StepJSONBytes([]byte(programSource("effects: {class: none, retry_class: never}\n")), "yaml")
 	if err != nil {
 		t.Fatal(err)

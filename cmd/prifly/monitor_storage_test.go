@@ -15,6 +15,7 @@ import (
 )
 
 func TestMonitorMaintenanceRefusesAndReclaims(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -110,6 +111,7 @@ func TestMonitorMaintenanceRefusesAndReclaims(t *testing.T) {
 }
 
 func TestMonitorMaintenanceHTTPAndActiveRun(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root, _ := filepath.EvalSymlinks(t.TempDir())
 	id := monitorFixture(t, root)
@@ -187,6 +189,7 @@ func TestMonitorMaintenanceHTTPAndActiveRun(t *testing.T) {
 }
 
 func TestMonitorStorageCountsHardlinksAndSkipsSymlinks(t *testing.T) {
+	t.Parallel()
 	root, _ := filepath.EvalSymlinks(t.TempDir())
 	monitorFixture(t, root)
 	catalog := newMonitorCatalog(t.TempDir(), nil)
@@ -224,6 +227,7 @@ func TestMonitorStorageCountsHardlinksAndSkipsSymlinks(t *testing.T) {
 // lock does not tell one process's descriptors apart. Cleanup now waits for
 // the monitor's reads and is refused only by another process.
 func TestMonitorCleanupWaitsForTheMonitorsOwnRead(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root, _ := filepath.EvalSymlinks(t.TempDir())
 	id := monitorFixture(t, root)

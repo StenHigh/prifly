@@ -15,6 +15,7 @@ import (
 )
 
 func TestProjectBuildDeterminismAndDataBoundaries(t *testing.T) {
+	t.Parallel()
 	source := projectPackageSource{ID: "test:package/build", Version: "1.0.0", Description: "Inspect", RequiresCoreProtocol: "1"}
 	options := projectWorkflowOptions{Settings: map[string]map[string]any{}, Exclude: []string{}}
 	values := map[string]any{"label": "Inspect"}

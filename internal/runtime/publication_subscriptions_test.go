@@ -218,6 +218,7 @@ func sessionFail(t *testing.T, task SessionTask) SessionSubmission {
 }
 
 func TestOncePublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
+	t.Parallel()
 	e, runID := publicationSubscriptionRuntimeSource(t, "retained", "interrupt_on_terminal_failure")
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {
@@ -259,6 +260,7 @@ func TestOncePublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
 // PUB-004 once qualification: the producer is still held by its host when the
 // consumer receives a distinct admission whose input is the sealed publication.
 func TestOncePublicationAdmitsConsumerBeforeProducerSettlement(t *testing.T) {
+	t.Parallel()
 	e, runID := publicationSubscriptionRuntime(t)
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {
@@ -376,6 +378,7 @@ func TestOncePublicationAdmitsConsumerBeforeProducerSettlement(t *testing.T) {
 }
 
 func TestOnceBlobPublicationDeliversSealedBytesBeforeProducerSettlement(t *testing.T) {
+	t.Parallel()
 	e, runID := publicationSubscriptionRuntimeSourceFormat(t, "retained", "wait_until_timeout", "blob")
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {
@@ -424,6 +427,7 @@ func TestOnceBlobPublicationDeliversSealedBytesBeforeProducerSettlement(t *testi
 }
 
 func TestOncePublicationConsumesAReservedDeliveryAtWaitEntry(t *testing.T) {
+	t.Parallel()
 	e, runID := publicationSubscriptionRuntime(t)
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)
@@ -473,6 +477,7 @@ func TestOncePublicationConsumesAReservedDeliveryAtWaitEntry(t *testing.T) {
 }
 
 func TestNewOnlyOncePublicationRejectsItemsBeforeItsAuthorityCut(t *testing.T) {
+	t.Parallel()
 	e, runID := publicationSubscriptionRuntimeInitial(t, "new_only")
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)

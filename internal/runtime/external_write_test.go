@@ -70,6 +70,7 @@ func externalWriteFixture(t *testing.T, shape func(*flow.StepDefinition), bindCl
 }
 
 func TestExternalWriterMayReadAnExplicitlyClaimedRepository(t *testing.T) {
+	t.Parallel()
 	readOnly := func(step *flow.StepDefinition) {
 		step.SchemaVersion = "13"
 		step.RepositoryWorkspace = "read_only"
@@ -105,6 +106,7 @@ func TestExternalWriterMayReadAnExplicitlyClaimedRepository(t *testing.T) {
 // "changes something outside", which no host can act under and no owner can
 // review.
 func TestAnAssistedStepPublishesUnderADeclaredBoundary(t *testing.T) {
+	t.Parallel()
 	e, runID, err := externalWriteFixture(t, func(*flow.StepDefinition) {})
 	if err != nil {
 		t.Fatalf("a step declaring a bounded external write did not start: %v", err)
@@ -136,6 +138,7 @@ func TestAnAssistedStepPublishesUnderADeclaredBoundary(t *testing.T) {
 // Three refusals, each for a reason an author can act on. idempotent is not
 // one of them: it is the author's statement that repeating is safe by itself.
 func TestADeclaredExternalWriteIsRefusedWithoutItsBounds(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, contains string
 		shape          func(*flow.StepDefinition)
@@ -162,6 +165,7 @@ func TestADeclaredExternalWriteIsRefusedWithoutItsBounds(t *testing.T) {
 // not admit the class does not get it, whatever the step declares -- the field
 // named those classes from the first edition and bound nothing until now.
 func TestAnEarlierPolicyEditionDoesNotAdmitAnExternalWrite(t *testing.T) {
+	t.Parallel()
 	e, _, err := externalWriteFixture(t, func(s *flow.StepDefinition) {})
 	if err != nil {
 		t.Fatalf("the admitting edition refused: %v", err)

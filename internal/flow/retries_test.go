@@ -10,6 +10,7 @@ import (
 // step declared never repeatable is refused at compile rather than accepted
 // and quietly ignored, which would read as a budget that exists.
 func TestTechnicalRetriesNeedTheStepAuthorsPermission(t *testing.T) {
+	t.Parallel()
 	workflow, registry := fixture(t)
 	var w WorkflowRevision
 	if err := decodeValue(workflow, &w); err != nil {

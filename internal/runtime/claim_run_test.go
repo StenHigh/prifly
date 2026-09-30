@@ -15,8 +15,6 @@ import (
 
 func claimRunFixture(t *testing.T) (*Engine, string, WorktreeClaim) {
 	t.Helper()
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	return assistedWorkspaceFixture(t, "checkout")
 }
 
@@ -38,6 +36,7 @@ func commitClaimBinding(t *testing.T, e *Engine, runID string, binding *claimRun
 }
 
 func TestClaimBindingCommitIsAtomic(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := claimRunFixture(t)
 	ctx := context.Background()
 	binding, err := e.prepareClaimRunBinding(ctx, runID, claim.ID, claim.Generation)
@@ -73,6 +72,7 @@ func TestClaimBindingCommitIsAtomic(t *testing.T) {
 }
 
 func TestTwoRunsUseTheirOwnWorktreeClaims(t *testing.T) {
+	t.Parallel()
 	e, firstRun, firstClaim := assistedWorkspaceFixture(t, "worktree")
 	ctx := context.Background()
 	firstBinding, err := e.prepareClaimRunBinding(ctx, firstRun, firstClaim.ID, firstClaim.Generation)
@@ -112,6 +112,7 @@ func TestTwoRunsUseTheirOwnWorktreeClaims(t *testing.T) {
 }
 
 func TestLegacyProjectRunFindsItsUnboundWorktree(t *testing.T) {
+	t.Parallel()
 	e, firstRun, firstClaim := assistedWorkspaceFixture(t, "worktree")
 	ctx := context.Background()
 	binding, err := e.prepareClaimRunBinding(ctx, firstRun, firstClaim.ID, firstClaim.Generation)
@@ -143,6 +144,7 @@ func TestLegacyProjectRunFindsItsUnboundWorktree(t *testing.T) {
 // with claim list and claim release for a workspace no Run was using any more.
 // A Run that is over releases what it held; an unfinished one still refuses.
 func TestSettledRunFreesItsWorkspaceForTheNextClaim(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := assistedWorkspaceFixture(t, "worktree")
 	ctx := context.Background()
 	task := handOver(t, e, runID)
@@ -192,6 +194,7 @@ func TestSettledRunFreesItsWorkspaceForTheNextClaim(t *testing.T) {
 // gives the tree back on its own; any other is kept for continuation or for an
 // explicit claim release.
 func TestUnfinishedWorkKeepsItsTreeFromTheNextClaim(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := assistedWorkspaceFixture(t, "worktree")
 	ctx := context.Background()
 	binding, err := e.prepareClaimRunBinding(ctx, runID, claim.ID, claim.Generation)
@@ -237,6 +240,7 @@ func TestUnfinishedWorkKeepsItsTreeFromTheNextClaim(t *testing.T) {
 // A Run created from a finished one takes its tree as it is. Every condition
 // that makes the tree someone else's still refuses.
 func TestFinishedRunHandsItsTreeToTheLinkedRun(t *testing.T) {
+	t.Parallel()
 	e, sourceID, claim := assistedWorkspaceFixture(t, "worktree")
 	ctx := context.Background()
 	binding, err := e.prepareClaimRunBinding(ctx, sourceID, claim.ID, claim.Generation)
@@ -299,6 +303,7 @@ func TestFinishedRunHandsItsTreeToTheLinkedRun(t *testing.T) {
 // An expired lease is waived for exactly one triple: this claim, bound to this
 // Run, asked for by the actor recorded on it. Every other case still stands on it.
 func TestExpiredLeaseAdmitsOnlyTheReturningOwner(t *testing.T) {
+	t.Parallel()
 	lapsed := WorktreeClaim{
 		Status: "active", RunID: "run:one", Actor: "local:uid:501",
 		Claimed: Observation{UTC: "2026-09-01T00:00:00Z"}, LeaseUntil: "2026-09-01T00:30:00Z",
@@ -338,8 +343,6 @@ func TestExpiredLeaseAdmitsOnlyTheReturningOwner(t *testing.T) {
 // pause outlived the lease. Nothing is observable in that pause by construction,
 // so the fourth step must still be admissible without cancelling the Run.
 func TestOwnerPauseBetweenStepsKeepsWorkspaceOwnership(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	// The pilot measured ninety minutes between two of its steps; nights are longer.
 	const ownerPause = 90 * time.Minute
 	synctest.Test(t, func(t *testing.T) {
@@ -381,6 +384,7 @@ func TestOwnerPauseBetweenStepsKeepsWorkspaceOwnership(t *testing.T) {
 }
 
 func TestClaimReleaseFencesPreparedAdmission(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := claimRunFixture(t)
 	ctx := context.Background()
 	binding, err := e.prepareClaimRunBinding(ctx, runID, claim.ID, claim.Generation)
@@ -399,6 +403,7 @@ func TestClaimReleaseFencesPreparedAdmission(t *testing.T) {
 }
 
 func TestClaimReleaseCannotOverlapDriverPreparation(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := claimRunFixture(t)
 	ctx := context.Background()
 	before, version, err := e.readClaims(ctx)
@@ -449,6 +454,7 @@ func TestClaimReleaseCannotOverlapDriverPreparation(t *testing.T) {
 }
 
 func TestClaimBindingSurvivesRestartAndTerminalRelease(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := claimRunFixture(t)
 	ctx := context.Background()
 	task := handOver(t, e, runID)
@@ -489,6 +495,7 @@ func TestClaimBindingSurvivesRestartAndTerminalRelease(t *testing.T) {
 }
 
 func TestLegacyHandedClaimCannotBeAutomaticallyBound(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := claimRunFixture(t)
 	ctx := context.Background()
 	_ = handOver(t, e, runID)
@@ -526,8 +533,7 @@ func TestLegacyHandedClaimCannotBeAutomaticallyBound(t *testing.T) {
 }
 
 func TestClaimReleaseCleanupFailureStaysFencedAcrossRestart(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	claim, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: newID("command"), Repository: gitRepository(t), OwnerID: "session:cleanup"})

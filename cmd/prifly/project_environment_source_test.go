@@ -31,6 +31,7 @@ func environmentSourceProject(t *testing.T) (root, dotenv, keyfile string) {
 }
 
 func TestProjectLocalEnvironmentSourcesRecordThePlaceNotTheValue(t *testing.T) {
+	t.Parallel()
 	root, dotenv, keyfile := environmentSourceProject(t)
 	code, stdout, stderr := runCLI(t, "project", "local", "set", "--repository", root,
 		"--env", "APP_ENV=test",
@@ -79,6 +80,7 @@ func TestProjectLocalEnvironmentSourcesRecordThePlaceNotTheValue(t *testing.T) {
 }
 
 func TestProjectLocalEnvironmentSourceRefusesUnusableDeclarations(t *testing.T) {
+	t.Parallel()
 	root, dotenv, keyfile := environmentSourceProject(t)
 	for _, test := range []struct{ name, argument string }{
 		{"no-source", "TOKEN="},
@@ -131,6 +133,7 @@ func TestProjectLocalEnvironmentSourceRefusesUnusableDeclarations(t *testing.T) 
 // The reviewed launch is invalidated by a changed source and not by a changed
 // value: the value is never part of what was reviewed.
 func TestProjectLaunchDigestFollowsTheSourceNotTheValue(t *testing.T) {
+	t.Parallel()
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -168,6 +171,7 @@ func TestProjectLaunchDigestFollowsTheSourceNotTheValue(t *testing.T) {
 // only what was passed read as "the rest is gone" to a cold start that had
 // just declared a source and saw its allowed programs disappear.
 func TestProjectLocalReceiptDescribesTheFile(t *testing.T) {
+	t.Parallel()
 	root, dotenv, _ := environmentSourceProject(t)
 	if code, stdout, stderr := runCLI(t, "project", "local", "set", "--repository", root, "--allow-executable", "shell=/bin/sh", "--env", "APP_ENV=testing"); code != 0 || !strings.Contains(stdout, `"shell":"/bin/sh"`) {
 		t.Fatalf("allow an executable: %d %s %s", code, stdout, stderr)
@@ -195,6 +199,7 @@ func TestProjectLocalReceiptDescribesTheFile(t *testing.T) {
 // usable one. A cold start read the code in the message, "help" in the actions,
 // and went looking for a profile flag on prifly init, which is not it.
 func TestIncompatibleAuthorityNamesTheCommandThatWritesOne(t *testing.T) {
+	t.Parallel()
 	state := filepath.Join(t.TempDir(), "authority")
 	if code, _, stderr := runCLI(t, "init", state); code != 0 {
 		t.Fatalf("plain authority: %d %s", code, stderr)

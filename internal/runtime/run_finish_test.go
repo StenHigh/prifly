@@ -54,6 +54,7 @@ func rejectedRunFixture(t *testing.T) (*Engine, string) {
 // ordered activations by hand to find the finish stage, then opened the
 // workflow source to learn which edge led there.
 func TestTerminalRunNamesItsFinishAndTheEdgeThatReachedIt(t *testing.T) {
+	t.Parallel()
 	e, runID := rejectedRunFixture(t)
 	ctx := context.Background()
 	task := handOver(t, e, runID)
@@ -91,6 +92,7 @@ func TestTerminalRunNamesItsFinishAndTheEdgeThatReachedIt(t *testing.T) {
 // which pass took the exit, so naming either would be a guess, and map
 // iteration would make it a different guess on each read.
 func TestFinishEdgeIsNotNamedWhenTwoSettledStagesDeclareIt(t *testing.T) {
+	t.Parallel()
 	e, runID := rejectedRunFixture(t)
 	ctx := context.Background()
 	task := handOver(t, e, runID)

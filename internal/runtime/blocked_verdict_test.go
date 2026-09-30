@@ -21,6 +21,7 @@ import (
 // could not judge, and a graph at the revision that answers for it routes that
 // wherever its author decided -- here, to a finish of its own.
 func TestAStepCanSayItCouldNotJudgeAndTheGraphRoutesIt(t *testing.T) {
+	t.Parallel()
 	e, workflow := coreDriverFixture(t, "pass")
 	definitions, _, err := Builtins()
 	if err != nil {
@@ -59,6 +60,7 @@ func TestAStepCanSayItCouldNotJudgeAndTheGraphRoutesIt(t *testing.T) {
 // first result contract still may not return the later verdict, and the
 // refusal names the contract rather than the word.
 func TestAStepThatDeclaredTheOlderContractMayNotReturnTheNewVerdict(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, version string
 		accepted      bool
@@ -93,6 +95,7 @@ func TestAStepThatDeclaredTheOlderContractMayNotReturnTheNewVerdict(t *testing.T
 // and stayed green when intake was narrowed back, which is the whole failure it
 // existed to catch.
 func TestIntakeDoesNotRefuseTheVerdictBeforeTheStepIsKnown(t *testing.T) {
+	t.Parallel()
 	e, workflow := coreDriverFixture(t, "pass")
 	runID := coreDriverStart(t, e, workflow)
 	attempt := driverAdmit(t, e, runID)
@@ -107,6 +110,7 @@ func TestIntakeDoesNotRefuseTheVerdictBeforeTheStepIsKnown(t *testing.T) {
 // arrives anyway. This is the behaviour an unrouted verdict already had; the
 // test is here because the whole change rests on it being true.
 func TestASealedGraphKeepsItsWorkWhenTheNewVerdictHasNoRoute(t *testing.T) {
+	t.Parallel()
 	e, workflow := coreDriverFixture(t, "pass")
 	runID := coreDriverStart(t, e, workflow)
 	if err := e.Drive(context.Background(), runID); err != nil {
@@ -134,6 +138,7 @@ func TestASealedGraphKeepsItsWorkWhenTheNewVerdictHasNoRoute(t *testing.T) {
 // step that promises the verdict is never the first. This enters at the handoff
 // of a step that makes the promise.
 func TestTheEnvelopeCarriesAnOutputPromisedForTheBlockedVerdict(t *testing.T) {
+	t.Parallel()
 	e, _, _ := assistedWorkspaceFixture(t, "checkout")
 	ctx := context.Background()
 	definitions, _, err := Builtins()
@@ -203,6 +208,7 @@ func TestTheEnvelopeCarriesAnOutputPromisedForTheBlockedVerdict(t *testing.T) {
 // verdicts, so on the graph this answer exists for it named no edge at all --
 // and my fixture, being one plain step, could never have shown that.
 func TestTheFinishEdgeIsNamedWhenACallReachesIt(t *testing.T) {
+	t.Parallel()
 	for _, outcome := range []string{"succeeded", "partial", "rejected"} {
 		t.Run(outcome, func(t *testing.T) {
 			e, workflow, _, options := callFixture(t, "commit-pass", outcome, true)
@@ -276,6 +282,7 @@ func programBlockedFixture(t *testing.T, mode string) (*Engine, string) {
 // accepted and reaches the stage the author routed blocked to. Before contract
 // 12 the promise could not be written for a program at all.
 func TestAProgramStepHandsOverWhatBlockedIt(t *testing.T) {
+	t.Parallel()
 	e, runID := programBlockedFixture(t, "blocked-report")
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)
@@ -312,6 +319,7 @@ func TestAProgramStepHandsOverWhatBlockedIt(t *testing.T) {
 // The promise binds: blocked without the promised report is refused as any
 // missing required output is, and the author's error route takes over.
 func TestAProgramStepThatPromisedAReportMustGiveIt(t *testing.T) {
+	t.Parallel()
 	e, runID := programBlockedFixture(t, "blocked-silent")
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)
@@ -330,6 +338,7 @@ func TestAProgramStepThatPromisedAReportMustGiveIt(t *testing.T) {
 // to its action and the report that stage handed over, read by the same
 // routing the driver used.
 func TestNextNamesTheBlockedResultThatLedHere(t *testing.T) {
+	t.Parallel()
 	e, runID := programBlockedFixture(t, "blocked-report")
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {

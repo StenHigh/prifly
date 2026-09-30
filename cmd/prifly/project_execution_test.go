@@ -11,6 +11,7 @@ import (
 )
 
 func TestProjectExecutionSourceAndBuild(t *testing.T) {
+	t.Parallel()
 	folder := t.TempDir()
 	file := filepath.Join(folder, "worker.js")
 	if err := os.WriteFile(file, []byte("first worker bytes"), 0600); err != nil {
@@ -115,6 +116,7 @@ func TestProjectExecutionSourceAndBuild(t *testing.T) {
 }
 
 func TestProjectNeutralInputsDeferRequiredness(t *testing.T) {
+	t.Parallel()
 	launch := projectLaunchDetail{Inputs: []projectLaunchInput{{Name: "configured", Required: true}}}
 	if err := projectStartInputs(launch, nil, nil, false); err != nil {
 		t.Fatal("neutral listing overrode compiled configuration defaults", err)

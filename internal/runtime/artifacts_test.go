@@ -61,6 +61,7 @@ func artifactProducer(e *Engine) map[string]any {
 }
 
 func TestArtifactImportExportAndStableIdentity(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	data := []byte("opaque\x00bytes\n")
 	if err := os.WriteFile(filepath.Join(e.Root, "input.bin"), data, 0600); err != nil {
@@ -120,6 +121,7 @@ func TestArtifactImportExportAndStableIdentity(t *testing.T) {
 }
 
 func TestArtifactJSONValidationPreservesRawBytes(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	ref, _ := artifactSchema(t, e, `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["value"],"properties":{"value":{"type":"integer","minimum":0}},"additionalProperties":false}`)
 	for _, invalid := range []string{`{"value":"one"}`, `{"value":1,"value":2}`, `{"other":1}`} {
@@ -155,6 +157,7 @@ func TestArtifactJSONValidationPreservesRawBytes(t *testing.T) {
 }
 
 func TestArtifactDescriptorSchemaIsNotContentValidation(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	ref, reg := artifactSchema(t, e, `{"type":"object","required":["media_type","size_bytes","digest"],"properties":{"media_type":{"const":"application/octet-stream"},"size_bytes":{"const":4},"digest":{"type":"string"}},"additionalProperties":false}`)
 	a, err := e.putArtifact([]byte("data"), "blob", &ref, "artifact:descriptor", artifactProducer(e), nil, reg)
@@ -170,6 +173,7 @@ func TestArtifactDescriptorSchemaIsNotContentValidation(t *testing.T) {
 }
 
 func TestArtifactExplicitMediaType(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	if err := os.WriteFile(filepath.Join(e.Root, "input.txt"), []byte("text"), 0600); err != nil {
 		t.Fatal(err)
@@ -196,6 +200,7 @@ func TestArtifactExplicitMediaType(t *testing.T) {
 }
 
 func TestArtifactIdentityConflictAndProvenance(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	_, reg, err := e.Inventory()
 	if err != nil {
@@ -233,6 +238,7 @@ func TestArtifactIdentityConflictAndProvenance(t *testing.T) {
 }
 
 func TestArtifactCorruptionNeverHealsImplicitly(t *testing.T) {
+	t.Parallel()
 	for _, failure := range []string{"missing", "corrupt"} {
 		t.Run(failure, func(t *testing.T) {
 			e := artifactEngine(t)
@@ -268,6 +274,7 @@ func TestArtifactCorruptionNeverHealsImplicitly(t *testing.T) {
 }
 
 func TestArtifactReadOnlyPathsAndConcurrentPublication(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	if err := os.WriteFile(filepath.Join(e.Root, "input"), []byte("data"), 0600); err != nil {
 		t.Fatal(err)

@@ -47,6 +47,7 @@ func validateAuthoringForTest(t *testing.T, name string, data []byte) error {
 }
 
 func TestNeutralAuthoringReferencesMatchServedSchemas(t *testing.T) {
+	t.Parallel()
 	for _, example := range []struct{ name, schema string }{
 		{"check", "check-v1"},
 		{"execution-bindings", "project-workflow-folder-v1"},
@@ -66,6 +67,7 @@ func TestNeutralAuthoringReferencesMatchServedSchemas(t *testing.T) {
 }
 
 func TestCheckAuthoringSchemaMatchesFullDefinition(t *testing.T) {
+	t.Parallel()
 	base := authoringReferenceJSON(t, "check")
 	for _, test := range []struct {
 		name  string

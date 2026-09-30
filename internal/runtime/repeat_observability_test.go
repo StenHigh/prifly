@@ -18,6 +18,7 @@ import (
 )
 
 func TestRepeatObservationMixedTreeAndHistoricalCut(t *testing.T) {
+	t.Parallel()
 	e, inner, _, options := repeatFixture(t, "commit-pass", "succeeded", 3)
 	inner["id"] = "test:workflow/observed-inner-repeat"
 	innerRef := callRegister(t, e, inner, "workflows/observed-inner-repeat.json")
@@ -176,6 +177,7 @@ func TestRepeatObservationMixedTreeAndHistoricalCut(t *testing.T) {
 // This is a pure calculator regression with explicit clock observations; the
 // preceding test supplies actual driver evidence for the mixed invocation tree.
 func TestRepeatObservationExactTimingAndHistoricalRestriction(t *testing.T) {
+	t.Parallel()
 	r := invocationTimingFixture()
 	r.SchemaVersion = CoreRepeatStateVersion
 	controller := r.Activations["call"]
@@ -222,6 +224,7 @@ func TestRepeatObservationExactTimingAndHistoricalRestriction(t *testing.T) {
 }
 
 func TestRepeatObservationNativeHookNamespaces(t *testing.T) {
+	t.Parallel()
 	e, workflow, body, options := repeatFixture(t, "commit-pass", "succeeded", 3)
 	data, err := os.ReadFile(filepath.Join(e.Root, "steps/driver.json"))
 	if err != nil {
@@ -328,6 +331,7 @@ func TestRepeatObservationNativeHookNamespaces(t *testing.T) {
 // The fixture runs through the real process runner and the authenticated Unix
 // API. It stores no token: only the public status response becomes test evidence.
 func TestRepeatObservationWorkerHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("REPEAT_OBSERVATION_HELPER") != "1" {
 		return
 	}

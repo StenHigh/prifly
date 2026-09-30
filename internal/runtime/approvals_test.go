@@ -39,6 +39,7 @@ func openStop(t *testing.T, e *Engine, ctx context.Context) AuthorityStop {
 }
 
 func TestGatedReleaseRefusesWithoutAnApprovedDecision(t *testing.T) {
+	t.Parallel()
 	e, ctx := gatedRuntime(t, 1, "none")
 	stop := openStop(t, e, ctx)
 	control, _, err := e.Control(ctx)
@@ -65,6 +66,7 @@ func TestGatedReleaseRefusesWithoutAnApprovedDecision(t *testing.T) {
 // formed by the same person, and the installation refuses instead of counting
 // a second technical account as a second approver.
 func TestSingleOwnerCannotFormAnIndependentQuorum(t *testing.T) {
+	t.Parallel()
 	e, ctx := gatedRuntime(t, 2, "pairwise_distinct")
 	stop := openStop(t, e, ctx)
 	intent := stopReleaseIntentDigest(t, e, ctx, "command:release", stop)
@@ -102,6 +104,7 @@ func TestSingleOwnerCannotFormAnIndependentQuorum(t *testing.T) {
 }
 
 func TestApprovalCountsHumansNotAccounts(t *testing.T) {
+	t.Parallel()
 	e, ctx := gatedRuntime(t, 2, "none")
 	stop := openStop(t, e, ctx)
 	intent := stopReleaseIntentDigest(t, e, ctx, "command:release", stop)
@@ -136,6 +139,7 @@ func TestApprovalCountsHumansNotAccounts(t *testing.T) {
 }
 
 func TestApprovalIsConsumedOnceAndBoundToItsExactIntent(t *testing.T) {
+	t.Parallel()
 	e, ctx := gatedRuntime(t, 1, "none")
 	// Both stops exist before the decision, so the protected payload of the
 	// release this approval covers does not move under it.
@@ -198,6 +202,7 @@ func TestApprovalIsConsumedOnceAndBoundToItsExactIntent(t *testing.T) {
 }
 
 func TestRevokedDecisionCannotBeConsumed(t *testing.T) {
+	t.Parallel()
 	e, ctx := gatedRuntime(t, 1, "none")
 	stop := openStop(t, e, ctx)
 	intent := stopReleaseIntentDigest(t, e, ctx, "command:release", stop)
@@ -236,6 +241,7 @@ func TestRevokedDecisionCannotBeConsumed(t *testing.T) {
 }
 
 func TestRejectedDecisionIsTerminalAndAbsenceIsNotApproval(t *testing.T) {
+	t.Parallel()
 	e, ctx := gatedRuntime(t, 1, "none")
 	stop := openStop(t, e, ctx)
 	intent := stopReleaseIntentDigest(t, e, ctx, "command:release", stop)
@@ -267,6 +273,7 @@ func TestRejectedDecisionIsTerminalAndAbsenceIsNotApproval(t *testing.T) {
 }
 
 func TestExpiredDecisionIsRecordedAndNotConsumable(t *testing.T) {
+	t.Parallel()
 	e, ctx := gatedRuntime(t, 1, "none")
 	stop := openStop(t, e, ctx)
 	intent := stopReleaseIntentDigest(t, e, ctx, "command:release", stop)
@@ -378,6 +385,7 @@ func releaseReasonFor(command string) string {
 // racing consumers of one decision must not both win, and the loser must say
 // why rather than silently doing nothing.
 func TestConcurrentConsumeOfOneDecisionHasOneExplainableOrder(t *testing.T) {
+	t.Parallel()
 	e, ctx := gatedRuntime(t, 1, "none")
 	first := openStop(t, e, ctx)
 	second := openStopWith(t, e, ctx, "command:stop-2")

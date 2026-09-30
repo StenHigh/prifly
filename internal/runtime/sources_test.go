@@ -35,6 +35,7 @@ func sourceTestImport(t *testing.T, e *Engine, options SourceImportOptions) (Art
 }
 
 func TestSourceImportExactJSONAndNewAcquisition(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	ref, _ := artifactSchema(t, e, `{"type":"object","required":["value"],"properties":{"value":{"type":"integer"}},"additionalProperties":false}`)
 	data := []byte("{ \"value\": 7 }\r\n")
@@ -88,6 +89,7 @@ func TestSourceImportExactJSONAndNewAcquisition(t *testing.T) {
 }
 
 func TestSourceImportTextBinaryAndEmptyBytes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, media string
 		data        []byte
@@ -109,6 +111,7 @@ func TestSourceImportTextBinaryAndEmptyBytes(t *testing.T) {
 }
 
 func TestSourceImportRejectsInvalidContentBeforePublication(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, format, media string
 		data                []byte
@@ -140,6 +143,7 @@ func TestSourceImportRejectsInvalidContentBeforePublication(t *testing.T) {
 }
 
 func TestSourceImportRejectsInvalidMetadataBeforeReading(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	// There is intentionally no source file: malformed declared metadata must
 	// fail before reading or publishing anything for this acquisition.
@@ -161,6 +165,7 @@ func TestSourceImportRejectsInvalidMetadataBeforeReading(t *testing.T) {
 }
 
 func TestSourceImportConfinedPathsAndExplicitExternalFile(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	sourceTestFile(t, e, "file", []byte("inside"))
 	sourceTestFile(t, e, "glob-one", []byte("not selected"))
@@ -199,6 +204,7 @@ func TestSourceImportConfinedPathsAndExplicitExternalFile(t *testing.T) {
 }
 
 func TestSourceSnapshotReadOnlyAndNoImplicitRepair(t *testing.T) {
+	t.Parallel()
 	t.Run("read_only", func(t *testing.T) {
 		e := artifactEngine(t)
 		sourceTestFile(t, e, "source", []byte("sealed"))
@@ -259,6 +265,7 @@ func TestSourceSnapshotReadOnlyAndNoImplicitRepair(t *testing.T) {
 }
 
 func TestSourceSnapshotRejectsForgedImportAndProvenance(t *testing.T) {
+	t.Parallel()
 	t.Run("ordinary_json_import", func(t *testing.T) {
 		e := artifactEngine(t)
 		sourceTestFile(t, e, "source", []byte("content"))
@@ -313,6 +320,7 @@ func TestSourceSnapshotRejectsForgedImportAndProvenance(t *testing.T) {
 }
 
 func TestSourceSnapshotAndContextRequestClosedDescriptors(t *testing.T) {
+	t.Parallel()
 	definitions, err := sourceBuiltinDefinitions()
 	if err != nil {
 		t.Fatal(err)

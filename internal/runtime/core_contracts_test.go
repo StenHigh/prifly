@@ -15,6 +15,7 @@ import (
 func TestFoundationPublicSchemaIsImmutable(t *testing.T) {
 	// The released F1 schema is a compatibility fixture, not generated evidence
 	// to update when a new field is added to a shared Go type.
+	t.Parallel()
 	const released = "sha256:4fda82e5908602a8df274a23981884682c38fb08bc465d8cc9a1dd27af3d9c42"
 	if got := rawDigest(publicContracts); got != released {
 		t.Fatalf("released foundation-public:1 changed: %s", got)
@@ -22,6 +23,7 @@ func TestFoundationPublicSchemaIsImmutable(t *testing.T) {
 }
 
 func TestCorePublicSchemaIsImmutable(t *testing.T) {
+	t.Parallel()
 	const released = "sha256:573e440951b857afc6b22e4b77a4c0db08a1a252bd9e8007b5bde300cff06441"
 	if got := rawDigest(corePublicContracts); got != released {
 		t.Fatalf("released core-public:1 changed: %s", got)
@@ -29,6 +31,7 @@ func TestCorePublicSchemaIsImmutable(t *testing.T) {
 }
 
 func TestChoiceDecisionPublicContract(t *testing.T) {
+	t.Parallel()
 	distributed, err := os.ReadFile("../../schemas/core/choice-decision.schema.json")
 	if err != nil || !bytes.Equal(distributed, choiceContracts) {
 		t.Fatalf("choice embedded/distributed schemas differ: %v", err)
@@ -94,6 +97,7 @@ func TestChoiceDecisionPublicContract(t *testing.T) {
 }
 
 func TestChoiceSourceBudgetAndExactReferenceCache(t *testing.T) {
+	t.Parallel()
 	const data = `{"flag":true,"label":"value"}`
 	e, workflow, options := choiceFixture(t, data, "")
 	inputs := workflow["inputs"].(map[string]any)
@@ -140,6 +144,7 @@ func TestChoiceSourceBudgetAndExactReferenceCache(t *testing.T) {
 }
 
 func TestCorePublicContracts(t *testing.T) {
+	t.Parallel()
 	distributed, err := os.ReadFile("../../schemas/core/public.schema.json")
 	if err != nil || !bytes.Equal(distributed, corePublicContracts) {
 		t.Fatalf("core embedded/distributed schemas differ: %v", err)
@@ -320,6 +325,7 @@ func TestCorePublicContracts(t *testing.T) {
 // that way, because nothing compared the files on disk against what PublicSchema
 // can actually reach.
 func TestEveryGeneratedBundleIsReachable(t *testing.T) {
+	t.Parallel()
 	files, err := filepath.Glob("*.schema.json")
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no generated bundles found: %v", err)

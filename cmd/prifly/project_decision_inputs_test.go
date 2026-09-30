@@ -13,6 +13,7 @@ import (
 )
 
 func TestProjectDecisionInputs(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct{ name, refusal string }{
 		{"typed-value", ""},
 		{"typed-null", ""},

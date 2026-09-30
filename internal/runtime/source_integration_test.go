@@ -90,6 +90,7 @@ func sourceRuntimeProject(t *testing.T) (*Engine, StartOptions) {
 // echoes only files named by the supplied input ports; []byte JSON values keep
 // CRLF, UTF-8 and all other input bytes observable without normalization.
 func TestSourceRuntimeWorkerHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("SOURCE_RUNTIME_HELPER") != "1" {
 		return
 	}
@@ -145,6 +146,7 @@ func TestSourceRuntimeWorkerHelper(t *testing.T) {
 }
 
 func TestSourceRuntimeOptionalSnapshotDoesNotExpandContext(t *testing.T) {
+	t.Parallel()
 	e, options := sourceRuntimeProject(t)
 	content := []byte("sealed-source-only: Пример \"literal\"\r\n")
 	sourceTestFile(t, e, "selected-source.txt", content)
@@ -229,6 +231,7 @@ func TestSourceRuntimeOptionalSnapshotDoesNotExpandContext(t *testing.T) {
 }
 
 func TestSourceRuntimeRejectsShapeOnlyDescriptors(t *testing.T) {
+	t.Parallel()
 	e, options := sourceRuntimeProject(t)
 	sourceTestFile(t, e, "selected-source.txt", []byte("only an adapter import can assert this acquisition"))
 	artifact, _ := sourceTestImport(t, e, SourceImportOptions{Path: "selected-source.txt", Format: "blob", MediaType: "text/plain"})
@@ -313,6 +316,7 @@ func TestSourceRuntimeRejectsShapeOnlyDescriptors(t *testing.T) {
 }
 
 func TestSourceRuntimeProjectionCannotReassertImport(t *testing.T) {
+	t.Parallel()
 	e, options := sourceRuntimeProject(t)
 	sourceTestFile(t, e, "selected-source.txt", []byte("sealed content"))
 	artifact, expected := sourceTestImport(t, e, SourceImportOptions{Path: "selected-source.txt", Format: "blob", MediaType: "text/plain"})
@@ -350,6 +354,7 @@ func TestSourceRuntimeProjectionCannotReassertImport(t *testing.T) {
 }
 
 func TestSourceRuntimeLostSealedContentFailsBeforeWorker(t *testing.T) {
+	t.Parallel()
 	for _, failure := range []string{"missing", "corrupt"} {
 		t.Run(failure, func(t *testing.T) {
 			e, options := sourceRuntimeProject(t)
@@ -403,6 +408,7 @@ func TestSourceRuntimeLostSealedContentFailsBeforeWorker(t *testing.T) {
 }
 
 func TestSourceRuntimeReadOnlyPreservesAcquisitionAndAdmission(t *testing.T) {
+	t.Parallel()
 	e, options := sourceRuntimeProject(t)
 	sourceTestFile(t, e, "selected-source.txt", []byte("retained source"))
 	artifact, snapshot := sourceTestImport(t, e, SourceImportOptions{Path: "selected-source.txt", Format: "blob", MediaType: "text/plain"})

@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -15,8 +14,6 @@ import (
 // The routed contract serves such a step too, so the edition no longer marks
 // the difference: the absence of a saved allowance does.
 func TestUntimedAssistedDecisionAcceptsLateAnswerButRejectsResult(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
 		definition := DecisionDefinition{
@@ -112,8 +109,7 @@ func TestUntimedAssistedDecisionAcceptsLateAnswerButRejectsResult(t *testing.T) 
 // New admissions must enforce ownership even when the workflow uses a legacy
 // session contract. The historical sharing regression remains in Git.
 func TestLegacyAssistedRunsCannotShareInstallationClaim(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Parallel()
 	ctx := context.Background()
 	e, firstID, claim := assistedWorkspaceFixture(t, "checkout")
 	if _, err := e.SetAdmissionCapacity(ctx, CapacityRequest{CommandID: newID("command"), Capacity: 2, Reason: "prove capacity does not confer workspace ownership"}); err != nil {

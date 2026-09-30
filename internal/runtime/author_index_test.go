@@ -21,6 +21,7 @@ import (
 // a row fails, and a row for a capability this build does not declare fails too,
 // because a promise the engine has withdrawn is worse than a missing one.
 func TestEveryDeclaredCapabilityIsInTheAuthorIndex(t *testing.T) {
+	t.Parallel()
 	const index = "../../examples/README.md"
 	page, err := os.ReadFile(index)
 	if err != nil {

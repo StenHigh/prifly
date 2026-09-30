@@ -7,6 +7,7 @@ import (
 )
 
 func TestValidateDecisionDefinition(t *testing.T) {
+	t.Parallel()
 	valid := DecisionDefinition{
 		SchemaVersion:  DecisionDefinitionVersion,
 		ID:             "plan_profile",
@@ -54,6 +55,7 @@ func TestValidateDecisionDefinition(t *testing.T) {
 }
 
 func TestDecisionStateKeepsLegacyRunsUnchanged(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedWorkspaceFixture(t, "")
 	before, err := e.View(context.Background(), runID)
 	if err != nil || before.Run.SchemaVersion == CoreDecisionStateVersion || before.Run.DecisionCatalog != nil || before.Run.DecisionSheet != nil || len(before.Run.DecisionLedger) != 0 || before.Run.PendingDecision != nil {
@@ -81,6 +83,7 @@ func TestDecisionStateKeepsLegacyRunsUnchanged(t *testing.T) {
 }
 
 func TestDecisionConditionRequiresSealedPredecessorAnswer(t *testing.T) {
+	t.Parallel()
 	definition := DecisionDefinition{When: &DecisionCondition{Answers: map[string]json.RawMessage{"roadmap_linkage": json.RawMessage(`"link"`)}}}
 	linked := []DecisionRecord{{DefinitionID: "roadmap_linkage", Value: json.RawMessage(`"link"`)}}
 	if !decisionApplies(definition, "full", linked) {
@@ -95,6 +98,7 @@ func TestDecisionConditionRequiresSealedPredecessorAnswer(t *testing.T) {
 // host on the decision sheet alone. A step told to read the declared answers
 // lost the answer the owner gave.
 func TestPackageProfileAnswerIsOneOfTheDeclaredAnswers(t *testing.T) {
+	t.Parallel()
 	profile := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "plan_profile", Title: "Plan profile", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "fast", Title: "Fast", Value: json.RawMessage(`"fast"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "package_profile"}}
 	logging := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "logging", Title: "Logging", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "concise", Title: "Concise", Value: json.RawMessage(`"concise"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "logging"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{profile, logging}}
@@ -128,6 +132,7 @@ func TestPackageProfileAnswerIsOneOfTheDeclaredAnswers(t *testing.T) {
 }
 
 func TestDecisionBridgeResumesSameAssistedAttempt(t *testing.T) {
+	t.Parallel()
 	preflight := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "logging", Title: "Logging", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "concise", Title: "Concise", Value: json.RawMessage(`"concise"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "logging"}}
 	runtime := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}, {ID: "no", Title: "No", Value: json.RawMessage(`false`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{preflight, runtime}}
@@ -204,6 +209,7 @@ func TestDecisionBridgeResumesSameAssistedAttempt(t *testing.T) {
 }
 
 func TestDecisionBridgeAutonomousPolicyUsesDeclaredRecommendation(t *testing.T) {
+	t.Parallel()
 	runtime := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}}, Recommendation: json.RawMessage(`true`), Automatic: true, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{runtime}}
 	digest, err := DecisionCatalogDigest(catalog)
@@ -235,6 +241,7 @@ func TestDecisionBridgeAutonomousPolicyUsesDeclaredRecommendation(t *testing.T) 
 }
 
 func TestDecisionBridgeKeepsRestrictedChoiceForHumanAndRefusesUnknown(t *testing.T) {
+	t.Parallel()
 	restricted := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "publish_scope", Title: "Publish scope", Phase: "runtime", Choices: []DecisionChoice{{ID: "none", Title: "No publication", Value: json.RawMessage(`false`)}}, Recommendation: json.RawMessage(`false`), Sensitivity: "scope-changing", Destination: DecisionDestination{Kind: "session_context", Name: "publish_scope"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{restricted}}
 	digest, err := DecisionCatalogDigest(catalog)
@@ -279,6 +286,7 @@ func TestDecisionBridgeKeepsRestrictedChoiceForHumanAndRefusesUnknown(t *testing
 // not stop. This is the same person the bridge would have waited for, so the
 // ledger records them, not the policy.
 func TestDecisionBridgeAppliesTheOwnersSealedAnswer(t *testing.T) {
+	t.Parallel()
 	for _, source := range []string{"actor", "project_default"} {
 		t.Run(source, func(t *testing.T) { testDecisionBridgeAppliesSealedAnswer(t, source) })
 	}
@@ -332,6 +340,7 @@ func testDecisionBridgeAppliesSealedAnswer(t *testing.T, source string) {
 // a report: it never turns a launch into a refusal, so an entry only promises
 // that this Run would stop there with nobody to answer.
 func TestDecisionsAutonomyCannotTakeNamesEveryDeclaredReason(t *testing.T) {
+	t.Parallel()
 	session := DecisionDestination{Kind: "session_context", Name: "value"}
 	taken := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "taken", Title: "Taken", Phase: "runtime", Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}}, Recommendation: json.RawMessage(`true`), Automatic: true, Sensitivity: "ordinary", Destination: session}
 	manual := taken
@@ -377,6 +386,7 @@ func TestDecisionsAutonomyCannotTakeNamesEveryDeclaredReason(t *testing.T) {
 }
 
 func TestDecisionBridgeRejectsUnbridgedSession(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedWorkspaceFixture(t, "")
 	task := handOver(t, e, runID)
 	request := DecisionRequest{SchemaVersion: DecisionRequestVersion, RunID: runID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, DecisionID: "continue", DefinitionDigest: "sha256:undeclared", ExpectedRunVersion: task.RunVersion}
@@ -392,6 +402,7 @@ func TestDecisionBridgeRejectsUnbridgedSession(t *testing.T) {
 // Two packages with unrelated catalogs drive the same bridge through the same
 // DTOs; the bridge itself never learns which package is asking.
 func TestDecisionBridgeServesTwoPackagesWithOneProtocol(t *testing.T) {
+	t.Parallel()
 	packages := []struct {
 		name       string
 		definition DecisionDefinition
@@ -502,6 +513,7 @@ func TestDecisionBridgeServesTwoPackagesWithOneProtocol(t *testing.T) {
 // marked required reads as a gate in the questionnaire, while the authority
 // accepts a report whose executor never raised the request.
 func TestRuntimeDecisionCannotBeRequired(t *testing.T) {
+	t.Parallel()
 	definition := DecisionDefinition{
 		SchemaVersion: DecisionDefinitionVersion, ID: "commit_grouping", Title: "Commit grouping",
 		Phase: "runtime", Choices: []DecisionChoice{{ID: "follow", Title: "Follow", Value: json.RawMessage(`"follow"`)}},
@@ -526,6 +538,8 @@ func TestRuntimeDecisionCannotBeRequired(t *testing.T) {
 // Run afterwards checks that the sheet is well formed, and does not re-run the
 // answer's schema on every load and every command.
 func TestReadingADecisionRunDoesNotRevalidateAnswers(t *testing.T) {
+	// Sequential: it reads the delta of the package-wide decisionValueChecks counter,
+	// which a parallel neighbour would move.
 	preflight := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "logging", Title: "Logging", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "concise", Title: "Concise", Value: json.RawMessage(`"concise"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "logging"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{preflight}}
 	catalogDigest, err := DecisionCatalogDigest(catalog)

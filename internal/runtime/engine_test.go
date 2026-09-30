@@ -35,6 +35,15 @@ func TestMain(m *testing.M) {
 	if handled, code := flow.SchemaWorker(os.Args[1:], os.Stdin, os.Stdout); handled {
 		os.Exit(code)
 	}
+	// Git reads the developer's own configuration unless told not to. Every
+	// test gets the same isolation once, here, instead of each fixture setting
+	// it with t.Setenv -- which a parallel test may not call.
+	for name, value := range map[string]string{"GIT_CONFIG_GLOBAL": os.DevNull, "GIT_CONFIG_NOSYSTEM": "1"} {
+		if err := os.Setenv(name, value); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
 	// A transform decides from its snapshot and its command. Any file read,
 	// artifact seal or subprocess reached from inside one is a fact the caller
 	// should have computed first. Violations are collected rather than

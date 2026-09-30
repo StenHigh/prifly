@@ -58,6 +58,7 @@ func contextRegistryEntry(t *testing.T, e *Engine, path, id, kind, encoding, med
 }
 
 func TestContextResourceInventorySeparatesRepresentationsAndReadOnlyDoctor(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	text := []byte("\ufeff# Правила\r\nUnicode e\u0301 / é\r\n\x00 trailing  ")
 	jsonSource := []byte(" {\"version\":\"9.0.0\",\"id\":\"not:a-definition\",\"digest\":\"sha256:" + strings.Repeat("a", 64) + "\"} \n")
@@ -133,6 +134,7 @@ func TestContextResourceInventorySeparatesRepresentationsAndReadOnlyDoctor(t *te
 }
 
 func TestContextResourceRegistryVersionsAndExplicitNull(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	entry := contextRegistryEntry(t, e, "resources/value.json", "test:resource/value", "resource", "", "", []byte("true"))
 	for _, version := range []string{"1", "2", "3"} {
@@ -180,6 +182,7 @@ func TestContextResourceRegistryVersionsAndExplicitNull(t *testing.T) {
 }
 
 func TestContextResourceRegistryRejectsUnsafeOrConflictingEntries(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	base := contextRegistryEntry(t, e, "resources/data.txt", "test:context/data", "resource", "utf8_text", "text/plain", []byte("true"))
 	for _, tc := range []struct {
@@ -235,6 +238,7 @@ func TestContextResourceRegistryRejectsUnsafeOrConflictingEntries(t *testing.T) 
 }
 
 func TestContextResourceRegistryAliasesAndChecks(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	e.Config.Configuration.SemanticsProfile = flow.CoreProfile
 	defs, _, err := Builtins()
@@ -279,6 +283,7 @@ func TestContextResourceRegistryAliasesAndChecks(t *testing.T) {
 }
 
 func TestContextResourceRegistryAdmitsOnlyCoreToolDescriptors(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	defs, _, err := Builtins()
 	if err != nil {
@@ -315,6 +320,7 @@ func TestContextResourceRegistryAdmitsOnlyCoreToolDescriptors(t *testing.T) {
 }
 
 func TestContextResourcePinsShareLegacyIdentityAndExactRetry(t *testing.T) {
+	t.Parallel()
 	data := []byte("true")
 	ref := flow.Ref{ID: "test:resource/identity", Version: "1.0.0", Digest: rawDigest(data)}
 	jsonPin := PinnedResource{Ref: ref, RawDigest: rawDigest(data), ByteEncoding: "json", MediaType: "application/json", Bytes: data}
@@ -398,6 +404,7 @@ func TestContextResourcePinsShareLegacyIdentityAndExactRetry(t *testing.T) {
 }
 
 func TestContextResourcePinsValidateWholeSnapshotAndConcurrentRetry(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	data := []byte("true")
 	base := PinnedResource{Ref: flow.Ref{ID: "test:context/data", Version: "1.0.0", Digest: rawDigest(data)}, RawDigest: rawDigest(data), ByteEncoding: "utf8_text", MediaType: "text/plain", Bytes: data}
@@ -460,6 +467,7 @@ func TestContextResourcePinsValidateWholeSnapshotAndConcurrentRetry(t *testing.T
 }
 
 func TestContextResourceInventoryCombinedLimits(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	base := contextRegistryEntry(t, e, "resources/empty.txt", "test:context/base", "resource", "utf8_text", "text/plain", nil)
 	legacy := contextRegistryEntry(t, e, "resources/legacy.json", "test:resource/legacy", "resource", "", "", []byte("true"))

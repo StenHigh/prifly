@@ -10,6 +10,7 @@ import (
 )
 
 func TestControlPlaneEnrolsTheSessionPrincipal(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	if control, version, err := e.Control(ctx); err != nil || version != 0 || control.SchemaVersion != "" {
@@ -43,6 +44,7 @@ func TestControlPlaneEnrolsTheSessionPrincipal(t *testing.T) {
 }
 
 func TestProjectStopForbidsNewAdmissionAndReleaseRestoresIt(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	ctx := context.Background()
 	stop, err := e.RestrictControl(ctx, ControlRestrictRequest{CommandID: "command:control-stop", Scope: "project", Reason: "pilot boundary check"})
@@ -134,6 +136,7 @@ func TestProjectStopForbidsNewAdmissionAndReleaseRestoresIt(t *testing.T) {
 }
 
 func TestInstallationStopCoversTheProject(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	ctx := context.Background()
 	if _, err := e.RestrictControl(ctx, ControlRestrictRequest{CommandID: "command:installation-stop", Scope: "installation", Reason: "whole installation halted"}); err != nil {
@@ -165,6 +168,7 @@ func TestInstallationStopCoversTheProject(t *testing.T) {
 // A stop that commits after an admission was evaluated must not be overtaken by
 // it. The pin makes that ordering a rejection instead of a silent admission.
 func TestControlPinRejectsAnAdmissionPreparedBeforeAStop(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	ctx := context.Background()
 	pin, blocked, err := e.admissionGate(ctx)

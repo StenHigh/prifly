@@ -59,6 +59,7 @@ func mapStage(parent map[string]any) map[string]any {
 }
 
 func TestMapCompilesOneBodyForEveryItem(t *testing.T) {
+	t.Parallel()
 	parent, registry := mapFixture(t, nil)
 	plan, err := compileParallel(t, parent, registry)
 	if err != nil {
@@ -84,6 +85,7 @@ func TestMapCompilesOneBodyForEveryItem(t *testing.T) {
 // the qualified fan-out before any collection is ever read, because the
 // collection is not what makes the work affordable.
 func TestMapRefusesWhatThisBuildCannotRun(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, code string
 		bend       func(map[string]any)
@@ -130,6 +132,7 @@ func TestMapRefusesWhatThisBuildCannotRun(t *testing.T) {
 // An empty collection has no branch results to summarise. Its route must be
 // declared, and the summary must not be treated as present on it.
 func TestMapEmptyCollectionHasItsOwnRoute(t *testing.T) {
+	t.Parallel()
 	parent, registry := mapFixture(t, func(p map[string]any) {
 		mapStage(p)["on"] = map[string]any{"satisfied": "done", "unsatisfied": "done"}
 	})
@@ -159,6 +162,7 @@ func TestMapEmptyCollectionHasItsOwnRoute(t *testing.T) {
 // The stage produces exactly one port. Naming another must fail by name rather
 // than resolve to nothing when the stage settles.
 func TestMapProducesOnlyItsSummary(t *testing.T) {
+	t.Parallel()
 	parent, registry := mapFixture(t, func(p map[string]any) {
 		stages := p["definition"].(map[string]any)["stages"].(map[string]any)
 		stages["done"] = map[string]any{"kind": "finish", "outcome": "succeeded",
@@ -174,6 +178,7 @@ func TestMapProducesOnlyItsSummary(t *testing.T) {
 // Two pinned versions of the shipped summary form must not make one plan
 // describe its parallel output differently from read to read.
 func TestAggregateSchemaSelectionIsDeterministic(t *testing.T) {
+	t.Parallel()
 	shipped := []byte(`true`)
 	other := []byte(`{"type":"object"}`)
 	shippedDigest, err := Digest(shipped)

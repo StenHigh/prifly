@@ -74,6 +74,7 @@ func checkProtocolProblem(t *testing.T, err error, code string) *flow.Problem {
 }
 
 func TestCheckRequestBoundariesAndExactSubjects(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"workflow_input", "step_input", "step_output", "workflow_output", "step_result"} {
 		t.Run(boundary, func(t *testing.T) {
 			request := checkRequestFixture(boundary)
@@ -107,6 +108,7 @@ func TestCheckRequestBoundariesAndExactSubjects(t *testing.T) {
 }
 
 func TestCheckRequestStrictRejections(t *testing.T) {
+	t.Parallel()
 	request := checkRequestFixture("step_output")
 	base := checkRequestBytes(t, request)
 	mutations := map[string]func(map[string]any){
@@ -155,6 +157,7 @@ func TestCheckRequestStrictRejections(t *testing.T) {
 }
 
 func TestCheckRequestDoesNotInventBoundaryOwners(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"workflow_input", "step_input", "workflow_output"} {
 		t.Run(boundary, func(t *testing.T) {
 			request := checkRequestFixture(boundary)
@@ -174,6 +177,7 @@ func TestCheckRequestDoesNotInventBoundaryOwners(t *testing.T) {
 }
 
 func TestCheckRequestNumbersAreExactBeforeCanonicalization(t *testing.T) {
+	t.Parallel()
 	base := string(checkRequestBytes(t, checkRequestFixture("step_result")))
 	for _, raw := range []string{"3", "3.0", "3e0", "0.003e3"} {
 		data := []byte(strings.Replace(base, `"admitted_run_version":3`, `"admitted_run_version":`+raw, 1))
@@ -201,6 +205,7 @@ func TestCheckRequestNumbersAreExactBeforeCanonicalization(t *testing.T) {
 }
 
 func TestCheckResultBindsExactRequestBytes(t *testing.T) {
+	t.Parallel()
 	request := checkRequestFixture("step_result")
 	compact := checkRequestBytes(t, request)
 	var indented []byte
@@ -224,6 +229,7 @@ func TestCheckResultBindsExactRequestBytes(t *testing.T) {
 }
 
 func TestCheckResultStrictIdentityAndReportLimits(t *testing.T) {
+	t.Parallel()
 	request := checkRequestFixture("step_result")
 	requestBytes := checkRequestBytes(t, request)
 	base := CheckResult{SchemaVersion: CheckResultVersion, CheckID: request.CheckID, RunID: request.RunID, RequestDigest: rawDigest(requestBytes), Status: "pass", Summary: "", Limitations: []string{}}

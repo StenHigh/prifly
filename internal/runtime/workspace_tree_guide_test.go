@@ -15,6 +15,7 @@ import (
 // carrying one path would repeat the manifest's mistake in a new place, so the
 // declared policy is copied whole: a tree with an entrypoint is not a file.
 func TestGuideCopiesTheDeclaredPolicyWhole(t *testing.T) {
+	t.Parallel()
 	policies := []flow.WorkspaceTreeCapturePolicy{
 		{Kind: "exact_file", Path: ".ai-factory/PLAN.md"},
 		{Kind: "direct_child_file", Path: ".ai-factory/plans"},
@@ -51,6 +52,7 @@ func TestGuideCopiesTheDeclaredPolicyWhole(t *testing.T) {
 // there. So the guide cannot say the slot does not exist — it has to say whose
 // it is, and name both refusals an executor earns by treating it as its own.
 func TestGuideSaysWhoTheSlotBelongsTo(t *testing.T) {
+	t.Parallel()
 	step := flow.StepDefinition{WorkspaceTrees: []flow.WorkspaceTreeBinding{{OutputPort: "plan", Capture: flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}}}}
 	guide, _ := workspaceTreeGuide(step)
 	for _, expected := range []string{"lists no output slot", "workspace_tree_output_host_supplied", "workspace_tree_capture_conflict"} {
@@ -67,6 +69,7 @@ func TestGuideSaysWhoTheSlotBelongsTo(t *testing.T) {
 // A step that declares no capture gets no second document. An empty guide is
 // one more file to open that answers nothing.
 func TestStepWithoutCaptureGetsNoGuide(t *testing.T) {
+	t.Parallel()
 	if _, declared := workspaceTreeGuide(flow.StepDefinition{}); declared {
 		t.Fatal("a step with no declared capture was handed a guide anyway")
 	}
@@ -77,6 +80,7 @@ func TestStepWithoutCaptureGetsNoGuide(t *testing.T) {
 // and the directory holding the step manifest — and the guide belongs with the
 // manifest, because the reader it argues with is reading that file.
 func TestGuideSitsBesideTheManifestItCorrects(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "direct_child_tree", Path: ".ai-factory/plans", Entrypoint: "index.md"}
 	e, runID := treeSessionFixture(t, policy)
 	task := handOver(t, e, runID)
@@ -109,6 +113,7 @@ func TestGuideSitsBesideTheManifestItCorrects(t *testing.T) {
 // starting there earned workspace_tree_output_host_supplied for doing the
 // obvious. Reading order was the only thing that saved anyone.
 func TestCapturedPortGetsNoSlotWhileOrdinaryPortsKeepTheirs(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	e, runID := treeSessionFixture(t, policy)
 	task := handOver(t, e, runID)
@@ -157,6 +162,7 @@ func TestCapturedPortGetsNoSlotWhileOrdinaryPortsKeepTheirs(t *testing.T) {
 // spent three attempts taking the expected version from the wrong level of one
 // document, and one more discovering that a stop is released by name.
 func TestStopAndVersionRefusalsPointAtWhereTheAnswerIsRead(t *testing.T) {
+	t.Parallel()
 	for code, want := range map[string]string{"active_stop": "run.release", "version_conflict": "run.status", "recovery_required": "run.resolve"} {
 		problem, _ := ProblemFor(&flow.Problem{Code: code, Message: "x"})
 		if !slices.Contains(problem.SafeNextActions, want) {
@@ -168,6 +174,7 @@ func TestStopAndVersionRefusalsPointAtWhereTheAnswerIsRead(t *testing.T) {
 // A materialize-only port is listed without an output port, and the note says
 // it is there to be read, not declared or reported.
 func TestGuideShowsAMaterializeOnlyPortWithoutAnOutput(t *testing.T) {
+	t.Parallel()
 	step := flow.StepDefinition{WorkspaceTrees: []flow.WorkspaceTreeBinding{{InputPort: "plan", Capture: flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}}}}
 	guide, declared := workspaceTreeGuide(step)
 	if !declared || guide.SchemaVersion != "workspace-tree-guide/2" || len(guide.Ports) != 1 || guide.Ports[0].OutputPort != "" || guide.Ports[0].InputPort != "plan" {

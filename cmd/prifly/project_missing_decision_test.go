@@ -18,6 +18,7 @@ import (
 // decisions rather than fixed: a sensitive decision is never answered by policy,
 // and naming the policy there would send the reader in a circle.
 func TestMissingDecisionRefusalNamesEveryDecisionAndTheExitThatFitsIt(t *testing.T) {
+	t.Parallel()
 	automatic := func(id string) prifly.DecisionDefinition {
 		return prifly.DecisionDefinition{ID: id, Phase: "preflight", Required: true, Automatic: true, Sensitivity: "ordinary", Recommendation: json.RawMessage(`true`)}
 	}

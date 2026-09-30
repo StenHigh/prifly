@@ -11,6 +11,7 @@ import (
 )
 
 func TestArtifactClosureSealsExactManifestBeforeProducerSettlement(t *testing.T) {
+	t.Parallel()
 	e, runID := publicationSubscriptionRuntime(t)
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {
@@ -133,6 +134,7 @@ func TestArtifactClosureSealsExactManifestBeforeProducerSettlement(t *testing.T)
 }
 
 func TestArtifactClosureAcceptsAnExplicitEmptyManifest(t *testing.T) {
+	t.Parallel()
 	e, runID := publicationSubscriptionRuntime(t)
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {
@@ -170,6 +172,7 @@ func TestArtifactClosureAcceptsAnExplicitEmptyManifest(t *testing.T) {
 }
 
 func TestArtifactCloseWireKeepsExplicitEmptyMembership(t *testing.T) {
+	t.Parallel()
 	valid := []byte(`{"schema_version":"3","command_id":"command:close-empty","run_id":"run:wire","step_instance_id":"step:wire","attempt_id":"attempt:wire","envelope_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","hook":"documents","kind":"close","item_keys":[]}`)
 	command, err := ParsePublishCommand(valid)
 	if err != nil || command.ItemKeys == nil || len(command.ItemKeys) != 0 || validatePublishCommand(command) != nil {

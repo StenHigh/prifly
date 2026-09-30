@@ -12,6 +12,7 @@ import (
 )
 
 func TestParseActionIntentRejectsUnsealedOrAmbiguousOperation(t *testing.T) {
+	t.Parallel()
 	ref := flow.Ref{ID: "test:tool/write", Version: "1.0.0", Digest: "sha256:" + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 	resource := ResourceIdentity{ProviderRef: ref, CanonicalID: "file:report", Scope: "project"}
 	intent := ActionIntent{SchemaVersion: "1", ID: "intent:test", RunID: "run:test", StepInstanceID: "step:test", OriginatingAttempt: "attempt:test", OperationID: "operation:test", ToolRef: ref, Operation: "write", ArgumentsSchemaRef: ref, Arguments: json.RawMessage(`{"text":"sealed"}`), Targets: []ResourceIdentity{resource}, InputArtifacts: []ArtifactRef{}, ExpectedOutputs: map[string]ActionExpectedOutput{}, EffectClass: "external_write", RetryClass: "deduplicated", Preconditions: []ActionPrecondition{{Resource: resource, ExpectedVersion: "7"}}, DispatchNotAfter: "2026-08-30T12:00:00Z"}
@@ -46,6 +47,7 @@ func TestParseActionIntentRejectsUnsealedOrAmbiguousOperation(t *testing.T) {
 }
 
 func TestSessionActionProposalIsDurableAndBlockedBeforeDelivery(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
@@ -187,6 +189,7 @@ func TestSessionActionProposalIsDurableAndBlockedBeforeDelivery(t *testing.T) {
 }
 
 func TestActionAdmissionRejectsRevokedToolPackage(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	e, runID, _ := assistedFixture(t)
 	definitions, _, err := Builtins()
@@ -257,6 +260,7 @@ func TestActionAdmissionRejectsRevokedToolPackage(t *testing.T) {
 }
 
 func TestActionAdmissionConsumesExactResourceGrant(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)

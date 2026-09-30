@@ -136,6 +136,7 @@ func updater(f releaseFixture, address string) Updater {
 }
 
 func TestUpdateVerifiesAndAtomicallyReplacesManagedBinary(t *testing.T) {
+	t.Parallel()
 	f := fixture(t)
 	s, _ := server(t, f, nil)
 	defer s.Close()
@@ -153,6 +154,7 @@ func TestUpdateVerifiesAndAtomicallyReplacesManagedBinary(t *testing.T) {
 }
 
 func TestUpdateSelectsEachSupportedPlatform(t *testing.T) {
+	t.Parallel()
 	f := fixture(t)
 	s, _ := server(t, f, nil)
 	defer s.Close()
@@ -176,6 +178,7 @@ func TestUpdateSelectsEachSupportedPlatform(t *testing.T) {
 }
 
 func TestUpdateRejectsChangedManifestAndArchiveWithoutReplacingBinary(t *testing.T) {
+	t.Parallel()
 	for name, mutate := range map[string]func(string, []byte) []byte{
 		"manifest": func(path string, body []byte) []byte {
 			if path == "/release-manifest.json" {
@@ -208,6 +211,7 @@ func TestUpdateRejectsChangedManifestAndArchiveWithoutReplacingBinary(t *testing
 }
 
 func TestUpdateRefusesUnsupportedPlatformAndCurrentVersionWithoutArchive(t *testing.T) {
+	t.Parallel()
 	f := fixture(t)
 	s, requests := server(t, f, nil)
 	defer s.Close()
@@ -229,6 +233,7 @@ func TestUpdateRefusesUnsupportedPlatformAndCurrentVersionWithoutArchive(t *test
 }
 
 func TestInstallerUsesOnlyOneArchiveAndLeavesNoPartialBinary(t *testing.T) {
+	t.Parallel()
 	f := fixture(t)
 	s, _ := server(t, f, nil)
 	defer s.Close()
@@ -277,6 +282,7 @@ func TestInstallerUsesOnlyOneArchiveAndLeavesNoPartialBinary(t *testing.T) {
 }
 
 func TestUpdateRefusesSourceBuildBeforeNetwork(t *testing.T) {
+	t.Parallel()
 	f := fixture(t)
 	s, requests := server(t, f, nil)
 	defer s.Close()
@@ -295,6 +301,7 @@ func TestUpdateRefusesSourceBuildBeforeNetwork(t *testing.T) {
 }
 
 func TestUpdateRefusesCopiedBinaryBeforeNetwork(t *testing.T) {
+	t.Parallel()
 	f := fixture(t)
 	s, requests := server(t, f, nil)
 	defer s.Close()
@@ -313,6 +320,7 @@ func TestUpdateRefusesCopiedBinaryBeforeNetwork(t *testing.T) {
 }
 
 func TestInterruptedDownloadLeavesInstalledBinaryUntouched(t *testing.T) {
+	t.Parallel()
 	f := fixture(t)
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -338,6 +346,7 @@ func TestInterruptedDownloadLeavesInstalledBinaryUntouched(t *testing.T) {
 }
 
 func TestBuildRefusesMismatchedPublicKey(t *testing.T) {
+	t.Parallel()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -361,6 +370,7 @@ func buildAssets(binary string) []BuildAsset {
 }
 
 func TestBuildRefusesIncompleteOrDuplicatePlatformAssets(t *testing.T) {
+	t.Parallel()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -382,6 +392,7 @@ func TestBuildRefusesIncompleteOrDuplicatePlatformAssets(t *testing.T) {
 }
 
 func TestStableManifestRejectsPrerelease(t *testing.T) {
+	t.Parallel()
 	raw := []byte(`{"schema_version":"prifly-release/1","version":"1.0.0-rc.1","stable":true,"assets":[{"os":"linux","arch":"amd64","archive":"prifly-linux-amd64.tar.gz","binary":"prifly","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}]}`)
 	if _, _, err := parseManifest(raw); err == nil {
 		t.Fatal("stable manifest accepted a prerelease")
@@ -389,6 +400,7 @@ func TestStableManifestRejectsPrerelease(t *testing.T) {
 }
 
 func TestBuildCopiesInstallerAndReleaseCIIsManual(t *testing.T) {
+	t.Parallel()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -421,6 +433,7 @@ func TestBuildCopiesInstallerAndReleaseCIIsManual(t *testing.T) {
 // the RFC 8785 canonical form any reader can compute from the document itself.
 // An updater from either side of that change verifies the release it is given.
 func TestManifestCarriesBothSignatures(t *testing.T) {
+	t.Parallel()
 	f := fixture(t)
 	if len(f.jcsSignature) == 0 || string(f.jcsSignature) == string(f.signature) {
 		t.Fatalf("the canonical signature is missing or identical to the legacy one")
@@ -459,6 +472,7 @@ func TestManifestCarriesBothSignatures(t *testing.T) {
 // a numeric identifier ranks below an alphanumeric one, and a release ranks
 // above every prerelease of the same version.
 func TestPrereleaseOrderingFollowsSemver(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		left, right string
 		want        int
@@ -488,6 +502,7 @@ func TestPrereleaseOrderingFollowsSemver(t *testing.T) {
 // exist. This pins every claim that document makes, so a change to signing
 // fails here and names the document to update.
 func TestPublishedSignaturesMatchTheDocumentedVerification(t *testing.T) {
+	t.Parallel()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)

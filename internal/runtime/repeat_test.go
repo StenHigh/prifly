@@ -59,6 +59,7 @@ func repeatHistory(t *testing.T, e *Engine, runID string) (local.ReadView, []Rep
 }
 
 func TestRepeatNativeExportsScopesAndHistory(t *testing.T) {
+	t.Parallel()
 	for _, outcome := range []string{"succeeded", "partial", "rejected"} {
 		t.Run(outcome, func(t *testing.T) {
 			e, workflow, _, options := repeatFixture(t, "commit-pass", outcome, 3)
@@ -131,6 +132,7 @@ func TestRepeatNativeExportsScopesAndHistory(t *testing.T) {
 }
 
 func TestRepeatPostBodyRoutesAndUnknownAreExplicit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, input, route, failure, outcome string
 		max, bodies                          int64
@@ -192,6 +194,7 @@ func TestRepeatPostBodyRoutesAndUnknownAreExplicit(t *testing.T) {
 }
 
 func TestRepeatIterationBindingsAndProjectionProvenance(t *testing.T) {
+	t.Parallel()
 	e, workflow, body, options := repeatFixture(t, "", "succeeded", 3)
 	body["id"] = "test:workflow/repeat-values"
 	control := body["inputs"].(map[string]any)["control"].(map[string]any)
@@ -254,6 +257,7 @@ func TestRepeatIterationBindingsAndProjectionProvenance(t *testing.T) {
 }
 
 func TestRepeatQualifiedCapacityAndCapabilityVersions(t *testing.T) {
+	t.Parallel()
 	manifest := Capabilities()
 	core := manifest.Profiles[1]
 	if !slices.Contains(core.Capabilities, "repeat") || slices.Contains(manifest.Profiles[0].Capabilities, "repeat") || slices.Contains(manifest.Unsupported, "repeat") || !slices.Contains(core.StateVersions, CoreRepeatStateVersion) || !slices.Contains(core.ReadVersions, CoreRepeatReadVersion) {
@@ -294,6 +298,7 @@ func TestRepeatQualifiedCapacityAndCapabilityVersions(t *testing.T) {
 }
 
 func TestRepeatProjectLimitIsPinnedAndOnlyNarrows(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, value, refusal string
 		bodies               int
@@ -380,6 +385,7 @@ func TestRepeatProjectLimitIsPinnedAndOnlyNarrows(t *testing.T) {
 }
 
 func TestRepeatNextInputsAreIndependentAndConfigurationIsPinned(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"omitted", "absent", "literal"} {
 		t.Run(mode, func(t *testing.T) {
 			e, workflow, body, options := repeatFixture(t, "", "succeeded", 2)
@@ -435,6 +441,7 @@ func TestRepeatNextInputsAreIndependentAndConfigurationIsPinned(t *testing.T) {
 }
 
 func TestRepeatBindingFailurePublishesNoLastBodyExports(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"initial", "next"} {
 		t.Run(phase, func(t *testing.T) {
 			e, workflow, body, options := repeatFixture(t, "", "succeeded", 2)
@@ -483,6 +490,7 @@ func TestRepeatBindingFailurePublishesNoLastBodyExports(t *testing.T) {
 }
 
 func TestRepeatNonContinuingOutcomeSkipsUntil(t *testing.T) {
+	t.Parallel()
 	e, workflow, body, options := repeatFixture(t, "", "succeeded", 3)
 	body["id"], body["allowed_outcomes"] = "test:workflow/repeat-outcomes", []string{"succeeded", "rejected"}
 	stage := choiceStages(workflow)["work"].(map[string]any)

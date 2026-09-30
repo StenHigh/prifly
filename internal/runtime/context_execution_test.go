@@ -94,6 +94,7 @@ func contextDriverProject(t *testing.T, edit func(*ContextProfile)) (*Engine, St
 }
 
 func TestFullContextNativeExecutionUsesPinnedSources(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	started, err := e.Start(context.Background(), options)
 	if err != nil {
@@ -167,6 +168,7 @@ func TestFullContextNativeExecutionUsesPinnedSources(t *testing.T) {
 }
 
 func TestFullContextLimitsAndIsolationRefuseWithoutProcess(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, code string
 		edit       func(*ContextProfile)
@@ -201,6 +203,7 @@ func TestFullContextLimitsAndIsolationRefuseWithoutProcess(t *testing.T) {
 }
 
 func TestFullContextWorkspaceAndProfileDrift(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	started, err := e.Start(context.Background(), options)
 	if err != nil {
@@ -241,6 +244,7 @@ func TestFullContextWorkspaceAndProfileDrift(t *testing.T) {
 }
 
 func TestContextFieldsNeverExtendOlderStateContracts(t *testing.T) {
+	t.Parallel()
 	for _, version := range []string{StateVersion, CoreStateVersion, CoreInvocationStateVersion, CoreRepeatStateVersion} {
 		for _, field := range []string{"context_resources", "check_executions", "active_check_execution_id", "pending_acceptance", "context_profile", "context_profile_ref", "manifest", "rendering", "sources"} {
 			t.Run(version+"/"+field, func(t *testing.T) {

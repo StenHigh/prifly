@@ -9,6 +9,7 @@ import (
 )
 
 func TestCleanupRefusesUnfinishedAndUnresolved(t *testing.T) {
+	t.Parallel()
 	for _, status := range []string{"running", "waiting", "pending", "uncertain", "stopping"} {
 		if cleanupRefusal(Run{Status: status, Settled: &Observation{}}) == "" {
 			t.Fatal("accepted", status)
@@ -32,6 +33,7 @@ func TestCleanupRefusesUnfinishedAndUnresolved(t *testing.T) {
 }
 
 func TestCleanupRemovesOnlyOwnedWorkspace(t *testing.T) {
+	t.Parallel()
 	e, id := driverProject(t, "pass", 10000)
 	ctx := context.Background()
 	if err := e.Drive(ctx, id); err != nil {

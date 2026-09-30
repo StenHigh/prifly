@@ -12,6 +12,7 @@ import (
 )
 
 func TestProjectLocalExecutableAllowList(t *testing.T) {
+	t.Parallel()
 	root, state := t.TempDir(), filepath.Join(t.TempDir(), "authority")
 	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", state); code != 0 {
 		t.Fatalf("init: %d %s", code, stderr)
@@ -82,6 +83,7 @@ func TestProjectLocalExecutableAllowList(t *testing.T) {
 }
 
 func TestProjectLocalExecutableAllowRejectsUnsafeInputs(t *testing.T) {
+	t.Parallel()
 	root, authority := t.TempDir(), t.TempDir()
 	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", authority); code != 0 {
 		t.Fatalf("init: %d %s", code, stderr)

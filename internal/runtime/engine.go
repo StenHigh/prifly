@@ -475,13 +475,42 @@ func driverBusyMessage(held string) string {
 	return "a driver for " + subject + " is already pumping this authority, and one authority drives one Run at a time; this is not the admission bound, so capacity set does not lift it — let that Run reach a settled state, or end it with run cancel --id ID, and run status --id ID says where it is"
 }
 
+// driverLockProbeGrace is how long an exclusive lock -- the driver's, or
+// maintenance's on the installation -- keeps being asked for before the other
+// holder is reported. Every read of a Run asks whether a driver is live by
+// taking the lock shared for a moment; a driver that started in that moment was
+// refused as driver_already_active although nobody was driving, and a monitor
+// polling every 1.5 s made that moment a regular one. A real driver holds the
+// lock for the whole Run, far past this window.
+const (
+	driverLockProbeGrace = 250 * time.Millisecond
+	driverLockRetryEvery = 5 * time.Millisecond
+)
+
+func flockExclusive(f *os.File) error { return flockWithGrace(f, syscall.LOCK_EX) }
+
+// flockWithGrace takes a non-blocking lock, asking again for a short window.
+// A lock another holder has just released can still be carried for a moment
+// by a child process between fork and exec, which holds a copy of every
+// descriptor until exec closes it.
+func flockWithGrace(f *os.File, mode int) error {
+	deadline := time.Now().Add(driverLockProbeGrace)
+	for {
+		err := syscall.Flock(int(f.Fd()), mode|syscall.LOCK_NB)
+		if !errors.Is(err, syscall.EWOULDBLOCK) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(driverLockRetryEvery)
+	}
+}
+
 func (e *Engine) driverLock(runID string) (*os.File, error) {
 	path := filepath.Join(e.Root, e.Config.Configuration.StateRoot, "driver.lock")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := flockExclusive(f); err != nil {
 		held := driverHolder(f)
 		f.Close()
 		return nil, wrapFault("driver_already_active", driverBusyMessage(held), err)

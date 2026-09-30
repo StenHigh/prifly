@@ -11,6 +11,7 @@ import (
 )
 
 func TestPendingArtifactPublicationPinsEveryDeclaredCheck(t *testing.T) {
+	t.Parallel()
 	check := flow.Ref{ID: "test:check/content", Version: "1.0.0", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 	hook := flow.Hook{SchemaRef: flow.Ref{ID: "test:schema/document", Version: "1.0.0", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, Artifact: &flow.ArtifactHook{Format: "json", ContentCheckRefs: []flow.Ref{check}}}
 	attempt := &Attempt{ID: "attempt:producer", StepID: "step:producer"}
@@ -23,6 +24,7 @@ func TestPendingArtifactPublicationPinsEveryDeclaredCheck(t *testing.T) {
 }
 
 func TestArtifactPublicationChecksAcceptSealedItemBeforeProducerSettles(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "artifact-publish-check", 20000)
 	if _, err := e.SetAdmissionCapacity(context.Background(), CapacityRequest{CommandID: newID("command"), Capacity: 2, Reason: "qualify producer and its publication check"}); err != nil {
 		t.Fatal(err)
@@ -100,6 +102,7 @@ func TestArtifactPublicationChecksAcceptSealedItemBeforeProducerSettles(t *testi
 }
 
 func TestArtifactPublicationCheckFailureReleasesCandidateWithoutPublishing(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "artifact-publish-check-fail", 20000)
 	if _, err := e.SetAdmissionCapacity(context.Background(), CapacityRequest{CommandID: newID("command"), Capacity: 2, Reason: "qualify producer and its publication check"}); err != nil {
 		t.Fatal(err)

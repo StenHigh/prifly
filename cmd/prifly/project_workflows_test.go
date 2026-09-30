@@ -114,6 +114,7 @@ func runCLI(t *testing.T, args ...string) (int, string, string) {
 }
 
 func TestProjectWorkflowSourceParsing(t *testing.T) {
+	t.Parallel()
 	accepted := map[string]projectWorkflowSource{
 		"aif-classic":                            {catalogEntry: "aif-classic"},
 		"owner/repo":                             {repository: "https://github.com/owner/repo.git"},
@@ -145,6 +146,7 @@ func TestProjectWorkflowSourceParsing(t *testing.T) {
 }
 
 func TestProjectProfileOriginIsStrict(t *testing.T) {
+	t.Parallel()
 	repository, _ := newProjectFixture(t)
 	writeFixtureWorkflowFolder(t, repository, ".prifly/workflows/sample", "sample")
 	commit := strings.Repeat("a", 40)
@@ -179,6 +181,7 @@ func TestProjectProfileOriginIsStrict(t *testing.T) {
 }
 
 func TestProjectWorkflowTreeDigestIgnoresExtendAndOrder(t *testing.T) {
+	t.Parallel()
 	folder := filepath.Join(t.TempDir(), "folder")
 	writeFixtureWorkflowFolder(t, folder, ".", "sample")
 	writeFixtureFile(t, folder, "a-b.yaml", "x\n")
@@ -209,6 +212,7 @@ func TestProjectWorkflowTreeDigestIgnoresExtendAndOrder(t *testing.T) {
 }
 
 func TestCLIProjectWorkflowsAddInstallsFolderFromRepository(t *testing.T) {
+	t.Parallel()
 	source := newWorkflowRepositoryFixture(t, "flows/sample")
 	gitFixture(t, source, "tag", "-a", "v1", "-m", "release")
 	commit := gitFixture(t, source, "rev-parse", "v1^{commit}")
@@ -296,6 +300,7 @@ func TestCLIProjectWorkflowsAddInstallsFolderFromRepository(t *testing.T) {
 }
 
 func TestCLIProjectWorkflowsAddDiscoveryAndRefusals(t *testing.T) {
+	t.Parallel()
 	source := newWorkflowRepositoryFixture(t, "flows/alpha", "flows/beta")
 	repository, _ := newProjectFixture(t)
 	code, _, errout := runCLI(t, "project", "workflows", "add", source, "--repository", repository)
@@ -344,6 +349,7 @@ func TestCLIProjectWorkflowsAddDiscoveryAndRefusals(t *testing.T) {
 }
 
 func TestProjectWorkflowCatalogParsing(t *testing.T) {
+	t.Parallel()
 	valid := `schema_version: prifly-workflow-catalog/1
 title: Test catalog
 categories:
@@ -408,6 +414,7 @@ workflows:
 }
 
 func TestCLIProjectWorkflowsSearchAndAddByCatalogEntry(t *testing.T) {
+	t.Parallel()
 	source := newWorkflowRepositoryFixture(t, "flows/sample", "flows/other")
 	gitFixture(t, source, "tag", "v1")
 	commit := gitFixture(t, source, "rev-parse", "HEAD")
@@ -480,6 +487,7 @@ workflows:
 }
 
 func TestCLIProjectWorkflowsUpdateAndRemove(t *testing.T) {
+	t.Parallel()
 	source := newWorkflowRepositoryFixture(t, "flows/sample")
 	repository, _ := newProjectFixture(t)
 	if code, _, errout := runCLI(t, "project", "workflows", "add", source, "--repository", repository); code != 0 {
@@ -587,6 +595,7 @@ func TestCLIProjectWorkflowsUpdateAndRemove(t *testing.T) {
 }
 
 func TestCLIProjectWorkflowsUpdateExplainsCompiledVariant(t *testing.T) {
+	t.Parallel()
 	source := newWorkflowRepositoryFixture(t, "flows/sample")
 	repository, _ := newProjectFixture(t)
 	profilePath := filepath.Join(repository, ".prifly", "project.yaml")
@@ -620,6 +629,7 @@ func TestCLIProjectWorkflowsUpdateExplainsCompiledVariant(t *testing.T) {
 // anything is swapped -- compile never does: for a compiled folder project/
 // is simply where the team's components live.
 func TestCLIProjectWorkflowsRefuseAnUpstreamProjectFolder(t *testing.T) {
+	t.Parallel()
 	source := newWorkflowRepositoryFixture(t, "flows/sample")
 	writeFixtureFile(t, source, "flows/sample/project/steps/tests.yaml", "authoring: prifly-step/1\n")
 	gitFixture(t, source, "add", "-A")

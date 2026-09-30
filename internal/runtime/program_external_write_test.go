@@ -59,6 +59,7 @@ func unreconciled(r Run) *Diagnostic {
 // contract 14 it had to say class none, and the journal said nothing changed
 // while the program created and removed containers.
 func TestAProgramDeclaresItsExternalWriteAndTheRunSealsIt(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "pass", 10000, programExternalWrite("idempotent"))
 	r := driverRun(t, e, runID)
 	if r.SchemaVersion != CoreExternalWriteStateVersion {
@@ -82,12 +83,18 @@ func TestAProgramDeclaresItsExternalWriteAndTheRunSealsIt(t *testing.T) {
 // accepted result -- a failing exit, a timeout that stopped it -- leaves the
 // Run waiting for that person, even though its process group is proven empty.
 func TestAnInterruptedProgramWriteWaitsForTheOwnerUnlessIdempotent(t *testing.T) {
+	t.Parallel()
 	for _, interruption := range []struct {
 		mode    string
 		timeout int64
-	}{{"nonzero", 10000}, {"wait", 300}} {
+	}{{"nonzero", 10000}, {"wait", 2000}} {
 		for _, retryClass := range []string{"deduplicated", "reconcile_required", "never"} {
 			t.Run(interruption.mode+"/"+retryClass, func(t *testing.T) {
+				// The wait deadline is long enough that the program has
+				// started before it expires even on a loaded machine: one that
+				// never started changed nothing, and the Run then fails
+				// honestly instead of waiting for the owner.
+				t.Parallel()
 				e, runID := driverProject(t, interruption.mode, interruption.timeout, programExternalWrite(retryClass))
 				r := driveUntilSettled(t, e, runID)
 				if r.Status != "uncertain" || !r.HasUnresolvedEffects {
@@ -146,6 +153,7 @@ func TestAnInterruptedProgramWriteWaitsForTheOwnerUnlessIdempotent(t *testing.T)
 // what it should be by itself. The interrupted program fails as any program
 // does and is taken again without anyone attesting.
 func TestAnInterruptedIdempotentProgramWriteFailsAndResumes(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "nonzero", 10000, programExternalWrite("idempotent"))
 	r := driveUntilSettled(t, e, runID)
 	if r.Status != "failed" || r.HasUnresolvedEffects || unreconciled(r) != nil {
@@ -159,6 +167,7 @@ func TestAnInterruptedIdempotentProgramWriteFailsAndResumes(t *testing.T) {
 // A result the authority accepted says what the program did, whatever its
 // retry class: the verdict routes, nothing waits for the owner.
 func TestAProgramWriteThatReportedIsSettledByItsVerdict(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "pass", 10000, programExternalWrite("reconcile_required"))
 	if r := driveUntilSettled(t, e, runID); r.Status != "completed" || r.HasUnresolvedEffects {
 		t.Fatalf("an accepted result was held for the owner: %s %+v", r.Status, r.Diagnostics)
@@ -169,6 +178,7 @@ func TestAProgramWriteThatReportedIsSettledByItsVerdict(t *testing.T) {
 // from saved evidence. The program did start, so what it changed outside is as
 // unknown as after any other interruption.
 func TestALostDriverLeavesAnUnreconciledProgramWriteForTheOwner(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		retryClass, status string
 	}{{"reconcile_required", "uncertain"}, {"idempotent", "failed"}} {
@@ -193,6 +203,7 @@ func TestALostDriverLeavesAnUnreconciledProgramWriteForTheOwner(t *testing.T) {
 // The assisted line is not asked about its retry class: a lost session is not
 // proof the session stopped, so idempotent does not make it certain.
 func TestIdempotentDoesNotMakeALostAssistedSessionCertain(t *testing.T) {
+	t.Parallel()
 	e, runID, err := externalWriteFixture(t, func(s *flow.StepDefinition) { s.Effects.RetryClass = "idempotent" })
 	if err != nil {
 		t.Fatalf("an assisted idempotent external write did not start: %v", err)
@@ -222,6 +233,7 @@ func TestIdempotentDoesNotMakeALostAssistedSessionCertain(t *testing.T) {
 // retry class and the boundary, from the definition the Run sealed. A package
 // changed afterwards does not change what the Run answers.
 func TestARunNamesTheEffectEachStepDeclared(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "pass", 10000, programExternalWrite("idempotent"))
 	r := driveUntilSettled(t, e, runID)
 	// A later edition of the step on disk declares something else.

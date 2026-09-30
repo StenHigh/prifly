@@ -21,6 +21,7 @@ import (
 // under the accepted key conflict. Concurrent mutation and crash/cancel around
 // the commit remain parts of PUB-AC-05/06 that this test does not claim.
 func TestArtifactPublicationSealsBeforeProducerSettlementAndDoesNotReread(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "artifact-publish", 20000)
 	_, finished := driverAsync(t, e, runID)
 	select {

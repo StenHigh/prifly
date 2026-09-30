@@ -32,6 +32,7 @@ func standingGrantFixture(t *testing.T, operations int64) (*Engine, StartOptions
 }
 
 func TestStandingGrantIsSpentByEachStartAndRefusedWithoutOne(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("a brief cannot grant itself the exemption", func(t *testing.T) {

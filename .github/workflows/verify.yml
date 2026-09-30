@@ -1,7 +1,9 @@
 name: verify
 
-# The product gates run for every branch push and pull request. Release tags
-# never run them again: a tag is cut from a tree that already passed.
+# The everyday gate, on every branch push and pull request: every test and every
+# static check, split into jobs that run at once. The race detector and the full
+# end-to-end suite are the pre-release qualification (qualify.yml). Release tags
+# never run either again: a tag is cut from a tree that already passed both.
 on:
   push:
     branches: ["**"]
@@ -17,9 +19,10 @@ env:
   GOTELEMETRY: off
 
 jobs:
-  verify:
+  static:
+    name: static checks
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -35,8 +38,45 @@ jobs:
         run: |
           go version
           python3 --version
-          gcc --version | head -1
-      - name: Product gates
-        run: make ci-check GO="$(go env GOROOT)/bin/go"
-      - name: End-to-end checks
-        run: make e2e GO="$(go env GOROOT)/bin/go"
+      - name: Static gates
+        run: make vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check GO="$(go env GOROOT)/bin/go"
+
+  engine:
+    name: engine tests ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: prifly-go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: prifly-go-${{ runner.os }}-
+      - name: Engine shard
+        run: make test-shard SHARDS=3 SHARD=${{ matrix.shard }} GO="$(go env GOROOT)/bin/go"
+
+  packages:
+    name: other packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: prifly-go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: prifly-go-${{ runner.os }}-
+      - name: Every package but the engine
+        run: make test-rest GO="$(go env GOROOT)/bin/go"

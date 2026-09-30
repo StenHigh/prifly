@@ -156,6 +156,7 @@ func verdicts(view prifly.RunView) map[string][]string {
 // learns from run next why the Run stopped, and a declared continuation goes
 // on once the condition holds -- without repeating anything already accepted.
 func TestCLIBlockedExampleAcceptance(t *testing.T) {
+
 	f := newBlockedExample(t)
 	input := []string{"--input", "request=" + filepath.Join(f.root, "request.json")}
 
@@ -278,6 +279,7 @@ func TestCLIBlockedExampleAcceptance(t *testing.T) {
 // refused rather than sealed into a Run whose carried stages were decided
 // otherwise.
 func TestCLIResumeTakesTheSourceRunsAnswers(t *testing.T) {
+
 	f := newBlockedExample(t)
 	folder := ".prifly/workflows/blocked-condition/"
 	data, err := os.ReadFile(filepath.Join(f.root, folder+"workflow.yaml"))

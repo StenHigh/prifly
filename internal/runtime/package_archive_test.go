@@ -60,6 +60,7 @@ func archiveOf(t *testing.T, source string, bend func(*tar.Header) bool) string 
 }
 
 func TestArchiveImportSealsTheSameBytesAsADirectory(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	source, _, _ := skillPackage(t, "---\nname: aif-plan\n---\n\n# Plan\n")
@@ -89,6 +90,7 @@ func TestArchiveImportSealsTheSameBytesAsADirectory(t *testing.T) {
 }
 
 func TestArchiveRefusesEscapingLinkingAndCollidingEntries(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	source, _, _ := skillPackage(t, "# Plan\n")
@@ -135,6 +137,7 @@ func TestArchiveRefusesEscapingLinkingAndCollidingEntries(t *testing.T) {
 // PKG-007: a signature proves who sealed the bytes. A key inside the package
 // never appoints itself, so verification consults only recorded trust roots.
 func TestSignatureIsVerifiedAgainstRecordedTrustRootsOnly(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	public, private, err := ed25519.GenerateKey(nil)

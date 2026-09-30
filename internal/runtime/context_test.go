@@ -92,6 +92,7 @@ func contextErrorCode(t *testing.T, err error, want string) {
 }
 
 func TestContextRenderingFrozenStepBytes(t *testing.T) {
+	t.Parallel()
 	manifest, sources := contextRenderFixture()
 	rendered, err := RenderContext(manifest, contextTestEnvelope(t, manifest), sources)
 	if err != nil {
@@ -106,6 +107,7 @@ func TestContextRenderingFrozenStepBytes(t *testing.T) {
 }
 
 func TestContextRenderingExactSourcesAndRoles(t *testing.T) {
+	t.Parallel()
 	manifest, sources := contextRenderFixture()
 	envelope := contextTestEnvelope(t, manifest)
 	rendered, err := RenderContext(manifest, envelope, sources)
@@ -188,6 +190,7 @@ func TestContextRenderingDeterminismAndNoAmbientInstructions(t *testing.T) {
 }
 
 func TestContextRenderingRejectsSourceAndEnvelopeMismatch(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mutate func(*FullContextManifest, *[]ContextSource)
 		code   string
@@ -240,6 +243,7 @@ func TestContextRenderingRejectsSourceAndEnvelopeMismatch(t *testing.T) {
 }
 
 func TestContextRenderingStrictByteBudgetAndRepeatedEntries(t *testing.T) {
+	t.Parallel()
 	manifest, sources := contextRenderFixture()
 	// The same revision is explicitly provided twice with different roles.
 	manifest.Entries = append(manifest.Entries, manifest.Entries[0])
@@ -289,6 +293,7 @@ func TestContextRenderingStrictByteBudgetAndRepeatedEntries(t *testing.T) {
 }
 
 func TestContextRenderingTextChunkBoundariesAndBinaryLocator(t *testing.T) {
+	t.Parallel()
 	manifest, _ := contextRenderFixture()
 	text := strings.Repeat("a", 4095) + "🙂\u2028\u2029\"\\\x00<>\r\n" + strings.Repeat("z", 8192)
 	source := contextTestSource("artifact:text", "blob", "text/plain; charset=UTF-8", "internal", []byte(text))
@@ -314,6 +319,7 @@ func TestContextRenderingTextChunkBoundariesAndBinaryLocator(t *testing.T) {
 }
 
 func TestContextRenderingLargeTextDoesNotUseDefinitionByteLimit(t *testing.T) {
+	t.Parallel()
 	manifest, _ := contextRenderFixture()
 	source := contextTestSource("artifact:large_text", "blob", "text/plain", "internal", bytes.Repeat([]byte("x"), flow.MaxDocumentBytes+1))
 	manifest.MaxBytes = MaxArtifactBytes
@@ -330,6 +336,7 @@ func TestContextRenderingLargeTextDoesNotUseDefinitionByteLimit(t *testing.T) {
 }
 
 func TestContextProfileLimitsAndTokenApplicability(t *testing.T) {
+	t.Parallel()
 	manifest, _ := contextRenderFixture()
 	profile := ContextProfile{
 		SchemaVersion: ContextProfileVersion, ID: "test:context/profile", Version: "1.0.0", AssemblyRef: manifest.AssemblyRef,
@@ -430,6 +437,7 @@ func TestCheckContextRenderingPreservesExactRequest(t *testing.T) {
 }
 
 func TestCheckContextRenderingRejectsInvalidBootstrap(t *testing.T) {
+	t.Parallel()
 	manifest, sources := contextRenderFixture()
 	base := contextTestCheckRequest(t, manifest)
 	for name, request := range map[string][]byte{
@@ -459,6 +467,7 @@ func TestCheckContextRenderingRejectsInvalidBootstrap(t *testing.T) {
 }
 
 func TestCheckContextRenderingExactBudgetIncludesWhitespace(t *testing.T) {
+	t.Parallel()
 	manifest, sources := contextRenderFixture()
 	manifest.Entries = append(manifest.Entries, manifest.Entries[0])
 	manifest.Entries[len(manifest.Entries)-1].Role = "reference"
@@ -498,6 +507,7 @@ func TestCheckContextRenderingExactBudgetIncludesWhitespace(t *testing.T) {
 }
 
 func TestCheckContextRenderingUsesSharedSourceAndProfileGuards(t *testing.T) {
+	t.Parallel()
 	for name, test := range map[string]struct {
 		mutate func(*FullContextManifest, *[]ContextSource)
 		code   string

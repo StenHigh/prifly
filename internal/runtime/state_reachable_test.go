@@ -23,6 +23,7 @@ import (
 // Runs sealed before 41 carry. What stays checked is that the Run carrying
 // either fact is sealed at a version whose bundle has a place for it.
 func TestAStateVersionDeclaredForARecordedFactIsReached(t *testing.T) {
+	t.Parallel()
 	e, _, _ := assistedWorkspaceFixture(t, "checkout")
 	ctx := context.Background()
 	var registry RegistryFile

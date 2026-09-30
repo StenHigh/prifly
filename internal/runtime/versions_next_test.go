@@ -16,6 +16,7 @@ import (
 // generated from the thing it checks agrees with it by construction and would
 // have agreed with the broken copies too.
 func TestEveryStateNamesItsNextContract(t *testing.T) {
+	t.Parallel()
 	expected := []struct{ state, next string }{
 		{CoreStateVersion, "foundation-next/1"},
 		{CoreInvocationStateVersion, CoreInvocationNextVersion},
@@ -87,6 +88,7 @@ func TestEveryStateNamesItsNextContract(t *testing.T) {
 // surface stopped hiding behind invalid_usage the question never arose,
 // because invalid_usage carries neither word.
 func TestAProjectRefusalIsNotAnAuthorityStateConflict(t *testing.T) {
+	t.Parallel()
 	for _, code := range []string{
 		"project_profile_conflict",
 		"project_runner_conflict",
@@ -120,6 +122,7 @@ func TestAProjectRefusalIsNotAnAuthorityStateConflict(t *testing.T) {
 // not a number going up, so both sides are held: the bundle that allows more
 // and the bundles that do not.
 func TestTheNewBundleAllowsWhatEveryOlderOneRefuses(t *testing.T) {
+	t.Parallel()
 	manifest := Capabilities()
 	core := manifest.Profiles[1]
 	if len(core.StateVersions) != len(versionContracts) || len(core.ReadVersions) != len(versionContracts) {

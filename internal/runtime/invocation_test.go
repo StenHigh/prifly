@@ -35,6 +35,7 @@ func invocationScopesFixture() Run {
 }
 
 func TestInvocationScopesQualifyStageAndPorts(t *testing.T) {
+	t.Parallel()
 	r := invocationScopesFixture()
 	for _, name := range []string{"root", "first", "second", "nested"} {
 		id := "invocation:" + name
@@ -69,6 +70,7 @@ func TestInvocationScopesQualifyStageAndPorts(t *testing.T) {
 }
 
 func TestInvocationCallerUniquenessIsSpecificToCall(t *testing.T) {
+	t.Parallel()
 	r := invocationScopesFixture()
 	if got := r.childForCall("activation:call-first"); got == nil || got.ID != "invocation:first" {
 		t.Fatal("call did not resolve its own child")
@@ -87,6 +89,7 @@ func TestInvocationCallerUniquenessIsSpecificToCall(t *testing.T) {
 }
 
 func TestInvocationScopedRestrictionsAndResumeLatches(t *testing.T) {
+	t.Parallel()
 	r := invocationScopesFixture()
 	r.Stops = []Stop{{ID: "stop:first", Kind: "pause", Status: "active", Scope: "invocation", ScopeID: "invocation:first"}}
 	for _, id := range []string{"invocation:first", "invocation:nested"} {
@@ -120,6 +123,7 @@ func TestInvocationScopedRestrictionsAndResumeLatches(t *testing.T) {
 }
 
 func TestInvocationAncestryDoesNotRepairMissingOrCyclicScopes(t *testing.T) {
+	t.Parallel()
 	r := invocationScopesFixture()
 	if !r.withinInvocation("invocation:nested", "invocation:first") || !r.withinInvocation("invocation:nested", r.RootInvocationID) || r.withinInvocation("invocation:second", "invocation:first") {
 		t.Fatal("invocation ancestry does not follow parent identity")
@@ -137,6 +141,7 @@ func TestInvocationAncestryDoesNotRepairMissingOrCyclicScopes(t *testing.T) {
 }
 
 func TestInvocationWirePreservesLegacyRunAndRegistry(t *testing.T) {
+	t.Parallel()
 	type withoutMarshal Run
 	for _, state := range []string{StateVersion, CoreStateVersion} {
 		for _, ready := range [][]string{nil, {}, {"done"}} {
@@ -199,6 +204,7 @@ func TestInvocationWirePreservesLegacyRunAndRegistry(t *testing.T) {
 }
 
 func TestInvocationBudgetArithmeticDoesNotOverflow(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		used, additional, limit int64
 		fits                    bool
@@ -270,6 +276,7 @@ func invocationPlanFixture(t *testing.T) Run {
 }
 
 func TestInvocationPlanFollowsPinnedCallerPath(t *testing.T) {
+	t.Parallel()
 	r := invocationPlanFixture(t)
 	child, err := r.planFor("invocation:child")
 	if err != nil || child.Workflow.ID != "test:workflow/child" {
@@ -282,6 +289,7 @@ func TestInvocationPlanFollowsPinnedCallerPath(t *testing.T) {
 }
 
 func TestInvocationBudgetChargesAncestorsAtomically(t *testing.T) {
+	t.Parallel()
 	t.Run("successful_charge", func(t *testing.T) {
 		r := invocationPlanFixture(t)
 		if err := r.chargeInvocation("invocation:child", 1, 1); err != nil {
@@ -338,6 +346,7 @@ func TestInvocationBudgetChargesAncestorsAtomically(t *testing.T) {
 }
 
 func TestInvocationBudgetRejectsChangedPinnedPath(t *testing.T) {
+	t.Parallel()
 	for name, change := range map[string]func(*testing.T, *Run){
 		"changed_limits_same_reference": func(t *testing.T, r *Run) {
 			ref := r.Invocations["invocation:child"].WorkflowRef
@@ -403,6 +412,7 @@ func TestInvocationBudgetRejectsChangedPinnedPath(t *testing.T) {
 }
 
 func TestInvocationBudgetKeepsLegacyAccountingShape(t *testing.T) {
+	t.Parallel()
 	r := invocationPlanFixture(t)
 	child := r.Invocations["invocation:child"]
 	data := r.registry()[child.WorkflowRef]
@@ -427,6 +437,7 @@ func TestInvocationBudgetKeepsLegacyAccountingShape(t *testing.T) {
 }
 
 func TestInvocationPublicSchemaIsSeparate(t *testing.T) {
+	t.Parallel()
 	const releasedChoice = "sha256:7fcacd3aa4719606b3f7ec0d1395b20feabdd393f22f013e48178a13f38f9cd8"
 	const releasedInvocation = "sha256:ff73ea6801148b60e077b20093b904b465ca298c3b233c106375ae2194654864"
 	if rawDigest(choiceContracts) != releasedChoice {
@@ -489,6 +500,7 @@ func TestInvocationPublicSchemaIsSeparate(t *testing.T) {
 }
 
 func TestInvocationNextSchemaRequiresQualifiedWork(t *testing.T) {
+	t.Parallel()
 	next := NextView{SchemaVersion: CoreInvocationNextVersion, RunID: "run:next", Action: "stage", WorkID: "done", InvocationID: "invocation:child", StageID: "done", ReadOnly: true, SafeNextActions: []string{"run.drive"}}
 	if err := validatePublic(t, "CoreNextViewV2", next); err != nil {
 		t.Fatal(err)
@@ -526,6 +538,7 @@ func TestInvocationNextSchemaRequiresQualifiedWork(t *testing.T) {
 }
 
 func TestInvocationLocalRegistrySchemaIsExplicitVersionTwo(t *testing.T) {
+	t.Parallel()
 	registry := RegistryFile{SchemaVersion: "2", Entries: []Definition{}, Aliases: map[string]string{"child": "workflows/child.json"}}
 	if err := validatePublic(t, "LocalRegistryV2", registry); err != nil {
 		t.Fatal(err)

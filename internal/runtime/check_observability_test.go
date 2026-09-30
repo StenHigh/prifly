@@ -50,6 +50,7 @@ func checkTimingFixture() Run {
 }
 
 func TestCheckTimingScopesAndNoProducerDoubleCounting(t *testing.T) {
+	t.Parallel()
 	r := checkTimingFixture()
 	r.Stops = []Stop{{ID: "stop:child", Scope: "invocation", ScopeID: "child", Kind: "pause", Status: "released", Created: timingObservation(13500), Released: timingPoint(14000)}}
 	before, _ := json.Marshal(r)
@@ -92,6 +93,7 @@ func TestCheckTimingScopesAndNoProducerDoubleCounting(t *testing.T) {
 }
 
 func TestCheckTimingAcceptanceIsSeparateFromProcessSettlement(t *testing.T) {
+	t.Parallel()
 	for _, state := range []string{"accepted", "pending", "rejected"} {
 		t.Run(state, func(t *testing.T) {
 			r := checkTimingFixture()
@@ -126,6 +128,7 @@ func TestCheckTimingAcceptanceIsSeparateFromProcessSettlement(t *testing.T) {
 }
 
 func TestCheckTimingUnknownAndKnownNoSpawnAreDifferent(t *testing.T) {
+	t.Parallel()
 	t.Run("unknown_after_start", func(t *testing.T) {
 		r := checkTimingFixture()
 		check := r.CheckExecutions["check:output"]
@@ -169,6 +172,7 @@ func TestCheckTimingUnknownAndKnownNoSpawnAreDifferent(t *testing.T) {
 }
 
 func TestCheckTimingClockQualityAndBounds(t *testing.T) {
+	t.Parallel()
 	for _, reason := range []string{"invalid_monotonic_order", "duration_overflow", "incomparable_clock_domains"} {
 		t.Run(reason, func(t *testing.T) {
 			r := checkTimingFixture()
@@ -199,6 +203,7 @@ func TestCheckTimingClockQualityAndBounds(t *testing.T) {
 }
 
 func TestCheckTimingLegacyVersionsIgnoreNewFields(t *testing.T) {
+	t.Parallel()
 	for _, version := range []string{StateVersion, CoreStateVersion, CoreInvocationStateVersion, CoreRepeatStateVersion} {
 		t.Run(version, func(t *testing.T) {
 			r := invocationTimingFixture()
@@ -260,6 +265,7 @@ func checkTelemetryFixture(t *testing.T) (*Engine, Run, int64) {
 }
 
 func TestCheckTelemetryCountsOutcomesAndFixedCut(t *testing.T) {
+	t.Parallel()
 	e, r, version := checkTelemetryFixture(t)
 	cut := telemetrySaveRun(t, e, r, version)
 	query := telemetryQuery("records", "check.admitted", "check.settled", "check.failed", "check.cancelled", "check.uncertain", "check.reports", "timing.executor_time")
@@ -310,6 +316,7 @@ func TestCheckTelemetryCountsOutcomesAndFixedCut(t *testing.T) {
 }
 
 func TestCheckTelemetryRejectsForeignOwners(t *testing.T) {
+	t.Parallel()
 	_, r, _ := checkTelemetryFixture(t)
 	plan, err := r.plan()
 	if err != nil {
@@ -346,6 +353,7 @@ func TestCheckTelemetryRejectsForeignOwners(t *testing.T) {
 }
 
 func TestCheckTelemetryCohortVersionAndLegacyCut(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	snapshots, oldCut, err := e.Store.ReadAllAt(context.Background(), -1, 10)
 	if err != nil || len(snapshots) != 1 {
@@ -392,6 +400,7 @@ func TestCheckTelemetryCohortVersionAndLegacyCut(t *testing.T) {
 }
 
 func TestCheckTelemetryValidatesEveryRunBeforePlanCache(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	ids := []string{}
 	for i := 0; i < 2; i++ {
@@ -436,6 +445,7 @@ func TestCheckTelemetryValidatesEveryRunBeforePlanCache(t *testing.T) {
 }
 
 func TestCheckTelemetryPendingAcceptanceDoesNotFailFirstAttempt(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	started, err := e.Start(context.Background(), options)
 	if err != nil {

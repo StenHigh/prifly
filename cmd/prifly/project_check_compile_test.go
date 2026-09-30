@@ -142,6 +142,7 @@ stages:
 }
 
 func TestProjectLegacyProfileRejectsCheckDocumentsBeforeOutput(t *testing.T) {
+	t.Parallel()
 	output := filepath.Join(t.TempDir(), "must-not-exist")
 	source := projectPackageSource{Documents: []projectPackageDocument{{Kind: "check"}}}
 	_, err := compileAndSealProjectPackage(t.TempDir(), "", output, "prifly-project-profile/2", "", source, nil, prifly.PackageRecord{}, nil, projectWorkflowOptions{})

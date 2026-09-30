@@ -15,6 +15,7 @@ import (
 )
 
 func TestNeutralStartWithoutBriefExecutesAfterRestart(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, func(profile *ContextProfile) { profile.IncludeBrief = true })
 	ctx := context.Background()
 	legacy, err := e.Start(ctx, options)
@@ -124,6 +125,7 @@ func TestNeutralStartWithoutBriefExecutesAfterRestart(t *testing.T) {
 }
 
 func TestNeutralStartPreservesTypedInputsAndLegacyBriefValidation(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	options.BriefFile = ""
 	if _, err := e.Start(context.Background(), options); err == nil {
@@ -162,6 +164,7 @@ func TestNeutralStartPreservesTypedInputsAndLegacyBriefValidation(t *testing.T) 
 }
 
 func TestNeutralStartProtocolRemainsClosedAndVersioned(t *testing.T) {
+	t.Parallel()
 	ref := flow.Ref{ID: "test:workflow/neutral", Version: "1.0.0", Digest: "sha256:" + strings.Repeat("a", 64)}
 	command := map[string]any{"schema_version": "2", "command_id": "command:neutral", "project_id": "project:neutral", "workflow_ref": ref, "package_lock_ref": ref, "inputs": map[string]any{}, "interaction_mode": "with_human", "execution_mode": "managed", "capacity_profile": "foundation:one-slot", "grant_refs": []any{}}
 	check := func(name string) error {
@@ -193,6 +196,7 @@ func TestNeutralStartProtocolRemainsClosedAndVersioned(t *testing.T) {
 }
 
 func TestStartInputPreflightUsesReadonlyAdmissionValidation(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	plan, _, _, _, err := e.compileFile(options.WorkflowFile)
 	if err != nil {
@@ -264,6 +268,7 @@ func TestStartInputPreflightUsesReadonlyAdmissionValidation(t *testing.T) {
 }
 
 func TestNeutralStartInlineConfigurationMatchesPreflight(t *testing.T) {
+	t.Parallel()
 	for _, scope := range []string{"run", "project"} {
 		t.Run(scope, func(t *testing.T) {
 			e, options := configurationFixture(t, scope)

@@ -168,6 +168,7 @@ func awaitingReviewers(t *testing.T, r Run) []*Attempt {
 // Handing one out and waiting for it before asking the second is a fan-out in
 // shape only: the second reviewer would start after the first had finished.
 func TestBothReviewersHoldATaskAtOnce(t *testing.T) {
+	t.Parallel()
 	e, runID := reviewFanOut(t, 2)
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)
@@ -188,6 +189,7 @@ func TestBothReviewersHoldATaskAtOnce(t *testing.T) {
 // A stage that declares one at a time still runs one at a time: the same
 // definition under a different declaration must not quietly become concurrent.
 func TestOneAtATimeStaysOneAtATime(t *testing.T) {
+	t.Parallel()
 	e, runID := reviewFanOut(t, 1)
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)
@@ -212,6 +214,7 @@ func quorumFanOut(t *testing.T, required int) (*Engine, string) {
 // not a cancellation confirmed. The order is read from the journal, because
 // that is where "before" and "after" are recorded.
 func TestReachedQuorumWaitsForTheLiveRemainder(t *testing.T) {
+	t.Parallel()
 	e, runID := quorumFanOut(t, 2)
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {
@@ -308,6 +311,7 @@ func TestReachedQuorumWaitsForTheLiveRemainder(t *testing.T) {
 // route for "undecided". The map fixture reaches it in the driver; this pins
 // the rule itself, without depending on the order the driver happens to take.
 func TestRecordedRouteDependsOnDecisionsNotOnWhatIsStillRunning(t *testing.T) {
+	t.Parallel()
 	settled := Observation{UTC: "2026-01-01T00:00:00Z"}
 	outcome := "succeeded"
 	entered := []*Invocation{

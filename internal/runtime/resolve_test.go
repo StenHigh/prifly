@@ -40,6 +40,7 @@ func uncertainAssistedRun(t *testing.T) (*Engine, string, string) {
 // Resolution is that statement: it closes the obligation, frees the slot and
 // leaves the outcome recorded as attested rather than observed.
 func TestResolveReleasesSlotAndNeverRoutesOnError(t *testing.T) {
+	t.Parallel()
 	e, runID, attemptID := uncertainAssistedRun(t)
 	ctx := context.Background()
 	if slot, _, err := e.Store.Slot(ctx); err != nil || slot == "" {
@@ -82,6 +83,7 @@ recorded:
 // Resolution is refused while a driver still owns the Run: an obligation its
 // owner still holds may yet settle by itself.
 func TestResolveRefusesLiveDriver(t *testing.T) {
+	t.Parallel()
 	e, runID, attemptID := uncertainAssistedRun(t)
 	ctx := context.Background()
 	lock, err := e.driverLock(runID)
@@ -104,6 +106,7 @@ func TestResolveRefusesLiveDriver(t *testing.T) {
 
 // The command states what it needs and refuses guesses.
 func TestResolveRequiresAnExactAttestation(t *testing.T) {
+	t.Parallel()
 	e, runID, attemptID := uncertainAssistedRun(t)
 	ctx := context.Background()
 	view, err := e.View(ctx, runID)
@@ -148,6 +151,7 @@ func runEvents(t *testing.T, e *Engine, runID string) []string {
 // findings must not be merged: an attested unknown hidden under a cancellation
 // is the worse answer. So the difference is stated where the operator meets it.
 func TestAttestingAnUnknownUnderACancellationSaysWhyItIsNotCancelled(t *testing.T) {
+	t.Parallel()
 	e, runID, attemptID := uncertainAssistedRun(t)
 	ctx := context.Background()
 	if _, err := e.apply(ctx, e.owner, newID("command"), runID, "run.restricted", map[string]string{"fixture": "cancel"}, nil, local.CommandGuarded, func(r *Run, _ local.Snapshot, _ Observation) (local.Change, error) {

@@ -112,6 +112,7 @@ func acceptanceProject(t *testing.T, boundaries []string, failureBoundary, mode 
 }
 
 func TestAcceptanceAllBoundariesUseRealChecks(t *testing.T) {
+	t.Parallel()
 	e, options := acceptanceProject(t, []string{"workflow_input", "step_input", "step_output", "step_result", "workflow_output"}, "", "pass", false)
 	started, err := e.Start(context.Background(), options)
 	if err != nil {
@@ -182,6 +183,7 @@ func TestAcceptanceAllBoundariesUseRealChecks(t *testing.T) {
 }
 
 func TestAcceptanceProducerOutputsStayUnpublishedUntilChecks(t *testing.T) {
+	t.Parallel()
 	e, options := acceptanceProject(t, []string{"step_output", "step_result"}, "", "pass", false)
 	started, err := e.Start(context.Background(), options)
 	if err != nil {
@@ -251,6 +253,7 @@ func assertPendingAcceptanceBindings(t *testing.T, r Run) {
 }
 
 func TestAcceptanceFailureNeverRewritesProducerVerdict(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		boundary, report string
 		onError          bool
@@ -315,6 +318,7 @@ func TestAcceptanceFailureNeverRewritesProducerVerdict(t *testing.T) {
 }
 
 func TestAcceptanceCheckerHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("ACCEPTANCE_CHECKER") != "1" {
 		return
 	}

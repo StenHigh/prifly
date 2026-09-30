@@ -11,6 +11,7 @@ import (
 )
 
 func TestSchemaWorkerClosedTransport(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, request, code string
 	}{
@@ -52,6 +53,7 @@ func TestSchemaWorkerClosedTransport(t *testing.T) {
 }
 
 func TestSchemaWorkerTransportFitsTwoBoundedRawDocuments(t *testing.T) {
+	t.Parallel()
 	schema := []byte(`{"type":"string","title":"` + strings.Repeat("<", 1<<20) + `"}`)
 	value := []byte(`"` + strings.Repeat("&", 1<<20) + `"`)
 	// encoding/json's default escaping would make each field much larger;
@@ -81,6 +83,7 @@ func TestSchemaWorkerTransportFitsTwoBoundedRawDocuments(t *testing.T) {
 }
 
 func TestSchemaWorkerOutputAllowanceCannotBeBypassedByCopy(t *testing.T) {
+	t.Parallel()
 	var output schemaOutput
 	n, err := io.Copy(&output, strings.NewReader(strings.Repeat("x", schemaReplyLimit+1)))
 	if err == nil || n > schemaReplyLimit || output.buffer.Len() > schemaReplyLimit {
@@ -91,6 +94,7 @@ func TestSchemaWorkerOutputAllowanceCannotBeBypassedByCopy(t *testing.T) {
 func TestAuthorSchemaHardDeadlineKillsRealComputation(t *testing.T) {
 	// This is a valid, small schema. Its shared-reference allOf graph expands
 	// exponentially during successful validation; it is not a sleeping fake.
+	t.Parallel()
 	defs := map[string]any{"n0": map[string]any{"type": "integer"}}
 	for i := 1; i <= 36; i++ {
 		ref := map[string]any{"$ref": fmt.Sprintf("#/$defs/n%d", i-1)}
@@ -121,6 +125,7 @@ func TestAuthorSchemaHardDeadlineKillsRealComputation(t *testing.T) {
 }
 
 func TestSchemaCompileCacheDoesNotCacheValidationResults(t *testing.T) {
+	t.Parallel()
 	schema := []byte(`{"type":"integer","maximum":1}`)
 	if err := checkSchema(schema, nil); err != nil {
 		t.Fatal(err)
@@ -138,6 +143,8 @@ func TestSchemaCompileCacheDoesNotCacheValidationResults(t *testing.T) {
 // validation, and it is now reserved for the schemas that actually need its
 // deadline: the ones whose evaluation can expand beyond any local budget.
 func TestOrdinarySchemasAreValidatedWithoutAProcess(t *testing.T) {
+	// Sequential: it reads the delta of the package-wide schemaWorkerRuns counter,
+	// which a parallel neighbour would move.
 	before := schemaWorkerRuns.Load()
 	for _, c := range []struct {
 		schema, value string

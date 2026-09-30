@@ -13,6 +13,7 @@ import (
 )
 
 func TestAcceptancePendingProducerPauseAndCancel(t *testing.T) {
+	t.Parallel()
 	for _, continuation := range []string{"resume", "cancel"} {
 		t.Run(continuation, func(t *testing.T) {
 			e, options := acceptanceProject(t, []string{"step_output", "step_result"}, "", "pass", true)
@@ -102,6 +103,7 @@ func TestAcceptancePendingProducerPauseAndCancel(t *testing.T) {
 }
 
 func TestAcceptanceProjectedInputKeepsCheckedIdentityAcrossReopen(t *testing.T) {
+	t.Parallel()
 	e, options := acceptanceProject(t, []string{"step_input"}, "", "pass", false)
 	var workflow flow.WorkflowRevision
 	var step flow.StepDefinition
@@ -218,6 +220,7 @@ func TestAcceptanceProjectedInputKeepsCheckedIdentityAcrossReopen(t *testing.T) 
 }
 
 func TestAcceptanceOptionalAbsentPortsNeverCreateChecks(t *testing.T) {
+	t.Parallel()
 	e, options := acceptanceProject(t, nil, "", "pass", false)
 	var workflow flow.WorkflowRevision
 	var step flow.StepDefinition
@@ -281,6 +284,7 @@ func TestAcceptanceOptionalAbsentPortsNeverCreateChecks(t *testing.T) {
 }
 
 func TestAcceptanceNestedWorkflowChecksKeepInvocationOwnership(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"call", "repeat"} {
 		t.Run(kind, func(t *testing.T) {
 			e, options := acceptanceProject(t, []string{"workflow_input", "workflow_output"}, "", "pass", false)

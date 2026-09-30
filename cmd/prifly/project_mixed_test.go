@@ -20,6 +20,7 @@ import (
 // The host here is scripted. This proves the public protocol and real native
 // workers, not a human's identity or Codex/Claude's question presentation.
 func TestCLIProjectMixedDecisionResumesWithoutGit(t *testing.T) {
+
 	testCLIProjectMixedDecision(t, false)
 }
 
@@ -27,6 +28,7 @@ func TestCLIProjectMixedDecisionResumesWithoutGit(t *testing.T) {
 // synctest covers two weeks; this test covers the same timed public protocol
 // between actual commands, without rewriting timestamps or durable snapshots.
 func TestCLIProjectTimedMixedDecisionResumesWithoutGit(t *testing.T) {
+
 	testCLIProjectMixedDecision(t, true)
 }
 

@@ -33,6 +33,7 @@ func checkDefinitionProblem(t *testing.T, err error, code string) *Problem {
 }
 
 func TestCheckDefinitionClosedContract(t *testing.T) {
+	t.Parallel()
 	for name, definition := range map[string]CheckDefinition{
 		"content":         checkDefinitionFixture("content", "content_valid"),
 		"result":          checkDefinitionFixture("result", "check_passed"),
@@ -88,6 +89,7 @@ func TestCheckDefinitionClosedContract(t *testing.T) {
 }
 
 func TestCheckDefinitionStrictInputBounds(t *testing.T) {
+	t.Parallel()
 	for name, data := range map[string][]byte{
 		"duplicate":    []byte(`{"schema_version":"check-definition/1","schema_version":"check-definition/1"}`),
 		"array":        []byte(`[]`),
@@ -114,6 +116,7 @@ func TestCheckDefinitionStrictInputBounds(t *testing.T) {
 }
 
 func TestCheckDefinitionSafeIntegerPreflight(t *testing.T) {
+	t.Parallel()
 	for raw, want := range map[string]int64{"3": 3, "3.0": 3, "3e0": 3, "0.003e3": 3, "-0": 0, "9007199254740991": 9007199254740991, "-9007199254740991": -9007199254740991} {
 		if got, ok := ParseSafeInteger(raw); !ok || got != want {
 			t.Fatalf("exact integer %s = %d, %t; want %d", raw, got, ok, want)
@@ -180,6 +183,7 @@ func checkCompileFixture(t *testing.T) (WorkflowRevision, Registry, Ref, Ref) {
 }
 
 func TestCoreCheckClosureIsOptInAndChargesEveryBoundary(t *testing.T) {
+	t.Parallel()
 	w, registry, contentRef, resultRef := checkCompileFixture(t)
 	w.Limits.MaxControlTransitions, w.Limits.MaxStepInstances = 7, 1
 	p, err := CompileCore(encoded(t, w), "json", registry, nil)
@@ -220,6 +224,7 @@ func TestCoreCheckClosureIsOptInAndChargesEveryBoundary(t *testing.T) {
 }
 
 func TestCoreCheckKindsMatchEveryDeclaringPosition(t *testing.T) {
+	t.Parallel()
 	for _, position := range []string{"workflow_input", "workflow_output", "step_input", "step_output", "step_result"} {
 		t.Run(position, func(t *testing.T) {
 			w, registry, contentRef, resultRef := checkCompileFixture(t)
@@ -258,6 +263,7 @@ func TestCoreCheckKindsMatchEveryDeclaringPosition(t *testing.T) {
 }
 
 func TestCoreCheckDefinitionsRejectRecursiveAndUnpinnedDependencies(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"recursive", "missing_adapter", "digest", "ordinary_step", "context_resource"} {
 		t.Run(mode, func(t *testing.T) {
 			w, registry, contentRef, _ := checkCompileFixture(t)
@@ -300,6 +306,7 @@ func TestCoreCheckDefinitionsRejectRecursiveAndUnpinnedDependencies(t *testing.T
 }
 
 func TestCoreCheckNestedCostsCountEachInvocation(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"call", "repeat", "repeat_call"} {
 		t.Run(kind, func(t *testing.T) {
 			child, registry, contentRef, resultRef := checkCompileFixture(t)
@@ -358,6 +365,7 @@ func TestCoreCheckNestedCostsCountEachInvocation(t *testing.T) {
 }
 
 func TestCoreCheckFailedPrefixesKeepCostsButNoOutputs(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"step", "call", "repeat"} {
 		t.Run(kind, func(t *testing.T) {
 			checked, registry, _, resultRef := checkCompileFixture(t)
@@ -421,6 +429,7 @@ func TestCoreCheckFailedPrefixesKeepCostsButNoOutputs(t *testing.T) {
 }
 
 func TestCoreCheckFinishCostsFollowExportsAndOptionalBounds(t *testing.T) {
+	t.Parallel()
 	w, registry, _, _ := checkCompileFixture(t)
 	w.AllowedOutcomes = []string{"no_work", "rejected"}
 	stage := w.Definition.Stages["work"]
@@ -453,6 +462,7 @@ func TestCoreCheckFinishCostsFollowExportsAndOptionalBounds(t *testing.T) {
 }
 
 func TestCoreCheckRefShapedInstanceDataIsNotExecutable(t *testing.T) {
+	t.Parallel()
 	w, registry, _, _ := checkCompileFixture(t)
 	stage := w.Definition.Stages["work"]
 	stage.InputBindings["data"] = Binding{From: "literal", SchemaRef: w.Inputs["value"].SchemaRef, Value: json.RawMessage(`{"format":"json","content_check_refs":[{"id":"test:missing","version":"1.0.0","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`)}

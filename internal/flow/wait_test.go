@@ -54,6 +54,7 @@ func waitStage(workflow map[string]any) map[string]any {
 }
 
 func TestWaitCompilesWithItsSourceAndEventPinned(t *testing.T) {
+	t.Parallel()
 	workflow, registry := waitFixture(t, nil)
 	plan, err := compileParallel(t, workflow, registry)
 	if err != nil {
@@ -72,6 +73,7 @@ func TestWaitCompilesWithItsSourceAndEventPinned(t *testing.T) {
 // An indefinite wait is a deliberate declaration, not an omission. It cannot
 // expire, so it has no expiry route, and a build refuses one that claims both.
 func TestWaitDeclaresEitherADeadlineOrNone(t *testing.T) {
+	t.Parallel()
 	indefinite, registry := waitFixture(t, func(w map[string]any) {
 		stage := waitStage(w)
 		stage["timeout_seconds"] = nil
@@ -118,6 +120,7 @@ func TestWaitDeclaresEitherADeadlineOrNone(t *testing.T) {
 // Expiry produces no event. Reading one after the expiry route is a reference
 // to a value that route cannot produce, and must fail by name.
 func TestWaitEventIsAbsentOnTheExpiryRoute(t *testing.T) {
+	t.Parallel()
 	workflow, registry := waitFixture(t, func(w map[string]any) {
 		stages := w["definition"].(map[string]any)["stages"].(map[string]any)
 		stage := waitStage(w)

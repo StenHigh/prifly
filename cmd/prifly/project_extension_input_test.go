@@ -191,6 +191,7 @@ inputs:
 
 // `project extend` never compiles, so the binding it writes is read back here.
 func TestCLIProjectExtendWritesTheDeclaredBinding(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	workflowPath := filepath.Join(dir, "cycle.yaml")
 	writeFixtureFile(t, dir, "cycle.yaml", `id: test:workflow/cycle
@@ -234,6 +235,7 @@ definition:
 // The step source is the only thing `project extend` can read the step's ports
 // from, so it carries the two refusals compilation would otherwise raise.
 func TestCLIProjectExtendReadsTheStepSourceForItsPorts(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, bindings, step, refusal string
 	}{

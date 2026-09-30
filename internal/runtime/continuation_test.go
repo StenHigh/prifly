@@ -9,6 +9,7 @@ import (
 // The names below belong to no package: a continuation is whatever the
 // continuing workflow declares, and the authority finds exactly that.
 func TestContinuationTakesExactlyWhatTheWorkflowDeclares(t *testing.T) {
+	t.Parallel()
 	ref := func(id string) ArtifactRef { return ArtifactRef{ArtifactID: id, Revision: 1, Digest: "sha256:" + id} }
 	early, late := &Observation{UTC: "2026-09-22T12:00:00Z"}, &Observation{UTC: "2026-09-22T13:00:00Z"}
 	outcome := "partial"

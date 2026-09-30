@@ -15,6 +15,7 @@ import (
 )
 
 func TestArtifactPreparationPrivateAcrossReopen(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	schema, reg := artifactSchema(t, e, `{"type":"object","required":["value"],"properties":{"value":{"type":"integer"}},"additionalProperties":false}`)
 	source, err := e.putArtifact([]byte("accepted source"), "blob", nil, "artifact:source", artifactProducer(e), nil, reg)
@@ -122,6 +123,7 @@ func TestArtifactPreparationPrivateAcrossReopen(t *testing.T) {
 }
 
 func TestArtifactPreparationRejectsBeforeSealing(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	schema, reg := artifactSchema(t, e, `{"type":"integer"}`)
 	for _, name := range []string{"json", "missing_schema", "producer", "identity", "provenance", "media", "size"} {
@@ -160,6 +162,7 @@ func TestArtifactPreparationRejectsBeforeSealing(t *testing.T) {
 }
 
 func TestArtifactPreparedPublicationRevalidates(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"missing_blob", "corrupt_blob", "size", "oversized", "revision", "producer", "null_provenance", "null_evidence", "invalid_evidence", "media", "missing_schema", "json_schema", "blob_schema", "lost_provenance"} {
 		t.Run(name, func(t *testing.T) {
 			e := artifactEngine(t)
@@ -231,6 +234,7 @@ func TestArtifactPreparedPublicationRevalidates(t *testing.T) {
 }
 
 func TestArtifactPreparationAcceptedIdentityNeverRepairs(t *testing.T) {
+	t.Parallel()
 	for _, failure := range []string{"missing", "corrupt"} {
 		t.Run(failure, func(t *testing.T) {
 			e := artifactEngine(t)
@@ -276,6 +280,7 @@ func TestArtifactPreparationAcceptedIdentityNeverRepairs(t *testing.T) {
 }
 
 func TestArtifactPreparedConcurrentIdentityPublication(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	_, reg, err := e.Inventory()
 	if err != nil {

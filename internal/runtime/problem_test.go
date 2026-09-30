@@ -25,6 +25,7 @@ func TestProblemForKeepsStableCodeAndEngineDetail(t *testing.T) {
 	// a `code: detail` error, which refusal-check forbids in non-test code, so
 	// its text is a failing component's own output. That is evidence and stays
 	// in violations; every explanation is in `message`.
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		err     error
@@ -67,6 +68,7 @@ func TestProblemForKeepsStableCodeAndEngineDetail(t *testing.T) {
 // code with the generic sentence — including the one that says the authority is
 // open in another process. The cause's own text stays out either way.
 func TestProblemForKeepsAuthoredDetailThroughAWrappedCause(t *testing.T) {
+	t.Parallel()
 	cause := errors.New("flock /private/tmp/authority/.prifly/state/driver.lock: resource temporarily unavailable")
 	for _, c := range []struct {
 		name    string
@@ -98,6 +100,7 @@ func TestProblemForKeepsAuthoredDetailThroughAWrappedCause(t *testing.T) {
 
 // A refusal with no words of its own is still that refusal, not invalid_input.
 func TestProblemForKeepsTheCodeOfAWordlessWrappedFault(t *testing.T) {
+	t.Parallel()
 	problem, exit := ProblemFor(wrapFault("pinned_workflow_unreadable", "", errors.New("open /nowhere: no such file")))
 	if problem.Code != "pinned_workflow_unreadable" || exit != 2 || len(problem.Violations) != 0 {
 		t.Fatalf("a wordless refusal lost its subject: %+v exit %d", problem, exit)
@@ -107,6 +110,7 @@ func TestProblemForKeepsTheCodeOfAWordlessWrappedFault(t *testing.T) {
 // A recorded occurrence only re-presents its cause, so the refusal it carries
 // keeps its code and detail while the correlation ID names the diagnostic.
 func TestProblemForReadsThroughDiagnosticOccurrence(t *testing.T) {
+	t.Parallel()
 	err := &DiagnosticError{ID: "diagnostic:abc", Err: errors.New("recovery_required: no process was launched")}
 	problem, exit := ProblemFor(err)
 	if problem.Code != "recovery_required" || exit != 6 {
@@ -127,6 +131,7 @@ func TestProblemForReadsThroughDiagnosticOccurrence(t *testing.T) {
 // Typed refusals keep their existing meaning: a code-shaped sentinel branch is
 // still chosen before the default branch reads any text.
 func TestProblemForPrefersTypedRefusals(t *testing.T) {
+	t.Parallel()
 	problem, exit := ProblemFor(fmt.Errorf("read state: %w", os.ErrNotExist))
 	if problem.Code != "not_found" || exit != 2 || len(problem.Violations) != 0 {
 		t.Fatalf("a typed refusal changed shape: %+v exit %d", problem, exit)
@@ -144,6 +149,7 @@ func refusalCode(err error) string {
 // refusing got a segmentation fault instead of an answer, which hid the real
 // failure behind a panic in the reporting path.
 func TestProblemForNoErrorDoesNotCrash(t *testing.T) {
+	t.Parallel()
 	problem, exit := ProblemFor(nil)
 	if problem.Code != "invalid_input" || exit != 2 || problem.CorrelationID == "" {
 		t.Fatalf("a missing error did not produce the default problem: %+v %d", problem, exit)
@@ -156,6 +162,7 @@ func TestProblemForNoErrorDoesNotCrash(t *testing.T) {
 // empty pointer. Both cases are pinned because the fix has two ways to be wrong:
 // leaving the duplicate, or dropping a real pointer with it.
 func TestFlowProblemFillsViolationsOnlyWhereThereIsAPlace(t *testing.T) {
+	t.Parallel()
 	placed, _ := ProblemFor(&flow.Problem{Code: "missing_stage", Path: "/definition", Message: "transition target does not exist"})
 	if len(placed.Violations) != 1 || placed.Violations[0] != (Violation{"/definition", "transition target does not exist"}) {
 		t.Fatalf("a refusal that names a place lost it: %+v", placed.Violations)
@@ -178,6 +185,7 @@ func TestFlowProblemFillsViolationsOnlyWhereThereIsAPlace(t *testing.T) {
 // codes. This pins both halves: the short list that is true, and the fact that
 // everything else stays false, so a new code cannot join by accident.
 func TestRetryableIsTrueOnlyWhereTheSameCallMaySucceedLater(t *testing.T) {
+	t.Parallel()
 	for _, code := range []string{"storage_busy", "driver_already_active", "publisher_busy", "admission_deferred", "wait_not_due", "deadline_not_reached"} {
 		problem, _ := ProblemFor(&Fault{Code: code, Message: "held right now"})
 		if !problem.Retryable {
@@ -206,6 +214,7 @@ func TestRetryableIsTrueOnlyWhereTheSameCallMaySucceedLater(t *testing.T) {
 // not retryable, "do not assume the operation committed" — for a command that
 // was never tried. The busy error comes from a real store, not a constructed one.
 func TestProblemForReportsABusyStoreAsAWait(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "authority")
 	options := local.StoreOptions{EventTypes: EventTypes, BusyTimeout: time.Millisecond}
 	holder, err := local.OpenStore(dir, options)

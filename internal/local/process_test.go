@@ -59,6 +59,7 @@ func requireSettledProcess(t *testing.T, out ProcessOutcome, err error) {
 }
 
 func TestProcessNativeIdentity(t *testing.T) {
+	t.Parallel()
 	identity, err := readProcess(os.Getpid())
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +130,7 @@ func TestProcessWireEnvironmentAndArgv(t *testing.T) {
 }
 
 func TestProcessEarlyResultDoesNotReleaseProcess(t *testing.T) {
+	t.Parallel()
 	spec := processTestSpec(t, "early")
 	var resultAt time.Time
 	out, err := RunProcess(context.Background(), spec, func(o ProcessObservation) error {
@@ -147,6 +149,7 @@ func TestProcessEarlyResultDoesNotReleaseProcess(t *testing.T) {
 }
 
 func TestProcessWaitsForChildAfterParentExitAndClosedPipes(t *testing.T) {
+	t.Parallel()
 	spec := processTestSpec(t, "orphan")
 	out, err := RunProcess(context.Background(), spec, nil)
 	requireSettledProcess(t, out, err)
@@ -159,6 +162,7 @@ func TestProcessWaitsForChildAfterParentExitAndClosedPipes(t *testing.T) {
 }
 
 func TestProcessCancellationEscalatesWholeGroup(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"term", "ignore-term-tree"} {
 		t.Run(mode, func(t *testing.T) {
 			spec := processTestSpec(t, mode)
@@ -197,6 +201,7 @@ func TestProcessCancellationEscalatesWholeGroup(t *testing.T) {
 }
 
 func TestProcessRuntimeAndOutputLimits(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"runtime", "stdout", "stderr", "result-overflow", "trailing", "malformed"} {
 		t.Run(mode, func(t *testing.T) {
 			spec := processTestSpec(t, mode)
@@ -222,6 +227,7 @@ func TestProcessRuntimeAndOutputLimits(t *testing.T) {
 }
 
 func TestProcessExitIsEvidenceNotVerdict(t *testing.T) {
+	t.Parallel()
 	spec := processTestSpec(t, "exit-error")
 	out, err := RunProcess(context.Background(), spec, nil)
 	requireSettledProcess(t, out, err)
@@ -237,6 +243,7 @@ func TestProcessExitIsEvidenceNotVerdict(t *testing.T) {
 }
 
 func TestProcessRefusesBeforeSpawnAndCleansObservationFailure(t *testing.T) {
+	t.Parallel()
 	fifo := filepath.Join(t.TempDir(), "not-an-executable")
 	if err := syscall.Mkfifo(fifo, 0700); err != nil {
 		t.Fatal(err)
@@ -291,6 +298,7 @@ func TestProcessRefusesBeforeSpawnAndCleansObservationFailure(t *testing.T) {
 }
 
 func TestProcessProbeNeverAuthorizesRecoveredIdentity(t *testing.T) {
+	t.Parallel()
 	if got := ProbeProcess(ProcessIdentity{PID: os.Getpid()}); got.State != "unknown" {
 		t.Fatalf("PID alone accepted: %+v", got)
 	}
@@ -317,6 +325,7 @@ func TestProcessProbeNeverAuthorizesRecoveredIdentity(t *testing.T) {
 // small envelope omits core-only fields: full protocol/schema validation belongs
 // to the runtime tests, while this package verifies byte transport and OS facts.
 func TestProcessHelper(t *testing.T) {
+	t.Parallel()
 	mode := os.Getenv("PRIFLY_PROCESS_TEST")
 	if mode == "" {
 		return
@@ -416,6 +425,7 @@ func TestProcessHelper(t *testing.T) {
 // that changed is a different file: it is hashed again and reports its new
 // digest, so a pinned digest still refuses a swapped binary.
 func TestExecutableDigestIsRememberedUntilTheFileChanges(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "worker")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {

@@ -44,6 +44,7 @@ func gitRepository(t *testing.T) string {
 }
 
 func TestWorktreeClaimIsExclusiveAndConfined(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -93,6 +94,7 @@ func TestWorktreeClaimIsExclusiveAndConfined(t *testing.T) {
 }
 
 func TestWorkspaceCheckoutClaimIsCleanExclusiveAndNeverMutatesGitTopology(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -136,6 +138,7 @@ func TestWorkspaceCheckoutClaimIsCleanExclusiveAndNeverMutatesGitTopology(t *tes
 }
 
 func TestWorktreeClaimRefusesTheAuthorityRootAndNonRepositories(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	if _, err := e.ClaimWorktree(ctx, ClaimRequest{CommandID: "command:root", Repository: e.Root, OwnerID: "run:pilot"}); err == nil {
@@ -157,6 +160,7 @@ func TestWorktreeClaimRefusesTheAuthorityRootAndNonRepositories(t *testing.T) {
 }
 
 func TestWorktreeReleaseRemovesOnlyItsOwnGeneration(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -196,6 +200,7 @@ func TestWorktreeReleaseRemovesOnlyItsOwnGeneration(t *testing.T) {
 // Cleanup must delete what this claim created, not whatever now sits at the
 // path: a replaced directory blocks removal instead of being destroyed.
 func TestWorktreeCleanupRefusesAReplacedDirectory(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -222,6 +227,7 @@ func TestWorktreeCleanupRefusesAReplacedDirectory(t *testing.T) {
 }
 
 func TestWorktreeClaimIsRefusedUnderAControlStop(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -238,6 +244,7 @@ func TestWorktreeClaimIsRefusedUnderAControlStop(t *testing.T) {
 // where a tree is actually shared: two checkouts of one repository, named two
 // ways, are one checkout.
 func TestPhysicalAliasesAreOneResource(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -260,6 +267,7 @@ func TestPhysicalAliasesAreOneResource(t *testing.T) {
 // on a checkout, because that is where two claims contend for one tree: two
 // worktree claims take two trees and never contend at all.
 func TestExpiredLeaseBlocksInsteadOfHandingOverOwnership(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -328,6 +336,7 @@ func TestExpiredLeaseBlocksInsteadOfHandingOverOwnership(t *testing.T) {
 // RUN-014: the whole set is taken together or not at all. Reading the free
 // resources and then locking them separately is not that.
 func TestAtomicMultiClaimTakesAllOrNothing(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	first, second := gitRepository(t), gitRepository(t)
@@ -379,6 +388,7 @@ func TestAtomicMultiClaimTakesAllOrNothing(t *testing.T) {
 
 // Stage acceptance: racing claims never produce two owners of one resource.
 func TestConcurrentClaimsProduceOneOwner(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -434,6 +444,7 @@ func TestConcurrentClaimsProduceOneOwner(t *testing.T) {
 // names the relation — the tree a claim occupies — and, because the rule
 // changed under them, says explicitly what no longer conflicts.
 func TestClaimConflictNamesTheRelationNotJustTheObstacle(t *testing.T) {
+	t.Parallel()
 	for _, expected := range []string{"this working tree", "another worktree of the same repository does not conflict", "same checkout", "claim list", "claim release"} {
 		if !strings.Contains(claimConflictMessage, expected) {
 			t.Fatalf("the conflict refusal does not name %q: %s", expected, claimConflictMessage)
@@ -455,6 +466,7 @@ func TestClaimConflictNamesTheRelationNotJustTheObstacle(t *testing.T) {
 // check and was refused by it. The inode is what a replacement changes; the
 // device is what the operating system changes for its own reasons.
 func TestAClaimSurvivesTheVolumeBeingRenumbered(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -503,6 +515,7 @@ func TestAClaimSurvivesTheVolumeBeingRenumbered(t *testing.T) {
 // offered doctor and run.status — neither reaches capacity set. A reader could
 // not tell "not supported" from "not configured".
 func TestCapacityRefusalPointsAtTheNumberThatRefused(t *testing.T) {
+	t.Parallel()
 	problem, _ := ProblemFor(local.Reject("capacity_conflict", "x"))
 	for _, expected := range []string{"capacity.show", "capacity.set"} {
 		if !slices.Contains(problem.SafeNextActions, expected) {
@@ -524,6 +537,7 @@ func TestCapacityRefusalPointsAtTheNumberThatRefused(t *testing.T) {
 // the claim's own (its inode is verified first), so the lock is overridden;
 // a removal that still fails names the claim, the path and git's words.
 func TestWorktreeReleaseRemovesAWorktreeAnotherToolLocked(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)
@@ -556,6 +570,7 @@ func TestWorktreeReleaseRemovesAWorktreeAnotherToolLocked(t *testing.T) {
 // the claim, the path and git's reason -- not the generic "check its
 // arguments" the plain error used to become.
 func TestWorktreeRemovalFailureNamesTheClaimAndGitsReason(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	repository := gitRepository(t)

@@ -53,6 +53,7 @@ func checkpointFixture(t *testing.T) (*Engine, string) {
 // sealed at the state whose read names it, and the read names the output the
 // step reported once it is accepted -- not before.
 func TestAcceptedCheckpointIsNamedOnTheRunRead(t *testing.T) {
+	t.Parallel()
 	e, runID := checkpointFixture(t)
 	ctx := context.Background()
 	if r := driverRun(t, e, runID); r.SchemaVersion != CoreQuestionStateVersion {
@@ -113,6 +114,7 @@ func TestAcceptedCheckpointIsNamedOnTheRunRead(t *testing.T) {
 // external write, sealed the Run at 37, whose contract has no place for the
 // boundary 39 records.
 func TestAProjectTitleDoesNotLowerTheSealedState(t *testing.T) {
+	t.Parallel()
 	e, _, err := externalWriteFixture(t, func(*flow.StepDefinition) {})
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +131,7 @@ func TestAProjectTitleDoesNotLowerTheSealedState(t *testing.T) {
 // A finished Run handed to a fresh executor says what reached its finish and
 // with which outputs, its checkpoint, and that nothing installed continues it.
 func TestNextHandsTheRunToAFreshExecutor(t *testing.T) {
+	t.Parallel()
 	e, runID := checkpointFixture(t)
 	ctx := context.Background()
 	task := handOver(t, e, runID)

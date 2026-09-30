@@ -103,6 +103,7 @@ func fanActivation(t *testing.T, r Run) *Activation {
 // A fan-out is real work: each branch is an ordinary invocation with its own
 // pinned workflow, inputs and settled result, not a lightweight marker.
 func TestParallelEntersEveryBranchAsAnOrdinaryInvocation(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	before := driverRun(t, e, runID)
@@ -142,6 +143,7 @@ func TestParallelEntersEveryBranchAsAnOrdinaryInvocation(t *testing.T) {
 // A join verdict is a statement about the declared contract, not about success.
 // An unsatisfied join routes; it does not fail the Run.
 func TestUnsatisfiedJoinRoutesInsteadOfFailing(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "rejected"})
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -161,6 +163,7 @@ func TestUnsatisfiedJoinRoutesInsteadOfFailing(t *testing.T) {
 // remainder=cancel stops entering further branches once the quorum decides.
 // Nothing is abandoned mid-flight, so the honest record is "never entered".
 func TestQuorumWithCancelledRemainderNeverEntersTheRest(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinQuorum(1, "cancel", "succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -183,6 +186,7 @@ func TestQuorumWithCancelledRemainderNeverEntersTheRest(t *testing.T) {
 // remainder=wait keeps entering branches after the quorum is reached, and the
 // later results do not overturn the verdict the counts already produced.
 func TestQuorumWithWaitingRemainderStillEntersEveryBranch(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinQuorum(1, "wait", "succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "rejected"})
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -202,6 +206,7 @@ func TestQuorumWithWaitingRemainderStillEntersEveryBranch(t *testing.T) {
 // An unreachable quorum is decided as soon as the counts make it unreachable,
 // rather than after pointlessly entering the rest.
 func TestUnreachableQuorumIsDecidedFromTheCountsAlone(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinQuorum(2, "cancel", "succeeded"), branchSpec{"a", "rejected"}, branchSpec{"b", "succeeded"}, branchSpec{"c", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -221,6 +226,7 @@ func TestUnreachableQuorumIsDecidedFromTheCountsAlone(t *testing.T) {
 // joinVerdict is the whole rule; it must be a function of the counts so that a
 // verdict reached early cannot drift as later branches settle.
 func TestJoinVerdictDependsOnCountsOnly(t *testing.T) {
+	t.Parallel()
 	all := flow.Join{Mode: "all", AcceptOutcomes: []string{"succeeded"}}
 	quorum := flow.Join{Mode: "quorum", AcceptOutcomes: []string{"succeeded"}, RequiredSuccesses: 2}
 	for _, c := range []struct {
@@ -248,6 +254,7 @@ func TestJoinVerdictDependsOnCountsOnly(t *testing.T) {
 // A branch that failed produced no outcome at all. That is a technical failure
 // of a child, not an unsatisfied join, and it must not be routed as one.
 func TestFailedBranchIsNotAnUnsatisfiedJoin(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	r, view, err := e.load(context.Background(), runID)
@@ -288,6 +295,7 @@ func TestFailedBranchIsNotAnUnsatisfiedJoin(t *testing.T) {
 // technical error. on_error catches technical failures; it must not quietly
 // become the route the author forgot to declare.
 func TestUnroutedJoinVerdictIsNotCaughtByOnError(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "rejected"}, branchSpec{"right", "succeeded"})
 	stages := workflow["definition"].(map[string]any)["stages"].(map[string]any)
 	fan := stages["fan"].(map[string]any)
@@ -314,6 +322,7 @@ func TestUnroutedJoinVerdictIsNotCaughtByOnError(t *testing.T) {
 // checkJoinRoute re-derives the verdict at commit time, so a decision that
 // claims a route its own counts do not produce is refused rather than trusted.
 func TestJoinRouteIsRecheckedAgainstItsOwnCounts(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -358,6 +367,7 @@ func TestJoinRouteIsRecheckedAgainstItsOwnCounts(t *testing.T) {
 // The order is sealed at entry from the pinned plan. A branch invocation that
 // does not belong to that sealed order is not silently adopted.
 func TestSealedBranchOrderOwnsItsInvocations(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)

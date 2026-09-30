@@ -21,6 +21,7 @@ import (
 // two explicitly admitted slots, and release of unused launch claims. It does
 // not qualify the later no-Git/no-host launch or an actual model's behavior.
 func TestCLIProjectCompiledVariantsLifecycle(t *testing.T) {
+	t.Parallel()
 	repository, authority := newProjectFixture(t)
 	const folder = ".prifly/workflows/sample/"
 	const initialContext = "# Inspect\n\nInspect the supplied data.\n"

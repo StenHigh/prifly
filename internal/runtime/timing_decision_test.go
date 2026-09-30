@@ -31,8 +31,6 @@ func timedDecisionRequest(t *testing.T, e *Engine, task SessionTask) DecisionReq
 }
 
 func TestTimedDecisionRefusalsPreserveDelivery(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
 		e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
@@ -79,8 +77,7 @@ func TestTimedDecisionRefusalsPreserveDelivery(t *testing.T) {
 }
 
 func TestTimedDecisionInvalidAnswerDoesNotResume(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Parallel()
 	ctx := context.Background()
 	e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 	task := handOver(t, e, runID)
@@ -117,8 +114,6 @@ func TestTimedDecisionInvalidAnswerDoesNotResume(t *testing.T) {
 }
 
 func TestTimedAutomaticDecisionPreservesBudgetAndHonorsStop(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	for _, mode := range []string{"preanswered", "autonomous"} {
 		for _, stop := range []string{"none", "run", "project"} {
 			t.Run(mode+"/"+stop, func(t *testing.T) {
@@ -208,8 +203,7 @@ func restrictTimedDecision(t *testing.T, e *Engine, runID, scope, kind string) {
 }
 
 func TestTimedDecisionAnswerDoesNotBypassCurrentControls(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Parallel()
 	for _, scope := range []string{"run", "project"} {
 		t.Run(scope, func(t *testing.T) {
 			ctx := context.Background()
@@ -242,8 +236,7 @@ func TestTimedDecisionAnswerDoesNotBypassCurrentControls(t *testing.T) {
 }
 
 func TestTimedDecisionCancelAnswerSerialization(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Parallel()
 	for _, order := range []string{"cancel first", "answer first", "concurrent"} {
 		t.Run(order, func(t *testing.T) {
 			ctx := context.Background()
@@ -309,6 +302,7 @@ func TestTimedDecisionCancelAnswerSerialization(t *testing.T) {
 // action delivery stops at prepared/not_started. The pause guard must still
 // reject unresolved or incomplete knowledge instead of asserting quiescence.
 func TestTimedDecisionYieldRejectsUnresolvedCandidateEffects(t *testing.T) {
+	t.Parallel()
 	notStarted, unknown := "not_started", "unknown"
 	a := &Attempt{ID: "attempt:waiting"}
 	for _, test := range []struct {
@@ -339,6 +333,7 @@ func TestTimedDecisionYieldRejectsUnresolvedCandidateEffects(t *testing.T) {
 }
 
 func TestTimedDecisionInvariantRequiresExactOwnerEditions(t *testing.T) {
+	t.Parallel()
 	definition := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "continue", Title: "Continue", Phase: "runtime", Choices: []DecisionChoice{{ID: "yes", Title: "Yes", Value: json.RawMessage(`true`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "continue"}}
 	catalog := DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{definition}}
 	catalogDigest, err := DecisionCatalogDigest(catalog)
@@ -387,8 +382,6 @@ func TestTimedDecisionInvariantRequiresExactOwnerEditions(t *testing.T) {
 }
 
 func TestTimedDecisionResumeRechecksRevokedPackage(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
 		e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")

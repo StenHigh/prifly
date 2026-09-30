@@ -10,6 +10,7 @@ import (
 // refusal did not say which — the pilot's reference brief had an empty list, so
 // there was nothing to copy from either.
 func TestAnObjectShapedRefusalNamesTheContractThatPrintsIt(t *testing.T) {
+	t.Parallel()
 	brief := map[string]any{"schema_version": "1", "confirmation": "explicit", "source_refs": []any{"a plain sentence where an object belongs"}}
 	err := validateProtocolValue("RunBrief", brief, "")
 	if err == nil {
@@ -26,6 +27,7 @@ func TestAnObjectShapedRefusalNamesTheContractThatPrintsIt(t *testing.T) {
 
 // A scalar type is the whole answer, so naming a command there would be noise.
 func TestAScalarRefusalStaysAsShortAsTheAnswer(t *testing.T) {
+	t.Parallel()
 	brief := map[string]any{"schema_version": 1}
 	err := validateProtocolValue("RunBrief", brief, "")
 	if err == nil {

@@ -51,6 +51,7 @@ func invocationTimingFixture() Run {
 }
 
 func TestInvocationTimingTreeAndNoDoubleCounting(t *testing.T) {
+	t.Parallel()
 	r := invocationTimingFixture()
 	before, _ := json.Marshal(r)
 	report := Timing(r, timingObservation(22000), false)
@@ -86,6 +87,7 @@ func TestInvocationTimingTreeAndNoDoubleCounting(t *testing.T) {
 }
 
 func TestInvocationTimingRestrictionsStayInScope(t *testing.T) {
+	t.Parallel()
 	for _, scope := range []string{"child", "invocation"} {
 		t.Run(scope, func(t *testing.T) {
 			r := invocationTimingFixture()
@@ -106,6 +108,7 @@ func TestInvocationTimingRestrictionsStayInScope(t *testing.T) {
 }
 
 func TestInvocationTimingCancelledChildDoesNotKeepElapsedOpen(t *testing.T) {
+	t.Parallel()
 	r := invocationTimingFixture()
 	r.Status, r.Outcome, r.Settled = "waiting", nil, nil
 	r.Invocations[r.RootInvocationID].Status, r.Invocations[r.RootInvocationID].Outcome, r.Invocations[r.RootInvocationID].Settled = "waiting", nil, nil
@@ -127,6 +130,7 @@ func TestInvocationTimingCancelledChildDoesNotKeepElapsedOpen(t *testing.T) {
 }
 
 func TestInvocationTimingLegacyProjectionIsUnchanged(t *testing.T) {
+	t.Parallel()
 	r := timingFixture()
 	before, _ := json.Marshal(Timing(r, timingObservation(20000), false))
 	// New in-memory fields cannot reinterpret the history of a legacy state.
@@ -189,6 +193,7 @@ func invocationPublicationFixture(t *testing.T) (*Engine, string, PublishCommand
 }
 
 func TestInvocationPublicationUsesChildHookAndStopScope(t *testing.T) {
+	t.Parallel()
 	e, token, command, r, _ := invocationPublicationFixture(t)
 	telemetrySaveRun(t, e, r, 0)
 	ctx := context.Background()
@@ -244,6 +249,7 @@ func completeInvocationObservationFixture(r *Run) {
 }
 
 func TestInvocationTelemetryChildPopulationAndHistoricalCut(t *testing.T) {
+	t.Parallel()
 	e, _, command, r, oldCut := invocationPublicationFixture(t)
 	oldQuery := telemetryQuery("records", "core.entities_created", "timing.elapsed", "step.quality_warnings")
 	oldQuery.Cut, oldQuery.Limit = &oldCut, 1000
@@ -309,6 +315,7 @@ func TestInvocationTelemetryChildPopulationAndHistoricalCut(t *testing.T) {
 }
 
 func TestInvocationTelemetryMixedCalculatorGroupsStaySeparate(t *testing.T) {
+	t.Parallel()
 	e, _, command, r, _ := invocationPublicationFixture(t)
 	completeInvocationObservationFixture(&r)
 	telemetrySaveRun(t, e, r, 0)
@@ -341,6 +348,7 @@ func TestInvocationTelemetryMixedCalculatorGroupsStaySeparate(t *testing.T) {
 }
 
 func TestInvocationTelemetryRejectsInvalidChildOwnership(t *testing.T) {
+	t.Parallel()
 	e, _, _, r, _ := invocationPublicationFixture(t)
 	r.Activations["activation:caller"].InvocationID = "invocation:child-observability"
 	telemetrySaveRun(t, e, r, 0)

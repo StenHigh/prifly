@@ -15,6 +15,7 @@ import (
 )
 
 func TestContinuationSelectsUnmergedImplementationCommit(t *testing.T) {
+	t.Parallel()
 	root, authority := newProjectFixture(t)
 	writeFixtureFile(t, root, "feature.txt", "base\n")
 	gitFixture(t, root, "add", ".")
@@ -60,6 +61,7 @@ func TestContinuationSelectsUnmergedImplementationCommit(t *testing.T) {
 }
 
 func TestActiveContinuationSelectsOnlyUnfinishedChildOfSource(t *testing.T) {
+	t.Parallel()
 	runs := []prifly.RunSummary{
 		{ID: "run:other-source", ForkSourceRunID: "run:other", ForkReason: prifly.ContinuationReason, Status: "running"},
 		{ID: "run:ordinary-fork", ForkSourceRunID: "run:source", ForkReason: "manual fork", Status: "running"},
@@ -80,6 +82,7 @@ func TestActiveContinuationSelectsOnlyUnfinishedChildOfSource(t *testing.T) {
 }
 
 func TestDuplicateContinuationChoiceChangesReviewDigest(t *testing.T) {
+	t.Parallel()
 	summary := projectLaunchSummary{SchemaVersion: "project-launch-summary/3", Launch: "aif-classic-continuation"}
 	without, err := projectReviewDigest(summary)
 	if err != nil {
@@ -340,6 +343,7 @@ stages:
 // The source reaches partial and the tail, continuing partial Runs, takes over
 // its tree with the file its last step left uncommitted.
 func TestCLIContinuationTakesOverTheSourceTree(t *testing.T) {
+	t.Parallel()
 	f := newContinuationCLI(t, "  from_outcomes: [partial]\n")
 	root, authority, base, source, command, refuse, submit := f.root, f.authority, f.base, f.source, f.command, f.refuse, f.submit
 	submit(map[string]string{"handoff": "{}\n"}, nil)
@@ -440,6 +444,7 @@ func TestCLIContinuationTakesOverTheSourceTree(t *testing.T) {
 // cancelled, with no outcome, and the work its steps left in the tree. A tail
 // declaring from_cancelled continues it; one that does not is refused.
 func TestCLIContinuationOfACancelledRun(t *testing.T) {
+	t.Parallel()
 	f := newContinuationCLI(t, "  from_cancelled: true\n")
 	f.submit(map[string]string{"handoff": "{}\n"}, nil)
 	writeFixtureFile(t, f.source.WorkspacePath, "plans/plan.md", "# Plan\n")
@@ -488,6 +493,7 @@ func TestCLIContinuationOfACancelledRun(t *testing.T) {
 
 // A tail continuing only outcomes does not take a cancelled Run.
 func TestCLIContinuationRefusesACancelledRunItDoesNotDeclare(t *testing.T) {
+	t.Parallel()
 	f := newContinuationCLI(t, "  from_outcomes: [partial]\n")
 	f.submit(map[string]string{"handoff": "{}\n"}, nil)
 	writeFixtureFile(t, f.source.WorkspacePath, "plans/plan.md", "# Plan\n")
@@ -511,6 +517,7 @@ func TestCLIContinuationRefusesACancelledRunItDoesNotDeclare(t *testing.T) {
 // A launch of another workflow that declares no continuation is refused before
 // the source Run is read at all.
 func TestProjectContinueRefusesAWorkflowThatContinuesNothing(t *testing.T) {
+	t.Parallel()
 	plan := &flow.Plan{}
 	plan.Workflow.ID = "example:workflow/plain"
 	var fault *prifly.Fault
@@ -523,6 +530,7 @@ func TestProjectContinueRefusesAWorkflowThatContinuesNothing(t *testing.T) {
 // source's: a launch with no standing workspace must not demand one, which
 // the resume would then refuse to take.
 func TestCLIResumeTakesTheSourceTreeModeWithoutAStandingWorkspace(t *testing.T) {
+	t.Parallel()
 	f := newContinuationCLIResuming(t, "  from_outcomes: [partial]\n", true)
 	f.submit(map[string]string{"handoff": "{}\n"}, nil)
 	writeFixtureFile(t, f.source.WorkspacePath, "plans/plan.md", "# Plan\n")

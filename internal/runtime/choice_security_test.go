@@ -33,6 +33,7 @@ func assertChoiceSecurityUnchanged(t *testing.T, e *Engine, before TelemetryResp
 }
 
 func TestChoiceSecurityRefusesExecutablePredicatesBeforeAdmission(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := choiceFixture(t, `{"flag":true}`, "")
 	canary := filepath.Join(t.TempDir(), "condition-executed")
 	command := "printf touched > '" + strings.ReplaceAll(canary, "'", "'\\''") + "'"
@@ -140,6 +141,7 @@ func TestChoiceSecurityLiteralStringsRemainData(t *testing.T) {
 func TestChoiceSecurityInputSchemaFailurePrecedesRouting(t *testing.T) {
 	// Accepted artifacts cannot carry this value under the declared object
 	// schema. Exercise the real input boundary instead of forging stored state.
+	t.Parallel()
 	e, workflow, options := choiceFixture(t, `[]`, "")
 	stages := choiceStages(workflow)
 	stage := stages["pick"].(map[string]any)

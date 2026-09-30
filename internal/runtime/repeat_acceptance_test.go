@@ -12,6 +12,7 @@ import (
 // WF-AC-09: the second body has completed, but its post-body decision has not
 // committed. Recovery must use that retained result and the existing counter.
 func TestRepeatAcceptanceCrashAfterSecondCompletedBody(t *testing.T) {
+	t.Parallel()
 	e, workflow, body, options := repeatFixture(t, "commit-pass", "succeeded", 3)
 	body["id"] = "test:workflow/repeat-second-outcome"
 	body["allowed_outcomes"] = []string{"succeeded", "rejected"}
@@ -130,6 +131,7 @@ func TestRepeatAcceptanceCrashAfterSecondCompletedBody(t *testing.T) {
 }
 
 func TestRepeatAcceptanceSecondBodyHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("REPEAT_SECOND_BODY_HELPER") != "1" {
 		return
 	}

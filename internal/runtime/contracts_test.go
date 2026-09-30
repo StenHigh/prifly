@@ -65,6 +65,7 @@ func validateInBundle(t *testing.T, content []byte, name string, value any) erro
 }
 
 func TestPublicSchemasMatchActualReadViewsAndRejectExtensions(t *testing.T) {
+	t.Parallel()
 	copy, err := os.ReadFile("../../schemas/foundation/public.schema.json")
 	if err != nil {
 		t.Fatal(err)
@@ -130,6 +131,7 @@ func TestPublicSchemasMatchActualReadViewsAndRejectExtensions(t *testing.T) {
 	}
 }
 func TestPublicationSchemaClosesVariants(t *testing.T) {
+	t.Parallel()
 	zero := int64(0)
 	command := PublishCommand{SchemaVersion: "1", CommandID: "command:publish", RunID: "run:one", StepID: "step:one", AttemptID: "attempt:one", EnvelopeDigest: rawDigest([]byte("envelope")), Hook: "progress", Kind: "state", ExpectedStateVersion: &zero, Value: json.RawMessage(`false`)}
 	if err := validatePublic(t, "PublishStepPublicationCommand", command); err != nil {
@@ -291,6 +293,7 @@ func checkGlossaryBindings(document string, sources *os.Root) error {
 }
 
 func TestGlossaryBindings(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile("../../openspec/specs/specification-governance/terms.md")
 	if err != nil {
 		t.Fatal(err)

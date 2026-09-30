@@ -76,6 +76,7 @@ stages:
 }
 
 func TestCLIProjectConfigurableInputLaunch(t *testing.T) {
+	t.Parallel()
 	for _, version := range []string{"2", "3"} {
 		t.Run("profile-"+version, func(t *testing.T) {
 			var root, authority string
@@ -129,6 +130,7 @@ func TestCLIProjectConfigurableInputLaunch(t *testing.T) {
 }
 
 func TestCLIProjectStepDeclaresReadOnlyClaim(t *testing.T) {
+	t.Parallel()
 	root, authority := t.TempDir(), filepath.Join(t.TempDir(), "authority")
 	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", authority, "--host", "codex-cli"); code != 0 {
 		t.Fatalf("init: %s", stderr)

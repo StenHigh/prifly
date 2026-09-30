@@ -13,6 +13,7 @@ func toolDescriptorFixture() ToolDescriptor {
 }
 
 func TestToolDescriptorClosedContract(t *testing.T) {
+	t.Parallel()
 	descriptor := toolDescriptorFixture()
 	data, err := json.Marshal(descriptor)
 	if err != nil {

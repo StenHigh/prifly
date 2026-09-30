@@ -105,8 +105,6 @@ func timedAnswer(t *testing.T, e *Engine, request DecisionRequest) DecisionAnswe
 }
 
 func TestTimedSessionWaitReopenAndCapacityKeepRemainingAllowance(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
 		e, runID, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
@@ -199,8 +197,6 @@ func TestTimedSessionWaitReopenAndCapacityKeepRemainingAllowance(t *testing.T) {
 }
 
 func TestTimedSessionTwoWeekHumanWaitPreservesExactOutputAndClaimBoundary(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	for _, effect := range []string{"none", "workspace_write"} {
 		t.Run(effect, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -279,8 +275,6 @@ func TestTimedSessionTwoWeekHumanWaitPreservesExactOutputAndClaimBoundary(t *tes
 }
 
 func TestTimedSessionExpiryAndCancellation(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	for _, name := range []string{"active expiry", "wait expiry", "cancel waiting", "cancel active", "unknown workspace"} {
 		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -346,6 +340,7 @@ func TestTimedSessionExpiryAndCancellation(t *testing.T) {
 }
 
 func TestSessionTimingRejectsClockRollbackWithoutRefill(t *testing.T) {
+	t.Parallel()
 	before := Observation{UTC: "2026-09-06T12:00:00Z"}
 	a := &Attempt{Admitted: before, Deadline: Observation{UTC: "2026-09-06T13:00:00Z"}, Session: &SessionHandoff{SchemaVersion: AssistedSessionTimingVersion, Timing: &SessionTiming{Limits: flow.SessionLimits{ActiveTimeoutMS: activeMS(3600000)}, RemainingMS: 3000000, Observed: before}}}
 	r := Run{LastObserved: before}
@@ -361,8 +356,7 @@ func TestSessionTimingRejectsClockRollbackWithoutRefill(t *testing.T) {
 }
 
 func TestTimedQuestionDoesNotHideSiblingOrPrematurelyFinishJoin(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Parallel()
 	ctx := context.Background()
 	e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(3600000)}, "none")
 	data, err := os.ReadFile(filepath.Join(e.Root, options.WorkflowFile))
@@ -440,8 +434,6 @@ func TestTimedQuestionDoesNotHideSiblingOrPrematurelyFinishJoin(t *testing.T) {
 // must therefore outlive that hour, keep the wait limit it did declare, and
 // still be a session the engine can settle.
 func TestSessionWithoutDeclaredWorkDeadlineOutlivesTheInheritedHour(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
 		wait := (24 * time.Hour).Milliseconds()

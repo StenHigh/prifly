@@ -59,6 +59,7 @@ func deepBranchChild(t *testing.T, e *Engine, base map[string]any, name string) 
 // working inside one. Their invocations belong to the branch, not to the
 // fan-out's own scope.
 func TestParallelComposesWithChoiceAndRepeatInsideABranch(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"})
 	deep := deepBranchChild(t, e, workflow, "left")
 	stage := workflow["definition"].(map[string]any)["stages"].(map[string]any)["fan"].(map[string]any)
@@ -104,6 +105,7 @@ func TestParallelComposesWithChoiceAndRepeatInsideABranch(t *testing.T) {
 // The state version is chosen from the whole compiled closure. A repeat that
 // exists only inside a branch still requires the state that records it.
 func TestParallelClosureSelectsStateForOperatorsInsideBranches(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"})
 	deep := deepBranchChild(t, e, workflow, "left")
 	stage := workflow["definition"].(map[string]any)["stages"].(map[string]any)["fan"].(map[string]any)
@@ -128,6 +130,7 @@ func TestParallelClosureSelectsStateForOperatorsInsideBranches(t *testing.T) {
 // Branch identity is derived from the run, the activation and the declared
 // branch, so re-entering the same branch cannot produce a second invocation.
 func TestParallelBranchEntryIsIdempotentUnderRetry(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	r, view, err := e.load(context.Background(), runID)
@@ -159,6 +162,7 @@ func TestParallelBranchEntryIsIdempotentUnderRetry(t *testing.T) {
 // Cancellation covers the whole active work set: a live branch is an ordinary
 // invocation inside the fan-out's scope and is cancelled with it.
 func TestCancellationReachesALiveBranch(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	r, view, err := e.load(context.Background(), runID)
@@ -246,6 +250,7 @@ func joinHistory(t *testing.T, e *Engine, runID string) ([]JoinDecision, []strin
 // each settled branch is decided once, in order; nothing is repeated and the
 // projection agrees with the journal it was folded from.
 func TestJoinRecordsEachBranchAndDecisionExactlyOnce(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -272,6 +277,7 @@ func TestJoinRecordsEachBranchAndDecisionExactlyOnce(t *testing.T) {
 // A decision is evidence about a settled branch. While a branch is still live
 // no decision may be taken, and the refusal changes nothing.
 func TestJoinRefusesToDecideALiveBranch(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	ctx := context.Background()
@@ -311,6 +317,7 @@ func TestJoinRefusesToDecideALiveBranch(t *testing.T) {
 // A reached join is not permission to finish while an effect is unresolved.
 // The fan-out cannot settle its verdict until the uncertainty is settled.
 func TestJoinDoesNotSettleOverAnUnresolvedEffect(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinQuorum(1, "cancel", "succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	ctx := context.Background()
@@ -347,6 +354,7 @@ func TestJoinDoesNotSettleOverAnUnresolvedEffect(t *testing.T) {
 // Parent and branch intervals are different quantities. The fan-out's own
 // elapsed time covers its branches; it is not the sum of their leaf work.
 func TestFanOutTimingSeparatesParentFromBranches(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -398,6 +406,7 @@ func waiverAwareFixture(t *testing.T, accept ...string) (*Engine, string, *flow.
 // Resemblance to success is not acceptance, and the branch keeps its own
 // recorded outcome either way.
 func TestJoinAcceptsAReducedOutcomeOnlyWhenDeclared(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name     string
 		accept   []string
@@ -432,6 +441,7 @@ func TestJoinAcceptsAReducedOutcomeOnlyWhenDeclared(t *testing.T) {
 // inside a branch, and inside a loop inside that branch, is spent from the
 // root's budget too, so a generous local limit cannot buy more than the Run has.
 func TestNestedWorkSpendsTheSharedBudgetOnce(t *testing.T) {
+	t.Parallel()
 	build := func(t *testing.T, rootTransitions int64) (*Engine, string) {
 		t.Helper()
 		e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"})
@@ -494,6 +504,7 @@ func TestNestedWorkSpendsTheSharedBudgetOnce(t *testing.T) {
 // did. It reports the entered branches with their own outcomes, and it is
 // sealed evidence like any other artifact, not a value assembled at read time.
 func TestFanOutSummaryIsReadableByTheNextStage(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := parallelFixture(t, joinAll("succeeded"), branchSpec{"left", "succeeded"}, branchSpec{"right", "succeeded"})
 	defs, _, err := Builtins()
 	if err != nil {

@@ -130,6 +130,7 @@ func countDispositions(decisions []SlotDecision) map[string]int {
 // AC-054. A logical slot fires at most once, and how many times the process
 // that decides it has started is not one of the inputs.
 func TestScheduleSlotFiresOnceAcrossRestarts(t *testing.T) {
+	t.Parallel()
 	e, s := createdSchedule(t, []string{"09:00", "21:00"}, nil)
 	ctx := context.Background()
 	backdateSchedule(t, e, s.ID, time.Now().Add(-72*time.Hour))
@@ -191,6 +192,7 @@ func TestScheduleSlotFiresOnceAcrossRestarts(t *testing.T) {
 // Creating a schedule is not running one. Its watermark starts where it was
 // created, so nothing already in the calendar's past is due.
 func TestScheduleCreationStartsNothing(t *testing.T) {
+	t.Parallel()
 	e, s := createdSchedule(t, []string{"00:00", "12:00"}, nil)
 	ctx := context.Background()
 	decisions, err := e.FireDueSlots(ctx, s.ID)
@@ -210,6 +212,7 @@ func TestScheduleCreationStartsNothing(t *testing.T) {
 }
 
 func TestDisabledScheduleDecidesNothingAndKeepsItsBacklog(t *testing.T) {
+	t.Parallel()
 	e, s := createdSchedule(t, []string{"09:00"}, func(s *Schedule) { s.Enabled = false })
 	ctx := context.Background()
 	backdateSchedule(t, e, s.ID, time.Now().Add(-48*time.Hour))
@@ -242,6 +245,7 @@ func TestDisabledScheduleDecidesNothingAndKeepsItsBacklog(t *testing.T) {
 // Coalesce runs the backlog once. Every missed slot still gets its own recorded
 // decision, because "we chose not to run it" is a fact about that slot.
 func TestScheduleCoalesceStartsOneRunForTheBacklog(t *testing.T) {
+	t.Parallel()
 	e, s := createdSchedule(t, []string{"09:00", "21:00"}, func(s *Schedule) { s.Misfire, s.MaxCatchUp = "coalesce", 0 })
 	ctx := context.Background()
 	backdateSchedule(t, e, s.ID, time.Now().Add(-72*time.Hour))
@@ -259,6 +263,7 @@ func TestScheduleCoalesceStartsOneRunForTheBacklog(t *testing.T) {
 }
 
 func TestScheduleSkipDropsMissedSlots(t *testing.T) {
+	t.Parallel()
 	e, s := createdSchedule(t, []string{"09:00", "21:00"}, func(s *Schedule) { s.Misfire, s.MaxCatchUp = "skip", 0 })
 	ctx := context.Background()
 	backdateSchedule(t, e, s.ID, time.Now().Add(-72*time.Hour))
@@ -280,6 +285,7 @@ func TestScheduleSkipDropsMissedSlots(t *testing.T) {
 // The catch-up budget counts missed slots only, so a bounded schedule starts one
 // run for the current slot plus at most max_catch_up for what it missed.
 func TestScheduleBoundedCatchUpStopsAtItsBudget(t *testing.T) {
+	t.Parallel()
 	e, s := createdSchedule(t, []string{"09:00", "21:00"}, func(s *Schedule) { s.MaxCatchUp = 2 })
 	ctx := context.Background()
 	backdateSchedule(t, e, s.ID, time.Now().Add(-96*time.Hour))
@@ -301,6 +307,7 @@ func TestScheduleBoundedCatchUpStopsAtItsBudget(t *testing.T) {
 // Overlap is refused, not deferred: a deferred slot would fire later, which is
 // the duplicate in time the watermark exists to prevent.
 func TestScheduleMaxOverlapRefusesRatherThanDefers(t *testing.T) {
+	t.Parallel()
 	e, s := createdSchedule(t, []string{"09:00", "21:00"}, func(s *Schedule) { s.MaxOverlap = 1 })
 	ctx := context.Background()
 	backdateSchedule(t, e, s.ID, time.Now().Add(-72*time.Hour))
@@ -327,6 +334,7 @@ func TestScheduleMaxOverlapRefusesRatherThanDefers(t *testing.T) {
 // The two days a year a wall time is not one instant. The declared policy is
 // what answers it; nothing here falls back to a library default.
 func TestScheduleResolvesDaylightGapAndFold(t *testing.T) {
+	t.Parallel()
 	loc, err := time.LoadLocation("America/New_York")
 	if err != nil {
 		t.Fatal(err)
@@ -369,6 +377,7 @@ func TestScheduleResolvesDaylightGapAndFold(t *testing.T) {
 }
 
 func TestScheduleRefusesContractsItCannotKeep(t *testing.T) {
+	t.Parallel()
 	e, s := scheduleFixture(t, []string{"09:00"}, nil)
 	ctx := context.Background()
 	for name, bend := range map[string]func(*Schedule){
@@ -397,6 +406,7 @@ func TestScheduleRefusesContractsItCannotKeep(t *testing.T) {
 }
 
 func TestScheduleCapabilityIsReported(t *testing.T) {
+	t.Parallel()
 	manifest := Capabilities()
 	core := manifest.Profiles[1]
 	found := false
@@ -417,6 +427,7 @@ func TestScheduleCapabilityIsReported(t *testing.T) {
 
 // A watermark ahead of the clock is a clock that went backwards, not a backlog.
 func TestScheduleClockRollbackDecidesNothing(t *testing.T) {
+	t.Parallel()
 	e, s := createdSchedule(t, []string{"09:00"}, nil)
 	ctx := context.Background()
 	backdateSchedule(t, e, s.ID, time.Now().Add(48*time.Hour))

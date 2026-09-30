@@ -86,6 +86,7 @@ func repeatSameProjection(t *testing.T, before, after local.ReadView) {
 }
 
 func TestRepeatControlPauseAtBodyBoundary(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"body_finished", "continued"} {
 		t.Run(boundary, func(t *testing.T) {
 			e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2)
@@ -151,6 +152,7 @@ func TestRepeatControlPauseAtBodyBoundary(t *testing.T) {
 }
 
 func TestRepeatControlCancelledCurrentChildStaysBlocked(t *testing.T) {
+	t.Parallel()
 	e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2)
 	workflow["allowed_outcomes"] = []string{"succeeded", "rejected"}
 	choiceStages(workflow)["work"].(map[string]any)["on_error"] = "rejected"
@@ -200,6 +202,7 @@ func TestRepeatControlCancelledCurrentChildStaysBlocked(t *testing.T) {
 }
 
 func TestRepeatControlCommitReceiptAndCAS(t *testing.T) {
+	t.Parallel()
 	e, workflow, _, options := repeatFixture(t, "", "succeeded", 2)
 	runID := choiceStart(t, e, workflow, options)
 	repeatEnter(t, e, runID)
@@ -231,6 +234,7 @@ func TestRepeatControlCommitReceiptAndCAS(t *testing.T) {
 }
 
 func TestRepeatControlConcurrentWritersCreateOneBody(t *testing.T) {
+	t.Parallel()
 	e, workflow, _, options := repeatFixture(t, "", "succeeded", 2)
 	runID := choiceStart(t, e, workflow, options)
 	repeatEnter(t, e, runID)
@@ -279,6 +283,7 @@ func TestRepeatControlConcurrentWritersCreateOneBody(t *testing.T) {
 }
 
 func TestRepeatControlStorageBudgetGuardsEveryBodyCreation(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"entry", "continue"} {
 		t.Run(boundary, func(t *testing.T) {
 			e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2)
@@ -336,6 +341,7 @@ func TestRepeatControlStorageBudgetGuardsEveryBodyCreation(t *testing.T) {
 }
 
 func TestRepeatControlCrashAtDurableBoundaries(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"entered", "body_finished", "continued"} {
 		t.Run(boundary, func(t *testing.T) {
 			e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2)
@@ -404,6 +410,7 @@ func TestRepeatControlCrashAtDurableBoundaries(t *testing.T) {
 }
 
 func TestRepeatControlBoundaryHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("REPEAT_BOUNDARY_HELPER") != "1" {
 		return
 	}
@@ -443,6 +450,7 @@ func TestRepeatControlBoundaryHelper(t *testing.T) {
 }
 
 func TestRepeatControlUnknownWorkerBlocksNextIteration(t *testing.T) {
+	t.Parallel()
 	e, workflow, _, options := repeatFixture(t, "crash-short", "succeeded", 2)
 	workflow["allowed_outcomes"] = []string{"succeeded", "rejected"}
 	choiceStages(workflow)["work"].(map[string]any)["on_error"] = "rejected"

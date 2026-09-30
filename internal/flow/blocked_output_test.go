@@ -12,6 +12,7 @@ import (
 // edge was refused as unguaranteed, correctly, because the step had promised
 // nothing there. The reason an operator needs most reached only the journal.
 func TestAnOutputMayBePromisedForTheVerdictThatJudgedNothing(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		contract string
 		accepted bool
@@ -53,6 +54,7 @@ func TestAnOutputMayBePromisedForTheVerdictThatJudgedNothing(t *testing.T) {
 // later -- a project's insertion silently rewriting the package author's
 // contract, and every route the later revision added refused as unsupported.
 func TestAnInsertionRaisesTheRevisionAndNeverLowersIt(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		sealed, want string
 	}{
@@ -84,6 +86,7 @@ func TestAnInsertionRaisesTheRevisionAndNeverLowersIt(t *testing.T) {
 // that produce the contracts and against every version the authoring ladder can
 // lower to, which is what a seventh copy would have to disagree with.
 func TestEveryStepContractThisBuildLowersToIsNamed(t *testing.T) {
+	t.Parallel()
 	for _, version := range StepContracts {
 		named := StepContractFor(version)
 		if named == "" {
@@ -113,6 +116,7 @@ func TestEveryStepContractThisBuildLowersToIsNamed(t *testing.T) {
 // nothing the assisted line added after 5. A session field reaching a program
 // by inheritance is what building it as the next link would have done.
 func TestProgramLineContractCarriesOnlyThePromise(t *testing.T) {
+	t.Parallel()
 	schema, err := ProtocolSchema("StepDefinitionV12")
 	if err != nil {
 		t.Fatal(err)

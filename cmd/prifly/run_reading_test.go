@@ -54,6 +54,7 @@ func readingFixture(t *testing.T, count int) (project string, runs []string, cli
 // .events returned nothing because they sit in .view.events. The text form is
 // one line per event and says how to read on.
 func TestRunEventsTextIsOneLinePerEventAndSaysHowToContinue(t *testing.T) {
+	t.Parallel()
 	_, runs, cli := readingFixture(t, 1)
 	text := cli("run", "events", runs[0], "--limit", "1")
 	lines := strings.Split(strings.TrimSpace(text), "\n")
@@ -78,6 +79,7 @@ func TestRunEventsTextIsOneLinePerEventAndSaysHowToContinue(t *testing.T) {
 // run list was "not a run operation". It names the authority's Runs, newest
 // first, and reads only.
 func TestRunListNamesTheAuthoritysRunsNewestFirst(t *testing.T) {
+	t.Parallel()
 	project, runs, cli := readingFixture(t, 3)
 	engine, err := prifly.Open(project, true)
 	if err != nil {
@@ -144,6 +146,7 @@ func TestRunListNamesTheAuthoritysRunsNewestFirst(t *testing.T) {
 // its answer and basis, and an empty report reads as the host's "none" rather
 // than as nothing recorded.
 func TestRunStatusPrintsTheQuestionsEachStepAnswered(t *testing.T) {
+	t.Parallel()
 	view := prifly.RunView{Run: prifly.Run{
 		ID: "run:questions",
 		Activations: map[string]*prifly.Activation{

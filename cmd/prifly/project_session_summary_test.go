@@ -13,6 +13,7 @@ import (
 )
 
 func TestCLIProjectSessionLimitsPrepareShowsPinnedPolicies(t *testing.T) {
+	t.Parallel()
 	root, authority, legacy := projectSessionLimitsFixture(t)
 	const folder = ".prifly/workflows/limits/"
 	timed := strings.Replace(legacy, "prifly-step/1", "prifly-step/2", 1)

@@ -127,6 +127,7 @@ func callEnter(t *testing.T, e *Engine, runID string) Run {
 }
 
 func TestCallNativeExportsOutcomesAndRepeatedScope(t *testing.T) {
+	t.Parallel()
 	for _, outcome := range []string{"succeeded", "partial", "rejected"} {
 		t.Run(outcome, func(t *testing.T) {
 			e, workflow, _, options := callFixture(t, "commit-pass", outcome, true)
@@ -204,6 +205,7 @@ func TestCallNativeExportsOutcomesAndRepeatedScope(t *testing.T) {
 }
 
 func TestCallScopedPauseReleaseAndCancel(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"pause", "cancel"} {
 		t.Run(kind, func(t *testing.T) {
 			e, workflow, _, options := callFixture(t, "commit-pass", "succeeded", true)
@@ -269,6 +271,7 @@ func TestCallScopedPauseReleaseAndCancel(t *testing.T) {
 }
 
 func TestCallConfigurationDoesNotReplaceExplicitAbsence(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"omitted", "absent", "value"} {
 		t.Run(mode, func(t *testing.T) {
 			e, workflow, child, options := callFixture(t, "", "succeeded", false)
@@ -319,6 +322,7 @@ func TestCallConfigurationDoesNotReplaceExplicitAbsence(t *testing.T) {
 }
 
 func TestCallLocalAliasCycleAndPinnedResolution(t *testing.T) {
+	t.Parallel()
 	e, workflow, child, options := callFixture(t, "", "succeeded", false)
 	var registry RegistryFile
 	data, _ := os.ReadFile(filepath.Join(e.Root, "definitions.json"))
@@ -372,6 +376,7 @@ func TestCallLocalAliasCycleAndPinnedResolution(t *testing.T) {
 }
 
 func TestCallKnownFailureAndGlobalUnknownBarrier(t *testing.T) {
+	t.Parallel()
 	t.Run("known", func(t *testing.T) {
 		e, workflow, _, options := callFixture(t, "nonzero", "succeeded", false)
 		workflow["allowed_outcomes"] = []string{"succeeded", "rejected"}
@@ -459,6 +464,7 @@ func TestCallKnownFailureAndGlobalUnknownBarrier(t *testing.T) {
 }
 
 func TestCallCapabilitiesDeclareBothStateContracts(t *testing.T) {
+	t.Parallel()
 	manifest := Capabilities()
 	if manifest.SchemaVersion != "capabilities/2" || len(manifest.Profiles) != 2 {
 		t.Fatal("missing versioned capability discovery")
@@ -499,6 +505,7 @@ func callActivateReady(t *testing.T, e *Engine, runID string) (Run, local.ReadVi
 }
 
 func TestCallCrashAtDurableBoundaries(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"entered", "child_finished", "returned"} {
 		t.Run(boundary, func(t *testing.T) {
 			e, workflow, _, options := callFixture(t, "commit-pass", "succeeded", false)
@@ -555,6 +562,7 @@ func TestCallCrashAtDurableBoundaries(t *testing.T) {
 }
 
 func TestCallBoundaryHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("CALL_BOUNDARY_HELPER") != "1" {
 		return
 	}
@@ -615,6 +623,7 @@ func TestCallBoundaryHelper(t *testing.T) {
 }
 
 func TestCallNestedScopeStopsDescendantsOnly(t *testing.T) {
+	t.Parallel()
 	e, workflow, _, options := callFixture(t, "commit-pass", "succeeded", false)
 	middle := callClone(t, workflow)
 	middle["id"] = "test:workflow/call-middle"

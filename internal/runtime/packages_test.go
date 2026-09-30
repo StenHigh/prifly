@@ -98,6 +98,7 @@ func toolPackage(t *testing.T, adapter flow.Ref, operation, effectClass, retryCl
 }
 
 func TestPackageImportSealsDeclaredBytesAndRecordsTrust(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	body := "---\nname: aif-plan\n---\n\n# Plan\n"
@@ -152,6 +153,7 @@ func TestPackageImportSealsDeclaredBytesAndRecordsTrust(t *testing.T) {
 }
 
 func TestPackageImportSealsToolDescriptorWithoutExecutingIt(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	definitions, _, err := Builtins()
@@ -184,6 +186,7 @@ func TestPackageImportSealsToolDescriptorWithoutExecutingIt(t *testing.T) {
 
 // Pilot acceptance 1: changed skill bytes cannot substitute for the pinned ones.
 func TestChangedPackageBytesDoNotResolve(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	body := "---\nname: aif-plan\n---\n\n# Plan\n"
@@ -213,6 +216,7 @@ func TestChangedPackageBytesDoNotResolve(t *testing.T) {
 }
 
 func TestPackageImportRejectsUndeclaredAndMismatchedContent(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	body := "# Plan\n"
@@ -258,6 +262,7 @@ func TestPackageImportRejectsUndeclaredAndMismatchedContent(t *testing.T) {
 }
 
 func TestPackageIdentityConflictAndRepeatedImport(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	source, _, _ := skillPackage(t, "# Plan\n")
@@ -292,6 +297,7 @@ func TestPackageIdentityConflictAndRepeatedImport(t *testing.T) {
 // A control plane enrolled before package trust existed must upgrade, not brick
 // the installation: the core operation set belongs to the enrolled owner.
 func TestControlPlaneEnrolledWithoutTrustIsReconciled(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	if _, _, err := e.ensureControl(ctx); err != nil {
@@ -331,6 +337,7 @@ func TestControlPlaneEnrolledWithoutTrustIsReconciled(t *testing.T) {
 }
 
 func TestPackageComponentCannotShadowCoreOrLocalDefinitions(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	core := packageSource(t, map[string]string{"a.md": "# A\n"}, []map[string]any{

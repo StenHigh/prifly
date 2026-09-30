@@ -94,6 +94,7 @@ func compileCallFixture(t *testing.T, root, child WorkflowRevision, registry Reg
 }
 
 func TestCoreCallsReuseLocalPlansAndExports(t *testing.T) {
+	t.Parallel()
 	root, child, registry := callBindingFixture(t)
 	child.AllowedOutcomes = []string{"no_work", "rejected"}
 	ref := registerCallWorkflow(t, registry, child)
@@ -140,6 +141,7 @@ func TestCoreCallsReuseLocalPlansAndExports(t *testing.T) {
 }
 
 func TestCoreCallBindingsAndOutcomes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, code string
 		edit       func(*WorkflowRevision, *WorkflowRevision, Registry)
@@ -238,6 +240,7 @@ func TestCoreCallBindingsAndOutcomes(t *testing.T) {
 }
 
 func TestCoreCallOutcomeAvailability(t *testing.T) {
+	t.Parallel()
 	for _, optional := range []bool{false, true} {
 		t.Run(fmt.Sprintf("optional_%v", optional), func(t *testing.T) {
 			root, child, registry := callBindingFixture(t)
@@ -266,6 +269,7 @@ func TestCoreCallOutcomeAvailability(t *testing.T) {
 }
 
 func TestCoreCallSharedBudgets(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                  string
 		calls, workers, depth int
@@ -308,6 +312,7 @@ func TestCoreCallSharedBudgets(t *testing.T) {
 }
 
 func TestCoreCallOutcomeBudgetAndErrorPrefix(t *testing.T) {
+	t.Parallel()
 	for _, handledError := range []bool{false, true} {
 		t.Run(fmt.Sprintf("error_route_%v", handledError), func(t *testing.T) {
 			root, registry := callWorkflow(t, "test:workflow/cost-root")
@@ -353,6 +358,7 @@ func TestCoreCallOutcomeBudgetAndErrorPrefix(t *testing.T) {
 }
 
 func TestCoreChildPreflightBeforeCanonicalization(t *testing.T) {
+	t.Parallel()
 	for _, raw := range []string{"1.0000000000000000001", "1e-999999999"} {
 		t.Run(raw, func(t *testing.T) {
 			root, registry := callWorkflow(t, "test:workflow/raw-root")
@@ -373,6 +379,7 @@ func TestCoreCallReferenceValidation(t *testing.T) {
 	// operator a profile does not implement must be refused wherever it sits,
 	// including inside a child nobody looked at. Every core operator is now
 	// implemented, so the foundation profile is where that property still lives.
+	t.Parallel()
 	for _, tc := range []struct{ name, code string }{
 		{"missing", "missing_ref"}, {"digest", "digest_mismatch"}, {"identity", "ref_identity_mismatch"},
 		{"not_workflow", "schema_invalid"}, {"root_identity_conflict", "ref_identity_conflict"}, {"nested_unsupported", "unsupported"},
@@ -440,6 +447,7 @@ func TestCoreCallReferenceValidation(t *testing.T) {
 }
 
 func TestCoreCallNestedDepthAndSharedValidationBudget(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                  string
 		rootDepth, childDepth int
@@ -482,6 +490,7 @@ func TestCoreCallNestedDepthAndSharedValidationBudget(t *testing.T) {
 }
 
 func TestCoreCallChoiceUsesOnlyDeclaredExports(t *testing.T) {
+	t.Parallel()
 	root, child, registry := callBindingFixture(t)
 	root.Outputs = map[string]OutputPort{}
 	root.Definition.Stages["done"] = Stage{Kind: "finish", Outcome: "no_work", OutputBindings: map[string]Binding{}}
@@ -511,6 +520,7 @@ func TestCoreCallChoiceUsesOnlyDeclaredExports(t *testing.T) {
 func TestUnavailableOutputNamesTheReasonThatApplies(t *testing.T) {
 	// An optional workflow input bound to a required child port: nothing about
 	// a choice, everything about the input.
+	t.Parallel()
 	root, child, registry := callBindingFixture(t)
 	p := root.Inputs["value"]
 	p.Required = false

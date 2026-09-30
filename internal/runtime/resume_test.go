@@ -48,6 +48,7 @@ func declaring(p *flow.Plan, resumable *flow.Resumable) *flow.Plan {
 }
 
 func TestAStoppedRunResumesWhereItStoppedOnlyWhenItsWorkflowSaysSo(t *testing.T) {
+	t.Parallel()
 	r, p, sequences := resumeFixture()
 	if _, err := recoveryPointOf(r, p, p, sequences, ""); refusalCode(err) != "resume_undeclared" {
 		t.Fatalf("a Run of a workflow that declared nothing was resumed: %v", err)
@@ -86,6 +87,7 @@ func TestAStoppedRunResumesWhereItStoppedOnlyWhenItsWorkflowSaysSo(t *testing.T)
 }
 
 func TestACancelledRunResumesAtTheStageItWasStoppedAt(t *testing.T) {
+	t.Parallel()
 	r, p, sequences := resumeFixture()
 	r.Status, r.Outcome, r.CancelRequested = "cancelled", nil, true
 	delete(r.Activations, "a:stopped")

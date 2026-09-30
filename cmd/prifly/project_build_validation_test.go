@@ -9,6 +9,7 @@ import (
 )
 
 func TestProjectBuildProvenanceRejectsIdentityTampering(t *testing.T) {
+	t.Parallel()
 	data := []byte(`{"id":"test:workflow/root","version":"1.0.0"}`)
 	digest, err := flow.Digest(data)
 	if err != nil {

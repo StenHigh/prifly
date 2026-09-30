@@ -17,6 +17,7 @@ import (
 // The check reads both sides — what the compiler accepts and what the document
 // claims — rather than either alone, because either alone is what shipped.
 func TestTheDocumentDeclaresEveryRevisionThisBuildCompiles(t *testing.T) {
+	t.Parallel()
 	declared := Capabilities().Profiles[1].WorkflowVersions
 	for _, version := range flow.WorkflowRevisions {
 		if !slices.Contains(declared, version) {
@@ -35,6 +36,7 @@ func TestTheDocumentDeclaresEveryRevisionThisBuildCompiles(t *testing.T) {
 // allowed to return it. Declaring one without the other is an adoption that
 // fails halfway.
 func TestTheVerdictIsDeclaredOnBothSidesItNeeds(t *testing.T) {
+	t.Parallel()
 	profile := Capabilities().Profiles[1]
 	if !slices.Contains(profile.Capabilities, "blocked_verdict") {
 		t.Fatal("the verdict is not named in the capability list")
@@ -70,6 +72,7 @@ func TestTheVerdictIsDeclaredOnBothSidesItNeeds(t *testing.T) {
 // build declares is one some handoff can carry. A constant nobody emits is how
 // the wrong const reached six bundles.
 func TestEveryAssistedEditionDeclaredIsOneAHandoffCanCarry(t *testing.T) {
+	t.Parallel()
 	declared := []string{
 		AssistedSessionVersion, AssistedSessionCostVersion, AssistedSessionWorkspaceVersion,
 		AssistedSessionTreeVersion, AssistedSessionDecisionVersion, AssistedSessionTimingVersion,
@@ -105,6 +108,7 @@ func TestEveryAssistedEditionDeclaredIsOneAHandoffCanCarry(t *testing.T) {
 // package deciding whether it may declare a read-only repository workspace
 // reads this document and was told it may not.
 func TestTheDocumentDeclaresEveryStepContractThisBuildCompiles(t *testing.T) {
+	t.Parallel()
 	declared := Capabilities().Profiles[1].StepVersions
 	for _, version := range flow.StepContracts {
 		if !slices.Contains(declared, version) {
@@ -125,6 +129,7 @@ func TestTheDocumentDeclaresEveryStepContractThisBuildCompiles(t *testing.T) {
 // first rule it met, not the reason. A state this build does not know is named
 // as newer, with what to do about it.
 func TestAStateFromANewerBuildIsNamedAsSuch(t *testing.T) {
+	t.Parallel()
 	current := versionContracts[len(versionContracts)-1].State
 	data, err := json.Marshal(Run{SchemaVersion: current, ContextResources: []PinnedResource{}})
 	if err != nil {

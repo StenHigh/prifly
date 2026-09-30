@@ -48,6 +48,7 @@ func recoverFailedTestsFixture() Run {
 }
 
 func TestRecoverSourceFindsTechnicalFailureWithoutPromotingProcessExit(t *testing.T) {
+	t.Parallel()
 	source := recoverFailedTestsFixture()
 	frontier, attempt, err := recoveryFrontier(source)
 	if err != nil || frontier.StageID != "tests" || attempt.ID != "attempt:tests" {
@@ -68,6 +69,7 @@ func TestRecoverSourceFindsTechnicalFailureWithoutPromotingProcessExit(t *testin
 }
 
 func TestRecoverChoicesCannotChange(t *testing.T) {
+	t.Parallel()
 	base := &DecisionSheet{Records: []DecisionRecord{{DefinitionID: "security", DefinitionDigest: "sha256:same", Status: "answered", Value: json.RawMessage(`true`)}}}
 	same := &DecisionSheet{Records: []DecisionRecord{{DefinitionID: "security", DefinitionDigest: "sha256:same", Status: "answered", Value: json.RawMessage(`true`)}}}
 	if !recoverySameChoices(base, same) {
@@ -80,6 +82,7 @@ func TestRecoverChoicesCannotChange(t *testing.T) {
 }
 
 func TestRecoverRevalidatedProvenanceNeedsCandidate(t *testing.T) {
+	t.Parallel()
 	r := Run{SchemaVersion: CoreRecoveryStateVersion, Fork: &ForkProvenance{SourceRunID: "run:source", SourceRunVersion: 2}, Recovery: &RecoveryProvenance{SchemaVersion: "recovery/1", SourceRunID: "run:source", SourceRunVersion: 2, ReviewDigest: "sha256:review", SubjectCommit: strings.Repeat("a", 40), FrontierStageID: "tests", FrontierAction: "revalidate", Reused: []RecoveryReuse{{StageID: "verify"}}, RootOutputs: map[string]map[string]ArtifactRef{}}}
 	if recoveryInvariant(r) == nil {
 		t.Fatal("revalidation without immutable candidate was accepted")
@@ -92,6 +95,7 @@ func TestRecoverRevalidatedProvenanceNeedsCandidate(t *testing.T) {
 }
 
 func TestRecoverSealedCandidateRevalidatesWithoutProcess(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	plan, _, _, _, _, err := e.compileFileWithBindings(options.WorkflowFile, nil)
 	if err != nil {
@@ -125,6 +129,7 @@ func TestRecoverSealedCandidateRevalidatesWithoutProcess(t *testing.T) {
 }
 
 func TestRecoverCandidateRejectsUnsealedOrConflictingEvidence(t *testing.T) {
+	t.Parallel()
 	event := func(digest string) local.Event {
 		return local.Event{EventInput: local.EventInput{Type: "attempt.result_candidate", Version: 1, Data: json.RawMessage(`{"attempt_id":"attempt:tests","candidate_digest":"sha256:expected","disposition":"candidate","evidence_ref":{"artifact_id":"artifact:candidate","revision":1,"digest":"` + digest + `"}}`)}}
 	}
@@ -142,6 +147,7 @@ func TestRecoverCandidateRejectsUnsealedOrConflictingEvidence(t *testing.T) {
 }
 
 func TestRecoverEffectiveDefinitionIgnoresCompiledRefOnlyChange(t *testing.T) {
+	t.Parallel()
 	build := func(version, schemaType string) (flow.Ref, []PinnedDefinition) {
 		schemaBytes := []byte(fmt.Sprintf(`{"id":"test:schema/gate","version":%q,"type":%q}`, version, schemaType))
 		schemaDigest, _ := flow.Digest(schemaBytes)
@@ -193,6 +199,7 @@ func TestRecoverEffectiveDefinitionIgnoresCompiledRefOnlyChange(t *testing.T) {
 }
 
 func TestRecoverSourceRejectsOpenOrAnsweredRuns(t *testing.T) {
+	t.Parallel()
 	cases := map[string]func(*Run){
 		"outcome":          func(r *Run) { r.Status, r.Outcome = "completed", stringPointer("rejected") },
 		"active attempt":   func(r *Run) { r.Active = []string{"attempt:tests"} },
@@ -214,6 +221,7 @@ func TestRecoverSourceRejectsOpenOrAnsweredRuns(t *testing.T) {
 }
 
 func TestRecoverTraceReusesNestedQualityGatesAndRejectsChangedPrefix(t *testing.T) {
+	t.Parallel()
 	definition := func(id, version string) (flow.Ref, PinnedDefinition) {
 		data := []byte(fmt.Sprintf(`{"id":%q,"version":%q,"kind":"step"}`, id, version))
 		digest, _ := flow.Digest(data)
@@ -308,6 +316,7 @@ func TestRecoverTraceReusesNestedQualityGatesAndRejectsChangedPrefix(t *testing.
 // the source Run's own tree and chooses nothing, and only the state that
 // published it may carry it.
 func TestRecoveryProvenanceEditionsKeepTheirOwnShape(t *testing.T) {
+	t.Parallel()
 	ref := ArtifactRef{ArtifactID: "artifact:candidate", Revision: 1, Digest: "sha256:candidate"}
 	provenance := func(edition, commit string) *RecoveryProvenance {
 		return &RecoveryProvenance{SchemaVersion: edition, SourceRunID: "run:source", SourceRunVersion: 2, ReviewDigest: "sha256:review", SubjectCommit: commit, FrontierStageID: "tests", FrontierAction: "revalidate", CandidateRef: &ref, Reused: []RecoveryReuse{{StageID: "verify"}}, RootOutputs: map[string]map[string]ArtifactRef{}}
@@ -335,6 +344,7 @@ func TestRecoveryProvenanceEditionsKeepTheirOwnShape(t *testing.T) {
 // The tree a recovery runs the failed stage in again is the source Run's own:
 // the claim still bound to it, or the fact that it was released.
 func TestRecoveryFindsTheSourceTree(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := assistedWorkspaceFixture(t, "worktree")
 	ctx := context.Background()
 	if held, released, err := e.recoveryClaim(ctx, runID); err != nil || held != nil || released {

@@ -38,6 +38,7 @@ func readModelProfilesFromYAML(t *testing.T, source string) (map[string]map[stri
 }
 
 func TestAPackageCarriesModelProfilesForEveryHostItMayMeet(t *testing.T) {
+	t.Parallel()
 	profiles, err := readModelProfilesFromYAML(t, packagedModelProfiles)
 	if err != nil {
 		t.Fatalf("the block a shared package ships was refused: %v", err)
@@ -59,6 +60,7 @@ func TestAPackageCarriesModelProfilesForEveryHostItMayMeet(t *testing.T) {
 }
 
 func TestModelProfilesRefuseOnlyWhatIsNotAHostThisBuildKnows(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, source, code string }{
 		{"typo in a host", "model_profiles:\n  claude_code:\n    fast-draft: {model: haiku}\n", "project_model_profile_unknown_host"},
 		{"profile name a step could not declare", "model_profiles:\n  claude-code:\n    Fast_Draft: {model: haiku}\n", "project_model_profile_invalid"},
@@ -78,6 +80,7 @@ func TestModelProfilesRefuseOnlyWhatIsNotAHostThisBuildKnows(t *testing.T) {
 // produce a value neither file contains -- and `source`, which names one file,
 // would then be describing half of it.
 func TestAMachineEntryReplacesThePackageEntryWhole(t *testing.T) {
+	t.Parallel()
 	packaged := map[string]map[string]map[string]string{
 		"claude-code": {"deep-reasoning": {"model": "opus", "effort": "high"}, "fast-draft": {"model": "haiku"}},
 	}
@@ -107,6 +110,7 @@ func TestAMachineEntryReplacesThePackageEntryWhole(t *testing.T) {
 // summary meant a Run could seal a translation nobody reviewed -- and the
 // check whose whole purpose is that class would not notice.
 func TestTheReviewedSummaryCoversTheTableTheRunWillSeal(t *testing.T) {
+	t.Parallel()
 	packaged := map[string]map[string]map[string]string{
 		"claude-code": {"deep-reasoning": {"model": "opus", "effort": "high"}},
 	}

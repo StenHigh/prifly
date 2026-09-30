@@ -9,6 +9,7 @@ import (
 // The listing is a projection of recorded Runs, so what it reports must be what
 // the Run holds: a monitor that counted differently would tell its own story.
 func TestRunsListReportsWhatEachRunHolds(t *testing.T) {
+	t.Parallel()
 	e, runID := reviewFanOut(t, 2)
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {
@@ -51,6 +52,7 @@ func TestRunsListReportsWhatEachRunHolds(t *testing.T) {
 }
 
 func TestMonitorHistoryAndCreationCallback(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	ctx := context.Background()
 	called := 0
@@ -86,6 +88,7 @@ func TestMonitorHistoryAndCreationCallback(t *testing.T) {
 }
 
 func TestMonitorSubject(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		brief, task, want string
 	}{
@@ -100,6 +103,7 @@ func TestMonitorSubject(t *testing.T) {
 }
 
 func TestStartPinsProjectTitle(t *testing.T) {
+	t.Parallel()
 	e, _ := reviewFanOut(t, 2)
 	options := StartOptions{CommandID: newID("command"), ProjectTitle: "Pri-Fly monitor", WorkflowFile: "workflows/fanout.json", BriefFile: "brief.json", Inputs: map[string]string{}}
 	started, err := e.Start(context.Background(), options)

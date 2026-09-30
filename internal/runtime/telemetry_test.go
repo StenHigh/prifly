@@ -119,6 +119,7 @@ func telemetryHistoryRun(t *testing.T, base Run, id, status string, duration int
 }
 
 func TestTelemetryLifecyclePopulationAndIndependentVerdict(t *testing.T) {
+	t.Parallel()
 	e, _, command := publicationFixture(t, nil)
 	base, _ := publicationRun(t, e, command)
 	ids := []string{}
@@ -166,6 +167,7 @@ func TestTelemetryLifecyclePopulationAndIndependentVerdict(t *testing.T) {
 }
 
 func TestTelemetryWarningCoverageUsesDeclaredClosedChannel(t *testing.T) {
+	t.Parallel()
 	e, _, command := publicationFixture(t, nil)
 	base, _ := publicationRun(t, e, command)
 	ids := []string{}
@@ -197,6 +199,7 @@ func TestTelemetryWarningCoverageUsesDeclaredClosedChannel(t *testing.T) {
 }
 
 func TestTelemetryExactDistributionAndFixedKnowledgeCut(t *testing.T) {
+	t.Parallel()
 	e, _, command := publicationFixture(t, nil)
 	base, _ := publicationRun(t, e, command)
 	ids := []string{}
@@ -234,6 +237,7 @@ func TestTelemetryExactDistributionAndFixedKnowledgeCut(t *testing.T) {
 }
 
 func TestTelemetryUTCRollbackSurvivesJournalReplay(t *testing.T) {
+	t.Parallel()
 	e, _, command := publicationFixture(t, nil)
 	base, _ := publicationRun(t, e, command)
 	r := telemetryHistoryRun(t, base, "rollback", "completed", 15000)
@@ -295,6 +299,7 @@ func TestTelemetryUTCRollbackSurvivesJournalReplay(t *testing.T) {
 }
 
 func TestTelemetryCountersGaugesEventsAndMissingReplacement(t *testing.T) {
+	t.Parallel()
 	e, token, command := publicationFixture(t, func(step *flow.StepDefinition) {
 		step.Hooks["gauge_changed"] = step.Hooks["progress_changed"]
 		step.Telemetry = append(step.Telemetry, flow.Mapping{Name: "queue_depth", Revision: "1.0.0", Description: "Current queue", Hook: "gauge_changed", Kind: "gauge", Field: "/completed", Unit: "1", Aggregation: "last", Reset: "none", Dimensions: map[string]string{}}, flow.Mapping{Name: "latency", Revision: "1.0.0", Description: "Latency observations", Hook: "warning_raised", Kind: "distribution", Field: "/completed", Unit: "ms", Aggregation: "observations", Reset: "none", Dimensions: map[string]string{}})
@@ -373,6 +378,7 @@ func TestTelemetryCountersGaugesEventsAndMissingReplacement(t *testing.T) {
 }
 
 func TestTelemetryCohortEventAndCompletionWindows(t *testing.T) {
+	t.Parallel()
 	e, _, command := publicationFixture(t, nil)
 	base, _ := publicationRun(t, e, command)
 	r := telemetryHistoryRun(t, base, "window", "running", 5)
@@ -427,6 +433,7 @@ func TestTelemetryCohortEventAndCompletionWindows(t *testing.T) {
 }
 
 func TestCoreTelemetryPreparationFailureAttribution(t *testing.T) {
+	t.Parallel()
 	e, workflow := coreDriverFixture(t, "pass")
 	before := telemetryReport(t, e, telemetryQuery("records", "core.diagnostics"))
 	if before.CalculatorRevision != TelemetryCalculatorRevision || len(before.AsOf) != 1 {
@@ -508,6 +515,7 @@ func TestCoreTelemetryPreparationFailureAttribution(t *testing.T) {
 }
 
 func TestCoreTelemetryControlStageDiagnostic(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	definitions, _, err := Builtins()
 	if err != nil {
@@ -590,6 +598,7 @@ func telemetrySamples(t *testing.T, e *Engine, values []float64) (int64, error) 
 	return e.Store.AppendSamples(context.Background(), batch)
 }
 func TestTelemetrySavedSamplesMissingMetersAndCrashGap(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	cut, err := telemetrySamples(t, e, []float64{1, 2})
 	if err != nil {
@@ -659,6 +668,7 @@ func TestTelemetrySavedSamplesMissingMetersAndCrashGap(t *testing.T) {
 }
 
 func TestTelemetryPaginationBoundToOwnerQueryAndCut(t *testing.T) {
+	t.Parallel()
 	e, _, command := publicationFixture(t, nil)
 	base, _ := publicationRun(t, e, command)
 	ids := []string{}
@@ -734,6 +744,7 @@ func TestTelemetryPaginationBoundToOwnerQueryAndCut(t *testing.T) {
 }
 
 func TestTelemetryClosedQueriesLimitsAndCancellation(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	for _, input := range []string{`{"schema_version":"telemetry-query/1","mode":"catalog","refresh":true}`, `{"schema_version":"telemetry-query/1","mode":"catalog","filters":{"nonsense":[]}}`, `{"schema_version":"telemetry-query/1","mode":"catalog","mode":"records"}`, `{"schema_version":"telemetry-query/1","mode":"records","filters":null}`, `{"schema_version":"telemetry-query/1","mode":"records","filters":{"status":null}}`, `{"schema_version":"telemetry-query/1","mode":"records","limit":0}`} {
 		var q TelemetryQuery
@@ -758,6 +769,7 @@ func TestTelemetryClosedQueriesLimitsAndCancellation(t *testing.T) {
 }
 
 func TestTelemetryCounterLabelsCannotCreateNewAdditiveSource(t *testing.T) {
+	t.Parallel()
 	e, token, command := publicationFixture(t, nil)
 	for i, payload := range []string{`{"phase":"working","completed":10}`, `{"phase":"finished","completed":13}`} {
 		c := command
@@ -788,6 +800,7 @@ func TestTelemetryCounterLabelsCannotCreateNewAdditiveSource(t *testing.T) {
 }
 
 func TestTelemetryAggregateLimitAndDescriptorIdentity(t *testing.T) {
+	t.Parallel()
 	e, _, command := publicationFixture(t, nil)
 	base, _ := publicationRun(t, e, command)
 	other, _, otherCommand := publicationFixture(t, func(step *flow.StepDefinition) {
@@ -816,6 +829,7 @@ func TestTelemetryAggregateLimitAndDescriptorIdentity(t *testing.T) {
 // Exercise real command handlers and the actual best-effort collector. A SQL
 // trigger fails one receipt write; no sample/report fixture supplies the answer.
 func TestTelemetryActualCommandRequestsRejectionsAndPersistenceFailure(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
@@ -952,6 +966,7 @@ func TestTelemetryActualCommandRequestsRejectionsAndPersistenceFailure(t *testin
 }
 
 func TestRuntimeAdmissionStorageBudgetRefusesBeforeSlotAndAllowsStop(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "pass", 5000)
 	ctx := context.Background()
 	usage, err := e.Store.StorageUsage(ctx)
@@ -1002,6 +1017,7 @@ func TestRuntimeAdmissionStorageBudgetRefusesBeforeSlotAndAllowsStop(t *testing.
 }
 
 func TestTelemetryReadOnlyFixedCutWhileControlWriterCommits(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "pass", 5000)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -1158,6 +1174,7 @@ func telemetryCrashQuery(cut *int64) TelemetryQuery {
 }
 
 func TestTelemetryCrashPreservesFactsAndCutsButNotQueuedSamples(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	root := e.Root
 	if err := e.Close(); err != nil {
@@ -1279,6 +1296,7 @@ func TestTelemetryCrashPreservesFactsAndCutsButNotQueuedSamples(t *testing.T) {
 }
 
 func TestTelemetryCrashHelper(t *testing.T) {
+	t.Parallel()
 	root := os.Getenv("PRIFLY_TELEMETRY_CRASH_HELPER")
 	if root == "" {
 		return
@@ -1330,6 +1348,7 @@ func TestTelemetryCrashHelper(t *testing.T) {
 // already committed. The samples now ride the command's own transaction, so a
 // command is measured exactly once, at the cut it committed.
 func TestTelemetrySamplesRecordedWithCommand(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	ctx := context.Background()
 	options.CommandID = newID("command")
@@ -1372,6 +1391,7 @@ func TestTelemetrySamplesRecordedWithCommand(t *testing.T) {
 // that read linear: the population this build qualifies for must be answered
 // inside the bound a person waits at a terminal, not eventually.
 func TestTelemetryRegressionScansItsWholePopulation(t *testing.T) {
+	t.Parallel()
 	e, _, command := publicationFixture(t, nil)
 	base, _ := publicationRun(t, e, command)
 	// The scan is bounded by records and by bytes, and for Runs of a realistic

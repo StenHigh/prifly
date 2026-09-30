@@ -2,6 +2,7 @@
 """Keep the tagged-release publication contract explicit in GitHub Actions."""
 
 from pathlib import Path
+import re
 import sys
 
 
@@ -79,8 +80,32 @@ def main() -> int:
         if "secrets." in job_section(release, name):
             print(f"{name} must build without the signing secret", file=sys.stderr)
             return 1
-    if 'tags-ignore: ["**"]' not in verify or "make ci-check" not in verify or "make e2e" not in verify:
-        print("verify workflow must run the product gates for branches and skip release tags", file=sys.stderr)
+    if 'tags-ignore: ["**"]' not in verify:
+        print("verify workflow must run for branches and skip release tags", file=sys.stderr)
+        return 1
+    # The everyday gate is split into jobs; splitting must not drop a check.
+    # Every target of ci-check runs in verify -- `test` as the engine shards
+    # plus every other package -- and qualify runs race and the full e2e.
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    ci_check = next(line for line in makefile.splitlines() if line.startswith("ci-check:")).split(":", 1)[1].split()
+    if not ci_check:
+        print("Makefile ci-check lists no targets; nothing proves verify runs them", file=sys.stderr)
+        return 1
+    static = [line for line in verify.splitlines() if "run: make " in line and "test-" not in line]
+    missing = [target for target in ci_check if target != "test" and not any(f" {target} " in line + " " for line in static)]
+    shards = re.search(r"shard: \[([0-9, ]+)\]", verify)
+    count = re.search(r"SHARDS=([0-9]+)", verify)
+    if not shards or not count or [int(x) for x in shards.group(1).split(",")] != list(range(int(count.group(1)))):
+        missing.append("test-shard over every shard 0..SHARDS-1")
+    for needed in ("make test-rest", "make test-shard"):
+        if needed not in verify:
+            missing.append(needed)
+    if missing:
+        print("verify workflow drops everyday checks:", *missing, sep="\n- ", file=sys.stderr)
+        return 1
+    qualify = (WORKFLOWS / "qualify.yml").read_text(encoding="utf-8")
+    if "workflow_dispatch:" not in qualify or "push:" in qualify or "make race" not in qualify or "make e2e" not in qualify:
+        print("qualify workflow must be dispatched by hand and run the race detector and the full e2e", file=sys.stderr)
         return 1
     installer = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
     # A first install trusts HTTPS to GitHub and nothing else, so the one thing

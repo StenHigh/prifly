@@ -28,6 +28,7 @@ func publicationComposition(readPolicy string) *Plan {
 }
 
 func TestOncePublicationRequiresDeclaredSubscriberAccess(t *testing.T) {
+	t.Parallel()
 	err := publicationComposition("owner").checkPublicationCompositions()
 	p := expectProblem(t, err, "publication_read_forbidden")
 	if p.Path != "/definition/stages/fan/branches/1/workflow_ref@/definition/stages/await_document/source_ref@test:source/document/hook" {
@@ -39,6 +40,7 @@ func TestOncePublicationRequiresDeclaredSubscriberAccess(t *testing.T) {
 }
 
 func TestEachPublicationRequiresOneDirectRepeat(t *testing.T) {
+	t.Parallel()
 	root := publicationComposition("declared_subscribers")
 	producer := root.Branches["fan"]["producer"]
 	hook := producer.Steps["produce"].Hooks["document_created"]
@@ -65,6 +67,7 @@ func TestEachPublicationRequiresOneDirectRepeat(t *testing.T) {
 }
 
 func TestPublicationSourceSchemaIsClosed(t *testing.T) {
+	t.Parallel()
 	source := PublicationSourceDefinition{
 		SchemaVersion: PublicationSourceVersion, ID: "test:source/document", Version: "1.0.0", Mode: "once",
 		ProducerBranchID: "producer", ProducerStageID: "produce", Hook: "document_created",
@@ -85,6 +88,7 @@ func TestPublicationSourceSchemaIsClosed(t *testing.T) {
 }
 
 func TestPublicationStreamSourceSchemaIsClosed(t *testing.T) {
+	t.Parallel()
 	ref := Ref{ID: "core:schema/transport", Version: "1.0.0", Digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
 	source := PublicationSourceDefinition{
 		SchemaVersion: PublicationStreamSourceVersion, ID: "test:source/documents", Version: "1.0.0", Mode: "each_publication",
@@ -109,6 +113,7 @@ func TestPublicationStreamSourceSchemaIsClosed(t *testing.T) {
 }
 
 func TestNewOnlyPublicationSourcesAreSeparateClosedContracts(t *testing.T) {
+	t.Parallel()
 	ref := Ref{ID: "core:schema/transport", Version: "1.0.0", Digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
 	once := PublicationSourceDefinition{
 		SchemaVersion: PublicationNewOnlySourceVersion, ID: "test:source/new-document", Version: "1.0.0", Mode: "once",
@@ -136,6 +141,7 @@ func TestNewOnlyPublicationSourcesAreSeparateClosedContracts(t *testing.T) {
 }
 
 func TestTerminalFailurePublicationSourcesAreSeparateClosedContracts(t *testing.T) {
+	t.Parallel()
 	ref := Ref{ID: "core:schema/transport", Version: "1.0.0", Digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
 	once := PublicationSourceDefinition{SchemaVersion: PublicationFailureSourceVersion, ID: "test:source/failing-document", Version: "1.0.0", Mode: "once", ProducerBranchID: "producer", ProducerStageID: "produce", Hook: "document_created", HookSchemaRef: ref, ItemKey: "item", Initial: "retained", ProducerFailure: "interrupt_on_terminal_failure"}
 	if err := ValidateProtocol("PublicationSourceDefinitionV5", encoded(t, once)); err != nil {
@@ -154,6 +160,7 @@ func TestTerminalFailurePublicationSourcesAreSeparateClosedContracts(t *testing.
 }
 
 func TestBlobPublicationSourcesAreSeparateClosedContracts(t *testing.T) {
+	t.Parallel()
 	ref := Ref{ID: "core:schema/blob-descriptor", Version: "1.0.0", Digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
 	once := PublicationSourceDefinition{SchemaVersion: PublicationBlobSourceVersion, ID: "test:source/blob", Version: "1.0.0", Mode: "once", ProducerBranchID: "producer", ProducerStageID: "produce", Hook: "document_created", HookSchemaRef: ref, ItemKey: "item", Initial: "retained", ProducerFailure: "wait_until_timeout", Format: "blob", MediaTypes: []string{"text/plain"}}
 	if err := ValidateProtocol("PublicationSourceDefinitionV7", encoded(t, once)); err != nil {

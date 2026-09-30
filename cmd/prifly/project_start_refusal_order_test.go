@@ -118,6 +118,7 @@ func fillRegistry(t *testing.T, authority string, entries int) {
 }
 
 func TestProjectStartRefusesAFullRegistryBeforeItsSummary(t *testing.T) {
+	t.Parallel()
 	root, authority := singleLaunchFixture(t)
 	// Fill the authority's own registry to the bound: this launch's edition
 	// is what tips it over.
@@ -240,6 +241,7 @@ func singleEditions(t *testing.T, authority string) map[string]string {
 // in progress holds, never the newest earlier one, shown in the review before
 // anything changes, and only in the transaction that trusts the new edition.
 func TestProjectStartWithdrawsOldEditionsToFitTheRegistry(t *testing.T) {
+	t.Parallel()
 	root, authority := singleLaunchFixture(t)
 	if code, _, stderr := runCLI(t, "--project", authority, "capacity", "set", "--capacity", "4", "--reason", "Runs side by side"); code != 0 {
 		t.Fatalf("capacity: %s", stderr)

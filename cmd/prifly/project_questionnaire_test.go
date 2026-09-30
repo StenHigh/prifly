@@ -262,6 +262,7 @@ func TestCLIProjectQuestionnaireRejectsInvalidSelections(t *testing.T) {
 // Until 0.13.10 there was no way to ask this at all -- capacity_conflict creates
 // and queues a Run, so the question changed its own answer.
 func TestAdmissionPreviewNamesTheRefusalOnlyWhenNoSlotIsFree(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name          string
 		capacity      int64

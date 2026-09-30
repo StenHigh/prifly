@@ -19,6 +19,7 @@ import (
 // authority database's write lock. Nothing is injected into the engine: the
 // contention is the one SQLite itself reports to the next writer.
 func TestAuthorityWriteLockHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("AUTHORITY_LOCK_HELPER") != "1" {
 		return
 	}
@@ -93,6 +94,7 @@ func holdAuthorityWriteLock(t *testing.T, e *Engine) (release func()) {
 // recorded at all, the step fails as an authority failure that no declared
 // error handler consumes.
 func TestBusyAuthorityRetriesAndNeverRoutesOnError(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"retried", "unrecorded"} {
 		t.Run(name, func(t *testing.T) {
 			e, workflow := coreDriverFixture(t, "pass")
@@ -171,6 +173,7 @@ func TestBusyAuthorityRetriesAndNeverRoutesOnError(t *testing.T) {
 // invalid output, and no declared error route may consume it. The recorded
 // cause is what a reader needs to fix the storage.
 func TestUnavailableBlobStoreAtSettlementIsAnAuthorityFailure(t *testing.T) {
+	t.Parallel()
 	e, workflow := coreDriverFixture(t, "commit-wait")
 	runID := coreDriverStart(t, e, workflow)
 	ctx := context.Background()

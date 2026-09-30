@@ -37,6 +37,7 @@ func compileRepeatFixture(t *testing.T, root, body WorkflowRevision, registry Re
 }
 
 func TestCoreRepeatExactBodyAndBaselineWire(t *testing.T) {
+	t.Parallel()
 	root, body, registry := repeatBindingFixture(t)
 	p, err := compileRepeatFixture(t, root, body, registry)
 	if err != nil {
@@ -66,6 +67,7 @@ func TestCoreRepeatExactBodyAndBaselineWire(t *testing.T) {
 }
 
 func TestWorkflowRevisionV3OwnsPublicationBindings(t *testing.T) {
+	t.Parallel()
 	root, _, _ := repeatBindingFixture(t)
 	source := Ref{ID: "test:source/documents", Version: "1.0.0", Digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
 	body := Ref{ID: "test:workflow/body", Version: "1.0.0", Digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111"}
@@ -85,6 +87,7 @@ func TestWorkflowRevisionV3OwnsPublicationBindings(t *testing.T) {
 }
 
 func TestPublicationBindingOnlyFeedsCall(t *testing.T) {
+	t.Parallel()
 	stage := map[string]any{"kind": "step", "input_bindings": map[string]any{"document": map[string]any{"from": "publication", "stage_id": "await_document"}}}
 	workflow := map[string]any{
 		"schema_version": "3", "definition": map[string]any{"stages": map[string]any{"consume": stage}},
@@ -154,6 +157,7 @@ func streamRepeatCompilerFixture(t *testing.T) (*Plan, *Plan, Stage) {
 }
 
 func TestEachPublicationRepeatRequiresExactLowering(t *testing.T) {
+	t.Parallel()
 	root, body, stage := streamRepeatCompilerFixture(t)
 	if err := root.checkStreamRepeat(stage, "publications", body, "/definition/stages/publications"); err != nil {
 		t.Fatal(err)
@@ -203,6 +207,7 @@ func TestEachPublicationRepeatRequiresExactLowering(t *testing.T) {
 }
 
 func TestCoreRepeatPostBodyDecisionOrder(t *testing.T) {
+	t.Parallel()
 	root, body, registry := repeatBindingFixture(t)
 	body.AllowedOutcomes = []string{"no_work", "rejected"}
 	stage := root.Definition.Stages["repeat"]
@@ -279,6 +284,7 @@ func TestCoreRepeatPostBodyDecisionOrder(t *testing.T) {
 }
 
 func TestCoreRepeatConfiguredLimitOnlyNarrowsDeclaredBound(t *testing.T) {
+	t.Parallel()
 	root, body, registry := repeatBindingFixture(t)
 	root.SchemaVersion = "2"
 	input := root.Inputs["value"]
@@ -322,6 +328,7 @@ func TestCoreRepeatConfiguredLimitOnlyNarrowsDeclaredBound(t *testing.T) {
 }
 
 func TestCoreRepeatBindingsScopesAndConfiguration(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, code string
 		edit       func(*WorkflowRevision, *WorkflowRevision, *Stage)
@@ -404,6 +411,7 @@ func TestCoreRepeatBindingsScopesAndConfiguration(t *testing.T) {
 }
 
 func TestCoreRepeatSharedBoundsWithoutUnrolling(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                        string
 		iterations, steps, controls int64
@@ -455,6 +463,7 @@ func TestCoreRepeatSharedBoundsWithoutUnrolling(t *testing.T) {
 }
 
 func TestCoreRepeatOutputAvailabilityPerExit(t *testing.T) {
+	t.Parallel()
 	for _, route := range []string{"on_complete", "on_limit", "on_unknown", "on_error", "next_bindings"} {
 		for _, optional := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/optional_%v", route, optional), func(t *testing.T) {
@@ -513,6 +522,7 @@ func TestCoreRepeatOutputAvailabilityPerExit(t *testing.T) {
 }
 
 func TestCoreRepeatParentFactsAndBodyScope(t *testing.T) {
+	t.Parallel()
 	root, body, registry := repeatBindingFixture(t)
 	ref := registerCallWorkflow(t, registry, body)
 	before := callStage(ref, "repeat")
@@ -552,6 +562,7 @@ func TestCoreRepeatParentFactsAndBodyScope(t *testing.T) {
 }
 
 func TestCoreRepeatOutcomeCostsAndFailedPrefix(t *testing.T) {
+	t.Parallel()
 	for _, handled := range []bool{false, true} {
 		t.Run(fmt.Sprintf("handled_%v", handled), func(t *testing.T) {
 			root, registry := callWorkflow(t, "test:workflow/repeat-cost")
@@ -595,6 +606,7 @@ func TestCoreRepeatOutcomeCostsAndFailedPrefix(t *testing.T) {
 }
 
 func TestCoreRepeatAliasesAndMixedCycles(t *testing.T) {
+	t.Parallel()
 	root, registry := callWorkflow(t, "test:workflow/repeat-alias")
 	body, _ := callWorkflow(t, "test:workflow/repeat-alias-body")
 	leaf, _ := callWorkflow(t, "test:workflow/repeat-alias-leaf")
@@ -639,6 +651,7 @@ func TestCoreRepeatAliasesAndMixedCycles(t *testing.T) {
 }
 
 func TestCoreRepeatPreflightAndLiteralSeparation(t *testing.T) {
+	t.Parallel()
 	for _, raw := range []string{"1.0000000000000000001", "1e-999999999"} {
 		root, registry := callWorkflow(t, "test:workflow/repeat-raw")
 		body, _ := callWorkflow(t, "test:workflow/repeat-raw-body")
@@ -685,6 +698,7 @@ func TestCoreRepeatPreflightAndLiteralSeparation(t *testing.T) {
 }
 
 func TestCoreRepeatIterationProjectionAndPredicateTypes(t *testing.T) {
+	t.Parallel()
 	root, body, registry := repeatBindingFixture(t)
 	register := func(id, raw string) Ref {
 		t.Helper()
@@ -765,6 +779,7 @@ func TestCoreRepeatIterationProjectionAndPredicateTypes(t *testing.T) {
 }
 
 func TestCoreRepeatFieldEvidenceAndNestedBounds(t *testing.T) {
+	t.Parallel()
 	ref := FieldRef{From: "iteration_output", Port: "report", Pointer: "/" + strings.Repeat("𐀀", 2047)}
 	allowed := MaxPredicateFieldBytes / len(encoded(t, ref))
 	for _, count := range []int{allowed, allowed + 1} {

@@ -28,6 +28,7 @@ var productMarkers = []string{"aif:", "aif-", "ai factory"}
 // reads every string literal of the engine's non-test code and refuses any that
 // names a workflow, package or step outside the core namespace.
 func TestEngineNamesNoWorkflowOfItsOwn(t *testing.T) {
+	t.Parallel()
 	files, literals := 0, 0
 	var found []string
 	for _, root := range []string{"../../internal", "../../cmd"} {

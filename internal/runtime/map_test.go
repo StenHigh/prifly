@@ -103,6 +103,7 @@ func mapActivation(t *testing.T, r Run) *Activation {
 // anywhere leaves no half-processed expansion behind: no branch was ever
 // created, so there is no "already processed half" to reason about.
 func TestMapChecksTheWholeCollectionBeforeAnyChild(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, collection, code string
 	}{
@@ -146,6 +147,7 @@ func TestMapChecksTheWholeCollectionBeforeAnyChild(t *testing.T) {
 // against the port's own schema. The stage is never activated, so "before the
 // first child" is not even the question here.
 func TestMapCollectionMustBeAList(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := mapFixture(t, `{"id":"a"}`, nil)
 	writeRuntimeJSON(t, filepath.Join(e.Root, options.WorkflowFile), workflow)
 	writeRuntimeJSON(t, filepath.Join(e.Root, "prifly.json"), e.Config)
@@ -159,6 +161,7 @@ func TestMapCollectionMustBeAList(t *testing.T) {
 // Identity is typed. The number 1 and the string "1" are different items, so a
 // collection holding both is a legitimate two-item expansion, not a duplicate.
 func TestMapItemIdentityCarriesItsType(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := mapFixture(t, `[{"id":1},{"id":"1"}]`, nil)
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -183,6 +186,7 @@ func TestMapItemIdentityCarriesItsType(t *testing.T) {
 // An empty collection takes its own declared route and produces no summary.
 // Calling it a satisfied join would be a claim about branches that never ran.
 func TestMapEmptyCollectionTakesItsDeclaredRoute(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := mapFixture(t, `[]`, nil)
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -206,6 +210,7 @@ func TestMapEmptyCollectionTakesItsDeclaredRoute(t *testing.T) {
 // Each item is bound to the body's item port from the seal, with provenance
 // back to the exact collection it was cut from.
 func TestMapItemsCarryTheirProvenance(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := mapFixture(t, `[{"id":"a"},{"id":"b"},{"id":"c"}]`, nil)
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)
@@ -247,6 +252,7 @@ func TestMapItemsCarryTheirProvenance(t *testing.T) {
 
 // A run whose closure holds a map selects the state that can record a seal.
 func TestMapClosureSelectsTheSealedState(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := mapFixture(t, `[{"id":"a"}]`, nil)
 	runID := choiceStart(t, e, workflow, options)
 	r := driverRun(t, e, runID)
@@ -269,6 +275,7 @@ func TestMapClosureSelectsTheSealedState(t *testing.T) {
 // branch takes its item from the seal through sealedItem. A test could only
 // observe that with a body that waits for a host, which this fixture has not.
 func TestMapExpansionRestsOnSealedBytesNotOnTheSource(t *testing.T) {
+	t.Parallel()
 	original := `[{"id":"a"},{"id":"b"},{"id":"c"}]`
 	e, workflow, options := mapFixture(t, original, nil)
 	runID := choiceStart(t, e, workflow, options)
@@ -321,6 +328,7 @@ func TestMapExpansionRestsOnSealedBytesNotOnTheSource(t *testing.T) {
 // same Run, counted in the same journal, and its simultaneity is the Run's, not
 // a new allowance multiplied by the number of items.
 func TestMapItemsSpendTheRunsOwnBudget(t *testing.T) {
+	t.Parallel()
 	e, workflow, options := mapFixture(t, `[{"id":"a"},{"id":"b"},{"id":"c"}]`, nil)
 	runID := choiceStart(t, e, workflow, options)
 	r := driveParallel(t, e, runID)

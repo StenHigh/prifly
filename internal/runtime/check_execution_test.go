@@ -228,6 +228,7 @@ func executeCheckExecution(t *testing.T, e *Engine, runID, checkID string) {
 }
 
 func TestCheckExecutionNativeReportsAreNotProcessStatuses(t *testing.T) {
+	t.Parallel()
 	for _, verdict := range []string{"pass", "fail", "inconclusive"} {
 		t.Run(verdict, func(t *testing.T) {
 			e, runID := checkExecutionFixture(t, verdict, 10000)
@@ -270,6 +271,7 @@ func TestCheckExecutionNativeReportsAreNotProcessStatuses(t *testing.T) {
 }
 
 func TestCheckExecutionNativeRejectsInvalidReportsAndProcessFailures(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct{ mode, failure string }{
 		{"malformed", "invalid_json"},
 		{"missing", "missing_check_result"},
@@ -310,6 +312,7 @@ func TestCheckExecutionNativeRejectsInvalidReportsAndProcessFailures(t *testing.
 }
 
 func TestCheckExecutionMaterializedDriftNeverLaunches(t *testing.T) {
+	t.Parallel()
 	for _, path := range []string{"context.json", "context/manifest.json", "context/rendered.json", ContextSourcePath(0)} {
 		t.Run(path, func(t *testing.T) {
 			e, runID := checkExecutionFixture(t, "pass", 10000)
@@ -338,6 +341,7 @@ func TestCheckExecutionMaterializedDriftNeverLaunches(t *testing.T) {
 }
 
 func TestCheckExecutionRejectsSelfConsistentForeignRendering(t *testing.T) {
+	t.Parallel()
 	for _, changed := range []string{"request", "digest", "envelope"} {
 		t.Run(changed, func(t *testing.T) {
 			e, runID := checkExecutionFixture(t, "pass", 10000)
@@ -405,6 +409,7 @@ func TestCheckExecutionRejectsSelfConsistentForeignRendering(t *testing.T) {
 }
 
 func TestCheckExecutionStopsFenceAdmissionAndDispatch(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"admission", "dispatch"} {
 		for _, kind := range []string{"pause", "cancel"} {
 			t.Run(phase+"/"+kind, func(t *testing.T) {
@@ -466,6 +471,7 @@ func TestCheckExecutionStopsFenceAdmissionAndDispatch(t *testing.T) {
 }
 
 func TestCheckExecutionPendingClockIsNeverRebased(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"new_session", "elapsed"} {
 		t.Run(mode, func(t *testing.T) {
 			e, runID := checkExecutionFixture(t, "pass", 10000)
@@ -497,6 +503,7 @@ func TestCheckExecutionPendingClockIsNeverRebased(t *testing.T) {
 }
 
 func TestCheckExecutionQuotaProtectsAdmissionButNotSettlement(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"admission", "settlement"} {
 		t.Run(boundary, func(t *testing.T) {
 			e, runID := checkExecutionFixture(t, "pass", 10000)
@@ -551,6 +558,7 @@ func TestCheckExecutionQuotaProtectsAdmissionButNotSettlement(t *testing.T) {
 }
 
 func TestCheckExecutionNativeCancellationAndOriginalDeadline(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"cancel", "deadline"} {
 		t.Run(boundary, func(t *testing.T) {
 			// The checker is a separate race-instrumented test binary. Its
@@ -699,6 +707,7 @@ func checkExecutionCrashWait(t *testing.T, e *Engine, runID string, ready func(R
 }
 
 func TestCheckExecutionCrashRecoveryNeverRepeatsDispatch(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"before_start", "running", "settled"} {
 		t.Run(boundary, func(t *testing.T) {
 			mode := "pass"
@@ -834,6 +843,7 @@ func TestCheckExecutionCrashRecoveryNeverRepeatsDispatch(t *testing.T) {
 }
 
 func TestCheckExecutionCrashHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("CHECK_CRASH_HELPER") != "1" {
 		return
 	}
@@ -887,6 +897,7 @@ func TestCheckExecutionCrashHelper(t *testing.T) {
 }
 
 func TestCheckExecutionWorkerHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("CHECK_EXECUTION_HELPER") != "1" {
 		return
 	}

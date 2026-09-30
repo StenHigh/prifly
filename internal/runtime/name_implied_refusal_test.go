@@ -12,6 +12,7 @@ import (
 // The review is the one place that exists to have made that comparison for the
 // reader, and it has to make it on the same side of the bound the refusal does.
 func TestTheBudgetNamesTheRefusalItsOwnNumbersImply(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		entries int
 		refusal string
@@ -40,6 +41,7 @@ func TestTheBudgetNamesTheRefusalItsOwnNumbersImply(t *testing.T) {
 // that is one is recorded in its own provenance. Refusing without naming it
 // sent a host to rebuild the chain by hand from a fact the answer was holding.
 func TestARefusedContinuationSourceNamesTheOneItCameFrom(t *testing.T) {
+	t.Parallel()
 	classic := Run{ID: "run:classic"}
 	first := Run{ID: "run:first", Fork: &ForkProvenance{SourceRunID: classic.ID, Reason: ContinuationReason}}
 	second := Run{ID: "run:second", Fork: &ForkProvenance{SourceRunID: first.ID, Reason: ContinuationReason}}
@@ -72,6 +74,7 @@ func TestARefusedContinuationSourceNamesTheOneItCameFrom(t *testing.T) {
 // The walk is bounded, and the bound is the property being claimed: no stored
 // Run can be made to point at itself, so nothing else can demonstrate it.
 func TestTheContinuationWalkIsBounded(t *testing.T) {
+	t.Parallel()
 	chain := map[string]Run{}
 	for i := 0; i <= continuationChainLimit+4; i++ {
 		id := "run:" + strconv.Itoa(i)
@@ -96,6 +99,7 @@ func TestTheContinuationWalkIsBounded(t *testing.T) {
 // The refusal keeps its code and grows only its detail: a code inside error
 // text is what refusal-check exists to refuse.
 func TestTheNamedSourceIsDetailAndNotANewCode(t *testing.T) {
+	t.Parallel()
 	r := Run{ID: "run:continuation", Status: "completed", Outcome: stringPointer("partial"),
 		Fork: &ForkProvenance{SourceRunID: "run:classic", Reason: ContinuationReason}}
 	target := &flow.Plan{}

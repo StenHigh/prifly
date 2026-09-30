@@ -29,6 +29,7 @@ func importedPilotPackage(t *testing.T) (*Engine, context.Context, PackageEntry,
 }
 
 func TestPackageVerifyReportsDriftWithoutRepairingIt(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	report, err := e.VerifyPackage(ctx, pkg.Ref.ID, pkg.Ref.Version)
 	if err != nil {
@@ -59,6 +60,7 @@ func TestPackageVerifyReportsDriftWithoutRepairingIt(t *testing.T) {
 }
 
 func TestInspectPackageRequiresTheExactSealedManifest(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	inspection, err := e.InspectPackage(ctx, pkg.Ref)
 	if err != nil {
@@ -87,6 +89,7 @@ func TestInspectPackageRequiresTheExactSealedManifest(t *testing.T) {
 // PKG-010: uninstall closes a package for new resolution and must not break a
 // Run that still holds it.
 func TestRemoveRefusesWhileARunHoldsThePackageAndStopsResolutionAfter(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	opened, err := Open(e.Root, false)
 	if err != nil {
@@ -128,6 +131,7 @@ func TestRemoveRefusesWhileARunHoldsThePackageAndStopsResolutionAfter(t *testing
 // answer to "this identity must be free again", and it already refuses while a
 // Run still holds the package, so it is the one place the release belongs.
 func TestRemovingAPackageReleasesTheIdentitiesItPinned(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	ref := pkg.Components[0].Ref
 	original := []byte(`{"first":true}`)
@@ -155,6 +159,7 @@ func TestRemovingAPackageReleasesTheIdentitiesItPinned(t *testing.T) {
 // component still be resolvable, instead of one that is. The documented way to
 // replace a package could not be completed.
 func TestAComponentNeedsOneResolvableSupplierNotEveryPast(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	refs := []flow.Ref{pkg.Components[0].Ref}
 	if _, refusal, err := e.packageAdmissionGate(ctx, refs, true); err != nil || refusal != nil {
@@ -183,6 +188,7 @@ func TestAComponentNeedsOneResolvableSupplierNotEveryPast(t *testing.T) {
 // reader the wrong edition of their own step's instructions, and they found out
 // only by comparing digests against their envelope.
 func TestPackageComponentRefusesWhenTwoPackagesDeclareIt(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	component := pkg.Components[0].Ref
 	// One trusted package: the component reads back as itself.
@@ -213,6 +219,7 @@ func TestPackageComponentRefusesWhenTwoPackagesDeclareIt(t *testing.T) {
 }
 
 func TestRevocationIsTerminalAndNotUndoneByReimport(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, source := importedPilotPackage(t)
 	if _, err := e.SetPackageStatus(ctx, PackageLifecycleRequest{CommandID: "command:revoke", ID: pkg.Ref.ID, Version: pkg.Ref.Version, Status: PackageRevoked, Reason: "withdrawn after an incident"}); err != nil {
 		t.Fatal(err)
@@ -234,6 +241,7 @@ func TestRevocationIsTerminalAndNotUndoneByReimport(t *testing.T) {
 }
 
 func TestQuarantineStopsResolutionAndIsReversible(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	if _, err := e.SetPackageStatus(ctx, PackageLifecycleRequest{CommandID: "command:quarantine", ID: pkg.Ref.ID, Version: pkg.Ref.Version, Status: PackageQuarantined, Reason: "under review"}); err != nil {
 		t.Fatal(err)
@@ -263,6 +271,7 @@ func TestQuarantineStopsResolutionAndIsReversible(t *testing.T) {
 }
 
 func TestForkReuseTrustRefusesAWithdrawnSourcePackage(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	source := Run{Definitions: []PinnedDefinition{{Ref: pkg.Components[0].Ref}}}
 	if pin, err := e.reuseTrustPin(ctx, source, []ArtifactRef{{ArtifactID: "artifact:result", Revision: 1, Digest: "sha256:result"}}); err != nil || pin == nil || pin.Key != AuthorityPackagesKey {
@@ -276,6 +285,7 @@ func TestForkReuseTrustRefusesAWithdrawnSourcePackage(t *testing.T) {
 }
 
 func TestRevokedPackageBlocksAdmissionWithoutReopeningEngine(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	run := Run{Definitions: []PinnedDefinition{{Ref: pkg.Components[0].Ref}}}
 	pin, blocked, err := e.revokedPin(ctx, run)
@@ -293,6 +303,7 @@ func TestRevokedPackageBlocksAdmissionWithoutReopeningEngine(t *testing.T) {
 }
 
 func TestNewRunRequiresCurrentPackageResolution(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	refs := []flow.Ref{pkg.Components[0].Ref}
 	pin, blocked, err := e.packageAdmissionGate(ctx, refs, true)
@@ -310,6 +321,7 @@ func TestNewRunRequiresCurrentPackageResolution(t *testing.T) {
 }
 
 func TestSideBySideVersionsAndComponentCollision(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	// The same component identity from a second resolvable package is refused.
 	collide := packageSource(t, map[string]string{"skills/other/SKILL.md": "# Other\n"}, []map[string]any{
@@ -345,6 +357,7 @@ func TestSideBySideVersionsAndComponentCollision(t *testing.T) {
 // A dependency must already be installed and still resolvable. Nothing is
 // fetched, so a missing link is an explainable refusal naming the chain.
 func TestPackageDependencyMustBeInstalledAndResolvable(t *testing.T) {
+	t.Parallel()
 	e, ctx, base, _ := importedPilotPackage(t)
 	dependent := packageSource(t, map[string]string{"skills/extra/SKILL.md": "# Extra\n"}, []map[string]any{
 		{"kind": "context", "ref": map[string]any{"id": "aif:context/extra-skill", "version": "1.0.0", "digest": rawDigest([]byte("# Extra\n"))}, "path": "skills/extra/SKILL.md"},
@@ -378,6 +391,7 @@ func TestPackageDependencyMustBeInstalledAndResolvable(t *testing.T) {
 // PKG-010: withdrawing a package another one needs is refused, and revoking it
 // reaches the dependents through the closure instead of leaving them resolving.
 func TestWithdrawalRespectsTheDependencyClosure(t *testing.T) {
+	t.Parallel()
 	e, ctx, base, _ := importedPilotPackage(t)
 	dependent := packageSource(t, map[string]string{"skills/extra/SKILL.md": "# Extra\n"}, []map[string]any{
 		{"kind": "context", "ref": map[string]any{"id": "aif:context/extra-skill", "version": "1.0.0", "digest": rawDigest([]byte("# Extra\n"))}, "path": "skills/extra/SKILL.md"},
@@ -419,6 +433,7 @@ func TestWithdrawalRespectsTheDependencyClosure(t *testing.T) {
 // Stage acceptance: a failed installation leaves the working directory as it
 // was. Nothing half-sealed survives, and the previously resolvable set stands.
 func TestFailedInstallationLeavesTheWorkingDirectoryIntact(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	before, err := os.ReadDir(filepath.Join(e.Root, filepath.FromSlash(PackageRoot)))
 	if err != nil {
@@ -459,6 +474,7 @@ func TestFailedInstallationLeavesTheWorkingDirectoryIntact(t *testing.T) {
 // The shape of a declared output slot lives in the package that declared it.
 // Reachable only as a file inside the authority, it is storage, not a contract.
 func TestPackageComponentIsReadableByItsDeclaredID(t *testing.T) {
+	t.Parallel()
 	e, ctx, entry, _ := importedPilotPackage(t)
 	manifest, err := os.ReadFile(filepath.Join(e.Root, filepath.FromSlash(entry.Root), PackageManifestFile))
 	if err != nil {
@@ -488,6 +504,7 @@ func TestPackageComponentIsReadableByItsDeclaredID(t *testing.T) {
 // package became unreadable without naming an edition, and every edition held
 // the same content. Identity is the digest.
 func TestIdenticalComponentBytesUnderTwoVersionsStayReadable(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	component := pkg.Components[0].Ref
 	body := "---\nname: aif-plan\n---\n\n# Plan\n"
@@ -513,6 +530,7 @@ func TestIdenticalComponentBytesUnderTwoVersionsStayReadable(t *testing.T) {
 // "more than one, including A and B" reads as "exactly two" when seven trusted
 // packages declare the id. The count is what says the list is cut short.
 func TestAmbiguityRefusalNamesHowManyDeclareIt(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	component := pkg.Components[0].Ref
 	for index, edition := range []string{"1.1.0", "1.2.0"} {
@@ -538,6 +556,7 @@ func TestAmbiguityRefusalNamesHowManyDeclareIt(t *testing.T) {
 // with "no package declares this component" sent the reader to look for the
 // component, which is installed twice over.
 func TestNamingAnUninstalledEditionSaysSo(t *testing.T) {
+	t.Parallel()
 	e, ctx, pkg, _ := importedPilotPackage(t)
 	component := pkg.Components[0].Ref
 	_, _, err := e.PackageComponent(ctx, component.ID, pkg.Ref.ID+"@9.9.9")
@@ -558,6 +577,7 @@ func TestNamingAnUninstalledEditionSaysSo(t *testing.T) {
 // replaced keep theirs. The pilot reached it in one evening over seven package
 // releases, and the refusal named the limit without naming the release.
 func TestDependencyLimitNamesTheEditionsThatFillIt(t *testing.T) {
+	t.Parallel()
 	packages := []PackageEntry{}
 	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0"} {
 		packages = append(packages, PackageEntry{
@@ -617,6 +637,7 @@ func buildProvenancePackage(t *testing.T, authorVersion, buildKey, installedVers
 // key. The mapping was sealed inside the package all along and nothing showed
 // it, so a reader holding the authoring version had nowhere to go.
 func TestPackageListNamesTheAuthoringEditionWithoutMakingItAnAddress(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	const authorVersion = "1.27.1"
@@ -668,6 +689,7 @@ func TestPackageListNamesTheAuthoringEditionWithoutMakingItAnAddress(t *testing.
 // that no longer match the digest the manifest recorded are not a quieter kind
 // of provenance: they are what package verify exists to report.
 func TestChangedProvenanceBytesClaimNoAuthoringEdition(t *testing.T) {
+	t.Parallel()
 	e := contextRegistryRuntime(t)
 	ctx := context.Background()
 	const built = "0.0.0-b1.gtioeldpilotbuildkeyaaaaaaaaaaaaaaaaaaaaaaaaaa"

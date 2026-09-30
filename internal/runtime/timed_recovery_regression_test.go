@@ -16,8 +16,7 @@ import (
 )
 
 func TestCancelledTimedSessionSettlesSavedReport(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Parallel()
 	ctx := context.Background()
 	e, runID, _ := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "workspace_write")
 	task := handOver(t, e, runID)
@@ -58,8 +57,7 @@ func TestCancelledTimedSessionSettlesSavedReport(t *testing.T) {
 }
 
 func TestMixedTimedRunKeepsLegacyDecisionVisible(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Parallel()
 	ctx := context.Background()
 	e, _, options := timedFixture(t, flow.SessionLimits{ActiveTimeoutMS: activeMS(time.Hour.Milliseconds())}, "none")
 	data, err := os.ReadFile(filepath.Join(e.Root, "steps/plan.json"))
@@ -141,8 +139,6 @@ func TestMixedTimedRunKeepsLegacyDecisionVisible(t *testing.T) {
 }
 
 func TestResolveParkedTimedSessionDoesNotReleaseSlotTwice(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
 		wait := time.Minute.Milliseconds()
@@ -173,6 +169,7 @@ func TestResolveParkedTimedSessionDoesNotReleaseSlotTwice(t *testing.T) {
 }
 
 func TestTimedActionProposalUsesDeliveryClockAndHostPhase(t *testing.T) {
+	t.Parallel()
 	definitions, _, err := Builtins()
 	if err != nil {
 		t.Fatal(err)

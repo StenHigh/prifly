@@ -31,6 +31,7 @@ func continuationFixture(t *testing.T) (map[string]any, Registry) {
 }
 
 func TestRevisionSevenSealsCheckpointAndContinuation(t *testing.T) {
+	t.Parallel()
 	workflow, registry := continuationFixture(t)
 	plan, err := CompileProfile(encoded(t, workflow), "json", registry, CoreProfile)
 	if err != nil {
@@ -64,6 +65,7 @@ func TestRevisionSevenSealsCheckpointAndContinuation(t *testing.T) {
 }
 
 func TestRevisionSevenRefusesWhatItCannotKeep(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, code, pointer string
 		edit                func(map[string]any)
@@ -131,6 +133,7 @@ func TestRevisionSevenRefusesWhatItCannotKeep(t *testing.T) {
 // Revision 7 answers for every verdict, as revision 6 does: a declaration of
 // what a workflow keeps is no reason for its routes to answer for less.
 func TestRevisionSevenAnswersForEveryVerdict(t *testing.T) {
+	t.Parallel()
 	workflow, registry := continuationFixture(t)
 	stages(workflow)["check_first"].(map[string]any)["impossible_verdicts"] = []any{"needs_revision", "no_work"}
 	_, err := CompileProfile(encoded(t, workflow), "json", registry, CoreProfile)
@@ -143,6 +146,7 @@ func TestRevisionSevenAnswersForEveryVerdict(t *testing.T) {
 // reaches every other revision: an author writes what they mean and the
 // lowest contract that carries it is chosen.
 func TestAuthoringRaisesToRevisionSevenOnItsFields(t *testing.T) {
+	t.Parallel()
 	for _, source := range []map[string]any{
 		{"checkpoint": map[string]any{"schema_ref": "report"}},
 		{"continuation": map[string]any{"from_workflows": []any{"a:workflow/b"}, "from_outcomes": []any{"partial"}, "inputs": map[string]any{}}},
@@ -161,6 +165,7 @@ func TestAuthoringRaisesToRevisionSevenOnItsFields(t *testing.T) {
 // it may keep only the caller's shape; one the caller does not declare at all
 // would leave the Run's last checkpoint without a shape to check against.
 func TestCalledWorkflowKeepsTheCallersCheckpointShape(t *testing.T) {
+	t.Parallel()
 	root, child, registry := callBindingFixture(t)
 	ref := *root.Inputs["value"].SchemaRef
 	other := []byte(`{"type":"object"}`)
@@ -186,6 +191,7 @@ func TestCalledWorkflowKeepsTheCallersCheckpointShape(t *testing.T) {
 // resumed. It maps nothing: the declaration is which Runs, never what they
 // carry. An empty statement and the field on revision 7 are both refused.
 func TestRevisionEightSealsWhichOwnRunsResume(t *testing.T) {
+	t.Parallel()
 	workflow, registry := continuationFixture(t)
 	workflow["schema_version"] = WorkflowRevisionResumeVersion
 	workflow["resumable"] = map[string]any{"from_outcomes": []any{"partial", "rejected"}, "from_cancelled": true}

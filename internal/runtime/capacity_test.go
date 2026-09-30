@@ -8,6 +8,7 @@ import (
 // Capacity is a qualification statement, not a performance dial: this build
 // admits a bounded number of attempts at once and refuses to claim more.
 func TestAdmissionCapacityStaysWithinTheQualifiedProfile(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	capacity, held, err := e.AdmissionCapacity(ctx)
@@ -51,6 +52,7 @@ func TestAdmissionCapacityStaysWithinTheQualifiedProfile(t *testing.T) {
 // Changing how much work an authority admits at once is an admission decision,
 // so a principal who may not admit work may not raise the ceiling either.
 func TestAdmissionCapacityRequiresAdmissionAccess(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	if _, err := e.SetAdmissionCapacity(ctx, CapacityRequest{CommandID: newID("command"), Capacity: 2, Reason: "raise the ceiling"}); err != nil {
@@ -65,6 +67,7 @@ func TestAdmissionCapacityRequiresAdmissionAccess(t *testing.T) {
 // authority's records: a second run is refused by name while the single slot
 // is held, and admitted once the recorded capacity says two may run.
 func TestAdmissionCapacityBoundsConcurrentRuns(t *testing.T) {
+	t.Parallel()
 	e, _ := driverProject(t, "commit-pass", 10000)
 	ctx := context.Background()
 	first, second := driverStart(t, e), driverStart(t, e)
@@ -120,6 +123,7 @@ func TestAdmissionCapacityBoundsConcurrentRuns(t *testing.T) {
 // rather than to whoever asks next. The refusal is explicit either way: the
 // queue decides the order, it does not make a caller wait.
 func TestRefusedAdmissionJoinsTheQueueInOrder(t *testing.T) {
+	t.Parallel()
 	e, _ := driverProject(t, "commit-pass", 10000)
 	ctx := context.Background()
 	holder, early, late := driverStart(t, e), driverStart(t, e), driverStart(t, e)

@@ -104,6 +104,7 @@ func planFor(t *testing.T, e *Engine, version string) (*RegistryRetirement, flow
 // withdrawn, the newest earlier edition is kept for going back, and nothing
 // is written until the launch applies it with its own edition.
 func TestTheOldestEditionIsWithdrawnSoTheNewOneFits(t *testing.T) {
+	t.Parallel()
 	e := retirementEngine(t, MaxLocalRegistryEntries-9)
 	ctx := context.Background()
 	for _, version := range []string{"1.10.0", "1.9.0", "1.11.0"} {
@@ -156,6 +157,7 @@ func TestTheOldestEditionIsWithdrawnSoTheNewOneFits(t *testing.T) {
 // plan withdraws. Applying such a plan is refused, and nothing changes: not
 // the withdrawal, not the new edition's trust.
 func TestAPlanIsRefusedWhenARunAppearedAfterIt(t *testing.T) {
+	t.Parallel()
 	e := retirementEngine(t, MaxLocalRegistryEntries-9)
 	for _, version := range []string{"1.0.0", "2.0.0", "3.0.0"} {
 		importEdition(t, e, version, nil)
@@ -186,6 +188,7 @@ func TestAPlanIsRefusedWhenARunAppearedAfterIt(t *testing.T) {
 // When withdrawing every edition that may go is not enough, the refusal says
 // how many entries are needed and which editions stay, and why.
 func TestAPlanThatCannotMakeRoomNamesWhatStays(t *testing.T) {
+	t.Parallel()
 	e := retirementEngine(t, MaxLocalRegistryEntries-6)
 	for _, version := range []string{"1.0.0", "2.0.0"} {
 		importEdition(t, e, version, nil)

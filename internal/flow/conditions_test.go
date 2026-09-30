@@ -41,6 +41,7 @@ func conditionFixturePlan(selection string, values ...string) *Plan {
 }
 
 func TestControlScalarExactNumbers(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		raw     string
 		want    int64
@@ -78,6 +79,7 @@ func TestControlScalarExactNumbers(t *testing.T) {
 }
 
 func TestPredicateTruthAndTypes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		left, right any
@@ -167,6 +169,7 @@ func TestPredicateTruthAndTypes(t *testing.T) {
 }
 
 func TestChoiceSelection(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, selection, values, route, branch, code, errorBranch string
 		unknownRoute, defaultRoute                                bool
@@ -281,6 +284,7 @@ func conditionWorkflow(t *testing.T, choice Stage) (map[string]any, Registry) {
 }
 
 func TestPredicatePreflightLimits(t *testing.T) {
+	t.Parallel()
 	for _, depth := range []int{16, 17} {
 		t.Run(fmt.Sprintf("depth%d", depth), func(t *testing.T) {
 			predicate := conditionNested(depth)
@@ -359,6 +363,7 @@ func TestPredicatePreflightLimits(t *testing.T) {
 }
 
 func TestPredicateEvidenceBudget(t *testing.T) {
+	t.Parallel()
 	for _, total := range []int{MaxPredicateFieldBytes, MaxPredicateFieldBytes + 1} {
 		t.Run(fmt.Sprint(total), func(t *testing.T) {
 			choice := Stage{Kind: "choice", Selection: "exclusive"}
@@ -387,6 +392,7 @@ func TestPredicateEvidenceBudget(t *testing.T) {
 }
 
 func TestConditionPreflightIsScopedAndExact(t *testing.T) {
+	t.Parallel()
 	for _, raw := range []string{"1.0000000000000000001", "9007199254740990.9", "1e-1000000"} {
 		p := Predicate{Op: "eq", Left: conditionLiteral(raw), Right: conditionLiteral("1")}
 		expectProblem(t, ValidateProtocol("Predicate", encoded(t, p)), "condition_type_mismatch")
@@ -438,6 +444,7 @@ func TestConditionPreflightIsScopedAndExact(t *testing.T) {
 // contracts do not list it. What matters most here is the unknown row - the
 // absence of facts must never become a permission by being negated.
 func TestGuardNegationLeavesUnknownAlone(t *testing.T) {
+	t.Parallel()
 	for value, want := range map[string]Truth{"true": TruthFalse, "false": TruthTrue, "unknown": TruthUnknown} {
 		t.Run(value, func(t *testing.T) {
 			predicate := Predicate{Op: "not", Args: []Predicate{conditionFixturePredicate(value)}}

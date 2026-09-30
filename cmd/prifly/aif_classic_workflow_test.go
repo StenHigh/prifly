@@ -9,6 +9,7 @@ import (
 )
 
 func TestAIFClassicGateFindingsReachRepairDecision(t *testing.T) {
+	t.Parallel()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("test source path unavailable")
@@ -28,6 +29,7 @@ func TestAIFClassicGateFindingsReachRepairDecision(t *testing.T) {
 }
 
 func TestAIFClassicAndRunnerDescribeOneControlLoop(t *testing.T) {
+	t.Parallel()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("test source path unavailable")

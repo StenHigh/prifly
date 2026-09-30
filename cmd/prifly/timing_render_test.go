@@ -13,6 +13,7 @@ import (
 // session could measure, and the tree carries the wall-clock value that spans
 // the whole attempt. The line must lead with the one that answers the question.
 func TestRenderTimingNamesTheClockBehindEachNumber(t *testing.T) {
+	t.Parallel()
 	measured, estimate, known := int64(1413), int64(1062000), int64(0)
 	tree := prifly.TimingTree{
 		CalculatorRevision: prifly.TimingCalculatorRevisionContext, RunID: "run:pilot",

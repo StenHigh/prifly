@@ -15,6 +15,7 @@ import (
 // completeness answers for is a property of the revision rather than the global
 // list. It fails the moment a verdict is added without that gating.
 func TestSealedRevisionsAnswerOnlyForTheirOwnVerdicts(t *testing.T) {
+	t.Parallel()
 	for _, version := range []string{WorkflowRevisionVerdictVersion, WorkflowRevisionRetryVersion} {
 		t.Run("revision "+version, func(t *testing.T) {
 			workflow, registry := verdictFixture(t)
@@ -57,6 +58,7 @@ func TestSealedRevisionsAnswerOnlyForTheirOwnVerdicts(t *testing.T) {
 // exactly the four they were published with; anything added belongs to a
 // revision that can name it.
 func TestEachRevisionNamesTheVerdictsItAnswersFor(t *testing.T) {
+	t.Parallel()
 	sealed := []string{"pass", "fail", "needs_revision", "no_work"}
 	for _, version := range []string{WorkflowRevisionVerdictVersion, WorkflowRevisionRetryVersion} {
 		if required := VerdictsRequiredBy(version); !slices.Equal(required, sealed) {

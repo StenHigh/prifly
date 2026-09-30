@@ -17,6 +17,7 @@ import (
 )
 
 func TestExecutionReviewChecksPinnedBytesWithoutDisclosure(t *testing.T) {
+	t.Parallel()
 	e, options := acceptanceProject(t, []string{"workflow_input", "step_result"}, "", "pass", false)
 	options.SchemaVersion = "2"
 	started, err := e.Start(context.Background(), options)
@@ -61,6 +62,7 @@ func TestExecutionReviewChecksPinnedBytesWithoutDisclosure(t *testing.T) {
 }
 
 func TestExecutionBindingsExactVersionsChecksAndRestart(t *testing.T) {
+	t.Parallel()
 	e, firstOptions := acceptanceProject(t, []string{"workflow_input", "step_result"}, "", "pass", false)
 	read := func(path string, target any) {
 		t.Helper()
@@ -298,6 +300,7 @@ func TestExecutionBindingsExactVersionsChecksAndRestart(t *testing.T) {
 }
 
 func TestExecutionBindingsClosedPayload(t *testing.T) {
+	t.Parallel()
 	for _, data := range [][]byte{
 		[]byte(`{"schema_version":"execution-bindings/1","bindings":[]}`),
 		[]byte(`{"schema_version":"execution-bindings/2","bindings":[]}`),

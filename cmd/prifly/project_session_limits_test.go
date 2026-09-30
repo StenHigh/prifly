@@ -55,6 +55,7 @@ result_schema_ref: "{{result}}"
 // Compile only: this test proves the authoring/sealing boundary, not that a
 // host has consumed the timed session protocol or that a Run has resumed.
 func TestCLIProjectSessionLimitsSealDistinctRevisions(t *testing.T) {
+	t.Parallel()
 	root, _, legacyStep := projectSessionLimitsFixture(t)
 	const folder = ".prifly/workflows/limits/"
 	type sealed struct {

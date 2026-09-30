@@ -28,6 +28,7 @@ func issuedGrant(t *testing.T, e *Engine, ctx context.Context, operations int64)
 }
 
 func TestGrantSpendsOneOperationPerAdmissionAndExhausts(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	grant := issuedGrant(t, e, ctx, 1)
@@ -74,6 +75,7 @@ func TestGrantSpendsOneOperationPerAdmissionAndExhausts(t *testing.T) {
 }
 
 func TestGrantCannotDeliverRightsItsSubjectLacks(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	if _, _, err := e.ensureControl(ctx); err != nil {
@@ -94,6 +96,7 @@ func TestGrantCannotDeliverRightsItsSubjectLacks(t *testing.T) {
 }
 
 func TestGrantIssuedToAnotherSubjectIsNotUsableHere(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	grant := issuedGrant(t, e, ctx, 2)
@@ -121,6 +124,7 @@ func TestGrantIssuedToAnotherSubjectIsNotUsableHere(t *testing.T) {
 }
 
 func TestRevokedGrantStopsNewUseButKeepsRecordedOnes(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	grant := issuedGrant(t, e, ctx, 5)
@@ -157,6 +161,7 @@ func TestRevokedGrantStopsNewUseButKeepsRecordedOnes(t *testing.T) {
 }
 
 func TestExpiredGrantIsNotAdmissible(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	grant := issuedGrant(t, e, ctx, 5)
@@ -189,6 +194,7 @@ func TestExpiredGrantIsNotAdmissible(t *testing.T) {
 // CTRL-007: a grant bounds when a decision is made; it is not the way to skip
 // one. Issuing it is therefore gated exactly like the operation it delegates.
 func TestGrantIssuanceIsItselfGatedByTheApprovalPolicy(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	if _, err := e.SetControlApprovalPolicy(ctx, ControlApprovalPolicyRequest{
@@ -217,6 +223,7 @@ func TestGrantIssuanceIsItselfGatedByTheApprovalPolicy(t *testing.T) {
 }
 
 func TestReleaseTakesEitherApprovalsOrOneGrant(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	grant := issuedGrant(t, e, ctx, 2)
@@ -237,6 +244,7 @@ func TestReleaseTakesEitherApprovalsOrOneGrant(t *testing.T) {
 // Permission filtering precedes selection: a principal without read access must
 // not learn a count, a cursor page or a receipt.
 func TestReadsAreRefusedWithoutCurrentReadAccess(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	if _, _, err := e.ensureControl(ctx); err != nil {

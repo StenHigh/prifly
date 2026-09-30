@@ -17,6 +17,7 @@ import (
 // is interrupted; left behind by an early return, it does that later, to a Run
 // that has already moved on, naming a driver that finished long ago.
 func TestDriveTakesItsWatcherWithItOnAnEarlyFailure(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := programAfterWriteFixture(t, "workspace-read", "repair")
 	ctx := context.Background()
 	planTask := handOver(t, e, runID)
@@ -95,6 +96,7 @@ func TestDriveTakesItsWatcherWithItOnAnEarlyFailure(t *testing.T) {
 // three commits to a missing password, and repeating them would have paid
 // twice for work already sealed.
 func TestReopenRunsTheBrokenStageAgainAndKeepsWhatWasDone(t *testing.T) {
+	t.Parallel()
 	broken := environmentSourceFile(t, "env", "OTHER=ignored\n")
 	e, runID, _ := programAfterWriteFixture(t, "workspace-read", "none", map[string]EnvironmentSource{"DRIVER_TEST_SOURCED": {DotEnv: broken, Key: "PASSWORD"}})
 	ctx := context.Background()
@@ -166,6 +168,7 @@ func TestReopenRunsTheBrokenStageAgainAndKeepsWhatWasDone(t *testing.T) {
 
 // An accepted verdict is an answer, not a breakage, and reopen refuses it.
 func TestReopenRefusesARunThatReachedAnOutcome(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "pass", 5000)
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {
@@ -198,6 +201,7 @@ func TestReopenRefusesARunThatReachedAnOutcome(t *testing.T) {
 // restricted at all — so it stands for a Run that failed while a stop was
 // already in force.
 func TestReopenTakesASettledRunOnceAndOnItsCurrentVersion(t *testing.T) {
+	t.Parallel()
 	broken := environmentSourceFile(t, "env", "OTHER=ignored\n")
 	e, runID, _ := programAfterWriteFixture(t, "workspace-read", "none", map[string]EnvironmentSource{"DRIVER_TEST_SOURCED": {DotEnv: broken, Key: "PASSWORD"}})
 	ctx := context.Background()
@@ -232,6 +236,7 @@ func TestReopenTakesASettledRunOnceAndOnItsCurrentVersion(t *testing.T) {
 // the Run does not die on a program that fails once, and the failed attempt
 // stays in the record with its diagnostic.
 func TestDeclaredRetryTakesTheStageAgainWithoutTheOwner(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := programAfterWriteFixture(t, "workspace-read", "retry")
 	ctx := context.Background()
 	planTask := handOver(t, e, runID)
@@ -275,6 +280,7 @@ func TestDeclaredRetryTakesTheStageAgainWithoutTheOwner(t *testing.T) {
 // A budget is a number, not a promise: when it is spent the Run fails exactly
 // as it did before the budget existed.
 func TestDeclaredRetryIsSpentAndThenTheRunFails(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := programAfterWriteFixture(t, "nonzero", "retry")
 	ctx := context.Background()
 	planTask := handOver(t, e, runID)
@@ -308,6 +314,7 @@ func TestDeclaredRetryIsSpentAndThenTheRunFails(t *testing.T) {
 // that broke without answering it was a dead end: the command that takes that
 // state is a different one, and the refusal did not name it.
 func TestResumeOfABrokenRunNamesTheCommandThatTakesIt(t *testing.T) {
+	t.Parallel()
 	broken := environmentSourceFile(t, "env", "OTHER=ignored\n")
 	e, runID, _ := programAfterWriteFixture(t, "workspace-read", "none", map[string]EnvironmentSource{"DRIVER_TEST_SOURCED": {DotEnv: broken, Key: "PASSWORD"}})
 	ctx := context.Background()

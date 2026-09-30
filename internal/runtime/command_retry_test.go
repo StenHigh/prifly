@@ -19,6 +19,7 @@ import (
 func TestEveryCommandRetryIsDuplicate(t *testing.T) {
 	// The two receipt shapes are compared by their recorded content, which is
 	// what a retry must reproduce exactly.
+	t.Parallel()
 	type invoke func(commandID string) (bool, any, error)
 	authority := func(result local.AuthorityApplyResult, err error) (bool, any, error) {
 		return result.Duplicate, result.Receipt, err

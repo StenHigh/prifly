@@ -20,6 +20,7 @@ import (
 // name enum cost the pilot three attempts to discover. The schema's own side is
 // safe to state — it is the contract, not the caller's input, which stays out.
 func TestSchemaRefusalNamesWhatTheContractDeclares(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, schema, value, want string
 	}{
@@ -137,6 +138,7 @@ func expectProblem(t *testing.T, err error, code string) *Problem {
 }
 
 func TestSchemaProblemsNeverExposeSchemaURLsOrValues(t *testing.T) {
+	t.Parallel()
 	const secret = "CANARY-SECRET-SCHEMA-CONTENT"
 	url := "https://example.invalid/schema?token=" + secret
 	for _, test := range []struct {
@@ -186,6 +188,7 @@ func TestSchemaProblemsNeverExposeSchemaURLsOrValues(t *testing.T) {
 }
 
 func TestFoundationFixture(t *testing.T) {
+	t.Parallel()
 	workflow, registry := fixture(t)
 	plan, err := Compile(encoded(t, workflow), "json", registry)
 	if err != nil {
@@ -232,6 +235,7 @@ func TestFoundationFixture(t *testing.T) {
 }
 
 func TestFoundationValidationFailures(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, code string
 		edit       func(map[string]any)
@@ -304,6 +308,7 @@ func TestFoundationValidationFailures(t *testing.T) {
 }
 
 func TestUnsupportedUnreachableOperators(t *testing.T) {
+	t.Parallel()
 	workflow, registry := fixture(t)
 	seen := make(map[string]bool)
 	for _, bytes := range registry {
@@ -348,6 +353,7 @@ func TestUnsupportedUnreachableOperators(t *testing.T) {
 // steps. WorkflowRevision v4 settles that at sealing, and an author certain a
 // verdict cannot occur here says so instead of saying nothing.
 func TestV4StepStageAnswersForEveryVerdictItsStepCanReturn(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, code, path string
 		edit             func(map[string]any)
@@ -397,6 +403,7 @@ func TestV4StepStageAnswersForEveryVerdictItsStepCanReturn(t *testing.T) {
 // rule applied to older revisions would refuse to resume work already accepted;
 // and a revision that cannot carry impossible_verdicts cannot be asked for it.
 func TestOlderRevisionsKeepTheRuleTheyWereSealedUnder(t *testing.T) {
+	t.Parallel()
 	for _, version := range []string{"1", "2", "3"} {
 		t.Run("v"+version, func(t *testing.T) {
 			workflow, registry := fixture(t)
@@ -439,6 +446,7 @@ func verdictFixture(t *testing.T) (map[string]any, Registry) {
 }
 
 func TestCoreGraphAvailability(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, code string
 		edit       func(map[string]any)
@@ -559,6 +567,7 @@ func TestCoreGraphAvailability(t *testing.T) {
 }
 
 func TestCoreChoiceGraph(t *testing.T) {
+	t.Parallel()
 	optionalProducer := func(w map[string]any, choice *Stage) {
 		first := stages(w)["check_first"].(map[string]any)["on"].(map[string]any)
 		first["pass"], first["fail"] = "check_second", "choose"
@@ -673,6 +682,7 @@ func TestCoreChoiceGraph(t *testing.T) {
 }
 
 func TestCoreProjection(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, source, projection, pointer, value, want, code string
 		optional, absent                                     bool
@@ -745,6 +755,7 @@ func TestCoreProjection(t *testing.T) {
 }
 
 func TestWorkflowConfigurationDeclarations(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, schema, defaultValue, scope, version, profile, code string
 	}{
@@ -793,6 +804,7 @@ func TestWorkflowConfigurationDeclarations(t *testing.T) {
 }
 
 func TestEmptyLiteralAndSharedFinish(t *testing.T) {
+	t.Parallel()
 	workflow, registry := fixture(t)
 	workflow["definition"] = map[string]any{"entry": "done", "stages": map[string]any{"done": map[string]any{"kind": "finish", "outcome": "no_work", "output_bindings": map[string]any{}}}}
 	workflow["allowed_outcomes"] = []string{"no_work"}
@@ -824,6 +836,7 @@ func TestEmptyLiteralAndSharedFinish(t *testing.T) {
 }
 
 func TestExactDependencyAndSchemaClosure(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct{ name, code string }{{"missing", "missing_ref"}, {"changed", "digest_mismatch"}, {"identity", "ref_identity_mismatch"}} {
 		t.Run(test.name, func(t *testing.T) {
 			workflow, registry := fixture(t)
@@ -863,6 +876,7 @@ func TestExactDependencyAndSchemaClosure(t *testing.T) {
 }
 
 func TestDefinitionNamesAndJSONInstanceReferences(t *testing.T) {
+	t.Parallel()
 	dataRef := Ref{ID: "test:data/not-a-dependency", Version: "1.0.0", Digest: "sha256:" + strings.Repeat("a", 64)}
 	schema := encoded(t, map[string]any{
 		"type": "object", "properties": map[string]any{"value": map[string]any{"const": dataRef}, "default": map[string]any{"type": "string"}},
@@ -902,6 +916,7 @@ func TestDefinitionNamesAndJSONInstanceReferences(t *testing.T) {
 }
 
 func TestStrictJSON(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct{ name, data, code string }{
 		{"duplicate", `{"a":1,"a":2}`, "duplicate_key"},
 		{"escaped duplicate", `{"a":1,"\u0061":2}`, "duplicate_key"},
@@ -930,6 +945,7 @@ func TestStrictJSON(t *testing.T) {
 }
 
 func TestExplicitConverterRequiredForDifferentSchemaRevision(t *testing.T) {
+	t.Parallel()
 	original, registry := fixture(t)
 	base, err := Compile(encoded(t, original), "json", registry)
 	if err != nil {
@@ -997,6 +1013,7 @@ func TestExplicitConverterRequiredForDifferentSchemaRevision(t *testing.T) {
 }
 
 func TestRestrictedYAMLAndEquivalence(t *testing.T) {
+	t.Parallel()
 	workflow, registry := fixture(t)
 	yamlBytes, err := yaml.Marshal(workflow)
 	if err != nil {
@@ -1032,6 +1049,7 @@ func TestRestrictedYAMLAndEquivalence(t *testing.T) {
 
 func TestCanonicalAndEmbeddedSchemas(t *testing.T) {
 	// RFC 8785 UTF-16 property sorting differs from UTF-8 sorting for these keys.
+	t.Parallel()
 	a, err := Canonical([]byte("{\"\ufb33\":2,\"😀\":1,\"a\":1.0,\"z\":-0}"))
 	if err != nil {
 		t.Fatal(err)
@@ -1093,6 +1111,7 @@ func TestCanonicalAndEmbeddedSchemas(t *testing.T) {
 }
 
 func TestCanonicalScalarDocumentsAndBooleanSchemas(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct{ source, expected string }{
 		{`"command:one"`, `"command:one"`},
 		{`"\u0061"`, `"a"`},
@@ -1180,6 +1199,7 @@ func hookFixture(t *testing.T) (map[string]any, Registry, map[string]any, func()
 }
 
 func TestDeclaredHooksAndMapping(t *testing.T) {
+	t.Parallel()
 	workflow, registry, step, _ := hookFixture(t)
 	if err := ValidateProtocol("StepDefinition", encoded(t, step)); err == nil {
 		t.Fatal("baseline v1 must not silently gain hooks")
@@ -1221,6 +1241,7 @@ func TestDeclaredHooksAndMapping(t *testing.T) {
 }
 
 func TestArtifactHookDefinitionV3IsCoreOnlyAndClosed(t *testing.T) {
+	t.Parallel()
 	workflow, registry, step, update := hookFixture(t)
 	hooks := step["hooks"].(map[string]any)
 	schemaRef := hooks["progress_changed"].(map[string]any)["schema_ref"].(Ref)
@@ -1282,6 +1303,7 @@ func TestArtifactHookDefinitionV3IsCoreOnlyAndClosed(t *testing.T) {
 }
 
 func TestInvalidHookDeclarations(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, code string
 		edit       func(map[string]any)
@@ -1328,6 +1350,7 @@ func TestInvalidHookDeclarations(t *testing.T) {
 }
 
 func TestJSONPointerAbsentAndNull(t *testing.T) {
+	t.Parallel()
 	value := map[string]any{"a/b": map[string]any{"~key": []any{nil, "yes"}}}
 	for _, test := range []struct {
 		pointer string
@@ -1345,6 +1368,7 @@ func TestJSONPointerAbsentAndNull(t *testing.T) {
 }
 
 func TestArtifactRevisionVersionReference(t *testing.T) {
+	t.Parallel()
 	ref := Ref{ID: "demo:schema/value", Version: "1.0.0", Digest: "sha256:" + strings.Repeat("a", 64)}
 	artifact := map[string]any{
 		"schema_version": "1", "id": "artifact:one", "revision": 1, "digest": "sha256:" + strings.Repeat("b", 64),
@@ -1368,6 +1392,7 @@ func TestArtifactRevisionVersionReference(t *testing.T) {
 // author's release. The declaration marks the stage its author owns, so the
 // rule applies there; the rest are named to the caller instead of refused.
 func TestVerdictCompletenessNarrowsToTheInsertedStage(t *testing.T) {
+	t.Parallel()
 	incomplete := func(t *testing.T) ([]byte, Registry) {
 		workflow, registry := verdictFixture(t)
 		// check_first is the package's stage now: it says nothing about a

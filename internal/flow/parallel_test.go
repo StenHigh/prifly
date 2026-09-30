@@ -55,6 +55,7 @@ func compileParallel(t *testing.T, parent map[string]any, registry Registry) (*P
 }
 
 func TestParallelCompilesItsBranchesAsOrdinaryChildren(t *testing.T) {
+	t.Parallel()
 	parent, registry := parallelFixture(t, nil)
 	plan, err := compileParallel(t, parent, registry)
 	if err != nil {
@@ -78,6 +79,7 @@ func TestParallelCompilesItsBranchesAsOrdinaryChildren(t *testing.T) {
 }
 
 func TestParallelBranchMayReadPrecedingStageOutput(t *testing.T) {
+	t.Parallel()
 	root, child, registry := callBindingFixture(t)
 	childRef := registerCallWorkflow(t, registry, child)
 	root.Outputs = map[string]OutputPort{}
@@ -101,6 +103,7 @@ func TestParallelBranchMayReadPrecedingStageOutput(t *testing.T) {
 }
 
 func TestParallelIsRefusedByTheFoundationProfile(t *testing.T) {
+	t.Parallel()
 	parent, registry := parallelFixture(t, nil)
 	data, err := json.Marshal(parent)
 	if err != nil {
@@ -112,6 +115,7 @@ func TestParallelIsRefusedByTheFoundationProfile(t *testing.T) {
 }
 
 func TestParallelJoinContractIsChecked(t *testing.T) {
+	t.Parallel()
 	for _, bend := range []struct {
 		name string
 		fn   func(map[string]any)
@@ -147,6 +151,7 @@ func TestParallelJoinContractIsChecked(t *testing.T) {
 // A reference to any other port fails by name rather than resolving to nothing
 // at run time.
 func TestParallelStageProducesOnlyItsSummary(t *testing.T) {
+	t.Parallel()
 	plan := &Plan{Profile: CoreProfile, Registry: Registry{Ref{ID: AggregateSchemaID, Version: "1.0.0", Digest: "sha256:0"}: []byte(`true`)}}
 	plan.Workflow.Definition.Stages = map[string]Stage{
 		"fan":  {Kind: "parallel"},
@@ -180,6 +185,7 @@ func TestParallelStageProducesOnlyItsSummary(t *testing.T) {
 // workflow declared, and by the join being one that waits. Each bound is
 // refused by its own reason rather than by one blanket refusal.
 func TestParallelSimultaneityIsBoundedByItsOwnDeclarations(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		reason string
@@ -237,6 +243,7 @@ func TestParallelSimultaneityIsBoundedByItsOwnDeclarations(t *testing.T) {
 // A branch is an ordinary child, so the budget must cover every branch rather
 // than the largest one: all of them may run.
 func TestParallelChargesEveryBranch(t *testing.T) {
+	t.Parallel()
 	parent, registry := parallelFixture(t, func(parent map[string]any) {
 		parent["limits"] = map[string]any{"max_step_instances": 4, "max_control_transitions": 3, "max_parallelism": 1, "max_child_depth": 1}
 	})

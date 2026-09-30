@@ -15,6 +15,7 @@ import (
 )
 
 func TestProjectWorkflowDecisionCatalog(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	folder := filepath.Join(root, ".prifly", "workflows", "sample")
 	write := func(name, text string) {
@@ -114,6 +115,7 @@ destination: ` + destination + `
 }
 
 func TestCLIProjectQuestionnaireIsReadOnly(t *testing.T) {
+	t.Parallel()
 	repository := filepath.Join(t.TempDir(), "repository")
 	if output, err := exec.Command("git", "init", "-q", repository).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v: %s", err, output)

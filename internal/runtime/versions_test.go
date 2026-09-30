@@ -7,6 +7,7 @@ import "testing"
 // state answers yes to every earlier question, and the read contract a state is
 // reported under is the one that belongs to it, not an earlier one.
 func TestVersionLadderAnswersEveryQuestionConsistently(t *testing.T) {
+	t.Parallel()
 	for rank, row := range versionContracts {
 		if got := readVersionFor(row.State, "core-workflow/1"); got != row.Read {
 			t.Fatalf("%s is reported as %s, not %s", row.State, got, row.Read)
@@ -37,6 +38,7 @@ func TestVersionLadderAnswersEveryQuestionConsistently(t *testing.T) {
 // Every predicate reads the same ladder, so each one is true exactly from its
 // own version onwards.
 func TestStatePredicatesFollowTheLadder(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		version string

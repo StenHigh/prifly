@@ -291,6 +291,7 @@ func streamTasks(t *testing.T, e *Engine, runID string) map[string]SessionTask {
 }
 
 func TestEachPublicationKeepsIndependentCursorsAndPendingAssignments(t *testing.T) {
+	t.Parallel()
 	e, options := publicationStreamRuntime(t, 60)
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
@@ -508,6 +509,7 @@ func TestEachPublicationKeepsIndependentCursorsAndPendingAssignments(t *testing.
 }
 
 func TestNewOnlyStreamStartsAfterItsAuthorityCut(t *testing.T) {
+	t.Parallel()
 	e, options := publicationStreamRuntimeInitial(t, 60, "new_only")
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
@@ -588,6 +590,7 @@ func TestNewOnlyStreamStartsAfterItsAuthorityCut(t *testing.T) {
 }
 
 func TestEachBlobPublicationDeliversSealedBytesToEverySubscriber(t *testing.T) {
+	t.Parallel()
 	e, options := publicationStreamRuntimeSourceFormat(t, 60, "retained", "wait_until_timeout", "blob")
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
@@ -636,6 +639,7 @@ func TestEachBlobPublicationDeliversSealedBytesToEverySubscriber(t *testing.T) {
 }
 
 func TestEachPublicationEmptyCloseSkipsConsumer(t *testing.T) {
+	t.Parallel()
 	e, options := publicationStreamRuntime(t, 60)
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
@@ -668,6 +672,7 @@ func TestEachPublicationEmptyCloseSkipsConsumer(t *testing.T) {
 }
 
 func TestEachPublicationTimeoutIsInterruptedNotEOF(t *testing.T) {
+	t.Parallel()
 	e, options := publicationStreamRuntime(t, 1)
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
@@ -696,6 +701,7 @@ func TestEachPublicationTimeoutIsInterruptedNotEOF(t *testing.T) {
 }
 
 func TestEachPublicationInterruptsOnTerminalProducerFailure(t *testing.T) {
+	t.Parallel()
 	e, options := publicationStreamRuntimeSource(t, 60, "retained", "interrupt_on_terminal_failure")
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)

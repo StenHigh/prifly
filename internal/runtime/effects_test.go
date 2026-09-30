@@ -68,6 +68,7 @@ func effectsFixture(t *testing.T) (*Engine, string, WorktreeClaim) {
 }
 
 func TestAReportThatChangedTheWorkspaceWithoutPermissionIsRefused(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := effectsFixture(t)
 	ctx := context.Background()
 
@@ -164,6 +165,7 @@ func readRuntimeJSON(t *testing.T, path string, value any) {
 // and until 0.13.25 it had no path but a guess from claim naming, and nothing
 // measured what it did there.
 func TestAProgramStepIsHandedTheWorkspaceAndHeldToItsEffects(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		mode, failure string
 	}{

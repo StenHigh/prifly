@@ -383,6 +383,7 @@ launches:
 func TestCLIProjectLaunchPrepareRequiresProfile3(t *testing.T) {
 	// The published /2 route still requires Git; it must not silently acquire
 	// /3's new review or launch semantics merely because a flag was supplied.
+	t.Parallel()
 	root, authority := newProjectFixture(t)
 	for _, args := range [][]string{
 		{"project", "questionnaire", "--repository", root, "--launch", "unused", "--prepare"},

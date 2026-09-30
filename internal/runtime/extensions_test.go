@@ -72,6 +72,7 @@ func coreErrorEvents(t *testing.T, e *Engine, runID string) []local.Event {
 }
 
 func TestCoreKnownFailureUsesErrorTransition(t *testing.T) {
+	t.Parallel()
 	for _, recoveryStep := range []bool{false, true} {
 		name := "finish"
 		if recoveryStep {
@@ -173,6 +174,7 @@ func TestCoreKnownFailureUsesErrorTransition(t *testing.T) {
 }
 
 func TestCoreUnstartedFailureUsesErrorTransition(t *testing.T) {
+	t.Parallel()
 	e, workflow := coreDriverFixture(t, "pass")
 	runID := coreDriverStart(t, e, workflow)
 	a := driverAdmit(t, e, runID)
@@ -193,6 +195,7 @@ func TestCoreUnstartedFailureUsesErrorTransition(t *testing.T) {
 }
 
 func TestCorePreparationFailureDoesNotInventAttempt(t *testing.T) {
+	t.Parallel()
 	e, workflow := coreDriverFixture(t, "pass")
 	runID := coreDriverStart(t, e, workflow)
 	r := driverRun(t, e, runID)
@@ -261,6 +264,7 @@ func TestCorePreparationFailureDoesNotInventAttempt(t *testing.T) {
 }
 
 func TestCorePauseDoesNotRunErrorHandler(t *testing.T) {
+	t.Parallel()
 	for _, invalidWorkspace := range []bool{false, true} {
 		name := "pending-dispatch"
 		if invalidWorkspace {
@@ -310,6 +314,7 @@ func TestCorePauseDoesNotRunErrorHandler(t *testing.T) {
 }
 
 func TestCoreCancellationDoesNotConsumeErrorHandler(t *testing.T) {
+	t.Parallel()
 	e, workflow := coreDriverFixture(t, "wait")
 	runID := coreDriverStart(t, e, workflow)
 	_, finished := driverAsync(t, e, runID)
@@ -344,6 +349,7 @@ func TestCoreCancellationDoesNotConsumeErrorHandler(t *testing.T) {
 // every verdict and is still loaded and driven by this build. Neither may erase
 // work that was already accepted.
 func TestCoreUnroutedVerdictThatHappensPreservesAcceptedResult(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, schemaVersion string
 		impossible          []string
@@ -381,6 +387,7 @@ func TestCoreUnroutedVerdictThatHappensPreservesAcceptedResult(t *testing.T) {
 }
 
 func TestCoreLostDriverDoesNotConsumeErrorHandler(t *testing.T) {
+	t.Parallel()
 	e, workflow := coreDriverFixture(t, "crash-short")
 	runID := coreDriverStart(t, e, workflow)
 	executable, err := os.Executable()

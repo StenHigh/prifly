@@ -11,6 +11,7 @@ import (
 // Naming one is refused explicitly, so the boundary is stated rather than left
 // to a lookup that happens not to match.
 func TestProtectedCheckClassesAreNeverWaivable(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	ctx := context.Background()
 	for _, class := range protectedCheckClasses {
@@ -27,6 +28,7 @@ func TestProtectedCheckClassesAreNeverWaivable(t *testing.T) {
 }
 
 func TestWaiverIsRefusedForARunThatPredatesThem(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	ctx := context.Background()
 	result, err := e.Start(ctx, options)
@@ -52,6 +54,7 @@ func TestWaiverIsRefusedForARunThatPredatesThem(t *testing.T) {
 // A recorded reduction must stay visible: a declared success that rested on a
 // waived check is reported as completed_with_waivers, not as plain success.
 func TestWaivedOutcomeStaysVisible(t *testing.T) {
+	t.Parallel()
 	root := "invocation:root"
 	run := &Run{SchemaVersion: CoreWaiverStateVersion, RootInvocationID: root}
 	if got := outcomeWithWaivers(run, root, "succeeded"); got != "succeeded" {
@@ -75,6 +78,7 @@ func TestWaivedOutcomeStaysVisible(t *testing.T) {
 // A waiver names the step it covered. The reduction belongs to the scope that
 // rested on it and to its ancestors, not to an unrelated sibling scope.
 func TestWaivedOutcomeIsAttributedToItsOwnScope(t *testing.T) {
+	t.Parallel()
 	root, left, right := "invocation:root", "invocation:left", "invocation:right"
 	run := &Run{
 		SchemaVersion: CoreWaiverStateVersion, RootInvocationID: root, WaiverApplied: true,
@@ -106,6 +110,7 @@ func TestWaivedOutcomeIsAttributedToItsOwnScope(t *testing.T) {
 // A waiver covers exactly the check instance it names. Its neighbours, other
 // steps and expired decisions are not covered.
 func TestWaiverCoversOnlyItsOwnCheckInstance(t *testing.T) {
+	t.Parallel()
 	ref := flow.Ref{ID: "demo:check/quality", Version: "1.0.0", Digest: rawDigest([]byte("q"))}
 	other := flow.Ref{ID: "demo:check/neighbour", Version: "1.0.0", Digest: rawDigest([]byte("n"))}
 	now := Observation{UTC: "2026-08-29T12:00:00Z"}
@@ -137,6 +142,7 @@ func TestWaiverCoversOnlyItsOwnCheckInstance(t *testing.T) {
 }
 
 func TestWaiverStateIsNotCarriedByOlderContracts(t *testing.T) {
+	t.Parallel()
 	for _, version := range []string{StateVersion, CoreStateVersion, CoreInvocationStateVersion, CoreRepeatStateVersion, CoreContextStateVersion, CoreSessionStateVersion} {
 		run := Run{SchemaVersion: version, Profile: flow.CoreProfile, Waivers: []Waiver{{ID: "waiver:1"}}}
 		if supportedRun(run) {
@@ -152,6 +158,7 @@ func TestWaiverStateIsNotCarriedByOlderContracts(t *testing.T) {
 // plain success would hide the reduction; reporting an outcome the workflow
 // never declared would put an inexpressible value into its own result.
 func TestFinishRefusesToReportAnUndeclaredReduction(t *testing.T) {
+	t.Parallel()
 	root := "invocation:root"
 	run := &Run{
 		SchemaVersion: CoreWaiverStateVersion, RootInvocationID: root, WaiverApplied: true,

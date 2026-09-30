@@ -304,6 +304,7 @@ func driverDone(t *testing.T, finished <-chan error, interrupted bool) {
 }
 
 func TestDriverRemainingBudget(t *testing.T) {
+	t.Parallel()
 	base := Observation{UTC: "2026-08-28T00:00:00Z", Session: "clock:one", Source: "go.time.monotonic", SuspendBasis: "excludes_suspend_on_darwin", UTCTrust: "local_wall_unqualified"}
 	due := base
 	due.UTC, due.MonotonicMS = "2026-08-28T00:00:10Z", 10000
@@ -347,6 +348,7 @@ func TestDriverRemainingBudget(t *testing.T) {
 }
 
 func TestDriverMaterializedDriftSettlesUnstartedAndReleasesSlot(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct{ path, code string }{{"context.json", "context_manifest_drift"}, {"inputs/source", "workspace_input_drift"}, {"worker.data", "workspace_script_drift"}} {
 		t.Run(test.path, func(t *testing.T) {
 			e, runID := driverProject(t, "pass", 5000)
@@ -373,6 +375,7 @@ func TestDriverMaterializedDriftSettlesUnstartedAndReleasesSlot(t *testing.T) {
 }
 
 func TestDriverPendingClockRecoveryAndDeadlineNeverBlindRetry(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"deadline", "new-clock", "dispatched"} {
 		t.Run(mode, func(t *testing.T) {
 			e, runID := driverProject(t, "pass", 5000)
@@ -431,6 +434,7 @@ func TestDriverPendingClockRecoveryAndDeadlineNeverBlindRetry(t *testing.T) {
 }
 
 func TestDriverStopWinsBeforeAdmissionAndDispatch(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"before_admission", "before_dispatch"} {
 		for _, kind := range []string{"pause", "cancel"} {
 			t.Run(phase+"/"+kind, func(t *testing.T) {
@@ -554,6 +558,7 @@ func driverDispatchFixture(t testing.TB, e *Engine, runID, attemptID string) {
 // as a lost settlement and releases the slot, instead of holding the authority
 // for an owner statement about an outcome the journal already answers.
 func TestDriverCrashAfterGroupEmptySettlesWithoutUncertainty(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "pass", 10000)
 	a := driverAdmit(t, e, runID)
 	driverDispatchFixture(t, e, runID, a.ID)
@@ -586,6 +591,7 @@ func TestDriverCrashAfterGroupEmptySettlesWithoutUncertainty(t *testing.T) {
 }
 
 func TestDriverUncertainSettlementRetainsObligationsAndWorkspace(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"group_not_empty", "uncertainty_flag"} {
 		t.Run(kind, func(t *testing.T) {
 			e, runID := driverProject(t, "pass", 10000)
@@ -662,6 +668,7 @@ func driverObservedStarts(t *testing.T, e *Engine) int {
 }
 
 func TestDriverAcceptedArtifactLossBlocksFinishAndDependent(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"commit-pass", "commit-consumer"} {
 		for _, fault := range []string{"missing", "corrupt"} {
 			t.Run(mode+"/"+fault, func(t *testing.T) {
@@ -740,6 +747,7 @@ func TestDriverAcceptedArtifactLossBlocksFinishAndDependent(t *testing.T) {
 }
 
 func TestDriverInvalidOutputRefusesRealSettlementAndDownstream(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"bad-digest", "bad-json"} {
 		t.Run(mode, func(t *testing.T) {
 			e, runID := driverProject(t, mode, 10000)
@@ -791,6 +799,7 @@ func TestDriverInvalidOutputRefusesRealSettlementAndDownstream(t *testing.T) {
 }
 
 func TestDriverCommandWorkerCheckAndRepeatedDefinition(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"mixed-pass", "mixed-check-fail"} {
 		t.Run(mode, func(t *testing.T) {
 			e, runID := driverProject(t, mode, 10000)
@@ -864,6 +873,7 @@ func TestDriverCommandWorkerCheckAndRepeatedDefinition(t *testing.T) {
 }
 
 func TestDriverActualCPUAndUnsupportedRSSCoverage(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "cpu", 10000)
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)
@@ -920,10 +930,12 @@ func TestDriverActualCPUAndUnsupportedRSSCoverage(t *testing.T) {
 }
 
 func TestDriverCrashBeforeSpawnDoesNotRetry(t *testing.T) {
+	t.Parallel()
 	driverCrashAtDispatchBoundary(t, false)
 }
 
 func TestDriverCrashAfterActualStartRetainsUncertaintyAndSlot(t *testing.T) {
+	t.Parallel()
 	driverCrashAtDispatchBoundary(t, true)
 }
 
@@ -1108,6 +1120,7 @@ func driverCrashAtDispatchBoundary(t *testing.T, started bool) {
 }
 
 func TestDriverCrashAfterAcceptedCommitDoesNotRepeatExecution(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "commit-pass", 10000)
 	executable, err := os.Executable()
 	if err != nil {
@@ -1216,6 +1229,7 @@ func TestDriverCrashAfterAcceptedCommitDoesNotRepeatExecution(t *testing.T) {
 }
 
 func TestDriverCrashHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("DRIVER_CRASH_HELPER") != "1" {
 		return
 	}
@@ -1283,6 +1297,7 @@ func TestDriverCrashHelper(t *testing.T) {
 }
 
 func TestDriverExecutableDriftAfterDispatchSettlesKnownNoSpawn(t *testing.T) {
+	t.Parallel()
 	e, _ := driverProject(t, "pass", 5000)
 	config := e.Config.Configuration.Executors["test:step/driver"]
 	executable, err := os.ReadFile(config.Executable)
@@ -1311,6 +1326,7 @@ func TestDriverExecutableDriftAfterDispatchSettlesKnownNoSpawn(t *testing.T) {
 }
 
 func TestDriverPreparationConsumesOriginalDeadline(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "wait", 2000)
 	a := driverAdmit(t, e, runID)
 	deadline := a.Deadline
@@ -1358,6 +1374,7 @@ func TestDriverPreparationConsumesOriginalDeadline(t *testing.T) {
 }
 
 func TestDriverPauseKeepsEarlyResultPendingUntilProcessSettlement(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "early", 10000)
 	_, finished := driverAsync(t, e, runID)
 	r := driverWait(t, e, runID, func(r Run) bool {
@@ -1419,6 +1436,7 @@ func TestDriverPauseKeepsEarlyResultPendingUntilProcessSettlement(t *testing.T) 
 }
 
 func TestDriverCancellationSettlesOwnedGroupAndPersistsInterrupt(t *testing.T) {
+	t.Parallel()
 	for _, interrupted := range []bool{false, true} {
 		t.Run(map[bool]string{false: "cancel-command", true: "context-interrupt"}[interrupted], func(t *testing.T) {
 			e, runID := driverProject(t, "wait", 10000)
@@ -1456,6 +1474,7 @@ func TestDriverCancellationSettlesOwnedGroupAndPersistsInterrupt(t *testing.T) {
 }
 
 func TestDriverResultCandidatesAndExitMustAgree(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"pass", "duplicate", "conflict", "nonzero"} {
 		t.Run(mode, func(t *testing.T) {
 			e, runID := driverProject(t, mode, 5000)
@@ -1483,6 +1502,7 @@ func TestDriverResultCandidatesAndExitMustAgree(t *testing.T) {
 // It compares two different public call boundaries, not telemetry on vs off.
 // Run without -race; the regular safety suite separately exercises race builds.
 func TestDriverOutputMediaMustMatchDeclaredPort(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name  string
 		media []string
@@ -1533,6 +1553,7 @@ func TestDriverOutputMediaMustMatchDeclaredPort(t *testing.T) {
 }
 
 func TestDriverCaptureCostSamples(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("PRIFLY_CAPTURE_BENCHMARK") != "1" {
 		t.Skip("set PRIFLY_CAPTURE_BENCHMARK=1 for the 15-pair local measurement")
 	}
@@ -1725,6 +1746,7 @@ func TestDriverCaptureCostSamples(t *testing.T) {
 }
 
 func TestDriverWorkerHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("DRIVER_TEST_HELPER") != "1" {
 		return
 	}
@@ -2004,6 +2026,7 @@ func resultControlBytes(t *testing.T, r Run) []byte {
 }
 
 func TestDriverResultRetryAndLateConflictPreserveAcceptedResult(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	e, runID := driverProject(t, "pass", 5000)
 	if err := e.Drive(ctx, runID); err != nil {
@@ -2113,6 +2136,7 @@ func TestDriverResultRetryAndLateConflictPreserveAcceptedResult(t *testing.T) {
 }
 
 func TestDriverResultIdentityAndVersionAreFenced(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	e, runID := driverProject(t, "early", 5000)
 	_, finished := driverAsync(t, e, runID)
@@ -2173,6 +2197,7 @@ func TestDriverResultIdentityAndVersionAreFenced(t *testing.T) {
 }
 
 func TestDriverLateResultAfterCancellationIsBoundedEvidence(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	e, runID := driverProject(t, "wait", 5000)
 	_, finished := driverAsync(t, e, runID)
@@ -2237,6 +2262,7 @@ func TestDriverLateResultAfterCancellationIsBoundedEvidence(t *testing.T) {
 }
 
 func TestResultEvidenceRunQuotaCountsOnlyLateIntake(t *testing.T) {
+	t.Parallel()
 	r := Run{}
 	for i := 0; i < maxLateResultsPerRun; i++ {
 		r.Diagnostics = append(r.Diagnostics, Diagnostic{Phase: "result_intake", Code: "late_result", AttemptID: fmt.Sprintf("attempt:%d", i)})
@@ -2256,6 +2282,8 @@ func TestResultEvidenceRunQuotaCountsOnlyLateIntake(t *testing.T) {
 // compiled plan. Two Runs of one workflow still compile twice: each pins its own
 // package lock, so their pinned sets are not the same set.
 func TestDriveCompilesAWorkflowOncePerRun(t *testing.T) {
+	// Sequential: it reads the delta of the package-wide planCompilations counter,
+	// which a parallel neighbour would move.
 	e, runID := driverProject(t, "pass", 10000)
 	ctx := context.Background()
 	before := planCompilations.Load()
@@ -2289,6 +2317,7 @@ func TestDriveCompilesAWorkflowOncePerRun(t *testing.T) {
 // the driver hands control back with nothing admitted, so the caller reads the
 // same ready stage and now knows what it holds.
 func TestDriveStopsBeforeAdmittingAProgram(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
@@ -2339,5 +2368,42 @@ func TestDriveStopsBeforeAdmittingAProgram(t *testing.T) {
 	}
 	if len(after.Attempts) == 0 {
 		t.Fatal("an unbounded drive stopped admitting the program")
+	}
+}
+
+// Every read of a Run asks whether a driver is live by holding the driver lock
+// shared for a moment. A drive that started in that moment was refused as
+// driver_already_active with nobody driving; a monitor polling the Run made
+// that a regular event. A probe does not block a driver, a driver still does.
+func TestAReadersProbeDoesNotRefuseADriver(t *testing.T) {
+	t.Parallel()
+	e, runID := driverProject(t, "pass", 10000)
+	path := filepath.Join(e.Root, e.Config.Configuration.StateRoot, "driver.lock")
+	probe, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer probe.Close()
+	if err := syscall.Flock(int(probe.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
+		t.Fatal(err)
+	}
+	released := make(chan struct{})
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		_ = syscall.Flock(int(probe.Fd()), syscall.LOCK_UN)
+		close(released)
+	}()
+	if err := e.Drive(context.Background(), runID); err != nil {
+		t.Fatalf("a reader's momentary probe refused the driver: %v", err)
+	}
+	<-released
+	// A driver that keeps the lock is still refused, after the grace.
+	held, err := e.driverLock(runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Close()
+	if err := e.Drive(context.Background(), runID); refusalCode(err) != "driver_already_active" {
+		t.Fatalf("a held driver lock did not refuse a second driver: %v", err)
 	}
 }

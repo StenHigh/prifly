@@ -28,6 +28,7 @@ func writeWorkspaceTreeFile(t *testing.T, root, path, value string) {
 }
 
 func TestCaptureWorkspaceTreePreservesFastFullAndUltraBytes(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	for _, test := range []struct {
 		name, location, entrypoint string
@@ -57,6 +58,7 @@ func TestCaptureWorkspaceTreePreservesFastFullAndUltraBytes(t *testing.T) {
 }
 
 func TestCaptureWorkspaceTreeRefusesUnsafeOrMissingUltraEntries(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "direct_child_tree", Path: ".ai-factory/plans", Entrypoint: "index.md"}
 	writeWorkspaceTreeFile(t, root, ".ai-factory/plans/feature/phase.md", "phase")
@@ -193,6 +195,7 @@ func treeSubmission(t *testing.T, task SessionTask, summary string, locations []
 }
 
 func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, location string
 		policy         flow.WorkspaceTreeCapturePolicy
@@ -285,6 +288,7 @@ func TestWorkspaceTreeSessionPassesExactNativePlanToImproveAndImplement(t *testi
 }
 
 func TestWorkspaceTreeRefusesPreHandoffDriftAndPolicyEscape(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	t.Run("output location", func(t *testing.T) {
 		e, runID := treeSessionFixture(t, policy)
@@ -327,6 +331,7 @@ func TestWorkspaceTreeRefusesPreHandoffDriftAndPolicyEscape(t *testing.T) {
 // workspace_trees once skipped capture entirely, so the port the runtime owns
 // was then reported missing and the host had no accepted submission form at all.
 func TestWorkspaceTreeCaptureFollowsDeclaredBindingsAtRoutedSessionVersion(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	e, runID := treeDecisionSessionFixture(t, policy)
 	first := handOver(t, e, runID)
@@ -383,6 +388,7 @@ func TestWorkspaceTreeCaptureFollowsDeclaredBindingsAtRoutedSessionVersion(t *te
 // path other than the one the handoff named, or a missing name where the host
 // genuinely chooses one. Each refusal names the entry it is about.
 func TestWorkspaceTreeLocationRefusalsNameTheReportedEntry(t *testing.T) {
+	t.Parallel()
 	exact := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	t.Run("input location mismatch", func(t *testing.T) {
 		e, runID := treeSessionFixture(t, exact)
@@ -425,6 +431,7 @@ func TestWorkspaceTreeLocationRefusalsNameTheReportedEntry(t *testing.T) {
 // A plan left in the workspace by an earlier Run is not this step's output, so
 // preparation refuses to claim it. The diagnostic says which refusal that was.
 func TestExistingOutputFileIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	e, runID := treeSessionFixture(t, policy)
 	claims, err := e.Claims(context.Background())
@@ -474,6 +481,7 @@ func treeWorkspace(t *testing.T, e *Engine) string {
 // into history. Checkout mode is where that bites -- a worktree claim is a fresh
 // directory, while a borrowed checkout carries the leftover into the next Run.
 func TestSealedExactFileCaptureLeavesItsPathFreeForTheNextRun(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	e, runID := treeFixture(t, policy, nil, nil, "checkout", false)
 	ctx := context.Background()
@@ -529,6 +537,7 @@ func TestSealedExactFileCaptureLeavesItsPathFreeForTheNextRun(t *testing.T) {
 // runtime seals its bytes and leaves it exactly where git has it: cleaning up
 // after a capture must never turn into deleting from a borrowed checkout.
 func TestSealedExactFileCaptureKeepsATrackedDocument(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	e, runID := treeSessionFixture(t, policy)
 	ctx := context.Background()
@@ -555,6 +564,7 @@ func TestSealedExactFileCaptureKeepsATrackedDocument(t *testing.T) {
 // mark is taken, readable at the declared location, never captured, and taken
 // back at settlement only where the engine placed it.
 func TestMaterializeOnlyTreeHandsAReadOnlyStepTheCapturedPlan(t *testing.T) {
+	t.Parallel()
 	policies := map[string]struct {
 		policy flow.WorkspaceTreeCapturePolicy
 		files  map[string]string
@@ -655,6 +665,7 @@ func TestMaterializeOnlyTreeHandsAReadOnlyStepTheCapturedPlan(t *testing.T) {
 // tree, so a host that edits the materialized entry is refused as one that
 // changed the workspace, and putting the bytes back lets it report again.
 func TestMaterializeOnlyTreeRefusesAHostThatEditsIt(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	e, runID := treeVerifyFixture(t, policy)
 	first := handOver(t, e, runID)
@@ -706,6 +717,7 @@ func TestMaterializeOnlyTreeRefusesAHostThatEditsIt(t *testing.T) {
 // The read view of a stopped Run names what stopped it, and a completed Run
 // names nothing: the reason used to live only somewhere in diagnostics[].
 func TestRunViewNamesTheFailureOfAStoppedRun(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	e, runID := treeSessionFixture(t, policy)
 	task := handOver(t, e, runID)
@@ -755,6 +767,7 @@ func TestRunViewNamesTheFailureOfAStoppedRun(t *testing.T) {
 // chained run drive --next after a submit and ran a seventeen-minute test
 // program inside its own harness.
 func TestNextNamesTheWorkAReadyStageHolds(t *testing.T) {
+	t.Parallel()
 	e, runID := treeVerifyFixture(t, flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"})
 	next, err := e.Next(context.Background(), runID)
 	if err != nil {
@@ -800,6 +813,7 @@ func TestNextNamesTheWorkAReadyStageHolds(t *testing.T) {
 // A control stage is work the driver does alone, and a step this build cannot
 // classify is named nothing rather than guessed at.
 func TestStageWorkNamesControlAndStaysSilentWhenItCannotTell(t *testing.T) {
+	t.Parallel()
 	e, runID := treeSessionFixture(t, flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"})
 	r := driverRun(t, e, runID)
 	plan, err := r.planFor(r.RootInvocationID)
@@ -832,6 +846,7 @@ func TestStageWorkNamesControlAndStaysSilentWhenItCannotTell(t *testing.T) {
 // made against a closed root and failed with ErrClosed -- and the rollback
 // discarded the error, so the failure looked exactly like success.
 func TestARefusedAdmissionTakesBackWhatPreparationPlaced(t *testing.T) {
+	t.Parallel()
 	policy := flow.WorkspaceTreeCapturePolicy{Kind: "exact_file", Path: ".ai-factory/PLAN.md"}
 	e, runID := treeVerifyFixture(t, policy)
 	ctx := context.Background()

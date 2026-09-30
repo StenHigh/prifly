@@ -37,6 +37,7 @@ func contextWorkflow(t *testing.T, instructions *Ref, refs []Ref) (WorkflowRevis
 
 func TestCoreContextExactResourcesAreDataAndDetached(t *testing.T) {
 	// Ref-shaped JSON (including id/version) is instance data in this leaf.
+	t.Parallel()
 	jsonData := []byte(" {\"version\":\"9.0.0\",\"id\":\"not:a-definition\",\"digest\":\"sha256:" + strings.Repeat("a", 64) + "\"} \n")
 	canonicalJSON, err := Canonical(jsonData)
 	if err != nil {
@@ -80,6 +81,7 @@ func TestCoreContextExactResourcesAreDataAndDetached(t *testing.T) {
 }
 
 func TestCoreContextRawUTF8Boundaries(t *testing.T) {
+	t.Parallel()
 	for _, data := range [][]byte{nil, []byte("true"), []byte("\r\n"), []byte("\ufeff"), []byte{0}, bytes.Repeat([]byte("x"), MaxDocumentBytes)} {
 		t.Run(fmt.Sprintf("bytes_%d_%x", len(data), sha256.Sum256(data))[:30], func(t *testing.T) {
 			ref := contextRef("test:context/text", data)
@@ -93,6 +95,7 @@ func TestCoreContextRawUTF8Boundaries(t *testing.T) {
 }
 
 func TestCoreContextRejectsInvalidOrUntypedResources(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, encoding, media string
 		data                  []byte
@@ -162,6 +165,7 @@ func TestCoreContextRejectsInvalidOrUntypedResources(t *testing.T) {
 }
 
 func TestCoreContextCannotBecomeDefinition(t *testing.T) {
+	t.Parallel()
 	for _, encoding := range []string{"utf8_text", "json"} {
 		for _, position := range []string{"schema", "step", "child_workflow", "root_workflow", "policy"} {
 			t.Run(encoding+"/"+position, func(t *testing.T) {
@@ -204,6 +208,7 @@ func TestCoreContextCannotBecomeDefinition(t *testing.T) {
 }
 
 func TestCoreContextIdentityConflictsAcrossTypedClosure(t *testing.T) {
+	t.Parallel()
 	first := contextRef("test:context/same", []byte("one"))
 	second := contextRef(first.ID, []byte("two"))
 	w, registry := contextWorkflow(t, &first, []Ref{second})
@@ -224,6 +229,7 @@ func TestCoreContextIdentityConflictsAcrossTypedClosure(t *testing.T) {
 }
 
 func TestCoreContextSharedCallRepeatClosure(t *testing.T) {
+	t.Parallel()
 	data := []byte("# Shared bytes\r\n")
 	ref := contextRef("test:context/nested", data)
 	leaf, registry := contextWorkflow(t, &ref, []Ref{ref})
@@ -256,6 +262,7 @@ func TestCoreContextSharedCallRepeatClosure(t *testing.T) {
 }
 
 func TestCoreContextSchemaFirstReferenceUses(t *testing.T) {
+	t.Parallel()
 	for _, nested := range []bool{false, true} {
 		for _, supplied := range []bool{false, true} {
 			t.Run(fmt.Sprintf("nested_%t/supplied_%t", nested, supplied), func(t *testing.T) {
@@ -319,6 +326,7 @@ func TestCoreContextSchemaFirstReferenceUses(t *testing.T) {
 }
 
 func TestCoreContextSchemaFirstCheckDependency(t *testing.T) {
+	t.Parallel()
 	for _, supplied := range []bool{false, true} {
 		t.Run(fmt.Sprintf("adapter_supplied_%t", supplied), func(t *testing.T) {
 			w, registry := contextWorkflow(t, nil, nil)
@@ -354,6 +362,7 @@ func TestCoreContextSchemaFirstCheckDependency(t *testing.T) {
 }
 
 func TestCoreContextLegacyEntrypointsStayJSONOnly(t *testing.T) {
+	t.Parallel()
 	data := []byte(`{"text":"legacy instructions"}`)
 	ref := contextRef("test:context/legacy", data)
 	w, registry := contextWorkflow(t, &ref, nil)
@@ -378,6 +387,7 @@ func TestCoreContextLegacyEntrypointsStayJSONOnly(t *testing.T) {
 }
 
 func TestCoreContextResourcePositionsAreScoped(t *testing.T) {
+	t.Parallel()
 	w, registry := contextWorkflow(t, nil, nil)
 	schema := contextRef("test:schema/context-names", []byte(`true`))
 	registry[schema] = []byte(`true`)
@@ -405,6 +415,7 @@ func TestCoreContextResourcePositionsAreScoped(t *testing.T) {
 }
 
 func TestCoreContextCompleteClosureCountLimit(t *testing.T) {
+	t.Parallel()
 	build := func(resourceCount int) (WorkflowRevision, Registry, ContextResources) {
 		w, registry := callWorkflow(t, "test:workflow/context-count")
 		stepRef := callStep(t, registry, map[string]InputPort{})
@@ -457,6 +468,7 @@ func TestCoreContextSharedDependencyLimits(t *testing.T) {
 	// Test exact accounting boundaries without allocating a 64 MiB fixture.
 	// The nested integration above verifies the same counter is shared by real
 	// call/repeat compilations rather than reset for each child or use site.
+	t.Parallel()
 	data := []byte("bytes")
 	ref := contextRef("test:context/budget", data)
 	for _, tc := range []struct {

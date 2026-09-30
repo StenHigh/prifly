@@ -14,6 +14,7 @@ import (
 )
 
 func TestLocalPolicyVersionsPreserveLegacyBytes(t *testing.T) {
+	t.Parallel()
 	defs, registry, err := Builtins()
 	if err != nil {
 		t.Fatal(err)
@@ -44,6 +45,7 @@ func TestLocalPolicyVersionsPreserveLegacyBytes(t *testing.T) {
 }
 
 func TestLocalPolicyInitAndOpenSelectExactVersion(t *testing.T) {
+	t.Parallel()
 	defs, _, err := Builtins()
 	if err != nil {
 		t.Fatal(err)
@@ -98,6 +100,7 @@ func TestLocalPolicyInitAndOpenSelectExactVersion(t *testing.T) {
 }
 
 func TestCallPolicyRefusalBeforeAdmissionAndExplicitUpgrade(t *testing.T) {
+	t.Parallel()
 	for _, version := range []string{"1.0.0", "2.0.0", "custom"} {
 		t.Run(version, func(t *testing.T) {
 			e, workflow, _, options := callFixture(t, "", "no_work", false)
@@ -182,6 +185,7 @@ func TestCallPolicyRefusalBeforeAdmissionAndExplicitUpgrade(t *testing.T) {
 }
 
 func TestLocalPolicyEnforcesEveryDeclaredLimit(t *testing.T) {
+	t.Parallel()
 	defs, _, err := Builtins()
 	if err != nil {
 		t.Fatal(err)
@@ -213,6 +217,7 @@ func TestLocalPolicyEnforcesEveryDeclaredLimit(t *testing.T) {
 }
 
 func TestLocalPolicyLegacyStartRetryExcludesUnusedVersion(t *testing.T) {
+	t.Parallel()
 	for _, profile := range []string{flow.Profile, flow.CoreProfile} {
 		t.Run(profile, func(t *testing.T) {
 			e, options := emptyRuntime(t)

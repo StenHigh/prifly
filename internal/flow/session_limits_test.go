@@ -27,6 +27,7 @@ result_schema_ref: result
 func TestSessionLimitsAuthoringDefaultsAndValues(t *testing.T) {
 	// A zero expectation means the field is absent: nothing declares a deadline
 	// of zero, and both fields spell "no deadline" the same way.
+	t.Parallel()
 	for _, test := range []struct {
 		name, limits, version string
 		active, wait          int64
@@ -92,6 +93,7 @@ func TestSessionLimitsAuthoringDefaultsAndValues(t *testing.T) {
 }
 
 func TestSessionLimitsAuthoringRefusesInvalidContracts(t *testing.T) {
+	t.Parallel()
 	for _, limits := range []string{
 		"null", "[]", "{active_timeout_ms: 0}",
 		"{active_timeout_ms: -1}", "{active_timeout_ms: 1.5}", "{active_timeout_ms: '1000'}",
@@ -137,6 +139,7 @@ func TestSessionLimitsAuthoringRefusesInvalidContracts(t *testing.T) {
 }
 
 func TestSessionLimitsWireAndLegacyIsolation(t *testing.T) {
+	t.Parallel()
 	legacy, err := StepJSONBytes(sessionLimitSource(StepAuthoringVersion, ""), "yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -200,6 +203,7 @@ func TestSessionLimitsWireAndLegacyIsolation(t *testing.T) {
 }
 
 func TestSessionLimitsCompileAndWorkspaceTrees(t *testing.T) {
+	t.Parallel()
 	w, registry := contextWorkflow(t, nil, nil)
 	changeCheckedStep(t, &w, registry, func(step *StepDefinition) {
 		var adapter map[string]any
@@ -237,6 +241,7 @@ func TestSessionLimitsCompileAndWorkspaceTrees(t *testing.T) {
 }
 
 func TestSessionLimitsEditorSchemaMatchesAuthoring(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile("../runtime/authoring/step-v2.schema.json")
 	if err != nil {
 		t.Fatal(err)
@@ -297,6 +302,7 @@ func TestSessionLimitsEditorSchemaMatchesAuthoring(t *testing.T) {
 }
 
 func TestAssistedExternalWriteAuthoringLowersToV11(t *testing.T) {
+	t.Parallel()
 	base := strings.Replace(string(sessionLimitSource(StepSessionAuthoringVersion, "")),
 		"effects: {class: none, retry_class: never}",
 		"effects: {class: external_write, retry_class: reconcile_required}", 1)
@@ -324,6 +330,7 @@ func TestAssistedExternalWriteAuthoringLowersToV11(t *testing.T) {
 }
 
 func TestAssistedReadOnlyRepositoryWorkspaceLowersToV13(t *testing.T) {
+	t.Parallel()
 	base := string(sessionLimitSource(StepSessionAuthoringVersion, ""))
 	for _, source := range []string{base + "repository_workspace: read_only\n", "schema_version: '13'\n" + base + "repository_workspace: read_only\n"} {
 		data, err := StepJSONBytes([]byte(source), "yaml")
@@ -350,6 +357,7 @@ func TestAssistedReadOnlyRepositoryWorkspaceLowersToV13(t *testing.T) {
 // delete the line they meant to keep, and an inserted step that quietly loses
 // its limits inherits the default hour without anyone choosing it.
 func TestLimitsUnderTheOlderAuthoringNameTheContractThatCarriesThem(t *testing.T) {
+	t.Parallel()
 	source := map[string]any{
 		"authoring": StepAuthoringVersion,
 		"id":        "test:step/tests",

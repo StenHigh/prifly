@@ -41,6 +41,7 @@ func configurationFixture(t *testing.T, scope string) (*Engine, StartOptions) {
 }
 
 func TestBuiltinsReturnDetachedContracts(t *testing.T) {
+	t.Parallel()
 	defs, registry, err := Builtins()
 	if err != nil || len(defs) == 0 {
 		t.Fatalf("builtins: %v", err)
@@ -57,6 +58,7 @@ func TestBuiltinsReturnDetachedContracts(t *testing.T) {
 }
 
 func TestCoreInputConfiguration(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, scope, project, run, source, value, refusal string }{
 		{"default_false", "run", "", "", "package_default", "false", ""},
 		{"project_null", "run", "null", "", "project", "null", ""},
@@ -146,6 +148,7 @@ func TestCoreInputConfiguration(t *testing.T) {
 }
 
 func TestCoreProjectionSealsDistinctArtifact(t *testing.T) {
+	t.Parallel()
 	for _, value := range []string{`{"value":null}`, `{"value":true}`, `{}`, `{"value":"invalid"}`} {
 		t.Run(value, func(t *testing.T) {
 			e, options := configurationFixture(t, "run")

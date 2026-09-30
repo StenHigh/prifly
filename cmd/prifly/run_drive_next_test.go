@@ -18,6 +18,7 @@ import (
 // commands to save a call in one is the wrong trade, so drive can be asked for
 // the other document by name instead.
 func TestRunDriveCanAnswerWithTheNextActionInsteadOfTheRunView(t *testing.T) {
+	t.Parallel()
 	project := t.TempDir()
 	if err := prifly.Init(project); err != nil {
 		t.Fatal(err)

@@ -30,6 +30,7 @@ func contextContractObject(t *testing.T, value any) map[string]any {
 // regeneration that added field descriptions and changed no shape, no
 // validation keyword and no meaning, while the owner was the only consumer.
 func TestContextPublicSchemasPreservePublishedBundles(t *testing.T) {
+	t.Parallel()
 	for _, previous := range []struct {
 		name, digest string
 		content      []byte
@@ -76,6 +77,7 @@ func TestContextPublicSchemasPreservePublishedBundles(t *testing.T) {
 }
 
 func TestContextPublicSchemasMatchActualStateAndReadViews(t *testing.T) {
+	t.Parallel()
 	prior, options := emptyRuntime(t)
 	definitions, _, err := Builtins()
 	if err != nil {
@@ -168,6 +170,7 @@ func TestContextPublicSchemasMatchActualStateAndReadViews(t *testing.T) {
 }
 
 func TestContextPublicTransportAndSourceContracts(t *testing.T) {
+	t.Parallel()
 	e := artifactEngine(t)
 	sourceTestFile(t, e, "source", []byte("source bytes"))
 	artifact, snapshot := sourceTestImport(t, e, SourceImportOptions{Path: "source", Format: "blob"})
@@ -242,6 +245,7 @@ func TestContextPublicTransportAndSourceContracts(t *testing.T) {
 }
 
 func TestContextPublicCheckContractsMatchClosedParsers(t *testing.T) {
+	t.Parallel()
 	definition := flow.CheckDefinition{
 		SchemaVersion: flow.CheckDefinitionVersion, ID: "test:check/content", Version: "1.0.0", Title: "Content check", Kind: "content", Claim: "content_valid",
 		Executor: flow.Executor{AdapterRef: checkProtocolRef("core:adapter/local-process", 'a'), Operation: "check"},
@@ -316,6 +320,7 @@ func TestContextPublicCheckContractsMatchClosedParsers(t *testing.T) {
 
 func TestContextPublicCheckExecutionLifecycle(t *testing.T) {
 	// This is a DTO fixture, not an execution receipt or native checker run.
+	t.Parallel()
 	request := checkRequestFixture("workflow_input")
 	requestBytes := checkRequestBytes(t, request)
 	observed := newClock().now()
@@ -367,6 +372,7 @@ func TestContextPublicCheckExecutionLifecycle(t *testing.T) {
 }
 
 func TestContextPublicAcceptanceStatesFromNativeExecution(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	e, options := acceptanceProject(t, []string{"workflow_input", "step_output", "step_result"}, "", "pass", false)
 	preview, err := e.Preview(PreviewOptions{WorkflowFile: options.WorkflowFile, BriefFile: options.BriefFile})

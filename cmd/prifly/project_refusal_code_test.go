@@ -17,6 +17,7 @@ import (
 // shape for errors.New and fmt.Errorf and never looked at usageError, which is
 // how the rule held everywhere except the surface carrying the most codes.
 func TestProjectRefusalsCarryTheirCodeInTheEnvelope(t *testing.T) {
+	t.Parallel()
 	root, authority := t.TempDir(), filepath.Join(t.TempDir(), "authority")
 	if code, _, stderr := runCLI(t, "project", "init", "--repository", root, "--state-root", authority, "--host", "codex-cli"); code != 0 {
 		t.Fatalf("init: %d %s", code, stderr)

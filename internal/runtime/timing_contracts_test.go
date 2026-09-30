@@ -8,6 +8,7 @@ import (
 )
 
 func TestTimingWireFieldsRespectExactEditions(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, fields string
 		valid        bool
@@ -46,6 +47,7 @@ func TestTimingWireFieldsRespectExactEditions(t *testing.T) {
 }
 
 func TestTimedPublicContractsPreserveLegacyShapes(t *testing.T) {
+	t.Parallel()
 	request := DecisionRequest{SchemaVersion: DecisionRequestTimingVersion, RunID: "run:one", AttemptID: "attempt:one", EnvelopeDigest: rawDigest([]byte("delivery")), DecisionID: "answer", DefinitionDigest: rawDigest([]byte("decision")), ExpectedRunVersion: 3, YieldExecution: true}
 	if err := validatePublic(t, "DecisionRequestV2", request); err != nil {
 		t.Fatal(err)
@@ -115,6 +117,7 @@ func TestTimedPublicContractsPreserveLegacyShapes(t *testing.T) {
 }
 
 func TestTimingStateLadderAndWireRoundTrip(t *testing.T) {
+	t.Parallel()
 	if !isTimingState(CoreTimingStateVersion) || isTimingState(CoreNeutralStateVersion) || readVersionFor(CoreTimingStateVersion, flow.CoreProfile) != CoreTimingReadVersion || stepReadVersionFor(CoreTimingStateVersion) != CoreTimingStepReadVersion {
 		t.Fatal("timing state/read boundary drifted")
 	}

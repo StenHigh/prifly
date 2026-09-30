@@ -83,6 +83,7 @@ func TestEnvironmentSourceReadsExactlyTheDeclaredPlace(t *testing.T) {
 // value is read at dispatch, so no state, artifact or document written by this
 // Run can hold it.
 func TestDriverEnvironmentSourceReachesTheProgramWithoutEnteringState(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	dotenv := environmentSourceFile(t, "env", "PASSWORD="+environmentSourceValue+"\n")
 	environmentSourceExecutor(t, e, map[string]EnvironmentSource{"DRIVER_TEST_SOURCED": {DotEnv: dotenv, Key: "PASSWORD"}})
@@ -136,6 +137,7 @@ func TestDriverEnvironmentSourceReachesTheProgramWithoutEnteringState(t *testing
 }
 
 func TestDriverMissingEnvironmentSourceRefusesBeforeStart(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		source EnvironmentSource
@@ -179,6 +181,7 @@ func TestDriverMissingEnvironmentSourceRefusesBeforeStart(t *testing.T) {
 // flat Run: it is refused at Start rather than written under a version whose
 // published contract has no place for it.
 func TestStartRefusesADeclaredSourceOutsideTheScopedState(t *testing.T) {
+	t.Parallel()
 	e, _ := driverProject(t, "pass", 5000)
 	config := e.Config.Configuration.Executors["test:step/driver"]
 	config.EnvironmentFrom = map[string]EnvironmentSource{"DRIVER_TEST_SOURCED": {Env: "PRIFLY_TEST_SOURCE"}}
@@ -216,6 +219,7 @@ func environmentSourceExecutor(t *testing.T, e *Engine, sources map[string]Envir
 // start is visibly not part of it — which is how a cold start lost an evening
 // to a password its program could never have received.
 func TestNextAnswersWhatTheProgramWouldBeGiven(t *testing.T) {
+	t.Parallel()
 	e, options := contextDriverProject(t, nil)
 	dotenv := environmentSourceFile(t, "env", "PASSWORD="+environmentSourceValue+"\n")
 	environmentSourceExecutor(t, e, map[string]EnvironmentSource{"DRIVER_TEST_SOURCED": {DotEnv: dotenv, Key: "PASSWORD"}})
@@ -268,6 +272,7 @@ func TestNextAnswersWhatTheProgramWouldBeGiven(t *testing.T) {
 // write its own files. The refusal now names what the engine did record and
 // what it does not keep.
 func TestNonzeroExitNamesTheCodeAndTheBoundaryOfWhatIsKept(t *testing.T) {
+	t.Parallel()
 	e, runID := driverProject(t, "nonzero", 30000)
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)

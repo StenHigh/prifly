@@ -90,7 +90,9 @@ func timingOpenFixture() Run {
 	return r
 }
 
-func TestTimingIdentityAndNoControlExecutor(t *testing.T) { // OBS-AC-01
+func TestTimingIdentityAndNoControlExecutor(t *testing.T) {
+	t. // OBS-AC-01
+		Parallel()
 	r := timingFixture()
 	second := *r.Steps["step"]
 	second.ID, second.ActivationID, second.AttemptIDs = "second-step", "second-activation", []string{"second-attempt"}
@@ -113,7 +115,9 @@ func TestTimingIdentityAndNoControlExecutor(t *testing.T) { // OBS-AC-01
 	timingMeasured(t, report.Root.Metrics["executor_sum"], 11000, false)
 }
 
-func TestTimingQueueExecutionSettlementAndStateTimeline(t *testing.T) { // OBS-AC-02
+func TestTimingQueueExecutionSettlementAndStateTimeline(t *testing.T) {
+	t. // OBS-AC-02
+		Parallel()
 	r := timingFixture()
 	before, _ := json.Marshal(r)
 	report := Timing(r, timingObservation(20000), false)
@@ -146,7 +150,9 @@ func TestTimingQueueExecutionSettlementAndStateTimeline(t *testing.T) { // OBS-A
 	}
 }
 
-func TestTimingEarlyResultAndMissingDriver(t *testing.T) { // OBS-AC-03, OBS-AC-11
+func TestTimingEarlyResultAndMissingDriver(t *testing.T) {
+	t. // OBS-AC-03, OBS-AC-11
+		Parallel()
 	r := timingOpenFixture()
 	live := timingFind(t, Timing(r, timingObservation(10000), true).Root, "attempt")
 	timingMeasured(t, live.Metrics["executor_time"], 5000, true)
@@ -165,7 +171,9 @@ func TestTimingEarlyResultAndMissingDriver(t *testing.T) { // OBS-AC-03, OBS-AC-
 	}
 }
 
-func TestTimingUTCRollbackUsesMonotonicOrder(t *testing.T) { // OBS-AC-04
+func TestTimingUTCRollbackUsesMonotonicOrder(t *testing.T) {
+	t. // OBS-AC-04
+		Parallel()
 	r := timingFixture()
 	back := timingObservation(15000)
 	back.UTC = timingObservation(-2000).UTC
@@ -186,7 +194,9 @@ func TestTimingUTCRollbackUsesMonotonicOrder(t *testing.T) { // OBS-AC-04
 	}
 }
 
-func TestTimingRecoveryGapKeepsKnownSegments(t *testing.T) { // OBS-AC-05
+func TestTimingRecoveryGapKeepsKnownSegments(t *testing.T) {
+	t. // OBS-AC-05
+		Parallel()
 	r := timingOpenFixture()
 	recovered := timingObservation(20000)
 	recovered.Session, recovered.MonotonicMS, recovered.UTCTrust = "new-driver", 0, "local_wall_unqualified"
@@ -212,7 +222,9 @@ func TestTimingRecoveryGapKeepsKnownSegments(t *testing.T) { // OBS-AC-05
 	}
 }
 
-func TestTimingSuspendAndSerializedWallTimestamp(t *testing.T) { // OBS-AC-06
+func TestTimingSuspendAndSerializedWallTimestamp(t *testing.T) {
+	t. // OBS-AC-06
+		Parallel()
 	r := timingFixture()
 	data, _ := json.Marshal(r)
 	data = bytes.ReplaceAll(data, []byte(`"includes_suspend"`), []byte(`"excludes_suspend_on_darwin"`))
@@ -241,7 +253,9 @@ func TestTimingSuspendAndSerializedWallTimestamp(t *testing.T) { // OBS-AC-06
 	}
 }
 
-func TestTimingRestrictionsAreUnionNotExtraElapsed(t *testing.T) { // OBS-AC-15
+func TestTimingRestrictionsAreUnionNotExtraElapsed(t *testing.T) {
+	t. // OBS-AC-15
+		Parallel()
 	r := timingFixture()
 	a := r.Attempts["attempt"]
 	a.Admitted, a.Started, a.ExecutorEnd = timingObservation(2000), timingPoint(2000), timingPoint(12000)
@@ -265,6 +279,7 @@ func TestTimingRestrictionsAreUnionNotExtraElapsed(t *testing.T) { // OBS-AC-15
 }
 
 func TestTimingLeafDedupAndParallelArithmetic(t *testing.T) {
+	t.Parallel()
 	r := timingFixture()
 	r.Steps["step"].AttemptIDs = append(r.Steps["step"].AttemptIDs, "attempt")
 	report := Timing(r, timingObservation(15000), false)
@@ -283,6 +298,7 @@ func TestTimingLeafDedupAndParallelArithmetic(t *testing.T) {
 }
 
 func TestTimingQualityOverflowAndTrustedEstimate(t *testing.T) {
+	t.Parallel()
 	c := timingCalculator{driverLive: true}
 	from, to := timingObservation(0), timingObservation(1000)
 	to.Session = "new-clock"
@@ -316,6 +332,7 @@ func TestTimingQualityOverflowAndTrustedEstimate(t *testing.T) {
 }
 
 func TestTimingRetainsPiecesAcrossCommandClockSessions(t *testing.T) {
+	t.Parallel()
 	r := timingFixture()
 	r.Created.Session = "start-command"
 	r.Created.UTCTrust = "local_wall_unqualified"
@@ -337,6 +354,7 @@ func TestTimingRetainsPiecesAcrossCommandClockSessions(t *testing.T) {
 // start is ever observed. A pilot measured it empty on all nine steps of a live
 // run and could not tell "not applicable" from "we forgot".
 func TestDispatchLatencySaysWhyItIsEmpty(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		edit    func(*Attempt)

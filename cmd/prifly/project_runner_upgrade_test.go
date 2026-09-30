@@ -16,6 +16,7 @@ import (
 // deleting it refused too. A repository whose runner was one release old had no
 // way forward at all.
 func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
+	t.Parallel()
 	for index := range projectKnownRunnerSkills(projectHosts[0]) {
 		root := t.TempDir()
 		for _, host := range projectHosts {
@@ -54,6 +55,7 @@ func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
 // replacing. Changing the runner without adding the old text to
 // projectKnownRunnerSkills leaves every installed runner unreplaceable.
 func TestProjectRunnerTextIsPinned(t *testing.T) {
+	t.Parallel()
 	pinned := map[string]string{
 		"codex-cli":   "sha256:7700474f4a8de08cc1a3d0a06136114887a4b89c87f50657266018d905daaf0c",
 		"codex-app":   "sha256:9ae1cdd3077ad2215d2cc048602af7dbc4d033cc57f173d82e598291e267b21d",
@@ -72,6 +74,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 	// Keep the five pre-neutral forms, the pre-timing, pre-state-id,
 	// pre-attempt-id, pre-effects, pre-overlay, pre-workspace and
 	// pre-attempt-field and pre-effects-rule runners byte-identical.
+	t.Parallel()
 	pinned := map[string][]string{
 		"codex-cli": {
 			"sha256:ad7b4782ffa2d341350a2ef6890da52ff19d70bb3da05f08f0e4ee52a2ae74dc",
@@ -165,6 +168,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 }
 
 func TestProjectCurrentRunnerIsWorkflowNeutral(t *testing.T) {
+	t.Parallel()
 	for _, host := range projectHosts {
 		t.Run(host.ID, func(t *testing.T) {
 			skill := projectRunnerSkill(host)

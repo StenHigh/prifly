@@ -755,11 +755,14 @@ func openEngine(root string, readOnly, maintenance bool) (_ *Engine, openErr err
 	if err != nil {
 		return nil, err
 	}
-	mode := syscall.LOCK_SH
 	if maintenance {
-		mode = syscall.LOCK_EX
+		// A moment's shared hold -- a reader probing, a child between fork and
+		// exec still carrying the descriptor -- is not an open authority.
+		err = flockExclusive(lock)
+	} else {
+		err = flockWithGrace(lock, syscall.LOCK_SH)
 	}
-	if err = syscall.Flock(int(lock.Fd()), mode|syscall.LOCK_NB); err != nil {
+	if err != nil {
 		lock.Close()
 		return nil, wrapFault("storage_busy", "authority is open in another process; retry after it closes", err)
 	}

@@ -104,6 +104,7 @@ func finishRepeatModel(r *Run, route, until string) {
 }
 
 func TestRepeatModelScopeAndHistoricalMembership(t *testing.T) {
+	t.Parallel()
 	r := repeatModelFixture(t, 2)
 	a := r.Activations["activation:enter"]
 	if err := r.repeatProgressInvariant(a); err != nil {
@@ -133,6 +134,7 @@ func TestRepeatModelScopeAndHistoricalMembership(t *testing.T) {
 }
 
 func TestRepeatModelRejectsCounterAndOwnerDrift(t *testing.T) {
+	t.Parallel()
 	for name, change := range map[string]func(*Run){
 		"reset_counter":       func(r *Run) { r.Activations["activation:enter"].Repeat.IterationCount = 1 },
 		"missing_body":        func(r *Run) { delete(r.Invocations, "invocation:body-1") },
@@ -170,6 +172,7 @@ func TestRepeatModelRejectsCounterAndOwnerDrift(t *testing.T) {
 }
 
 func TestRepeatModelBudgetUsesPinnedBodyAndAncestors(t *testing.T) {
+	t.Parallel()
 	r := repeatModelFixture(t, 2)
 	beforeRoot, beforeCurrent := r.ControlTransitions, r.Invocations["invocation:body-2"].ControlTransitions
 	if err := r.chargeInvocation("invocation:body-2", 1, 0); err != nil {
@@ -202,6 +205,7 @@ func TestRepeatModelBudgetUsesPinnedBodyAndAncestors(t *testing.T) {
 }
 
 func TestRepeatModelVersionedWire(t *testing.T) {
+	t.Parallel()
 	for _, version := range []string{StateVersion, CoreStateVersion, "core-state/unknown", ""} {
 		if isInvocationState(version) {
 			t.Fatal("unknown or flat state entered the invocation whitelist", version)
@@ -267,6 +271,7 @@ func TestRepeatModelVersionedWire(t *testing.T) {
 }
 
 func TestRepeatPublicSchemaAndDecisionRoutes(t *testing.T) {
+	t.Parallel()
 	distributed, err := os.ReadFile("../../schemas/core/repeats.schema.json")
 	if err != nil || !bytes.Equal(distributed, repeatPublicContracts) {
 		t.Fatal("repeat embedded/distributed schemas differ", err)

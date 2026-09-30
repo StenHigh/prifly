@@ -10,6 +10,7 @@ import (
 )
 
 func TestForkReuseRequiresCompletedExplicitOutput(t *testing.T) {
+	t.Parallel()
 	ref := ArtifactRef{Digest: "sha256:output"}
 	source := Run{Status: "completed", Outputs: map[string]ArtifactRef{"result": ref}}
 	payload := ForkPayload{ReuseRefs: []ArtifactRef{ref}}
@@ -26,6 +27,7 @@ func TestForkReuseRequiresCompletedExplicitOutput(t *testing.T) {
 }
 
 func TestForkCreatesSeparateCoreRunWithProvenance(t *testing.T) {
+	t.Parallel()
 	e, options := emptyRuntime(t)
 	defs, _, err := Builtins()
 	if err != nil {
@@ -102,6 +104,7 @@ func mustReadRuntime(t *testing.T, path string) []byte {
 // nil plan the caller dereferences: the core branch once assigned its error to
 // a shadowed err, and staticcheck (SA4006) was the first to read it.
 func TestCompileForkPlanReportsACompileFailure(t *testing.T) {
+	t.Parallel()
 	e, _ := emptyRuntime(t)
 	for _, version := range []string{CoreContextConfigVersion, CoreConfigVersion} {
 		e.Config.Configuration.SchemaVersion = version

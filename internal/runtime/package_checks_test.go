@@ -8,6 +8,7 @@ import (
 )
 
 func TestPackageCheckImportsKeepVersionAndIdentityBoundaries(t *testing.T) {
+	t.Parallel()
 	for _, failure := range []string{"legacy-manifest", "unknown-version", "malformed-check", "identity-mismatch", "digest-mismatch"} {
 		t.Run(failure, func(t *testing.T) {
 			e := contextRegistryRuntime(t)

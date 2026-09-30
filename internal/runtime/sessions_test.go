@@ -112,6 +112,7 @@ func assistedWorkspaceFixtureWithDecisions(t *testing.T, workspace string, catal
 }
 
 func TestWorkspaceCheckoutHandoffKeepsScratchOutsideRepository(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := assistedWorkspaceFixture(t, "checkout")
 	task := handOver(t, e, runID)
 	r := driverRun(t, e, runID)
@@ -206,6 +207,7 @@ func hostResult(t *testing.T, e *Engine, task SessionTask, summary string) Sessi
 // when the envelope was handed over, and a pickup window of its own that
 // nothing checked at any later boundary.
 func TestAssistedWorkingWindowOpensAtTheHandoff(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	attempt := driverRun(t, e, runID).Attempts[task.AttemptID]
@@ -243,8 +245,6 @@ func TestAssistedWorkingWindowOpensAtTheHandoff(t *testing.T) {
 // The authority's own wall clock is what spans them, and it is the same
 // difference consumeSessionTime already debits from a session allowance.
 func TestAssistedAttemptPublishesItsWorkingWindowWithoutSubtraction(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	synctest.Test(t, func(t *testing.T) {
 		ctx := context.Background()
 		e, runID, _ := assistedFixture(t)
@@ -282,6 +282,7 @@ func TestAssistedAttemptPublishesItsWorkingWindowWithoutSubtraction(t *testing.T
 }
 
 func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	if task.SchemaVersion != AssistedSessionRoutedVersion {
@@ -334,6 +335,7 @@ func TestAssistedReportRecordsEachNamedCostOnTheAttempt(t *testing.T) {
 }
 
 func TestAssistedReportedCostRejectsAmbiguousOrInexactClaims(t *testing.T) {
+	t.Parallel()
 	valid := ReportedCost{SchemaVersion: ReportedCostVersion, Source: "claude-code", Amount: "0", Currency: "USD"}
 	for name, costs := range map[string][]ReportedCost{
 		"missing version":  {{Source: valid.Source, Amount: valid.Amount, Currency: valid.Currency}},
@@ -365,6 +367,7 @@ func TestAssistedReportedCostRejectsAmbiguousOrInexactClaims(t *testing.T) {
 }
 
 func TestAssistedHandoffCarriesPinnedSkillClaimAndDeadline(t *testing.T) {
+	t.Parallel()
 	e, runID, claim := assistedFixture(t)
 	task := handOver(t, e, runID)
 	if task.PrincipalID != e.owner || task.ClaimID != claim.ID || task.ClaimGeneration != claim.Generation {
@@ -403,6 +406,7 @@ func TestAssistedHandoffCarriesPinnedSkillClaimAndDeadline(t *testing.T) {
 }
 
 func TestAssistedReportForAnotherAttemptOrEnvelopeIsRefused(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	ctx := context.Background()
@@ -444,6 +448,7 @@ func TestAssistedReportForAnotherAttemptOrEnvelopeIsRefused(t *testing.T) {
 }
 
 func TestAssistedReportIsRefusedUnderAStopAndAfterSettlement(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	ctx := context.Background()
@@ -458,6 +463,7 @@ func TestAssistedReportIsRefusedUnderAStopAndAfterSettlement(t *testing.T) {
 }
 
 func TestAssistedReportClaimingAbsentOutputsIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	ctx := context.Background()
@@ -492,6 +498,7 @@ func TestAssistedReportClaimingAbsentOutputsIsRefusedByName(t *testing.T) {
 }
 
 func TestAssistedDisconnectStaysUnknownAndRefusesALateReport(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	ctx := context.Background()
@@ -534,6 +541,7 @@ func TestAssistedDisconnectStaysUnknownAndRefusesALateReport(t *testing.T) {
 }
 
 func TestAssistedReportSettlesTheStepOnItsOwnEvidence(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	ctx := context.Background()
@@ -582,6 +590,7 @@ func TestAssistedReportSettlesTheStepOnItsOwnEvidence(t *testing.T) {
 // worktree at all. Two such steps cannot be kept apart by convention alone,
 // because neither is permitted to touch a shared one.
 func TestProposalOnlyAssistedStepClaimsNoWorktree(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name       string
 		effect     string
@@ -615,6 +624,7 @@ func TestProposalOnlyAssistedStepClaimsNoWorktree(t *testing.T) {
 // never retries. Intake reads the same ports first: a malformed report is a
 // refusal that names its port and leaves the handoff awaiting a corrected one.
 func TestAssistedIntakeRefusesAMalformedReportWithoutBurningTheHandoff(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	submission := hostResult(t, e, task, "planned without its output")
@@ -655,6 +665,7 @@ func TestAssistedIntakeRefusesAMalformedReportWithoutBurningTheHandoff(t *testin
 // A live Run without a held handoff is not a missing Run. The host that asks
 // for work needs to know which of the two it is looking at.
 func TestSessionTaskSeparatesAnAbsentHandoffFromAnAbsentRun(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	ctx := context.Background()
 	if _, err := e.SessionTask(ctx, runID, ""); refusalCode(err) != "no_active_handoff" {
@@ -677,6 +688,7 @@ func TestSessionTaskSeparatesAnAbsentHandoffFromAnAbsentRun(t *testing.T) {
 // the step's own declaration, so the refusal names both instead of sending the
 // author to swap a policy that was never the constraint.
 func TestUnqualifiedEffectClassRefusalNamesBothBoundaries(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	r, _, err := e.load(context.Background(), runID)
@@ -716,6 +728,7 @@ func TestUnqualifiedEffectClassRefusalNamesBothBoundaries(t *testing.T) {
 // the bundle. Order is not a contract, and a host that relies on it is relying
 // on a coincidence.
 func TestPinnedContextFilesAreNamedAfterTheirReference(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	if len(task.SkillRefs) == 0 {
@@ -752,6 +765,7 @@ func TestPinnedContextFilesAreNamedAfterTheirReference(t *testing.T) {
 // A Run whose host holds a task has work in it. The read-only view names
 // reading that task, so the reader is not left with a view that looks empty.
 func TestReadOnlyViewsNameTheHeldHandoffAndSealedOutputs(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	ctx := context.Background()
 	before, err := e.Next(ctx, runID)
@@ -794,6 +808,7 @@ func TestReadOnlyViewsNameTheHeldHandoffAndSealedOutputs(t *testing.T) {
 // view it arrived as an empty string, which reads as a step that produced
 // nothing, and a reader checking its own work is told the opposite of the truth.
 func TestAcceptedSummaryReachesTheView(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	ctx := context.Background()
 	task := handOver(t, e, runID)
@@ -827,6 +842,7 @@ func TestAcceptedSummaryReachesTheView(t *testing.T) {
 // A worker asking whether its own result was accepted reads the ordinary
 // summary. Leaving the verdict out of it sent one to the authority storage.
 func TestAcceptedVerdictIsVisibleInTheRunState(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	ctx := context.Background()
 	task := handOver(t, e, runID)
@@ -860,6 +876,7 @@ func TestAcceptedVerdictIsVisibleInTheRunState(t *testing.T) {
 // live constraint instead of protecting anyone from an unqualified clock, which
 // is how a package author lived thirteen releases without knowing it existed.
 func TestUntimedAssistedTaskNamesTheInheritedDeadline(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedWorkspaceFixture(t, "")
 	task := handOver(t, e, runID)
 	attempt := driverRun(t, e, runID).Attempts[task.AttemptID]
@@ -882,6 +899,7 @@ func TestUntimedAssistedTaskNamesTheInheritedDeadline(t *testing.T) {
 // legal needs_revision to a node that routed only pass and lost six accepted
 // steps to it.
 func TestRoutedTaskNamesTheVerdictsItsNodeRoutes(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedWorkspaceFixture(t, "")
 	task := handOver(t, e, runID)
 	r := driverRun(t, e, runID)
@@ -913,6 +931,7 @@ func TestRoutedTaskNamesTheVerdictsItsNodeRoutes(t *testing.T) {
 // hand the path over separately. Forgetting that step left the host holding a
 // workspace and no envelope digest, attempt identity or decision context.
 func TestSessionTaskIsMaterializedInTheWorkspaceItNames(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	written := func() SessionTask {
@@ -954,6 +973,7 @@ func TestSessionTaskIsMaterializedInTheWorkspaceItNames(t *testing.T) {
 // A host had to assemble five fields around a nested result of ten from prose,
 // and a whole class of its refusals was about that form rather than the work.
 func TestSubmissionTemplateIsTheReportTheHostOnlyFillsIn(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	task := handOver(t, e, runID)
 	skeleton, err := task.SubmissionTemplate()
@@ -1012,6 +1032,7 @@ func TestSubmissionTemplateIsTheReportTheHostOnlyFillsIn(t *testing.T) {
 // refresh writing a file into each workspace it displayed, so reading a handoff
 // and handing it over are separate operations.
 func TestReadingAHandoffLeavesTheWorkspaceUntouched(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	if err := e.Drive(context.Background(), runID); err != nil {
 		t.Fatal(err)
@@ -1069,6 +1090,7 @@ func TestReadingAHandoffLeavesTheWorkspaceUntouched(t *testing.T) {
 // projects every task from one read; what it must keep is that a task in the
 // list is the same task a host gets when it asks for that attempt by name.
 func TestListingHandoffsAgreesWithReadingOneByName(t *testing.T) {
+	t.Parallel()
 	e, options := publicationStreamRuntime(t, 60)
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
@@ -1121,6 +1143,7 @@ func TestListingHandoffsAgreesWithReadingOneByName(t *testing.T) {
 // projection from the sealed plan rather than by a second copy in the handoff:
 // two places where one fact lives is two places where it can disagree.
 func TestATaskCarriesTheModelProfileItsStepDeclared(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedFixture(t)
 	ctx := context.Background()
 	if err := e.Drive(ctx, runID); err != nil {
@@ -1168,6 +1191,7 @@ func TestATaskCarriesTheModelProfileItsStepDeclared(t *testing.T) {
 // holds no channel to a session that existed before the Run. So the report is
 // held to having an answer and to its shape, never to its truth.
 func TestADeclaredModelProfileIsAnsweredOrTheReportIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name      string
 		statement *ModelProfileStatement
@@ -1214,6 +1238,7 @@ func TestADeclaredModelProfileIsAnsweredOrTheReportIsRefused(t *testing.T) {
 // that answered differently are three countable outcomes, not three sentences
 // somebody has to read.
 func TestWhatTheHostSaidAboutTheProfileIsStoredAndCountable(t *testing.T) {
+	t.Parallel()
 	counted := map[string]int{}
 	for _, statement := range []*ModelProfileStatement{
 		{Outcome: "honoured", Named: "claude-opus-5"},
@@ -1262,6 +1287,7 @@ func TestWhatTheHostSaidAboutTheProfileIsStoredAndCountable(t *testing.T) {
 // they travel together because the host reads them together. A profile nobody
 // has translated yet arrives without one, and that is not a refusal.
 func TestATaskCarriesTheTranslationTheProjectSealed(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", nil, nil, func(step *flow.StepDefinition) {
 		step.SchemaVersion = "9"
 		step.ModelProfile = &flow.ModelProfile{Requested: "deep-reasoning", Reason: "judges work it did not do"}
@@ -1311,6 +1337,7 @@ func TestATaskCarriesTheTranslationTheProjectSealed(t *testing.T) {
 // step that declared a profile it was handing back a document the intake would
 // refuse, and the first host to meet that learned the form from two refusals.
 func TestTheTemplateCarriesTheAnswerTheIntakeWillDemand(t *testing.T) {
+	t.Parallel()
 	e, runID, _ := assistedWorkspaceFixtureWithDecisions(t, "", nil, nil, func(step *flow.StepDefinition) {
 		step.SchemaVersion = "9"
 		step.ModelProfile = &flow.ModelProfile{Requested: "careful-review", Reason: "judges work it did not do"}

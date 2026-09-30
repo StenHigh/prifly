@@ -33,6 +33,7 @@ func questionsFixture(t *testing.T) (*Engine, string, SessionTask) {
 // keeps that statement on the attempt -- apart from the journal of what the
 // authority itself delivered and accepted.
 func TestTheReportCarriesTheQuestionsTheStepAnswered(t *testing.T) {
+	t.Parallel()
 	e, runID, task := questionsFixture(t)
 	ctx := context.Background()
 	if task.QuestionReport != QuestionReportRequired {
@@ -97,6 +98,7 @@ func TestTheReportCarriesTheQuestionsTheStepAnswered(t *testing.T) {
 // An empty list is a statement, and it is kept as one: a reader must be able to
 // tell "the host said there were none" from "nobody said anything".
 func TestAnEmptyListIsKeptAsNoQuestions(t *testing.T) {
+	t.Parallel()
 	e, runID, task := questionsFixture(t)
 	submission := hostResult(t, e, task, "planned")
 	submission.AnsweredQuestions = &[]AnsweredQuestion{}
@@ -116,6 +118,7 @@ func TestAnEmptyListIsKeptAsNoQuestions(t *testing.T) {
 // A decision request is not the end of an attempt: its questions come with the
 // report after the answer is redelivered.
 func TestADecisionRequestCarriesNoQuestions(t *testing.T) {
+	t.Parallel()
 	e, runID, task := questionsFixture(t)
 	request := DecisionRequest{SchemaVersion: DecisionRequestVersion, RunID: runID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, DecisionID: "improve_apply"}
 	_, err := e.SubmitSession(context.Background(), SessionSubmission{SchemaVersion: task.SchemaVersion, RunID: runID, AttemptID: task.AttemptID, EnvelopeDigest: task.EnvelopeDigest, DecisionRequest: &request, AnsweredQuestions: &[]AnsweredQuestion{}})
@@ -127,6 +130,7 @@ func TestADecisionRequestCarriesNoQuestions(t *testing.T) {
 // A Run sealed before 41 keeps the report it always had: the list is neither
 // owed nor accepted there.
 func TestARunSealedBeforeQuestionsNeitherOwesNorTakesThem(t *testing.T) {
+	t.Parallel()
 	step := flow.StepDefinition{Inputs: map[string]flow.InputPort{"handoff": {}}}
 	earlier := Run{SchemaVersion: CoreContinuationStateVersion}
 	if err := checkAnsweredQuestions(earlier, step, nil); err != nil {
@@ -152,6 +156,7 @@ func TestARunSealedBeforeQuestionsNeitherOwesNorTakesThem(t *testing.T) {
 // names it until it has run, a second take changes nothing, and a reported task
 // has nothing left to take.
 func TestTakingATaskIsRecordedOnce(t *testing.T) {
+	t.Parallel()
 	e, runID, task := questionsFixture(t)
 	ctx := context.Background()
 	if task.TakeCommand != "session take --run "+runID+" --attempt "+task.AttemptID {
@@ -186,6 +191,7 @@ func TestTakingATaskIsRecordedOnce(t *testing.T) {
 }
 
 func TestAReportedTaskThatWasNeverTakenCannotBeTakenLater(t *testing.T) {
+	t.Parallel()
 	e, runID, task := questionsFixture(t)
 	ctx := context.Background()
 	if _, err := e.SubmitSession(ctx, hostResult(t, e, task, "planned")); err != nil {
@@ -193,5 +199,30 @@ func TestAReportedTaskThatWasNeverTakenCannotBeTakenLater(t *testing.T) {
 	}
 	if _, err := e.TakeSession(ctx, runID, task.AttemptID); refusalCode(err) != "session_state_conflict" {
 		t.Fatalf("a take after the report was recorded: %v", err)
+	}
+}
+
+// A field of the report put inside result was refused as a bare schema_invalid
+// with no pointer; the refusal names the field and where it belongs.
+func TestAReportFieldInsideResultIsNamed(t *testing.T) {
+	t.Parallel()
+	e, _, task := questionsFixture(t)
+	for _, name := range reportLevelFields {
+		submission := hostResult(t, e, task, "planned")
+		var result map[string]any
+		if err := json.Unmarshal(submission.Result, &result); err != nil {
+			t.Fatal(err)
+		}
+		result[name] = []any{}
+		body, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		submission.Result = body
+		_, err = e.SubmitSession(context.Background(), submission)
+		problem, ok := err.(*flow.Problem)
+		if !ok || problem.Path != "/result/"+name || !strings.Contains(problem.Message, "top level") {
+			t.Fatalf("%s inside result was refused as %v", name, err)
+		}
 	}
 }

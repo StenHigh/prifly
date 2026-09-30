@@ -9,13 +9,38 @@ export GOTELEMETRY := off
 export GOCACHE := $(CURDIR)/.cache/go-build
 export GOMODCACHE := $(CURDIR)/.cache/go-mod
 
-.PHONY: build test race vet check ci-check fmt schemas schemas-check release-ci-check staticcheck-check vuln-check e2e examples release
+.PHONY: build test race vet check ci-check check-fast test-changed test-shard test-rest shard-check scripts-check qualify fmt schemas schemas-check release-ci-check staticcheck-check vuln-check e2e examples release
 build:
 	$(GO) build -trimpath -buildvcs=false -o bin/prifly ./cmd/prifly
 test:
 	$(GO) test -timeout $(TEST_TIMEOUT) ./...
 race:
 	$(GO) test -race -timeout $(RACE_TIMEOUT) ./...
+# While developing: the packages an edit can affect, the ones that import them,
+# and the tests that read the edited files by path. Never a substitute for
+# ci-check before a commit leaves the machine, nor for qualify before a release.
+test-changed:
+	python3 scripts/test-changed.py --go "$(GO)"
+check-fast: test-changed fmt-check refusal-check
+# CI splits the engine's tests across parallel jobs. Each test is in exactly one
+# shard; shard-check proves it, so a test that fell out of every shard fails the
+# build instead of passing unrun.
+SHARDS ?= 3
+SHARD ?= 0
+RUNTIME_PACKAGE := ./internal/runtime
+test-shard:
+	$(GO) test -timeout $(TEST_TIMEOUT) -run "$$(python3 scripts/test-shard.py --go "$(GO)" --package $(RUNTIME_PACKAGE) --shards $(SHARDS) --shard $(SHARD))" $(RUNTIME_PACKAGE)
+test-rest:
+	$(GO) test -timeout $(TEST_TIMEOUT) $$($(GO) list ./... | grep -v '/internal/runtime$$')
+shard-check:
+	python3 scripts/test-shard.py --go "$(GO)" --package $(RUNTIME_PACKAGE) --shards $(SHARDS) --check
+scripts-check:
+	python3 -B scripts/test_test_changed.py
+	python3 -B scripts/test_tag_release.py
+# Before a release only, on the exact commit that will be tagged: the race
+# detector and the full end-to-end suite. scripts/tag-release.py refuses a
+# commit GitHub has not qualified.
+qualify: race e2e
 vet:
 	$(GO) vet ./...
 # The authority needs cgo to run, but nothing else in this build should need it
@@ -30,8 +55,8 @@ vet:
 		CGO_ENABLED=0 GOOS=$$target $(GO) vet ./... || exit 1; \
 		echo "vet: $$target read"; \
 	done
-check: test race vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check
-ci-check: test vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check
+check: test race vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check
+ci-check: test vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check
 fmt:
 	$(GO) fmt ./...
 # Formatting drifted unnoticed because nothing checked it. A gate that does not

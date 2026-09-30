@@ -21,6 +21,7 @@ func testBlobs(t *testing.T) *BlobStore {
 }
 
 func TestBlobSealImportExport(t *testing.T) {
+	t.Parallel()
 	b := testBlobs(t)
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "input.txt"), []byte("original bytes"), 0600); err != nil {
@@ -71,6 +72,7 @@ func TestBlobSealImportExport(t *testing.T) {
 }
 
 func TestBlobRejectsPathsAndNonregularFiles(t *testing.T) {
+	t.Parallel()
 	b := testBlobs(t)
 	root, outside := t.TempDir(), t.TempDir()
 	if err := os.WriteFile(filepath.Join(outside, "secret"), []byte("private"), 0600); err != nil {
@@ -114,6 +116,7 @@ func TestBlobRejectsPathsAndNonregularFiles(t *testing.T) {
 }
 
 func TestBlobFailuresAndCorruption(t *testing.T) {
+	t.Parallel()
 	b := testBlobs(t)
 	if _, err := b.Put(strings.NewReader("too many"), 3); !errors.Is(err, ErrBlobLimit) {
 		t.Fatalf("byte limit: %v", err)
@@ -155,6 +158,7 @@ func TestBlobFailuresAndCorruption(t *testing.T) {
 }
 
 func TestBlobReadOnlyDoesNotCreateOrWrite(t *testing.T) {
+	t.Parallel()
 	parent := t.TempDir()
 	dir := filepath.Join(parent, "missing")
 	if _, err := OpenBlobStoreReadOnly(dir); !errors.Is(err, os.ErrNotExist) {

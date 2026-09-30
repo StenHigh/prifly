@@ -15,6 +15,7 @@ import (
 )
 
 func TestConciseWorkflowYAMLCompilesToTheSameRevision(t *testing.T) {
+	t.Parallel()
 	machine, registry := fixture(t)
 	inputs := machine["inputs"].(map[string]any)
 	outputs := machine["outputs"].(map[string]any)
@@ -79,6 +80,7 @@ func TestConciseWorkflowYAMLCompilesToTheSameRevision(t *testing.T) {
 }
 
 func TestConciseStepYAMLLowersSafeDefaults(t *testing.T) {
+	t.Parallel()
 	digest := "sha256:" + string(bytes.Repeat([]byte{'0'}, 64))
 	source := fmt.Sprintf(`authoring: prifly-step/1
 id: test:step/concise
@@ -119,6 +121,7 @@ result_schema_ref: result
 }
 
 func TestStepAuthoringRejectsUnsafeSurface(t *testing.T) {
+	t.Parallel()
 	_, err := StepJSONBytes([]byte(`authoring: prifly-step/1
 id: test:step/a
 version: 1.0.0
@@ -153,6 +156,7 @@ kind: worker
 }
 
 func TestStepAuthoringReferenceIsAValidStepDefinition(t *testing.T) {
+	t.Parallel()
 	source, err := os.ReadFile("../../examples/authoring/step-authoring-reference.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -192,6 +196,7 @@ func TestStepAuthoringReferenceIsAValidStepDefinition(t *testing.T) {
 // port refused the word. The check goes through the lowering because the one
 // that went straight to the contract is what let it ship.
 func TestAuthoringDerivesTheContractThatCarriesTheVerdict(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, marker, want string
 		verdicts           []any
@@ -256,6 +261,7 @@ func TestAuthoringDerivesTheContractThatCarriesTheVerdict(t *testing.T) {
 // line, and a program promise on blocked lives only in v12. The two have no
 // common contract, and the refusal says so instead of naming an adapter.
 func TestProgramBlockedPromiseAndUncapturedTreeHaveNoCommonContract(t *testing.T) {
+	t.Parallel()
 	digest := "sha256:" + strings.Repeat("0", 64)
 	ref := map[string]any{"id": "test:schema/out", "version": "1.0.0", "digest": digest}
 	source := map[string]any{
@@ -276,6 +282,7 @@ func TestProgramBlockedPromiseAndUncapturedTreeHaveNoCommonContract(t *testing.T
 }
 
 func TestWorkspaceTreeAuthoringAndValidation(t *testing.T) {
+	t.Parallel()
 	digest := "sha256:" + string(bytes.Repeat([]byte{'0'}, 64))
 	author := func(capture, effects string) []byte {
 		return []byte(fmt.Sprintf(`authoring: prifly-step/1
@@ -347,6 +354,7 @@ workspace_trees:
 }
 
 func TestWorkflowAuthoringReferenceIsAValidWorkflowRevision(t *testing.T) {
+	t.Parallel()
 	source, err := os.ReadFile("../../examples/authoring/workflow-authoring-reference.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -363,6 +371,7 @@ func TestWorkflowAuthoringReferenceIsAValidWorkflowRevision(t *testing.T) {
 }
 
 func TestWorkflowAuthoringPreservesEveryStageKind(t *testing.T) {
+	t.Parallel()
 	paths, err := filepath.Glob("../../test/fixtures/contracts/workflows/*.workflow.json")
 	if err != nil {
 		t.Fatal(err)
@@ -401,6 +410,7 @@ func TestWorkflowAuthoringPreservesEveryStageKind(t *testing.T) {
 }
 
 func TestWorkflowAuthoringDerivesV3AndNormalizesPublicationBindings(t *testing.T) {
+	t.Parallel()
 	digest := "sha256:" + string(bytes.Repeat([]byte{'0'}, 64))
 	ref := map[string]any{"id": "test:source/documents", "version": "1.0.0", "digest": digest}
 	source := []byte(`authoring: prifly-workflow/1
@@ -472,6 +482,7 @@ stages:
 }
 
 func TestWorkflowAuthoringRejectsUnknownSurface(t *testing.T) {
+	t.Parallel()
 	_, err := WorkflowJSONBytes([]byte(`{"authoring":"prifly-workflow/1"}`), "json")
 	expectProblem(t, err, "unsupported_authoring")
 
@@ -493,6 +504,7 @@ policy_ref: missing
 }
 
 func TestWorkflowAuthoringSourcesKeepDottedIdentifiers(t *testing.T) {
+	t.Parallel()
 	digest := "sha256:" + string(bytes.Repeat([]byte{'0'}, 64))
 	ref := map[string]any{"id": "test:source/documents", "version": "1.0.0", "digest": digest}
 	stage, err := authorSource("$stages.review.one.report", nil, "/binding")
@@ -512,6 +524,7 @@ func TestWorkflowAuthoringSourcesKeepDottedIdentifiers(t *testing.T) {
 }
 
 func TestWorkflowAuthoringNormalizesCompensation(t *testing.T) {
+	t.Parallel()
 	digest := "sha256:" + string(bytes.Repeat([]byte{'0'}, 64))
 	data, err := WorkflowJSONBytes([]byte(`authoring: prifly-workflow/1
 id: test:workflow/compensated
@@ -598,6 +611,7 @@ func mapsEqual(left, right any) bool {
 // far as the author could tell; the pilot's first hour with a program step
 // went there. The refusal now names the authoring version a program uses.
 func TestAProgramStepUnderTheSessionAuthoringNamesTheVersionToUse(t *testing.T) {
+	t.Parallel()
 	_, err := StepJSONBytes([]byte(`authoring: prifly-step/2
 id: test:step/tests
 version: 1.0.0
@@ -614,6 +628,7 @@ executor: {adapter_ref: {id: core:adapter/local-process, version: 2.0.0, digest:
 // port. Only v8 carries it, only on effects none, and never beside a captured
 // binding; the older contracts keep refusing the absent port.
 func TestMaterializeOnlyWorkspaceTreeAuthoringAndValidation(t *testing.T) {
+	t.Parallel()
 	digest := "sha256:" + string(bytes.Repeat([]byte{'0'}, 64))
 	author := func(effects, version string) []byte {
 		return []byte(fmt.Sprintf(`authoring: prifly-step/1
@@ -680,6 +695,7 @@ workspace_trees:
 // the plan; what the host did with it is a fact of one execution and belongs
 // in the report, not here.
 func TestStepDeclaresTheModelProfileItWants(t *testing.T) {
+	t.Parallel()
 	digest := "sha256:" + strings.Repeat("a", 64)
 	author := func(extra string) []byte {
 		return []byte(fmt.Sprintf(`authoring: prifly-step/2
@@ -738,6 +754,7 @@ result_schema_ref: result
 // the form instead of asking whether the step is at least that version, so v9
 // -- which is v8 plus a field -- was refused by a rule v8 passes.
 func TestAMaterializeOnlyTreeSurvivesALaterStepContract(t *testing.T) {
+	t.Parallel()
 	manifest := Ref{ID: WorkspaceTreeManifestSchemaID, Version: "1.0.0", Digest: "sha256:" + strings.Repeat("a", 64)}
 	step := StepDefinition{
 		SchemaVersion: "9", ID: "test:step/review", Version: "1.0.0", Kind: "worker",

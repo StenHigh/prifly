@@ -11,6 +11,7 @@ import (
 )
 
 func TestMonitorRevisionPages(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	ctx := context.Background()
 	for _, cursor := range []string{"bad\n cursor", strings.Repeat("x", 257)} {
@@ -48,6 +49,7 @@ func TestMonitorRevisionPages(t *testing.T) {
 }
 
 func TestMonitorPageKeepsSnapshotIntegrity(t *testing.T) {
+	t.Parallel()
 	s, _ := testStore(t)
 	applyChange(t, s, storeCommand("first", "run:one", 0), storeChange(`{"n":1}`))
 	if _, err := s.db.Exec("UPDATE events SET state_after='{}'"); err != nil {
