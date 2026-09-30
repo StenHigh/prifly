@@ -524,6 +524,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			if len(summary.Execution) != 0 && !*allowExecution {
 				fmt.Fprintf(c.errout, "project: this launch runs %d workflow program(s), listed in execution; once you have reviewed them, the start with --expected-launch-digest also needs --allow-execution\n", len(summary.Execution))
 			}
+			// Exclusive resources change when a stage runs, not what runs, so
+			// the reviewed summary does not carry them; a misspelt stage is
+			// refused before this point. Said here so they are seen before a
+			// second Run waits on one.
+			if line := projectResourceLine(stageResources, resourceLimits); line != "" {
+				fmt.Fprintln(c.errout, line)
+			}
 			return c.emit(summary)
 		}
 		// Keep stdout's one final result intact. The pre-dispatch summary is on

@@ -374,6 +374,10 @@ func TestProjectResourcesKeepTwoRunsOffOneStage(t *testing.T) {
 	folder := ".prifly/workflows/single/"
 	writeFixtureFile(t, root, folder+"extend.yaml", "resources:\n  heavy:\n    stages: [work]\n")
 	gitFixture(t, root, "commit", "-qam", "resources")
+	// The review names them before any Run waits on one.
+	if code, _, stderr := runCLI(t, "--project", authority, "project", "questionnaire", "--prepare", "--repository", root, "--launch", "single", "--host", "codex-cli", "--input", "task="+filepath.Join(root, "task.json")); code != 0 || !strings.Contains(stderr, "exclusive resources this launch holds: heavy (limit 1) on work") {
+		t.Fatalf("the review did not name the resources: exit=%d %s", code, stderr)
+	}
 	first := startSingle(t, root, authority)
 	code, _, stderr := runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "single", "--host", "codex-cli", "--input", "task="+filepath.Join(root, "task.json"))
 	if code == 0 || !strings.Contains(stderr, `"code":"resource_busy"`) || !strings.Contains(stderr, first) {

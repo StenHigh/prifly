@@ -6,6 +6,7 @@ import (
 	"math"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
@@ -123,4 +124,29 @@ func wholeNumber(value any) (int64, bool) {
 		return parsed, err == nil
 	}
 	return 0, false
+}
+
+// projectResourceLine names the exclusive resources a launch will seal, each
+// with its limit and the stages holding it, or nothing when it declares none.
+func projectResourceLine(stages map[string][]string, limits map[string]int64) string {
+	if len(limits) == 0 {
+		return ""
+	}
+	held := map[string][]string{}
+	for stage, names := range stages {
+		for _, name := range names {
+			held[name] = append(held[name], stage)
+		}
+	}
+	names := make([]string, 0, len(limits))
+	for name := range limits {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		slices.Sort(held[name])
+		parts = append(parts, fmt.Sprintf("%s (limit %d) on %s", name, limits[name], strings.Join(held[name], ", ")))
+	}
+	return "project: exclusive resources this launch holds: " + strings.Join(parts, "; ") + " -- a stage waits with resource_busy while another Run holds its resource at the limit"
 }
