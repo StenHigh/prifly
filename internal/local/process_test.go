@@ -357,7 +357,10 @@ func TestProcessHelper(t *testing.T) {
 		writeResult()
 	case "early":
 		writeResult()
-		time.Sleep(350 * time.Millisecond)
+		// Long enough that a race-instrumented driver on a loaded two-core
+		// runner still reads the result while this process lives: 350ms was
+		// not, once in CI, and the probe then met an exited group.
+		time.Sleep(time.Second)
 	case "orphan", "ignore-term-tree":
 		childMode := "linger"
 		if mode == "ignore-term-tree" {
