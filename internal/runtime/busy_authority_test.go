@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,14 +67,14 @@ func holdAuthorityWriteLock(t *testing.T, e *Engine) (release func()) {
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
 	}
-	stopped := false
+	// The release is called from a timer and from the test at once; the
+	// child is stopped by whichever comes first, exactly once.
+	var stop sync.Once
 	release = func() {
-		if stopped {
-			return
-		}
-		stopped = true
-		_ = child.Process.Kill()
-		_ = child.Wait()
+		stop.Do(func() {
+			_ = child.Process.Kill()
+			_ = child.Wait()
+		})
 	}
 	t.Cleanup(release)
 	deadline := time.Now().Add(30 * time.Second)

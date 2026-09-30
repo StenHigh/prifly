@@ -2,7 +2,7 @@
 
 - [x] 1.1 Задать versioned `program-progress/1` и обновить словарь/опубликованный контракт без изменения StepResult; проверить закрытую schema и старые bundles через `make schemas-check` и `TestGlossaryBindings`. 2026-09-30: отдельный bundle `schemas/core/program-progress.schema.json` (`ProgramProgress`, `ProgramProgressRead`); state/read версии Run не тронуты — отчёт хранится рядом с Run. Словарь: «Program progress».
 - [x] 1.2 Добавить необязательный fd 4, ограничение размера/частоты и parser с отказом от неверных счётчиков; проверить старую программу без fd 4, частые/вредоносные сообщения и неизменный verdict через `go test ./internal/local -run 'Test.*Progress' -count=1`. fd 4 открывается драйвером всегда, `PRIFLY_PROGRESS_FD=4`; строка ≤ 1 КиБ, поток ≤ 1 МиБ (дальше сливается без блокировки), передача последней строки раз в секунду; тесты `internal/local` Progress + согласие разборщика и схемы.
-- [ ] 1.3 Добавить новую редакцию StepDefinition/YAML authoring с явным opt-in live-вывода только для program step и конечным process-output budget; отсутствие полей и старые editions сохраняют прежний режим и 64 КиБ. Проверить compile/reseal, отказ несовместимого executor и чтение сохранённых bundles.
+- [ ] 1.3 Добавить в конфигурацию executor проекта (execution-bindings/3, `project local set`) явный opt-in live-вывода и конечный process-output budget, запечатанные в Run новой версией состояния и показанные в `--prepare`; отсутствие полей и прежние версии сохраняют прежний режим и 64 КиБ. Проверить отказ opt-in для непрограммного executor, старые bindings/Runs и опубликованные bundles без изменений.
 
 ## 2. Authority и read projection
 
