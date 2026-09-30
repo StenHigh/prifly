@@ -205,6 +205,9 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreResourceStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreResourceReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "exclusive_resources")
+	// A program may report its own progress over fd 4. The report is kept
+	// beside the Run, never in it, so no state or read version is minted.
+	profile.Capabilities = append(profile.Capabilities, "program_progress")
 	return manifest
 }
 

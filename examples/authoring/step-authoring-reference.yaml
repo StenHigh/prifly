@@ -7,6 +7,12 @@
 # it seals StepDefinition v6 or v7. This file is intentionally verbose, not a ready
 # executable package: replace the illustrative exact refs with real definitions.
 # Managed steps keep prifly-step/1 and their executor configuration limits.
+# A program step declares nothing to report its progress: the program may
+# write program-progress/1 lines to fd 4 (PRIFLY_PROGRESS_FD), e.g.
+#   {"schema_version":"program-progress/1","phase":"product","current":4200,"total":6994}
+# phase is a name (letters, digits, . _ -, at most 64 bytes), message at most
+# 200 characters, total only with a current not above it. It is read by
+# `run progress` and the monitor; it is never the result (fd 3) or a verdict.
 authoring: prifly-step/2 # Required marker; explicitly opts into separate work/wait time.
 schema_version: "10" # Optional; the tool picks the lowest contract that carries what
 # you declared: v6 by default, v7 for active_timeout_ms: null, v8 for a

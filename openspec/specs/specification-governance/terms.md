@@ -426,6 +426,19 @@ host взял выданное задание; хранится один раз 
 драйвера. Имя непрозрачно для движка; лимит машины задаёт `local.yaml`. Это не
 ёмкость допуска (`capacity`) и не `max_parallelism` внутри одного Run.
 
+<a id="program-progress"></a>
+### Program progress — Прогресс программы
+
+Необязательная строка `program-progress/1`, которую программа шага пишет в fd 4
+(`PRIFLY_PROGRESS_FD`) о своей попытке: фаза, короткое пояснение и, если
+известен, счётчик `current/total`. Это диагностика, а не результат: fd 3
+остаётся единственным каналом StepResult, отчёт не меняет вердикт, не продлевает
+срок и не двигает версию Run. Authority хранит только последний валидный отчёт
+попытки рядом с Run (хранилище 8) и считает отклонённые; чтение
+`program-progress-read/1` (`run progress`, монитор) говорит, текущий ли он
+(`reported`), устаревший (`stale`), отсутствует (`not_reported`) или не может
+быть известен (`unavailable`).
+
 <a id="interaction-policy"></a>
 ### Attended / autonomous / unattended Run — Режим участия владельца
 
@@ -1589,6 +1602,9 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [Exclusive resource](#exclusive-resource) | `internal/runtime/model.go` | `runtime.Run.StageResources` | `stage_resources` |
 | [Exclusive resource](#exclusive-resource) | `internal/runtime/model.go` | `runtime.Run.ResourceLimits` | `resource_limits` |
 | [Exclusive resource](#exclusive-resource) | `internal/local/store.go` | `local.ResourceClaim` | — |
+| [Program progress](#program-progress) | `internal/local/progress.go` | `local.ProgramProgress` | — |
+| [Program progress](#program-progress) | `internal/runtime/progress.go` | `runtime.ProgramProgressView` | — |
+| [Program progress](#program-progress) | `internal/runtime/progress.go` | `runtime.AttemptProgressView.State` | `state` |
 | [Session take](#session-take) | `internal/runtime/sessions.go` | `runtime.SessionHandoff.Taken` | `taken` |
 | [Session take](#session-take) | `internal/runtime/sessions.go` | `runtime.SessionTask.TakeCommand` | `take_command` |
 | [Question report](#question-report) | `internal/runtime/questions.go` | `runtime.QuestionReport` | — |

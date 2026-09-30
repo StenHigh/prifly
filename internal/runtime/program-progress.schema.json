@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:program-progress:1",
+  "description": "What a program step says about its own progress, and how a reader gets it back. A program may write program-progress/1 lines to the descriptor named by PRIFLY_PROGRESS_FD (4); fd 3 stays the only channel of its StepResult. A report is a diagnostic: it is never a result, a verdict, a heartbeat or a reason to keep a Run alive, and it moves no Run version. The read keeps only the latest valid report per attempt, counts refused ones, and says whether the report is the attempt's current word (reported), an old one (stale), absent (not_reported) or unknowable on this storage (unavailable).",
+  "$ref": "#/$defs/ProgramProgress",
+  "x-prifly-contracts": ["ProgramProgress", "ProgramProgressRead"],
+  "$defs": {
+    "ProgramProgress": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "phase"],
+      "properties": {
+        "schema_version": {"const": "program-progress/1"},
+        "phase": {"type": "string", "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+        "message": {"type": "string", "maxLength": 200, "pattern": "^\\P{Cc}*$"},
+        "current": {"type": "integer", "minimum": 0},
+        "total": {"type": "integer", "minimum": 1}
+      },
+      "dependentRequired": {"total": ["current"]},
+      "description": "One line of at most 1024 bytes. current never exceeds total; a report that breaks a rule is refused whole and counted, never repaired."
+    },
+    "ProgramProgressRead": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "run_id", "run_version", "driver_live", "as_of", "attempts"],
+      "properties": {
+        "schema_version": {"const": "program-progress-read/1"},
+        "run_id": {"type": "string", "minLength": 1},
+        "run_version": {"type": "integer", "minimum": 0},
+        "driver_live": {"type": "boolean"},
+        "as_of": {"type": "object"},
+        "attempts": {"type": "array", "items": {"$ref": "#/$defs/AttemptProgress"}}
+      }
+    },
+    "AttemptProgress": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "step_instance_id", "stage_id", "attempt_status", "settled", "state", "accepted", "rejected", "truncated"],
+      "properties": {
+        "attempt_id": {"type": "string", "minLength": 1},
+        "step_instance_id": {"type": "string"},
+        "stage_id": {"type": "string"},
+        "attempt_status": {"type": "string"},
+        "settled": {"type": "boolean", "description": "The attempt is over; a report is then the program's last word and says nothing about how the attempt ended."},
+        "state": {"enum": ["reported", "not_reported", "stale", "unavailable"]},
+        "phase": {"type": "string", "maxLength": 64},
+        "message": {"type": "string", "maxLength": 200},
+        "current": {"type": "integer", "minimum": 0},
+        "total": {"type": "integer", "minimum": 1},
+        "observed": {"type": "string", "format": "date-time"},
+        "accepted": {"type": "integer", "minimum": 0},
+        "rejected": {"type": "integer", "minimum": 0, "description": "Reports refused as malformed; they are not shown."},
+        "truncated": {"type": "boolean", "description": "The program wrote past the 1 MiB bound; the rest was discarded unread."}
+      }
+    }
+  }
+}

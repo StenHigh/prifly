@@ -1229,6 +1229,18 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 		}
 		_, err = remainingBudget(attempt.Admitted, attempt.Deadline, now)
 		return err
+	}, Progress: func(d local.ProgressDelivery) error {
+		// A report is a diagnostic beside the Run, not a Run change: it moves no
+		// version or deadline. It runs on the process loop, so it is bounded
+		// well below the observation deadline; a busy store is tried again with
+		// the next report rather than holding the loop.
+		putCtx, putCancel := context.WithTimeout(context.Background(), progressWriteDeadline)
+		defer putCancel()
+		record := local.AttemptProgress{RunID: r.ID, AttemptID: a.ID, LaunchID: d.LaunchID, Observed: d.At.UTC(), Accepted: d.Accepted, Rejected: d.Rejected, Truncated: d.Truncated}
+		if d.Latest != nil {
+			record.Progress = *d.Latest
+		}
+		return retryOnBusy(putCtx, func() error { return e.Store.PutAttemptProgress(putCtx, record) })
 	}}, func(observation local.ProcessObservation) error {
 		observeCtx, observeCancel := context.WithTimeout(context.Background(), observationDeadline)
 		defer observeCancel()
@@ -1282,6 +1294,10 @@ const dispatchWindow = 30 * time.Second
 // than the store's busy timeout on purpose: a concurrent writer must be waited
 // out and retried, because a dropped observation costs the worker its evidence.
 const observationDeadline = 15 * time.Second
+
+// progressWriteDeadline bounds recording one progress report. It is short
+// because the write runs on the loop that also watches the process.
+const progressWriteDeadline = 2 * time.Second
 
 // retryOnBusy repeats a write that SQLite refused because another writer held
 // the database. The observation it carries has nowhere else to go: dropping it
@@ -1745,6 +1761,17 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 			current.ProcessOutcome = outcome
 			if outcome.Started && outcome.GroupEmpty && current.ExecutorEnd == nil {
 				current.ExecutorEnd = &obs
+			}
+			// The program's last report did not reach the authority. The attempt
+			// is judged as before; the reader of its progress is told why the
+			// record may be behind what the program said.
+			if detail := outcome.ProgressError; detail != "" {
+				if len(detail) > maxDiagnosticDetailBytes {
+					detail = strings.ToValidUTF8(detail[:maxDiagnosticDetailBytes], "")
+				}
+				if err := recordDiagnostic(r, Diagnostic{ID: derivedID("diagnostic", r.ID, commandID, "execution", "progress_unrecorded"), RunID: r.ID, AttemptID: attemptID, Origin: "core", Severity: "warn", Code: "progress_unrecorded", Category: "executor", Phase: "execution", Message: "The program's last progress report was not recorded: " + detail, Observed: obs, CauseRefs: []string{}}); err != nil {
+					return local.Change{}, err
+				}
 			}
 		}
 		if uncertain {

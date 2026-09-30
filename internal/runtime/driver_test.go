@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -1926,6 +1927,28 @@ func TestDriverWorkerHelper(t *testing.T) {
 	if mode == "blocked-report" || mode == "blocked-silent" {
 		result.Verdict, result.Summary = "blocked", "the condition this step needs is absent"
 	}
+	if strings.HasPrefix(mode, "progress-") {
+		// Two phases a second apart, so the first is handed on before the
+		// second replaces it; a wait file lets the test read the running one.
+		progress := os.NewFile(4, "progress")
+		if os.Getenv("PRIFLY_PROGRESS_FD") != "4" {
+			os.Exit(130)
+		}
+		_, _ = fmt.Fprintln(progress, `{"schema_version":"program-progress/1","phase":"product","current":4200,"total":6994}`)
+		deadline := time.Now().Add(15 * time.Second)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat("finish"); err == nil {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		_, _ = fmt.Fprintln(progress, `{"schema_version":"program-progress/1","phase":"baseline","message":"comparing with the base branch"}`)
+		_ = progress.Close()
+		if mode == "progress-fail" {
+			_, _ = fmt.Fprint(os.Stdout, "pass")
+			os.Exit(9)
+		}
+	}
 	if strings.HasPrefix(mode, "workspace-") {
 		// The program reports the workspace it was handed on stdout, and in
 		// the write mode leaves a file there that it was not permitted to.
@@ -2466,6 +2489,118 @@ func TestTwoRunsWithProgramsFinishTogether(t *testing.T) {
 	for _, id := range []string{first, second} {
 		if r := driveUntilSettled(t, e, id); r.Status != "completed" {
 			t.Fatalf("%s ended %s beside another Run: %+v", id, r.Status, r.Diagnostics)
+		}
+	}
+}
+
+// A running program's fd 4 report is readable beside the Run while it works,
+// moves no Run version, and after a failure stays only its last word.
+func TestDriverProgramProgressIsReadBesideTheRun(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []string{"progress-pass", "progress-fail"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+			e, runID := driverProject(t, mode, 20000)
+			_, finished := driverAsync(t, e, runID)
+			r := driverWait(t, e, runID, func(r Run) bool {
+				for _, a := range r.Attempts {
+					if a.Started != nil {
+						return true
+					}
+				}
+				return false
+			})
+			a := r.Attempts[r.Active[0]]
+			var live ProgramProgressView
+			deadline := time.Now().Add(10 * time.Second)
+			for time.Now().Before(deadline) {
+				view, err := e.ProgramProgress(context.Background(), runID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(view.Attempts) == 1 && view.Attempts[0].Phase != "" {
+					live = view
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			if len(live.Attempts) != 1 {
+				t.Fatal("no progress of the running program reached the reader")
+			}
+			row := live.Attempts[0]
+			if row.AttemptID != a.ID || row.State != ProgressReported || row.Phase != "product" || row.Current == nil || *row.Current != 4200 || *row.Total != 6994 || row.Settled || !live.DriverLive {
+				t.Fatalf("running progress: %+v", live)
+			}
+			if after := driverRun(t, e, runID); len(after.Attempts[a.ID].Candidate) != 0 || live.RunVersion > 0 && driverVersion(t, e, runID) != live.RunVersion {
+				t.Fatal("a progress report moved the Run")
+			}
+			if err := os.WriteFile(filepath.Join(a.Workspace, "finish"), nil, 0600); err != nil {
+				t.Fatal(err)
+			}
+			driverDone(t, finished, false)
+			final, err := e.ProgramProgress(context.Background(), runID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			row = final.Attempts[0]
+			if row.State != ProgressReported || row.Phase != "baseline" || row.Current != nil || !row.Settled || final.DriverLive {
+				t.Fatalf("final progress: %+v", final)
+			}
+			settled := driverRun(t, e, runID).Attempts[a.ID]
+			if mode == "progress-fail" && (settled.Accepted != nil || row.AttemptStatus == "succeeded" || settled.ProcessOutcome.ExitCode == nil || *settled.ProcessOutcome.ExitCode != 9) {
+				t.Fatalf("a report or a printed pass changed the outcome: %+v", settled)
+			}
+			if mode == "progress-pass" && settled.Accepted == nil {
+				t.Fatalf("a reporting program was not accepted: %+v", settled)
+			}
+		})
+	}
+}
+
+func driverVersion(t *testing.T, e *Engine, runID string) int64 {
+	t.Helper()
+	view, err := e.View(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return view.RunVersion
+}
+
+// The read names what it cannot know instead of calling it now.
+func TestProgramProgressStates(t *testing.T) {
+	t.Parallel()
+	started := &local.ProcessIdentity{LaunchID: "launch-1"}
+	r := Run{ID: "run:p", Attempts: map[string]*Attempt{
+		"attempt:silent":  {ID: "attempt:silent", ActivationID: "activation:a", Status: "running", Process: started},
+		"attempt:running": {ID: "attempt:running", ActivationID: "activation:a", Status: "running", Process: started},
+		"attempt:old":     {ID: "attempt:old", ActivationID: "activation:a", Status: "running", Process: started},
+		"attempt:host":    {ID: "attempt:host", Session: &SessionHandoff{}},
+		"attempt:junk":    {ID: "attempt:junk", Status: "running", Process: started},
+	}, Activations: map[string]*Activation{"activation:a": {ID: "activation:a", StageID: "tests"}}}
+	current := int64(3)
+	records := map[string]local.AttemptProgress{
+		"attempt:running": {AttemptID: "attempt:running", LaunchID: "launch-1", Progress: local.ProgramProgress{Phase: "product", Current: &current}, Accepted: 1},
+		"attempt:old":     {AttemptID: "attempt:old", LaunchID: "launch-0", Progress: local.ProgramProgress{Phase: "extra"}, Accepted: 1},
+		"attempt:junk":    {AttemptID: "attempt:junk", LaunchID: "launch-1", Rejected: 4},
+	}
+	states := func(view ProgramProgressView) map[string]string {
+		out := map[string]string{}
+		for _, a := range view.Attempts {
+			out[a.AttemptID] = a.State
+		}
+		return out
+	}
+	live := states(programProgressView(r, 1, records, true, true, Observation{}))
+	want := map[string]string{"attempt:silent": ProgressNotReported, "attempt:running": ProgressReported, "attempt:old": ProgressStale, "attempt:junk": ProgressNotReported}
+	if !maps.Equal(live, want) {
+		t.Fatalf("live states: %v", live)
+	}
+	if got := states(programProgressView(r, 1, records, true, false, Observation{}))["attempt:running"]; got != ProgressStale {
+		t.Fatalf("a report with no live driver read as now: %s", got)
+	}
+	for id, state := range states(programProgressView(r, 1, nil, false, true, Observation{})) {
+		if state != ProgressUnavailable {
+			t.Fatalf("%s on storage without progress: %s", id, state)
 		}
 	}
 }

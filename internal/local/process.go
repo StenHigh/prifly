@@ -43,6 +43,11 @@ type ProcessSpec struct {
 	// executable hashing and pipe setup. It must be bounded and cannot spawn.
 	// It does not make the durable dispatch and OS start boundary atomic.
 	BeforeStart func() error `json:"-"`
+	// Progress, when set, opens fd 4 for program-progress/1 reports and is
+	// handed the latest one at most once per ProgressDeliveryInterval, and once
+	// more after the process ends. It runs on the driver's loop, so it must be
+	// bounded; its failure is recorded in ProgressError and stops nothing.
+	Progress func(ProgressDelivery) error `json:"-"`
 }
 
 // ProcessIdentity binds an observation to an actual launch, not merely a PID.
@@ -120,6 +125,10 @@ type ProcessOutcome struct {
 	Stdout               DiagnosticStream  `json:"stdout"`
 	Stderr               DiagnosticStream  `json:"stderr"`
 	ResultBytes          int64             `json:"result_bytes"`
+	// ProgressError is the failure of the last attempt to hand a report on;
+	// empty once a later one succeeded. Diagnostics are not the attempt's
+	// outcome, so it is never recorded with it.
+	ProgressError string `json:"-"`
 }
 
 type ProcessProbe struct {
@@ -377,6 +386,12 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 	if err != nil {
 		return out, err
 	}
+	var progressR, progressW *os.File
+	if spec.Progress != nil {
+		if progressR, progressW, err = pipe(); err != nil {
+			return out, err
+		}
+	}
 	cmd := exec.Command(executable, spec.Args...)
 	cmd.Dir = spec.Dir
 	cmd.Env = make([]string, 0, len(spec.Env)+3)
@@ -389,6 +404,10 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinR, stdoutW, stderrW
 	cmd.ExtraFiles = []*os.File{resultW}
+	if progressW != nil {
+		cmd.Env = append(cmd.Env, "PRIFLY_PROGRESS_FD=4")
+		cmd.ExtraFiles = append(cmd.ExtraFiles, progressW)
+	}
 	if err := ctx.Err(); err != nil {
 		return out, err
 	}
@@ -411,6 +430,31 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 	_ = stdoutW.Close()
 	_ = stderrW.Close()
 	_ = resultW.Close()
+	progress := &progressCollector{}
+	progressDone := make(chan struct{}, 1)
+	progressOpen := progressR != nil
+	if progressOpen {
+		_ = progressW.Close()
+		go progress.read(progressR, progressDone)
+	}
+	var progressHanded time.Time
+	handProgress := func(force bool) {
+		if spec.Progress == nil || !force && time.Since(progressHanded) < ProgressDeliveryInterval {
+			return
+		}
+		delivery, changed := progress.take()
+		if !changed {
+			return
+		}
+		progressHanded = time.Now()
+		delivery.LaunchID = out.Identity.LaunchID
+		if err := spec.Progress(delivery); err != nil {
+			out.ProgressError = err.Error()
+			progress.retry()
+		} else {
+			out.ProgressError = ""
+		}
+	}
 	go func() {
 		_, _ = io.Copy(stdinW, bytes.NewReader(spec.Envelope))
 		_ = stdinW.Close()
@@ -559,7 +603,10 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 			}
 		case <-streamDone:
 			streamsComplete++
+		case <-progressDone:
+			progressOpen = false
 		case <-ticker.C:
+			handProgress(false)
 			if !settled && stopAt.IsZero() && time.Since(out.StartedAt) >= processPollCloseWatch {
 				settled = true
 				ticker.Reset(processPollSettled)
@@ -656,7 +703,7 @@ drain:
 		// Reading is bounded even if a prohibited detached descendant kept a pipe.
 		timer := time.NewTimer(spec.KillWait)
 		defer timer.Stop()
-		for !resultsComplete || streamsComplete < 2 || len(resultMessages) > 0 {
+		for !resultsComplete || streamsComplete < 2 || progressOpen || len(resultMessages) > 0 {
 			select {
 			case message := <-resultMessages:
 				if message.err != "" {
@@ -673,6 +720,8 @@ drain:
 				}
 			case <-streamDone:
 				streamsComplete++
+			case <-progressDone:
+				progressOpen = false
 			case <-timer.C:
 				out.Uncertain = true
 				retErr = errors.Join(retErr, errors.New("inherited process streams did not close"))
@@ -682,6 +731,7 @@ drain:
 	}
 
 finish:
+	handProgress(true)
 	_ = stdoutR.Close()
 	_ = stderrR.Close()
 	_ = resultR.Close()

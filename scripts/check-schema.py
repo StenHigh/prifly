@@ -83,6 +83,7 @@ def check(args, generator):
 		("package-manifest-v2", ["--package-manifest-v2"], ("schemas/core/package-manifest-v2.schema.json",)),
 		("execution-bindings", ["--execution-bindings"], ("schemas/core/execution-bindings.schema.json",)),
 		("execution-bindings-v2", ["--execution-bindings-v2"], ("schemas/core/execution-bindings-v2.schema.json",)),
+		("program-progress", ["--program-progress"], ("schemas/core/program-progress.schema.json",)),
 		("run-decisions", ["--run-decisions"], ("internal/runtime/run-decisions.schema.json", "schemas/core/run-decisions.schema.json")),
         ("step-definition-v3", ["--step-definition-v3"], ("schemas/core/step-definition-v3.schema.json",)),
         ("step-definition-v4", ["--step-definition-v4"], ("schemas/core/step-definition-v4.schema.json",)),

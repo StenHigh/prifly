@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	StorageVersion = 7
+	StorageVersion = 8
 	// MaxSlotWaiters bounds the admission queue. A queue without a bound is a
 	// second unbounded resource hiding behind a bounded one.
 	MaxSlotWaiters = 64
@@ -557,6 +557,7 @@ func (s *Store) initialize(ctx context.Context, conn *sql.Conn, dir string) erro
 CREATE TABLE authority(singleton INTEGER PRIMARY KEY CHECK(singleton=1),id TEXT NOT NULL UNIQUE,epoch INTEGER NOT NULL CHECK(epoch>0),state_directory TEXT NOT NULL,cut INTEGER NOT NULL CHECK(cut>=0),slot_id TEXT NOT NULL DEFAULT '',slot_run TEXT NOT NULL DEFAULT '',slot_capacity INTEGER NOT NULL DEFAULT 1 CHECK(slot_capacity>=1),admission_seq INTEGER NOT NULL DEFAULT 0,verified_cut INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE slots(slot_id TEXT PRIMARY KEY,run_id TEXT NOT NULL);
 CREATE TABLE slot_resources(slot_id TEXT NOT NULL,resource TEXT NOT NULL,PRIMARY KEY(slot_id,resource));
+CREATE TABLE attempt_progress(attempt_id TEXT PRIMARY KEY,run_id TEXT NOT NULL,data BLOB NOT NULL);
 CREATE TABLE slot_waiters(run_id TEXT PRIMARY KEY,since_seq INTEGER NOT NULL,seen_seq INTEGER NOT NULL);
 CREATE TABLE runs(run_id TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),event_seq INTEGER NOT NULL CHECK(event_seq>0),snapshot BLOB NOT NULL,snapshot_digest TEXT NOT NULL,snapshot_packed INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE pinned_bytes(digest TEXT PRIMARY KEY,bytes BLOB NOT NULL);
@@ -569,7 +570,7 @@ CREATE INDEX events_state ON events(run_id,seq) WHERE state_after IS NOT NULL;
 CREATE TABLE authority_states(state_key TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),cut INTEGER NOT NULL UNIQUE,data BLOB NOT NULL,digest TEXT NOT NULL);
 CREATE TABLE authority_commands(actor TEXT NOT NULL,command_id TEXT NOT NULL,state_key TEXT NOT NULL,digest TEXT NOT NULL,cut INTEGER NOT NULL UNIQUE,receipt BLOB NOT NULL,receipt_digest TEXT NOT NULL,PRIMARY KEY(actor,command_id));
 PRAGMA application_id=1347569228;
-PRAGMA user_version=7;`
+PRAGMA user_version=8;`
 	if _, err := conn.ExecContext(ctx, schema); err != nil {
 		return err
 	}
@@ -581,6 +582,9 @@ PRAGMA user_version=7;`
 }
 
 func (s *Store) migrate(ctx context.Context, conn *sql.Conn, version int) error {
+	if version == 7 {
+		return s.migrateAttemptProgress(ctx, conn)
+	}
 	if version == 6 {
 		return s.migrateSlotResources(ctx, conn)
 	}
@@ -761,7 +765,7 @@ func (s *Store) migrateSlotResources(ctx context.Context, conn *sql.Conn) error 
 	if err := conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
 		return err
 	}
-	if current == StorageVersion {
+	if current > 6 {
 		return nil
 	}
 	if current != 6 {
@@ -1508,7 +1512,7 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 		}
 		if rejection == nil {
 			for id := range change.PruneRuns {
-				for _, table := range []string{"events", "samples", "slot_waiters", "runs"} {
+				for _, table := range []string{"events", "samples", "slot_waiters", "attempt_progress", "runs"} {
 					if _, err := conn.ExecContext(ctx, "DELETE FROM "+table+" WHERE run_id=?", id); err != nil {
 						return out, err
 					}

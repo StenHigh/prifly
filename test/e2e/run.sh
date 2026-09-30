@@ -23,3 +23,4 @@ python3 -B test/e2e/verify-context.py --binary "$binary" --target "$home/fixture
 python3 -B test/e2e/verify-parallel-worktrees.py --binary "$binary" --target "$home/fixtures/parallel"
 python3 -B test/e2e/verify-monitor.py --binary "$binary" --target "$home/fixtures/monitor"
 python3 -B test/e2e/verify-capacity.py --binary "$binary" --target "$home/fixtures/capacity"
+python3 -B test/e2e/verify-progress.py --binary "$binary" --target "$home/fixtures/progress"

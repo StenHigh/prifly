@@ -253,6 +253,17 @@ func monitorMux(catalog *monitorCatalog) http.Handler {
 		}
 		write(w, map[string]any{"timing": view.Timing, "read_version": view.SchemaVersion}, nil)
 	})
+	// What the programs of a Run said about their progress. It changes while
+	// the Run's version does not, so it is its own read.
+	scoped("/api/progress", func(w http.ResponseWriter, r *http.Request, engine *prifly.Engine) {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id required", http.StatusBadRequest)
+			return
+		}
+		view, err := engine.ProgramProgress(r.Context(), id)
+		write(w, view, err)
+	})
 	// Debugging needs the recorded object itself, not a summary of it. This
 	// returns the Run as it is stored, so a node can be expanded to exactly
 	// what the authority holds about it.

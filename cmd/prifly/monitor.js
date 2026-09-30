@@ -17,7 +17,7 @@ function executionRole(object,stage) {
 }
 // A Run in the admission queue is the authority's fact, not the Run's: it is
 // read from the capacity answer, and only when that answer was fetched.
-function activityRows(run,capacity) {const rows=[];const queue=Object.entries(capacity?.waiting||{}).sort((a,b)=>a[1]-b[1]||a[0].localeCompare(b[0])),place=queue.findIndex(([id])=>id===run.id);if(place>=0)rows.push({title:'Ожидает допуска',detail:`место ${place+1} из ${queue.length} в очереди authority · capacity ${capacity.capacity}`});for(const a of values(run.attempts).filter(a=>!a.settled)){const r=executionRole(a);rows.push({node:a.id,title:r.kind,detail:r.detail+' · '+r.state});}for(const a of values(run.activations).filter(a=>a.status==='ready'))rows.push({node:a.id,title:'Готово к выдаче',detail:a.stage_id});if(run.pending_decision)rows.push({node:run.pending_decision.attempt_id,title:'Ожидается решение',detail:run.pending_decision.decision_id});for(const w of values(run.wait_registrations).filter(w=>w.status==='active'))rows.push({node:w.activation_id,title:'Ожидается сигнал',detail:w.target_stage_id});if(run.recovery)rows.push({run:run.recovery.source_run_id,title:'Восстановлен от Run',detail:`${run.recovery.reused.length} узлов взято из источника · ${run.recovery.frontier_stage_id}: ${run.recovery.frontier_action==='revalidate'?'перепроверен без запуска':'новое исполнение'}`});else if(run.fork)rows.push({run:run.fork.source_run_id,title:run.fork.reason==='project continuation'?'Продолжение от Run':'Run создан как fork',detail:run.fork.source_run_id});return rows;}
+function activityRows(run,capacity,progress) {const rows=[];const queue=Object.entries(capacity?.waiting||{}).sort((a,b)=>a[1]-b[1]||a[0].localeCompare(b[0])),place=queue.findIndex(([id])=>id===run.id);if(place>=0)rows.push({title:'Ожидает допуска',detail:`место ${place+1} из ${queue.length} в очереди authority · capacity ${capacity.capacity}`});for(const a of values(run.attempts).filter(a=>!a.settled)){const r=executionRole(a),p=progressView(progress?.attempts?.find(x=>x.attempt_id===a.id),progress?.as_of?.utc);rows.push({node:a.id,title:r.kind,detail:r.detail+' · '+r.state+(p?.phase?` · ${p.lead==='Сейчас'?'фаза':'последняя фаза, не текущая:'} ${p.phase}${p.counted?` ${p.counted.current}${p.counted.total?'/'+p.counted.total:''}`:''}`:'')});}for(const a of values(run.activations).filter(a=>a.status==='ready'))rows.push({node:a.id,title:'Готово к выдаче',detail:a.stage_id});if(run.pending_decision)rows.push({node:run.pending_decision.attempt_id,title:'Ожидается решение',detail:run.pending_decision.decision_id});for(const w of values(run.wait_registrations).filter(w=>w.status==='active'))rows.push({node:w.activation_id,title:'Ожидается сигнал',detail:w.target_stage_id});if(run.recovery)rows.push({run:run.recovery.source_run_id,title:'Восстановлен от Run',detail:`${run.recovery.reused.length} узлов взято из источника · ${run.recovery.frontier_stage_id}: ${run.recovery.frontier_action==='revalidate'?'перепроверен без запуска':'новое исполнение'}`});else if(run.fork)rows.push({run:run.fork.source_run_id,title:run.fork.reason==='project continuation'?'Продолжение от Run':'Run создан как fork',detail:run.fork.source_run_id});return rows;}
 const terminalStatuses=['completed','failed','cancelled'];
 // Why a completed Run ended partial, only as far as the record proves it: the
 // one finish an invocation reached, then either a waiver that changed that
@@ -83,6 +83,25 @@ function executionCounts(run) {
  return {steps,attempts,settled:consistent?settled:null,open:consistent?attempts-settled:null,hosts};
 }
 const known = v => v===null ? 'неизвестно' : String(v);
+// What a program said about itself over fd 4, as a reader may take it: the
+// phase and count it gave, how old that is, and whether it is now, its last
+// word, or unknowable. Never a percentage it did not give, never a success.
+function progressView(row,asOf) {
+ if(!row)return null;
+ const age=row.observed&&asOf?Math.max(0,Math.round((Date.parse(asOf)-Date.parse(row.observed))/1000)):null;
+ const counted=Number.isInteger(row.current)?(Number.isInteger(row.total)&&row.total>0&&row.current<=row.total?{current:row.current,total:row.total}:{current:row.current,total:null}):null;
+ const lead={reported:row.settled?'Последняя фаза до завершения попытки':'Сейчас',stale:'Последний отчёт — не текущий',not_reported:'Прогресс не сообщается',unavailable:'Прогресс недоступен в этом хранилище'}[row.state]||'Прогресс неизвестен';
+ const notes=[];
+ if(row.state==='stale')notes.push('драйвер попытки не наблюдается или отчёт от прежнего запуска');
+ if(row.settled&&row.phase)notes.push(`попытка ${label(row.attempt_status)}: фаза не говорит об итоге`);
+ if(row.rejected)notes.push(`${row.rejected} отчётов отклонено как неверные`);
+ if(row.truncated)notes.push('часть отчётов отброшена сверх предела');
+ return {lead,phase:row.phase||'',message:row.message||'',counted,age,notes};
+}
+function progressHTML(row,asOf) {
+ const v=progressView(row,asOf);if(!v)return '';
+ return `<h4>Прогресс программы</h4><p><b>${esc(v.lead)}</b>${v.phase?`: ${esc(v.phase)}`:''}${v.counted?` · ${esc(v.counted.current)}${v.counted.total?' / '+esc(v.counted.total):''}`:''}${v.age!==null?` <span class="muted">· ${esc(v.age)} с назад</span>`:''}</p>${v.counted?.total?`<progress max="${esc(v.counted.total)}" value="${esc(v.counted.current)}"></progress>`:''}${v.message?`<p class="muted">${esc(v.message)}</p>`:''}${v.notes.map(n=>`<p class="muted">${esc(n)}</p>`).join('')}`;
+}
 const ms = n => n >= 60000 ? `${(n/60000).toFixed(1)} мин` : n >= 1000 ? `${(n/1000).toFixed(1)} с` : `${n} мс`;
 function spreadPorts(edges,key,port) {
  const groups=new Map();for(const edge of edges){const group=groups.get(edge[key])||[];group.push(edge);groups.set(edge[key],group);}
@@ -265,7 +284,7 @@ function attemptPhases(node,assisted) {
  return [['host_pickup','Ждал, пока агент возьмёт задание'],['host_work','Агент работал'],['decision_wait','Ждал ответа на вопрос'],['executor_time','Программа работала'],['result_to_acceptance','Приёмка результата']]
   .map(([key,title])=>({key,title,d:m[key]})).filter(p=>p.d&&p.d.quality!=='not_applicable');
 }
-if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
+if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='',graphFocus='';
@@ -492,6 +511,7 @@ function renderNode() {
  }
  $('node-title').textContent=(timing?.stage_id || label(timing?.kind) || 'Исполнение')+' · '+short(nodeID);html+=`<h4>Роль исполнения</h4><p><b>${esc(role.kind)}</b><br><span class="muted">${esc(role.detail)}${role.state?' · '+esc(role.state):''}</span></p>`;
  html+=`<p>${badge(object.status)} ${esc(object.verdict || object.outcome || '')}</p>`;
+ if(received&&!received.session)html+=progressHTML(state.progress?.attempts?.find(a=>a.attempt_id===received.id),state.progress?.as_of?.utc);
  if(timing){const metrics=Object.entries(timing.metrics||{}),shown=metrics.filter(([,v])=>v.quality!=='not_applicable');html+=section('Время',Object.fromEntries(shown.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':time',true);const other=metrics.filter(([,v])=>v.quality==='not_applicable');if(other.length)html+=section('Неприменимые метрики',Object.fromEntries(other.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':other-time');}
  if(run.attempts?.[nodeID]) {
   const context=object.context || {},envelope=parseMaybe(object.envelope),step=run.steps?.[object.step_instance_id],def=(run.definitions||[]).find(d=>d.ref?.digest===step?.definition_ref?.digest)?.bytes;
@@ -525,7 +545,7 @@ function renderDetail() {
  const scrollX=window.scrollX,scrollY=window.scrollY;
  const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Прогон';
  $('detail-id').textContent=run.project_id+' · '+run.id;$('permalink').href=location.hash;
- const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run,state.capacity);
+ const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run,state.capacity,state.progress);
  preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div><h3>Сейчас</h3>${nowHTML({...run,source},activity,state.choices)}${timeHTML(state.timing)}${resourceHTML(run,state.capacity)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
  const invs=values(run.invocations);if(!invocation && !definition)invocation=run.root_workflow_invocation_id || '';
  $('invocation').innerHTML=invs.map(i=>`<option value="${esc(i.id)}">${esc(i.workflow_ref.id)} · ${esc(i.branch_id || '')}${i.iteration?' · итерация '+i.iteration:''} · ${esc(short(i.id))}</option>`).join('')+(!invs.length?'<option value="">Корневой workflow</option>':'')+definitions(run).map(d=>`<option value="def:${esc(d.id)}">План: ${esc(d.title || d.id)}</option>`).join('');
@@ -568,9 +588,12 @@ async function tick() {
     // changes while this Run's version does not.
     // A live Run also reads it for its place in the admission queue.
     if(next.run?.stage_resources || !terminalStatuses.includes(next.run?.status))next.capacity=await get('/api/capacity',{source});
+    // A program's progress moves while the Run's version does not.
+    const programs=values(next.run?.attempts).filter(a=>!a.session&&a.process);
+    if(programs.length)next.progress=await get('/api/progress',{source,id:selected});
     if(g!==generation)return;
     $('detail-error').hidden=true;
-    const version=source+selected+':'+next.run_version+':'+next.event_sequence+':'+JSON.stringify([next.capacity?.resources||{},next.capacity?.waiting||{}]);
+    const version=source+selected+':'+next.run_version+':'+next.event_sequence+':'+JSON.stringify([next.capacity?.resources||{},next.capacity?.waiting||{},next.progress?.attempts||[],programs.some(a=>!a.settled)?next.progress?.as_of?.utc:'']);
     state=next;if(stamp!==version){stamp=version;renderDetail();}
     if(tab==='journal')await refreshEvents(g);
    }catch(err){if(g===generation){$('detail-error').hidden=false;$('detail-error').textContent='Нет актуального чтения. Последние показанные данные могут устареть: '+err.message;}}

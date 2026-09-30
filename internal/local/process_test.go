@@ -414,6 +414,37 @@ func TestProcessHelper(t *testing.T) {
 	case "duplicate":
 		writeResult()
 		writeResult()
+	case "progress":
+		// Two valid reports around three refused ones, then a plain failure: the
+		// last report stays a diagnostic, and the exit is what happened.
+		progress := os.NewFile(4, "progress")
+		if os.Getenv("PRIFLY_PROGRESS_FD") != "4" || progress == nil {
+			os.Exit(94)
+		}
+		_, _ = fmt.Fprintln(progress, `{"schema_version":"program-progress/1","phase":"product","current":4200,"total":6994}`)
+		_, _ = fmt.Fprintln(progress, `{"schema_version":"program-progress/1","phase":"extra","current":9,"total":3}`)
+		_, _ = fmt.Fprintln(progress, `{"schema_version":"program-progress/1","phase":"<b>x</b>"}`)
+		_, _ = fmt.Fprintln(progress, `{"schema_version":"program-progress/1","phase":"x","message":"`+strings.Repeat("y", 2000)+`"}`)
+		_, _ = fmt.Fprintln(progress, `{"schema_version":"program-progress/1","phase":"baseline","message":"comparing with main"}`)
+		_ = progress.Close()
+		_, _ = fmt.Fprint(os.Stdout, "pass")
+		os.Exit(7)
+	case "progress-absent":
+		// Only the variable is asserted: the child's own runtime may take fd 4
+		// for its poller, so an open descriptor there proves nothing.
+		if os.Getenv("PRIFLY_PROGRESS_FD") != "" {
+			os.Exit(95)
+		}
+		writeResult()
+	case "progress-flood":
+		progress := os.NewFile(4, "progress")
+		line := []byte(`{"schema_version":"program-progress/1","phase":"flood"}` + "\n")
+		for written := 0; written < 2*MaxProgressStreamBytes; written += len(line) {
+			if _, err := progress.Write(line); err != nil {
+				os.Exit(96)
+			}
+		}
+		writeResult()
 	default:
 		os.Exit(93)
 	}
@@ -461,5 +492,87 @@ func TestExecutableDigestIsRememberedUntilTheFileChanges(t *testing.T) {
 	}
 	if changed == first {
 		t.Fatal("a replaced executable kept the digest of the file it replaced")
+	}
+}
+
+// A program's fd 4 reports reach the driver as diagnostics: the latest valid
+// one, with refused ones counted, and the exit stays the outcome.
+func TestProcessProgressIsDiagnosticNotVerdict(t *testing.T) {
+	t.Parallel()
+	spec := processTestSpec(t, "progress")
+	var deliveries []ProgressDelivery
+	spec.Progress = func(d ProgressDelivery) error { deliveries = append(deliveries, d); return nil }
+	out, err := RunProcess(context.Background(), spec, nil)
+	requireSettledProcess(t, out, err)
+	if out.ExitCode == nil || *out.ExitCode != 7 || len(out.ResultCandidates) != 0 {
+		t.Fatalf("progress changed the outcome: exit %v, candidates %d", out.ExitCode, len(out.ResultCandidates))
+	}
+	if len(deliveries) == 0 {
+		t.Fatal("no progress was handed on")
+	}
+	last := deliveries[len(deliveries)-1]
+	if last.Latest == nil || last.Latest.Phase != "baseline" || last.Latest.Message != "comparing with main" || last.Latest.Current != nil || last.Accepted != 2 || last.Rejected != 3 || last.Truncated {
+		t.Fatalf("final delivery: %+v %+v", last, last.Latest)
+	}
+	if out.ProgressError != "" {
+		t.Fatal(out.ProgressError)
+	}
+}
+
+// A program that never heard of fd 4 gets none, and nothing is delivered.
+func TestProcessWithoutProgressOpensNoChannel(t *testing.T) {
+	t.Parallel()
+	out, err := RunProcess(context.Background(), processTestSpec(t, "progress-absent"), nil)
+	requireSettledProcess(t, out, err)
+	if out.ExitCode == nil || *out.ExitCode != 0 || len(out.ResultCandidates) != 1 {
+		t.Fatalf("a program without fd 4 saw one: exit %v", out.ExitCode)
+	}
+}
+
+// A flood past the stream bound is discarded without blocking the program,
+// and the reader is told the record stopped being complete.
+func TestProcessProgressFloodIsBoundedAndNeverBlocks(t *testing.T) {
+	t.Parallel()
+	spec := processTestSpec(t, "progress-flood")
+	var last ProgressDelivery
+	calls := 0
+	spec.Progress = func(d ProgressDelivery) error { last, calls = d, calls+1; return errors.New("store unavailable") }
+	out, err := RunProcess(context.Background(), spec, nil)
+	requireSettledProcess(t, out, err)
+	if out.ExitCode == nil || *out.ExitCode != 0 || len(out.ResultCandidates) != 1 {
+		t.Fatalf("the flood changed the outcome: exit %v", out.ExitCode)
+	}
+	if !last.Truncated || last.Latest == nil || last.Latest.Phase != "flood" || last.Accepted > MaxProgressStreamBytes/50 {
+		t.Fatalf("flood not bounded: %+v", last)
+	}
+	if out.ProgressError != "store unavailable" || calls > 20 {
+		t.Fatalf("a failing delivery was lost or retried per line: %q after %d calls", out.ProgressError, calls)
+	}
+}
+
+func TestParseProgramProgressRefusesWhatItCannotTrust(t *testing.T) {
+	t.Parallel()
+	good := `{"schema_version":"program-progress/1","phase":"product","message":"ok","current":1,"total":2}`
+	if p, err := ParseProgramProgress([]byte(good)); err != nil || *p.Current != 1 || *p.Total != 2 {
+		t.Fatalf("valid report refused: %v", err)
+	}
+	for name, line := range map[string]string{
+		"unknown field": `{"schema_version":"program-progress/1","phase":"a","verdict":"pass"}`,
+		"version":       `{"schema_version":"program-progress/2","phase":"a"}`,
+		"phase markup":  `{"schema_version":"program-progress/1","phase":"<script>"}`,
+		"empty phase":   `{"schema_version":"program-progress/1","phase":""}`,
+		"control text":  `{"schema_version":"program-progress/1","phase":"a","message":"\u001b[31mred"}`,
+		"negative":      `{"schema_version":"program-progress/1","phase":"a","current":-1}`,
+		"total alone":   `{"schema_version":"program-progress/1","phase":"a","total":5}`,
+		"zero total":    `{"schema_version":"program-progress/1","phase":"a","current":0,"total":0}`,
+		"past total":    `{"schema_version":"program-progress/1","phase":"a","current":6,"total":5}`,
+		"two values":    `{"schema_version":"program-progress/1","phase":"a"} {}`,
+		"fractional":    `{"schema_version":"program-progress/1","phase":"a","current":1.5}`,
+		"long phase":    `{"schema_version":"program-progress/1","phase":"` + strings.Repeat("a", 65) + `"}`,
+		"long message":  `{"schema_version":"program-progress/1","phase":"a","message":"` + strings.Repeat("é", 201) + `"}`,
+	} {
+		if _, err := ParseProgramProgress([]byte(line)); err == nil {
+			t.Errorf("%s: accepted %s", name, line)
+		}
 	}
 }

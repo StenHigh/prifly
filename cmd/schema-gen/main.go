@@ -383,6 +383,7 @@ var documentContracts = []struct {
 	{"execution-bindings-v2", "generate execution bindings contract with declared value sources", func() ([]byte, error) {
 		return prifly.PublicSchema("ExecutionBindingsV2")
 	}},
+	{"program-progress", "generate program progress report and read contract", func() ([]byte, error) { return prifly.PublicSchema("ProgramProgress") }},
 	{"publication-source", "generate once artifact publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchema() }},
 	{"publication-source-v2", "generate each-publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV2() }},
 	{"publication-source-v3", "generate once new-only source author contract", func() ([]byte, error) { return flow.PublicationSourceSchemaV3() }},

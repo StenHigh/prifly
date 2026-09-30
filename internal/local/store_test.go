@@ -258,7 +258,7 @@ func TestStoreMigratesV1ForAuthorityControls(t *testing.T) {
 	// Rewinding the marker is not enough: a genuine v1 database also lacks the
 	// structures later versions added, and leaving them makes the fixture test
 	// a migration that never happens in the field.
-	if _, err := s.db.Exec("DROP TABLE slot_resources; DROP TABLE pinned_bytes; DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=1"); err != nil {
+	if _, err := s.db.Exec("DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -710,7 +710,9 @@ func TestStoreSoftBudgetRollsBackOptionalWorkButPreservesControl(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "authority")
 	opts := storeTestOptions
-	opts.SoftLimitBytes = 128 << 10
+	// A fresh authority already takes some pages per table; the budget sits
+	// above that and below the 200 KiB write it must refuse.
+	opts.SoftLimitBytes = 192 << 10
 	s, err := OpenStore(dir, opts)
 	if err != nil {
 		t.Fatal(err)
@@ -815,7 +817,9 @@ func TestStoreSoftBudgetRollsBackOptionalWorkButPreservesControl(t *testing.T) {
 func TestStoreSampleBudgetAfterActualSQLiteAllocation(t *testing.T) {
 	t.Parallel()
 	opts := storeTestOptions
-	opts.SoftLimitBytes = 128 << 10
+	// A fresh authority already takes some pages per table; the budget sits
+	// above that and below the 200 KiB write it must refuse.
+	opts.SoftLimitBytes = 192 << 10
 	s, err := OpenStore(filepath.Join(t.TempDir(), "authority"), opts)
 	if err != nil {
 		t.Fatal(err)
@@ -1659,7 +1663,7 @@ func TestStoreReadsAnUnmigratedDatabaseReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+	if _, err := db.Exec("DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -1708,7 +1712,7 @@ func TestStoreVerifiesIncrementallyFromItsRecordedCut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+	if _, err := db.Exec("DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {

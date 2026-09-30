@@ -1025,6 +1025,20 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			return c.emit(map[string]any{"schema_version": version, "cut": view.Cut, "run_version": view.RunVersion, "timing": view.Timing})
 		}
 		return c.emit(view)
+	case "progress":
+		// What the Run's programs said about themselves over fd 4. It is read
+		// beside the Run, never from it: reporting moves no Run version.
+		if err := parse(f, args[2:]); err != nil {
+			return err
+		}
+		view, err := e.ProgramProgress(ctx, id)
+		if err != nil {
+			return err
+		}
+		if c.format == "text" {
+			return renderProgramProgress(c.out, view)
+		}
+		return c.emit(view)
 	case "events":
 		// Both flags existed from the start and carried no description, so
 		// neither appeared in any help: a reader who saw more:true had no way
@@ -2690,6 +2704,9 @@ Global: --project DIR  --json  --format text|json|csv
   run list [--limit N]              This authority's Runs, newest first: id, workflow, status, outcome, created,
                                    and whether a task waits for its host; --json answers run-list/1. Reads only
   run status|next|explain|events|timing RUN_ID
+  run progress RUN_ID               What each program step said about its own progress over fd 4: phase, count,
+                                   when, and whether that is now (reported), old (stale), absent (not_reported)
+                                   or unknowable here (unavailable). A diagnostic, never the step's result.
                                    events reads one bounded page: --limit N (1..1000) and --after SEQ continue it,
                                    and a partial answer names the next value in next_after, so a reader never
                                    has to open the authority's own storage to finish reading a Run's history.

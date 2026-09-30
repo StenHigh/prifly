@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const monitorJSSource=require('node:fs').readFileSync(require('node:path').join(__dirname,'monitor.js'),'utf8');
-const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows}=require('./monitor.js');
+const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows}=require('./monitor.js');
 assert.equal(esc(`<img src='x' onerror="evil()">&`),'&lt;img src=&#39;x&#39; onerror=&quot;evil()&quot;&gt;&amp;');
 assert.equal(label('ready'),'Подготовлен к выдаче Attempt');
 assert.equal(label('pending'),'Attempt передан агенту');
@@ -213,6 +213,33 @@ assert.match(activityRows(recovered)[0].detail,/1 узлов взято/);
  assert.deepEqual(activityRows({id:'run:z'},{capacity:1,waiting:{'run:a':1}}),[]);
  const decided=activityRows({pending_decision:{attempt_id:'attempt:q',decision_id:'decision:go'}});
  assert.deepEqual(decided,[{node:'attempt:q',title:'Ожидается решение',detail:'decision:go'}]);
+}
+// Program progress: what the program gave, how old, and whether it is now.
+{
+ const asOf='2026-09-30T12:00:30Z';
+ const live={attempt_id:'attempt:t',state:'reported',settled:false,attempt_status:'running',phase:'product',current:4200,total:6994,observed:'2026-09-30T12:00:18Z',accepted:2,rejected:0,truncated:false};
+ assert.deepEqual(progressView(live,asOf),{lead:'Сейчас',phase:'product',message:'',counted:{current:4200,total:6994},age:12,notes:[]});
+ const html=progressHTML(live,asOf);
+ assert.match(html,/<b>Сейчас<\/b>: product · 4200 \/ 6994/);assert.match(html,/<progress max="6994" value="4200">/);assert.match(html,/12 с назад/);
+ assert.doesNotMatch(html,/%|pass|успех/i,'no invented percentage or success');
+ // Failed after its last report: the phase is its last word, not the outcome.
+ const failed=progressView({...live,settled:true,attempt_status:'failed',phase:'baseline',current:undefined,total:undefined},asOf);
+ assert.equal(failed.lead,'Последняя фаза до завершения попытки');assert.equal(failed.counted,null);
+ assert.match(failed.notes.join(' '),/Ошибка: фаза не говорит об итоге/);
+ assert.match(progressHTML({...live,state:'stale'},asOf),/не текущий/);
+ assert.match(progressHTML({attempt_id:'a',state:'not_reported',settled:false,rejected:3,truncated:true},asOf),/Прогресс не сообщается[^]*3 отчётов отклонено[^]*отброшена/);
+ assert.match(progressHTML({attempt_id:'a',state:'unavailable'},asOf),/недоступен/);
+ // A count past its total is shown as a count only, never a bar over 100%.
+ assert.deepEqual(progressView({...live,current:9,total:3},asOf).counted,{current:9,total:null});
+ // Untrusted text is text.
+ const hostile=progressHTML({...live,phase:'<img src=x onerror=alert(1)>',message:'<script>alert(1)</script>'},asOf);
+ assert.doesNotMatch(hostile,/<img|<script/);assert.match(hostile,/&lt;script&gt;/);
+ assert.equal(progressHTML(undefined,asOf),'');
+ // The "now" row of a running program carries its phase.
+ const rows=activityRows({attempts:{t:{id:'attempt:t',process:{executable:'tests'},started:{}}}},null,{as_of:{utc:asOf},attempts:[live]});
+ assert.match(rows[0].detail,/Исполнение начато · фаза product 4200\/6994/);
+ const staleRows=activityRows({attempts:{t:{id:'attempt:t',process:{executable:'tests'},started:{}}}},null,{as_of:{utc:asOf},attempts:[{...live,state:'stale'}]});
+ assert.match(staleRows[0].detail,/последняя фаза, не текущая: product/);
 }
 console.log('monitor UI: status wording, escaping, timing quality, graph paths/ports/parallel/repeat/cycles, file evidence passed');
 
