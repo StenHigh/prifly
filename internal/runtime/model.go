@@ -298,6 +298,11 @@ const (
 	// project said may not overlap.
 	CoreResourceStateVersion = "core-state/42"
 	CoreResourceReadVersion  = "core-read/42"
+	// A program's executor may open its stdout and stderr to a reader of the
+	// Run and name how much it may print. Both are sealed in the executor
+	// config, so a Run that declares either is sealed at 43.
+	CoreLiveOutputStateVersion = "core-state/43"
+	CoreLiveOutputReadVersion  = "core-read/43"
 	// A terminal Run names where its graph stopped. Both halves were already
 	// held: the finish activation is in the state, and the edge that reached
 	// it is declared in the plan the Run sealed. A host that wanted the reason
@@ -424,6 +429,29 @@ type ExecutorConfig struct {
 	GraceMS           int64                        `json:"grace_ms"`
 	MaxOutputBytes    int64                        `json:"max_output_bytes"`
 	ContextProfileRef *flow.Ref                    `json:"context_profile_ref,omitempty"`
+	// LiveOutput opens this program's stdout and stderr to a reader of the
+	// Run while it works: the newest bytes of each stream, beside the Run,
+	// never a transcript and never its result. It is the author's decision
+	// for their own program and is sealed with the Run (state 43).
+	LiveOutput bool `json:"live_output,omitempty"`
+	// OutputLimitBytes is how much the program may print to each of stdout
+	// and stderr before it is stopped for it. Absent keeps 64 KiB.
+	OutputLimitBytes int64 `json:"output_limit_bytes,omitempty"`
+}
+
+// DefaultProgramOutputBytes is the per-stream limit of a program that names
+// none; MaxProgramOutputBytes is the most one may name.
+const (
+	DefaultProgramOutputBytes = 64 << 10
+	MaxProgramOutputBytes     = 16 << 20
+)
+
+// programOutputLimit is the per-stream limit a program runs under.
+func programOutputLimit(config ExecutorConfig) int64 {
+	if config.OutputLimitBytes == 0 {
+		return DefaultProgramOutputBytes
+	}
+	return config.OutputLimitBytes
 }
 
 // EnvironmentSource is exactly one place a value is read from: the caller's

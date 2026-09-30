@@ -26,6 +26,13 @@ const ExecutionBindingsSourceVersion = "execution-bindings/2"
 //go:embed execution-bindings-v2.schema.json
 var executionBindingSourceContracts []byte
 
+// ExecutionBindingsOutputVersion adds what a program opens of its output and
+// how much it may print. A payload that names neither keeps its version.
+const ExecutionBindingsOutputVersion = "execution-bindings/3"
+
+//go:embed execution-bindings-v3.schema.json
+var executionBindingOutputContracts []byte
+
 // ExecutionBindings is a per-Run local-owner request, not package permission
 // or ordinary workflow input configuration. Files carry already confined
 // source bytes; no source path in this request is read from the authority.
@@ -50,8 +57,13 @@ func ValidateExecutionBindingsPayload(data []byte) error {
 	var declared struct {
 		SchemaVersion string `json:"schema_version"`
 	}
-	if json.Unmarshal(data, &declared) == nil && declared.SchemaVersion == ExecutionBindingsSourceVersion {
-		contract, version = executionBindingSourceContracts, "2.0.0"
+	if json.Unmarshal(data, &declared) == nil {
+		switch declared.SchemaVersion {
+		case ExecutionBindingsSourceVersion:
+			contract, version = executionBindingSourceContracts, "2.0.0"
+		case ExecutionBindingsOutputVersion:
+			contract, version = executionBindingOutputContracts, "3.0.0"
+		}
 	}
 	schema, err := flow.Canonical(contract)
 	if err != nil {
@@ -135,6 +147,11 @@ func (e *Engine) resolveExecutionBindings(plan *flow.Plan, definitions []PinnedD
 			}
 			if isAssistedExecutor(definitions, executor) {
 				return nil, fault("execution_binding_unsupported", "an assisted session does not bind a local executable")
+			}
+			// A check answers on its stdout; opening that stream or moving its
+			// limit would change the check's own protocol.
+			if _, check := plan.Checks[binding.DefinitionRef]; check && (binding.Config.LiveOutput || binding.Config.OutputLimitBytes != 0) {
+				return nil, fault("execution_binding_unsupported", "live_output and output_limit_bytes are for a program step, not a check")
 			}
 			result[binding.DefinitionRef] = binding
 		}

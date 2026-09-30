@@ -1039,6 +1039,24 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			return renderProgramProgress(c.out, view)
 		}
 		return c.emit(view)
+	case "output":
+		// What a program opened of its output: the newest bytes of each stream,
+		// kept beside the Run. A program that did not open it answers with none.
+		attempt := f.String("attempt", "", "the program attempt whose output to read")
+		if err := parse(f, args[2:]); err != nil {
+			return err
+		}
+		if *attempt == "" {
+			return usageError("run output RUN_ID --attempt ATTEMPT_ID; run progress RUN_ID lists the program attempts")
+		}
+		view, err := e.ProgramOutput(ctx, id, *attempt)
+		if err != nil {
+			return err
+		}
+		if c.format == "text" {
+			return renderProgramOutput(c.out, view)
+		}
+		return c.emit(view)
 	case "events":
 		// Both flags existed from the start and carried no description, so
 		// neither appeared in any help: a reader who saw more:true had no way
@@ -2704,6 +2722,8 @@ Global: --project DIR  --json  --format text|json|csv
   run list [--limit N]              This authority's Runs, newest first: id, workflow, status, outcome, created,
                                    and whether a task waits for its host; --json answers run-list/1. Reads only
   run status|next|explain|events|timing RUN_ID
+  run output RUN_ID --attempt ID    The newest 64 KiB of stdout and stderr of a program whose executor declares
+                                   live_output; offsets name what was skipped. Nothing for any other program.
   run progress RUN_ID               What each program step said about its own progress over fd 4: phase, count,
                                    when, and whether that is now (reported), old (stale), absent (not_reported)
                                    or unknowable here (unavailable). A diagnostic, never the step's result.

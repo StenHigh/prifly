@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const monitorJSSource=require('node:fs').readFileSync(require('node:path').join(__dirname,'monitor.js'),'utf8');
-const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows}=require('./monitor.js');
+const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows}=require('./monitor.js');
 assert.equal(esc(`<img src='x' onerror="evil()">&`),'&lt;img src=&#39;x&#39; onerror=&quot;evil()&quot;&gt;&amp;');
 assert.equal(label('ready'),'Подготовлен к выдаче Attempt');
 assert.equal(label('pending'),'Attempt передан агенту');
@@ -241,6 +241,23 @@ assert.match(activityRows(recovered)[0].detail,/1 узлов взято/);
  const staleRows=activityRows({attempts:{t:{id:'attempt:t',process:{executable:'tests'},started:{}}}},null,{as_of:{utc:asOf},attempts:[{...live,state:'stale'}]});
  assert.match(staleRows[0].detail,/последняя фаза, не текущая: product/);
 }
+// Program output: only when opened, as inert text, with what was skipped.
+{
+ assert.equal(outputHTML({disclosed:false,streams:[{stream:'stdout',text:'secret'}]}),'','a program that did not open its output shows nothing');
+ assert.equal(outputHTML(undefined),'');
+ const view={disclosed:true,state:'reported',settled:false,attempt_status:'running',output_limit_bytes:65536,streams:[{stream:'stderr',start_offset:0,end_offset:30,gap:false,text:'warn \u001b[2J<script>x</script>'},{stream:'stdout',start_offset:4096,end_offset:70000,gap:true,text:'verdict: pass\n'}]};
+ const html=outputHTML(view);
+ assert.match(html,/Вывод работающей программы/);assert.match(html,/не весь вывод/);
+ assert.match(html,/первые 4096 байт не сохранены/);assert.match(html,/есть пропуски/);
+ assert.doesNotMatch(html,/<script>|\u001b/);assert.match(html,/\\x1b\[2J&lt;script&gt;/);
+ assert.equal(inertText('a\tb\nc\u0007\u009b'),'a\tb\nc\\x07\\x9b');
+ const ended=outputHTML({...view,settled:true,attempt_status:'failed',state:'reported'});
+ assert.match(ended,/Вывод до завершения попытки[^]*вывод не говорит об итоге/);
+ assert.match(outputHTML({...view,state:'stale'}),/не текущий/);
+ // The attempt a node stands for: itself, or its stage's latest.
+ const run={attempts:{'attempt:1':{id:'attempt:1'},'attempt:2':{id:'attempt:2'}},steps:{s:{stage_activation_id:'activation:a',attempt_ids:['attempt:1','attempt:2']}},activations:{'activation:a':{id:'activation:a'}}};
+ assert.equal(receivedAttempt(run,'attempt:1').id,'attempt:1');assert.equal(receivedAttempt(run,'activation:a').id,'attempt:2');
+}
 console.log('monitor UI: status wording, escaping, timing quality, graph paths/ports/parallel/repeat/cycles, file evidence passed');
 
 // Exercise the actual pre-paint script, including browsers that deny storage.
@@ -250,11 +267,14 @@ const path = require('node:path');
 const monitorHTML=fs.readFileSync(path.join(__dirname,'monitor.html'),'utf8');
 const monitorCSS=fs.readFileSync(path.join(__dirname,'monitor.css'),'utf8');
 const monitorJS=fs.readFileSync(path.join(__dirname,'monitor.js'),'utf8');
-assert.match(monitorHTML,/<select name="view"[^>]*><option value="related">/);
-assert.match(monitorHTML,/<option value="related-newest">Связанные Run · ранние снизу/);
+// The list opens on the newest Run: the default (first) view puts later roots on top.
+assert.match(monitorHTML,/<select name="view"[^>]*><option value="related-newest">Связанные Run · новые сверху<\/option><option value="related">/);
 assert.match(monitorHTML,/<option value="flat">Плоский список/);
 assert.match(monitorCSS,/\.run-lineage\.is-child::before/);
 assert.match(monitorCSS,/@media\(max-width:1100px\).*\.run-table\{min-width:820px\}/);
+// Time and launch inputs open on demand: collapsed at first, kept as the reader left them.
+assert.match(monitorJS,/<details class="facts-section receipt" data-key="launch">/);
+assert.match(monitorJS,/<details class="facts-section" data-key="time">/);
 // The execution column's meaning is visible text before the scrolling table, not a hover title.
 assert.match(monitorHTML,/<p class="muted table-note" id="execution-note">[^<]*не доля сценария\.<\/p><div class="table-wrap"><table class="run-table" aria-describedby="execution-note">/);
 assert.match(monitorHTML,/<th>Исполнение<\/th>/);

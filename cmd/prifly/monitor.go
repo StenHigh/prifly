@@ -264,6 +264,16 @@ func monitorMux(catalog *monitorCatalog) http.Handler {
 		view, err := engine.ProgramProgress(r.Context(), id)
 		write(w, view, err)
 	})
+	// The newest output of one program attempt, when its executor opened it.
+	scoped("/api/output", func(w http.ResponseWriter, r *http.Request, engine *prifly.Engine) {
+		id, attempt := r.URL.Query().Get("id"), r.URL.Query().Get("attempt")
+		if id == "" || attempt == "" {
+			http.Error(w, "id and attempt required", http.StatusBadRequest)
+			return
+		}
+		view, err := engine.ProgramOutput(r.Context(), id, attempt)
+		write(w, view, err)
+	})
 	// Debugging needs the recorded object itself, not a summary of it. This
 	// returns the Run as it is stored, so a node can be expanded to exactly
 	// what the authority holds about it.

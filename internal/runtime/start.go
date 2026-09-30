@@ -406,6 +406,9 @@ func validateExecutorConfig(config ExecutorConfig, fullContext bool) error {
 	if config.TimeoutMS < 1 || config.TimeoutMS > 3600000 || config.GraceMS < 1 || config.GraceMS > 5000 || config.MaxOutputBytes < 1 || config.MaxOutputBytes > MaxArtifactBytes {
 		return errors.New("executor limits are out of range")
 	}
+	if config.OutputLimitBytes != 0 && (config.OutputLimitBytes < 1 || config.OutputLimitBytes > MaxProgramOutputBytes) {
+		return errors.New("output_limit_bytes must be between 1 byte and 16 MiB")
+	}
 	for target, source := range config.Files {
 		if !safeRelative(target) || !safeRelative(source) || strings.HasPrefix(target, "inputs/") || strings.HasPrefix(target, "outputs/") || target == "context.json" || target == "inputs" || target == "outputs" || target == "tmp" {
 			return errors.New("unsafe executor file binding")
@@ -1373,6 +1376,12 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 				return local.Change{}, err
 			}
 			stateVersion = higherState(stateVersion, CoreResourceStateVersion)
+		}
+		if requiresLiveOutputState(executors) {
+			if configurations == nil {
+				return local.Change{}, local.Reject("unsupported_live_output", "live output and an output limit require the scoped core state")
+			}
+			stateVersion = higherState(stateVersion, CoreLiveOutputStateVersion)
 		}
 		if fork != nil && !isForkState(stateVersion) {
 			stateVersion = CoreForkStateVersion

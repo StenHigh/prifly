@@ -70,7 +70,7 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 			if fields[key] == nil {
 				return refusal("project_execution_invalid", "omit optional fields instead of null: "+key)
 			}
-			if key != "executable" && key != "args" && key != "files" && key != "timeout_ms" && key != "grace_ms" && key != "max_output_bytes" && key != "context_profile_ref" {
+			if key != "executable" && key != "args" && key != "files" && key != "timeout_ms" && key != "grace_ms" && key != "max_output_bytes" && key != "context_profile_ref" && key != "live_output" && key != "output_limit_bytes" {
 				return refusal("project_execution_invalid", "unknown binding field "+key)
 			}
 		}
@@ -234,7 +234,7 @@ func projectValidateExecution(payload *projectPackageExecution) error {
 	if payload.SchemaVersion != projectExecutionVersion {
 		return refusal("project_execution_invalid", "unsupported package execution version")
 	}
-	copy := prifly.ExecutionBindings{SchemaVersion: prifly.ExecutionBindingsVersion, Bindings: append([]prifly.ExecutionBinding{}, payload.Bindings...)}
+	copy := prifly.ExecutionBindings{SchemaVersion: projectBindingsVersion(payload.Bindings), Bindings: append([]prifly.ExecutionBinding{}, payload.Bindings...)}
 	for i := range copy.Bindings {
 		if !projectLaunchID(copy.Bindings[i].Config.Executable) {
 			return refusal("project_execution_invalid", "executable must be a logical name")
@@ -315,12 +315,26 @@ func projectExecutionPayload(root string, compiled projectCompileResult, closure
 		// never enters the Run's state, its digests or any document made from
 		// them, and the owner still sees which source a reviewed launch uses.
 		binding.Config.EnvironmentFrom = maps.Clone(environmentSources)
-		if len(binding.Config.EnvironmentFrom) != 0 {
-			result.SchemaVersion = prifly.ExecutionBindingsSourceVersion
-		}
 		result.Bindings = append(result.Bindings, binding)
 	}
+	result.SchemaVersion = projectBindingsVersion(result.Bindings)
 	return result, nil
+}
+
+// projectBindingsVersion is the lowest bindings version that carries what the
+// bindings declare, so a launch that uses none of the later fields keeps the
+// bytes and digests it always had.
+func projectBindingsVersion(bindings []prifly.ExecutionBinding) string {
+	version := prifly.ExecutionBindingsVersion
+	for _, binding := range bindings {
+		if binding.Config.LiveOutput || binding.Config.OutputLimitBytes != 0 {
+			return prifly.ExecutionBindingsOutputVersion
+		}
+		if len(binding.Config.EnvironmentFrom) != 0 {
+			version = prifly.ExecutionBindingsSourceVersion
+		}
+	}
+	return version
 }
 
 func projectDecodeExecution(data []byte) (*projectPackageExecution, error) {

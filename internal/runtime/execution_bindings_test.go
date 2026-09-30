@@ -180,6 +180,16 @@ func TestExecutionBindingsExactVersionsChecksAndRestart(t *testing.T) {
 		{"missing-bytes", "execution_bindings_invalid", func(p *ExecutionBindings) { p.Bindings[0].Config.Files = map[string]string{"data": "missing"} }},
 		{"reserved-environment", "execution_bindings_invalid", func(p *ExecutionBindings) { p.Bindings[0].Config.Environment["PRIFLY_SOCKET"] = "/tmp/other" }},
 		{"nul-argument", "execution_bindings_invalid", func(p *ExecutionBindings) { p.Bindings[0].Config.Args = []string{"unsafe\x00argument"} }},
+		{"check-live-output", "execution_binding_unsupported", func(p *ExecutionBindings) {
+			p.SchemaVersion = ExecutionBindingsOutputVersion
+			for i, binding := range p.Bindings {
+				if _, check := plans[0].Checks[binding.DefinitionRef]; check {
+					p.Bindings[i].Config.LiveOutput = true
+					return
+				}
+			}
+			t.Fatal("fixture binds no check")
+		}},
 		{"missing-context", "missing_context_profile", func(p *ExecutionBindings) {
 			ref := firstRef
 			ref.Version = "9.0.0"
@@ -325,7 +335,12 @@ func TestExecutionBindingsClosedPayload(t *testing.T) {
 		binding("1", ","+sourced),
 		[]byte(`{"schema_version":"execution-bindings/1","bindings":[],"effects":"external_write"}`),
 		[]byte(`{"schema_version":"execution-bindings/2","bindings":[],"effects":"external_write"}`),
-		[]byte(`{"schema_version":"execution-bindings/3","bindings":[]}`),
+		[]byte(`{"schema_version":"execution-bindings/4","bindings":[]}`),
+		binding("2", `,"live_output":true`),
+		binding("1", `,"output_limit_bytes":1024`),
+		binding("3", `,"output_limit_bytes":16777217`),
+		binding("3", `,"output_limit_bytes":0`),
+		binding("3", `,"live_output":"yes"`),
 		[]byte(`{"schema_version":"execution-bindings/1","bindings":null}`),
 		binding("2", `,"environment_from":{"DB_PASSWORD":{"dotenv":"/etc/app.env"}}`),
 		binding("2", `,"environment_from":{"DB_PASSWORD":{"env":"TOKEN","file":"/etc/app.env"}}`),
@@ -334,7 +349,13 @@ func TestExecutionBindingsClosedPayload(t *testing.T) {
 			t.Fatalf("accepted unknown payload: %s", data)
 		}
 	}
-	for _, name := range []string{"ExecutionBindings", "ExecutionBindingsV2"} {
+	// Version 3 carries opened output and an output limit, and still a source.
+	for _, extra := range []string{`,"live_output":true`, `,"output_limit_bytes":16777216`, `,"live_output":false,"output_limit_bytes":1,` + sourced} {
+		if err := ValidateExecutionBindingsPayload(binding("3", extra)); err != nil {
+			t.Fatalf("version 3 refused %s: %v", extra, err)
+		}
+	}
+	for _, name := range []string{"ExecutionBindings", "ExecutionBindingsV2", "ExecutionBindingsV3"} {
 		if _, err := PublicSchema(name); err != nil {
 			t.Fatal(err)
 		}

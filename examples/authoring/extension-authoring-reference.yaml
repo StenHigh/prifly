@@ -57,6 +57,11 @@ execution_bindings:
       timeout_ms: 600000
       grace_ms: 1000
       max_output_bytes: 1048576
+      # Optional: open this program's stdout/stderr to readers of the Run
+      # (monitor, `run output`), and how much it may print per stream (absent:
+      # 64 KiB). Same fields as a package binding; sealed at state 43.
+      live_output: true
+      output_limit_bytes: 4194304
 
 # Set defaults for already declared project-scoped configuration inputs.
 # The key is the workflow's SHORT NAME: everything after the last `/` of the

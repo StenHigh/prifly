@@ -48,6 +48,12 @@ type ProcessSpec struct {
 	// more after the process ends. It runs on the driver's loop, so it must be
 	// bounded; its failure is recorded in ProgressError and stops nothing.
 	Progress func(ProgressDelivery) error `json:"-"`
+	// Output, when set, is handed the newest stdout and stderr bytes at most
+	// once per OutputDeliveryInterval, and once more after the process ends.
+	// Only the last OutputTailBytes of each stream wait between deliveries;
+	// older ones are skipped and the offsets show it. Its failure is recorded
+	// in OutputError and stops nothing. The stream limits above still apply.
+	Output func(OutputDelivery) error `json:"-"`
 }
 
 // ProcessIdentity binds an observation to an actual launch, not merely a PID.
@@ -129,6 +135,8 @@ type ProcessOutcome struct {
 	// empty once a later one succeeded. Diagnostics are not the attempt's
 	// outcome, so it is never recorded with it.
 	ProgressError string `json:"-"`
+	// OutputError is the failure of the last attempt to hand output on.
+	OutputError string `json:"-"`
 }
 
 type ProcessProbe struct {
@@ -267,6 +275,7 @@ type processRecord struct {
 
 type processCapture struct {
 	mu       sync.Mutex
+	tail     *outputTail
 	data     []byte
 	count    int64
 	limit    int64
@@ -280,6 +289,9 @@ func (c *processCapture) Write(p []byte) (int, error) {
 	defer c.mu.Unlock()
 	previous := c.count
 	c.count += int64(len(p))
+	if c.tail != nil {
+		c.tail.write(previous, p)
+	}
 	if remaining := c.limit - int64(len(c.data)); remaining > 0 {
 		c.data = append(c.data, p[:min(int64(len(p)), remaining)]...)
 	}
@@ -463,6 +475,37 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 	streamDone := make(chan struct{}, 2)
 	stdout := &processCapture{limit: spec.MaxStdoutBytes, name: "stdout", overflow: overflow}
 	stderr := &processCapture{limit: spec.MaxStderrBytes, name: "stderr", overflow: overflow}
+	if spec.Output != nil {
+		stdout.tail, stderr.tail = &outputTail{}, &outputTail{}
+	}
+	var outputHanded time.Time
+	handOutput := func(force bool) {
+		if spec.Output == nil || !force && time.Since(outputHanded) < OutputDeliveryInterval {
+			return
+		}
+		outputHanded = time.Now()
+		// A failure stays recorded until a later delivery succeeds; a tick
+		// with nothing to hand on says nothing either way.
+		failure, delivered := "", false
+		defer func() {
+			if failure != "" || delivered {
+				out.OutputError = failure
+			}
+		}()
+		for _, capture := range []*processCapture{stdout, stderr} {
+			offset, data := capture.tail.take()
+			if data == nil {
+				continue
+			}
+			if err := spec.Output(OutputDelivery{LaunchID: out.Identity.LaunchID, Stream: capture.name, Offset: offset, Data: data, At: time.Now()}); err != nil {
+				// The chunk is not put back: the next one starts later, and
+				// the gap in offsets says so honestly.
+				failure = err.Error()
+			} else {
+				delivered = true
+			}
+		}
+	}
 	go stdout.read(stdoutR, streamDone)
 	go stderr.read(stderrR, streamDone)
 	resultMessages := make(chan processResultMessage, 1)
@@ -607,6 +650,7 @@ func RunProcess(ctx context.Context, spec ProcessSpec, observe func(ProcessObser
 			progressOpen = false
 		case <-ticker.C:
 			handProgress(false)
+			handOutput(false)
 			if !settled && stopAt.IsZero() && time.Since(out.StartedAt) >= processPollCloseWatch {
 				settled = true
 				ticker.Reset(processPollSettled)
@@ -732,6 +776,7 @@ drain:
 
 finish:
 	handProgress(true)
+	handOutput(true)
 	_ = stdoutR.Close()
 	_ = stderrR.Close()
 	_ = resultR.Close()

@@ -98,6 +98,26 @@ function progressView(row,asOf) {
  if(row.truncated)notes.push('часть отчётов отброшена сверх предела');
  return {lead,phase:row.phase||'',message:row.message||'',counted,age,notes};
 }
+// A program's own output, as text that cannot act: every control character
+// but a line break or tab is shown as an escape, then HTML-escaped.
+const inertText = text => String(text||'').replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g,c=>'\\x'+c.charCodeAt(0).toString(16).padStart(2,'0'));
+function outputHTML(view) {
+ if(!view?.disclosed)return '';
+ const lead={reported:view.settled?'Вывод до завершения попытки':'Вывод работающей программы',stale:'Последний сохранённый вывод — не текущий',unavailable:'Вывод недоступен в этом хранилище',not_reported:'Программа ещё ничего не напечатала'}[view.state]||'Вывод неизвестен';
+ let html=`<h4>Вывод программы</h4><p><b>${esc(lead)}</b> <span class="muted">· последние 64 КиБ каждого потока, не весь вывод · предел программы ${esc(view.output_limit_bytes)} байт на поток${view.settled?` · попытка ${esc(label(view.attempt_status))}: вывод не говорит об итоге`:''}</span></p>`;
+ for(const stream of view.streams||[]){
+  const notes=[`байты ${stream.start_offset}–${stream.end_offset}`];
+  if(stream.start_offset>0)notes.push(`первые ${stream.start_offset} байт не сохранены`);
+  if(stream.gap)notes.push('есть пропуски: часть не поместилась');
+  html+=`<p><b>${esc(stream.stream)}</b> <span class="muted">${esc(notes.join(' · '))}</span></p><pre class="program-output">${esc(inertText(stream.text))}</pre>`;
+ }
+ return html;
+}
+function nodeObject(run,id) {for(const pool of [run.attempts,run.steps,run.activations,run.invocations,run.check_executions])if(pool?.[id])return pool[id];return id===run.id?run:null;}
+function receivedAttempt(run,id) {
+ const object=nodeObject(run,id);
+ return run.attempts?.[id]||(object?values(run.steps).filter(s=>s.stage_activation_id===object.id).flatMap(s=>s.attempt_ids||[]).map(a=>run.attempts?.[a]).filter(Boolean).at(-1):null);
+}
 function progressHTML(row,asOf) {
  const v=progressView(row,asOf);if(!v)return '';
  return `<h4>Прогресс программы</h4><p><b>${esc(v.lead)}</b>${v.phase?`: ${esc(v.phase)}`:''}${v.counted?` · ${esc(v.counted.current)}${v.counted.total?' / '+esc(v.counted.total):''}`:''}${v.age!==null?` <span class="muted">· ${esc(v.age)} с назад</span>`:''}</p>${v.counted?.total?`<progress max="${esc(v.counted.total)}" value="${esc(v.counted.current)}"></progress>`:''}${v.message?`<p class="muted">${esc(v.message)}</p>`:''}${v.notes.map(n=>`<p class="muted">${esc(n)}</p>`).join('')}`;
@@ -284,7 +304,7 @@ function attemptPhases(node,assisted) {
  return [['host_pickup','Ждал, пока агент возьмёт задание'],['host_work','Агент работал'],['decision_wait','Ждал ответа на вопрос'],['executor_time','Программа работала'],['result_to_acceptance','Приёмка результата']]
   .map(([key,title])=>({key,title,d:m[key]})).filter(p=>p.d&&p.d.quality!=='not_applicable');
 }
-if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
+if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='',graphFocus='';
@@ -363,7 +383,7 @@ function launchHTML(run,inputValues) {
  const l=launchInputs(run,inputValues);
  if(!l.inputs.length&&!l.decisions.length)return '';
  const row=(title,body)=>`<div class="receipt-row"><div class="receipt-key">${title}</div><div>${body}</div></div>`;
- let html='<details class="facts-section receipt" data-key="launch" open><summary>Входы и решения запуска</summary><div class="facts-body">';
+ let html='<details class="facts-section receipt" data-key="launch"><summary>Входы и решения запуска</summary><div class="facts-body">';
  if(l.profile)html+=row('Профиль пакета',`<b>${esc(l.profile)}</b> <small class="muted">${esc(answerSources[l.profileSource]||l.profileSource)}${l.policy?' · политика: '+esc(l.policy):''}</small>`);
  html+=l.inputs.map(i=>row(`Вход <code>${esc(i.port)}</code>`,`${launchValue(i.value,'launch:in:'+i.port)}<br><small class="muted">${esc(answerSources[i.source]||i.source)}</small>`)).join('');
  html+=l.decisions.map(d=>row(`${esc(d.title)}<br><small class="muted">${esc(d.id)}${d.phase==='runtime'?' · вопрос во время работы':''}</small>`,d.excluded?'<span class="muted">не применяется к этому профилю</span>':!d.answered?'<span class="muted">не отвечено до запуска</span>':`${d.choice?`<b>${esc(d.choice)}</b> `:''}${shownValue(d.value,'launch:d:'+d.id)}<br><small class="muted">${esc(answerSources[d.source]||d.source||'источник не записан')}</small>`)).join('');
@@ -373,7 +393,7 @@ function timeHTML(timing) {
  const t=timeBreakdown(timing);
  if(!t)return '';
  const total=amount(t.elapsed)||0,share=d=>total&&amount(d)!=null?Math.min(100,Math.round(amount(d)*100/total)):0;
- let html=`<details class="facts-section" data-key="time" open><summary>Куда ушло время</summary><div class="facts-body"><p>Всего: <b>${esc(duration(t.elapsed))}</b></p><div class="time-bars">`;
+ let html=`<details class="facts-section" data-key="time"><summary>Куда ушло время</summary><div class="facts-body"><p>Всего: <b>${esc(duration(t.elapsed))}</b></p><div class="time-bars">`;
  html+=t.categories.map(c=>`<div class="time-bar"><span>${esc(c.title)}</span><progress max="100" value="${share(c.d)}" aria-label="${esc(c.title)}"></progress><span>${esc(amount(c.d)==null?duration(c.d,true):duration(c.d))}</span></div>`).join('');
  html+='</div><p class="muted">Суммы по попыткам; параллельные ветви пересекаются, поэтому сумма может быть больше общего времени. «Оценка» — по часам authority между разными процессами.</p>';
  if(t.stages.length)html+='<table class="time-stages"><thead><tr><th>Стадия</th><th>Раз</th><th>Время</th><th>Из него агент</th></tr></thead><tbody>'+t.stages.map(s=>`<tr><td>${esc(s.stage)}</td><td>${s.count>1?'×'+s.count:'1'}</td><td>${s.unknown?'не менее ':''}${esc(ms(s.ms))}</td><td>${s.agentMs?esc(ms(s.agentMs)):'—'}</td></tr>`).join('')+'</tbody></table>';
@@ -496,12 +516,11 @@ function treeNode(n,depth=0) {
  return `<details class="node" data-key="tree:${esc(n.kind+':'+n.id)}" ${depth<2?'open':''}><summary><button data-node="${esc(n.id)}" data-focus="${esc(n.id)}" aria-pressed="${n.id===nodeID}">${esc(n.stage_id || label(n.kind))} · ${esc(short(n.id))}</button> ${badge(n.status)} <small>${esc(duration(n.metrics?.elapsed))}</small></summary>${(n.children||[]).map(c=>treeNode(c,depth+1)).join('')}</details>`;
 }
 function timingNode(node,id) {if(!node)return null;if(node.id===id)return node;for(const child of node.children||[]){const found=timingNode(child,id);if(found)return found;}return null;}
-function nodeObject(run,id) {for(const pool of [run.attempts,run.steps,run.activations,run.invocations,run.check_executions])if(pool?.[id])return pool[id];return id===run.id?run:null;}
 function renderNode() {
  const run=state.run,object=nodeObject(run,nodeID),timing=timingNode(state.timing?.root,nodeID);
  const activation=run.activations?.[object?.stage_activation_id||object?.activation_id||nodeID],stageID=activation?.stage_id||object?.stage_id||nodeID,graph=graphData(parseMaybe(currentWorkflow(run)),run,definition?definitionInvocation(run,definition):invocation,state.choices,state.input_values);
  let html=nodeCard(graph,stageID,object,run),role=executionRole(object,parseMaybe(currentWorkflow(run))?.definition?.stages?.[stageID]);
- const received=run.attempts?.[nodeID]||(object?values(run.steps).filter(s=>s.stage_activation_id===object.id).flatMap(s=>s.attempt_ids||[]).map(id=>run.attempts?.[id]).filter(Boolean).at(-1):null);
+ const received=receivedAttempt(run,nodeID);
  if(received)html+=receiptHTML(run,received,state.input_values,attemptPhases(timingNode(state.timing?.root,received.id),!!received.session),received.id===nodeID?'':'Последнее исполнение этой стадии: '+short(received.id));
  if(!object) {
   const stage=parseMaybe(currentWorkflow(run))?.definition?.stages?.[nodeID];
@@ -511,7 +530,7 @@ function renderNode() {
  }
  $('node-title').textContent=(timing?.stage_id || label(timing?.kind) || 'Исполнение')+' · '+short(nodeID);html+=`<h4>Роль исполнения</h4><p><b>${esc(role.kind)}</b><br><span class="muted">${esc(role.detail)}${role.state?' · '+esc(role.state):''}</span></p>`;
  html+=`<p>${badge(object.status)} ${esc(object.verdict || object.outcome || '')}</p>`;
- if(received&&!received.session)html+=progressHTML(state.progress?.attempts?.find(a=>a.attempt_id===received.id),state.progress?.as_of?.utc);
+ if(received&&!received.session)html+=progressHTML(state.progress?.attempts?.find(a=>a.attempt_id===received.id),state.progress?.as_of?.utc)+(state.output?.attempt_id===received.id?outputHTML(state.output):'');
  if(timing){const metrics=Object.entries(timing.metrics||{}),shown=metrics.filter(([,v])=>v.quality!=='not_applicable');html+=section('Время',Object.fromEntries(shown.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':time',true);const other=metrics.filter(([,v])=>v.quality==='not_applicable');if(other.length)html+=section('Неприменимые метрики',Object.fromEntries(other.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':other-time');}
  if(run.attempts?.[nodeID]) {
   const context=object.context || {},envelope=parseMaybe(object.envelope),step=run.steps?.[object.step_instance_id],def=(run.definitions||[]).find(d=>d.ref?.digest===step?.definition_ref?.digest)?.bytes;
@@ -591,9 +610,12 @@ async function tick() {
     // A program's progress moves while the Run's version does not.
     const programs=values(next.run?.attempts).filter(a=>!a.session&&a.process);
     if(programs.length)next.progress=await get('/api/progress',{source,id:selected});
+    // Output is read for the program attempt the operator is looking at.
+    const shown=nodeID&&receivedAttempt(next.run,nodeID);
+    if(shown&&!shown.session&&shown.process)next.output=await get('/api/output',{source,id:selected,attempt:shown.id});
     if(g!==generation)return;
     $('detail-error').hidden=true;
-    const version=source+selected+':'+next.run_version+':'+next.event_sequence+':'+JSON.stringify([next.capacity?.resources||{},next.capacity?.waiting||{},next.progress?.attempts||[],programs.some(a=>!a.settled)?next.progress?.as_of?.utc:'']);
+    const version=source+selected+':'+next.run_version+':'+next.event_sequence+':'+JSON.stringify([next.capacity?.resources||{},next.capacity?.waiting||{},next.progress?.attempts||[],programs.some(a=>!a.settled)?next.progress?.as_of?.utc:'',next.output?[next.output.attempt_id,next.output.state,(next.output.streams||[]).map(x=>x.end_offset)]:null]);
     state=next;if(stamp!==version){stamp=version;renderDetail();}
     if(tab==='journal')await refreshEvents(g);
    }catch(err){if(g===generation){$('detail-error').hidden=false;$('detail-error').textContent='Нет актуального чтения. Последние показанные данные могут устареть: '+err.message;}}

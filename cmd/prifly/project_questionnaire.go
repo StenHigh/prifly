@@ -165,6 +165,10 @@ type projectExecutionReview struct {
 	// EnvironmentSources says where a value that is not written down comes
 	// from: the reviewer sees the place, never the secret.
 	EnvironmentSources map[string]string `json:"environment_sources,omitempty"`
+	// LiveOutput says a reader of the Run will see this program's newest
+	// output while it works; OutputLimitBytes is what it may print per stream.
+	LiveOutput       bool  `json:"live_output,omitempty"`
+	OutputLimitBytes int64 `json:"output_limit_bytes,omitempty"`
 }
 
 func projectReviewDigest(value any) (string, error) {
@@ -216,7 +220,7 @@ func projectReviewExecutors(bindings *prifly.ExecutionBindings) ([]projectExecut
 		for name, source := range binding.Config.EnvironmentFrom {
 			sources[name] = source.Place()
 		}
-		item := projectExecutionReview{DefinitionRef: binding.DefinitionRef, Executable: binding.Config.Executable, ExecutableDigest: digest, Args: binding.Config.Args, FileDigests: map[string]string{}, ConfigurationDigest: configDigest, EnvironmentNames: names, EnvironmentSources: sources}
+		item := projectExecutionReview{DefinitionRef: binding.DefinitionRef, Executable: binding.Config.Executable, ExecutableDigest: digest, Args: binding.Config.Args, FileDigests: map[string]string{}, ConfigurationDigest: configDigest, EnvironmentNames: names, EnvironmentSources: sources, LiveOutput: binding.Config.LiveOutput, OutputLimitBytes: binding.Config.OutputLimitBytes}
 		for target, source := range binding.Config.Files {
 			item.FileDigests[target] = projectBytesDigest(binding.Files[source])
 		}

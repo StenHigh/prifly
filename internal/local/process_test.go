@@ -439,6 +439,16 @@ func TestProcessHelper(t *testing.T) {
 			os.Exit(95)
 		}
 		writeResult()
+	case "output-noisy":
+		// More stdout than the tail holds, then a line on stderr and "pass"
+		// printed before a failing exit.
+		chunk := bytes.Repeat([]byte("y"), 16<<10)
+		for i := 0; i < 16; i++ {
+			_, _ = os.Stdout.Write(chunk)
+		}
+		_, _ = fmt.Fprint(os.Stdout, "\nlast line pass\n")
+		_, _ = fmt.Fprint(os.Stderr, "warning: \x1b[31mred\x1b[0m\n")
+		os.Exit(3)
 	case "progress-flood":
 		progress := os.NewFile(4, "progress")
 		line := []byte(`{"schema_version":"program-progress/1","phase":"flood"}` + "\n")
@@ -577,5 +587,46 @@ func TestParseProgramProgressRefusesWhatItCannotTrust(t *testing.T) {
 		if _, err := ParseProgramProgress([]byte(line)); err == nil {
 			t.Errorf("%s: accepted %s", name, line)
 		}
+	}
+}
+
+// A live-output program hands on only the newest bytes of each stream; what
+// did not fit is a gap in offsets, and the exit stays the outcome.
+func TestProcessOutputTailIsBoundedAndKeepsOffsets(t *testing.T) {
+	t.Parallel()
+	spec := processTestSpec(t, "output-noisy")
+	spec.MaxStdoutBytes = 1 << 20
+	delivered := map[string][]OutputDelivery{}
+	spec.Output = func(d OutputDelivery) error {
+		delivered[d.Stream] = append(delivered[d.Stream], d)
+		return nil
+	}
+	out, err := RunProcess(context.Background(), spec, nil)
+	requireSettledProcess(t, out, err)
+	if out.ExitCode == nil || *out.ExitCode != 3 || out.StopReason != "" {
+		t.Fatalf("output changed the outcome: exit %v stop %q", out.ExitCode, out.StopReason)
+	}
+	stdout := delivered["stdout"]
+	if len(stdout) == 0 {
+		t.Fatal("no stdout was handed on")
+	}
+	last := stdout[len(stdout)-1]
+	end := last.Offset + int64(len(last.Data))
+	if end != out.Stdout.BytesRead || !bytes.HasSuffix(last.Data, []byte("last line pass\n")) {
+		t.Fatalf("the newest stdout was not delivered: end %d of %d", end, out.Stdout.BytesRead)
+	}
+	handed := int64(0)
+	for _, d := range stdout {
+		if len(d.Data) > OutputTailBytes {
+			t.Fatalf("a delivery exceeded the tail: %d", len(d.Data))
+		}
+		handed += int64(len(d.Data))
+	}
+	// 256 KiB written in a burst cannot all wait in a 64 KiB tail.
+	if handed >= out.Stdout.BytesRead {
+		t.Fatalf("every byte of %d was handed on: nothing was bounded", out.Stdout.BytesRead)
+	}
+	if stderr := delivered["stderr"]; len(stderr) != 1 || stderr[0].Offset != 0 || !bytes.Contains(stderr[0].Data, []byte("\x1b[31m")) {
+		t.Fatalf("stderr was not handed on verbatim: %+v", stderr)
 	}
 }

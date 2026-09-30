@@ -258,7 +258,7 @@ func TestStoreMigratesV1ForAuthorityControls(t *testing.T) {
 	// Rewinding the marker is not enough: a genuine v1 database also lacks the
 	// structures later versions added, and leaving them makes the fixture test
 	// a migration that never happens in the field.
-	if _, err := s.db.Exec("DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=1"); err != nil {
+	if _, err := s.db.Exec("DROP TABLE attempt_output; DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -1663,7 +1663,7 @@ func TestStoreReadsAnUnmigratedDatabaseReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+	if _, err := db.Exec("DROP TABLE attempt_output; DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -1712,7 +1712,7 @@ func TestStoreVerifiesIncrementallyFromItsRecordedCut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+	if _, err := db.Exec("DROP TABLE attempt_output; DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -2038,5 +2038,41 @@ func TestAResourceBoundsItsHoldersAcrossRuns(t *testing.T) {
 	applyChange(t, s, storeCommand("release-d", "run-d", 1), release)
 	if rejection := admit("run-b", "attempt-b2", heavy); rejection != nil {
 		t.Fatalf("a freed resource was not taken: %+v", rejection)
+	}
+}
+
+func TestStoreKeepsOnlyTheNewestOutputTail(t *testing.T) {
+	t.Parallel()
+	s, _ := testStore(t)
+	ctx := context.Background()
+	put := func(offset int64, size int) {
+		t.Helper()
+		if err := s.PutAttemptOutput(ctx, "run-a", "attempt:a", AttemptOutput{Stream: "stdout", Offset: offset, Data: bytes.Repeat([]byte("z"), size), Observed: time.Now(), LaunchID: "l"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put(0, 40<<10)
+	put(40<<10, 40<<10)
+	put(80<<10, 40<<10)
+	if err := s.PutAttemptOutput(ctx, "run-a", "attempt:a", AttemptOutput{Stream: "stderr", Offset: 0, Data: []byte("e"), Observed: time.Now(), LaunchID: "l"}); err != nil {
+		t.Fatal(err)
+	}
+	chunks, err := s.ReadAttemptOutput(ctx, "attempt:a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	offsets := []int64{}
+	for _, c := range chunks {
+		if c.Stream == "stdout" {
+			offsets = append(offsets, c.Offset)
+		}
+	}
+	// 120 KiB written: the first chunk ends before the newest 64 KiB and is
+	// gone; the second overlaps them and stays.
+	if fmt.Sprint(offsets) != fmt.Sprint([]int64{40 << 10, 80 << 10}) || len(chunks) != 3 {
+		t.Fatalf("kept %v of %d chunks", offsets, len(chunks))
+	}
+	if err := s.PutAttemptOutput(ctx, "run-a", "attempt:a", AttemptOutput{Stream: "stdin", Offset: 0, Data: []byte("x"), LaunchID: "l"}); err == nil {
+		t.Fatal("an unknown stream was stored")
 	}
 }

@@ -28,7 +28,16 @@ execution_bindings:
       # Cleanup the program starts is in that group and dies with it; a
       # program that needs longer finishes its cleanup on its next run.
       grace_ms: 100
-      max_output_bytes: 1048576 # Required output bound, 1..16777216 bytes.
+      max_output_bytes: 1048576 # Required bound on the step's output artifacts, 1..16777216 bytes.
+      # Optional (state 43, execution-bindings/3): open this program's stdout
+      # and stderr to readers of the Run while it works -- the newest 64 KiB of
+      # each, in the monitor and `run output`, never its result. Absent: none of
+      # its output is readable beside the Run. Programs only, never a check.
+      live_output: true
+      # Optional: how much the program may print to EACH of stdout and stderr
+      # before it is stopped with stdout_limit/stderr_limit, 1..16777216 bytes.
+      # Absent keeps 64 KiB. Independent of live_output.
+      output_limit_bytes: 1048576
       # Optional exact context profile; omit for the existing executor default.
       # The zero digest is illustrative and must be replaced before compilation.
       context_profile_ref:

@@ -1208,7 +1208,18 @@ func (e *Engine) executePending(ctx context.Context, r Run, v local.ReadView, a 
 	if boundary.path != "" {
 		env["PRIFLY_REPOSITORY_WORKSPACE"], env["PRIFLY_CLAIM_ID"] = boundary.path, boundary.claimID
 	}
-	outcome, runErr := local.RunProcess(processCtx, local.ProcessSpec{Executable: executor.Config.Executable, ExecutableDigest: executor.ExecutableDigest, Args: executor.Config.Args, Dir: a.Workspace, Env: env, Envelope: a.Envelope, MaxRuntime: remaining, GracePeriod: time.Duration(executor.Config.GraceMS) * time.Millisecond, KillWait: 2 * time.Second, MaxStdoutBytes: 64 << 10, MaxStderrBytes: 64 << 10, MaxResultBytes: 1 << 20, BeforeStart: func() error {
+	// Only a program whose sealed executor opened its output hands it on; for
+	// every other one no copy readable beside the Run is ever made.
+	var liveOutput func(local.OutputDelivery) error
+	if executor.Config.LiveOutput && isLiveOutputState(r.SchemaVersion) {
+		liveOutput = func(d local.OutputDelivery) error {
+			putCtx, putCancel := context.WithTimeout(context.Background(), progressWriteDeadline)
+			defer putCancel()
+			chunk := local.AttemptOutput{Stream: d.Stream, Offset: d.Offset, Data: d.Data, Observed: d.At.UTC(), LaunchID: d.LaunchID}
+			return retryOnBusy(putCtx, func() error { return e.Store.PutAttemptOutput(putCtx, r.ID, a.ID, chunk) })
+		}
+	}
+	outcome, runErr := local.RunProcess(processCtx, local.ProcessSpec{Executable: executor.Config.Executable, ExecutableDigest: executor.ExecutableDigest, Args: executor.Config.Args, Dir: a.Workspace, Env: env, Envelope: a.Envelope, MaxRuntime: remaining, GracePeriod: time.Duration(executor.Config.GraceMS) * time.Millisecond, KillWait: 2 * time.Second, MaxStdoutBytes: programOutputLimit(executor.Config), MaxStderrBytes: programOutputLimit(executor.Config), MaxResultBytes: 1 << 20, Output: liveOutput, BeforeStart: func() error {
 		readCtx, readCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer readCancel()
 		current, _, err := e.load(readCtx, r.ID)
@@ -1765,6 +1776,14 @@ func (e *Engine) settleWith(ctx context.Context, runID, attemptID string, eviden
 			// The program's last report did not reach the authority. The attempt
 			// is judged as before; the reader of its progress is told why the
 			// record may be behind what the program said.
+			if detail := outcome.OutputError; detail != "" {
+				if len(detail) > maxDiagnosticDetailBytes {
+					detail = strings.ToValidUTF8(detail[:maxDiagnosticDetailBytes], "")
+				}
+				if err := recordDiagnostic(r, Diagnostic{ID: derivedID("diagnostic", r.ID, commandID, "execution", "output_unrecorded"), RunID: r.ID, AttemptID: attemptID, Origin: "core", Severity: "warn", Code: "output_unrecorded", Category: "executor", Phase: "execution", Message: "Part of the program's opened output was not recorded: " + detail, Observed: obs, CauseRefs: []string{}}); err != nil {
+					return local.Change{}, err
+				}
+			}
 			if detail := outcome.ProgressError; detail != "" {
 				if len(detail) > maxDiagnosticDetailBytes {
 					detail = strings.ToValidUTF8(detail[:maxDiagnosticDetailBytes], "")

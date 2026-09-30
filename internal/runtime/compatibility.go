@@ -205,6 +205,12 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreResourceStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreResourceReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "exclusive_resources")
+	// State 43: a program's executor may open its output to a reader of the
+	// Run and name its per-stream output limit.
+	profile.StateVersion, profile.ReadVersion = CoreLiveOutputStateVersion, CoreLiveOutputReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreLiveOutputStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreLiveOutputReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "program_live_output")
 	// A program may report its own progress over fd 4. The report is kept
 	// beside the Run, never in it, so no state or read version is minted.
 	profile.Capabilities = append(profile.Capabilities, "program_progress")
@@ -255,6 +261,9 @@ func supportedRun(r Run) bool {
 		return false
 	}
 	if (len(r.StageResources) != 0 || len(r.ResourceLimits) != 0) && !isResourceState(r.SchemaVersion) {
+		return false
+	}
+	if requiresLiveOutputState(r.Executors) && !isLiveOutputState(r.SchemaVersion) {
 		return false
 	}
 	for _, record := range r.DecisionLedger {

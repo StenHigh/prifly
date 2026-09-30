@@ -74,6 +74,8 @@ var versionContracts = []versionContract{
 	{CoreQuestionStateVersion, CoreQuestionReadVersion, "", CoreAwaitingHostNextVersion},
 	// 42 seals which stages hold which exclusive resources, with their limits.
 	{CoreResourceStateVersion, CoreResourceReadVersion, "", CoreAwaitingHostNextVersion},
+	// 43 adds live output and an output limit to the sealed executor config.
+	{CoreLiveOutputStateVersion, CoreLiveOutputReadVersion, "", CoreAwaitingHostNextVersion},
 	// 36 minted no state row of its own: it is a next-action answer, so every
 	// state that could describe a finished Run and was still being created
 	// took it up, the way 31 and 32 took up 33. 41 is the same kind of answer

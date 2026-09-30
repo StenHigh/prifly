@@ -76,6 +76,8 @@
         "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 3600000},
         "grace_ms": {"type": "integer", "minimum": 1, "maximum": 5000},
         "max_output_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "live_output": {"type": "boolean", "description": "Open this program's stdout and stderr to readers of the Run while it works (state 43)."},
+        "output_limit_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216, "description": "Per-stream output limit; absent keeps 64 KiB."},
         "context_profile_ref": {"$ref": "#/$defs/reference"}
       }
     },

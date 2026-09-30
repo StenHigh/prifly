@@ -190,3 +190,4 @@ footer{max-width:1680px;margin:auto;padding:18px 28px;color:var(--muted);font-si
 .flight-deck .totals b{font-size:23px;color:#e4ecf5}
 @media(max-width:760px){.flight-deck{min-height:218px;padding:20px;gap:20px}.flight-deck h1{font-size:25px}.flight-deck::before{background:linear-gradient(90deg,#0c1829f5,#0c1829ce 65%,#0c182975),url('/monitor-hero.jpg') 68% center/cover no-repeat}.flight-deck::after{left:20px}.flight-deck .heading-note{max-width:250px}}
 @media(max-width:480px){header{display:grid;grid-template-columns:auto minmax(0,1fr)}.header-tools{display:grid;justify-items:end;gap:5px;min-width:0}.theme-picker select{max-width:125px}#connection{width:auto}}
+.program-output{max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:11px/1.5 var(--mono);background:var(--raised);padding:8px;border:1px solid var(--line);border-radius:4px}

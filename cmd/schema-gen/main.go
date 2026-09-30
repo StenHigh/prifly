@@ -63,6 +63,7 @@ type generator struct {
 	awaitingHost          bool
 	questions             bool
 	resources             bool
+	liveOutput            bool
 	recovery              bool
 }
 
@@ -218,6 +219,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.resources && t == reflect.TypeFor[prifly.Run]() && (field.Name == "StageResources" || field.Name == "ResourceLimits") {
 						continue
 					}
+					if !g.liveOutput && t == reflect.TypeFor[prifly.ExecutorConfig]() && (field.Name == "LiveOutput" || field.Name == "OutputLimitBytes") {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -355,6 +359,7 @@ var profileContracts = []struct {
 	{"awaiting-host", "generate next version 42 awaiting-host contracts", func(g *generator) { g.awaitingHost = true }},
 	{"questions", "generate answered-questions state/read version 41 contracts", func(g *generator) { g.questions = true }},
 	{"resources", "generate exclusive-resources state/read version 42 contracts", func(g *generator) { g.resources = true }},
+	{"live-output", "generate program live-output state/read version 43 contracts", func(g *generator) { g.liveOutput = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -382,6 +387,9 @@ var documentContracts = []struct {
 	{"execution-bindings", "generate explicit execution bindings contract", func() ([]byte, error) { return prifly.PublicSchema("ExecutionBindings") }},
 	{"execution-bindings-v2", "generate execution bindings contract with declared value sources", func() ([]byte, error) {
 		return prifly.PublicSchema("ExecutionBindingsV2")
+	}},
+	{"execution-bindings-v3", "generate execution bindings contract with opened output and an output limit", func() ([]byte, error) {
+		return prifly.PublicSchema("ExecutionBindingsV3")
 	}},
 	{"program-progress", "generate program progress report and read contract", func() ([]byte, error) { return prifly.PublicSchema("ProgramProgress") }},
 	{"publication-source", "generate once artifact publication source author contract", func() ([]byte, error) { return flow.PublicationSourceSchema() }},
@@ -961,6 +969,12 @@ func main() {
 			delete(contracts, name+"V41")
 		}
 	}
+	if g.liveOutput {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreCapabilities"} {
+			contracts[name+"V43"] = contracts[name+"V42"]
+			delete(contracts, name+"V42")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1285,6 +1299,16 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-resources:42"
 			bundle["title"] = "Pri-Fly exclusive-resource contracts"
 			bundle["description"] = "State/read 42 seals which root stages of a Run hold which exclusive resources, and each limit. An attempt of such a stage, or inside a call it makes, is admitted only while each of its resources has fewer holders than the limit among the attempts of every Run of the authority; otherwise it is refused as resource_busy, naming a holder, and nothing runs. Resource names are the project's and carry no meaning here. Next keeps 42 and every earlier bundle is unchanged, byte for byte."
+		}
+		if g.liveOutput {
+			g.property("runtime_Run", "schema_version", map[string]any{"const": prifly.CoreLiveOutputStateVersion})
+			g.property("runtime_RunView", "schema_version", map[string]any{"const": prifly.CoreLiveOutputReadVersion})
+			g.property("runtime_ExecutorConfig", "output_limit_bytes", map[string]any{"type": "integer", "minimum": 1, "maximum": prifly.MaxProgramOutputBytes})
+			g.describe("runtime_ExecutorConfig", "live_output", "The program's stdout and stderr are opened to readers of the Run while it works: the newest 64 KiB of each, kept beside the Run, never a transcript and never its result. Absent: nothing of its output is readable beside the Run.")
+			g.describe("runtime_ExecutorConfig", "output_limit_bytes", "How much the program may print to each of stdout and stderr before it is stopped for it. Absent keeps 64 KiB.")
+			bundle["$id"] = "urn:prifly:core-live-output:43"
+			bundle["title"] = "Pri-Fly program live-output contracts"
+			bundle["description"] = "State/read 43 seals, in a program's executor config, whether its stdout and stderr are opened to readers of the Run and how much it may print per stream. A Run is sealed at 43 only when an executor declares either. The output itself is not Run state: the newest bytes are kept beside the Run and read as program-output-read/1. Next keeps 42 and every earlier bundle is unchanged, byte for byte."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)

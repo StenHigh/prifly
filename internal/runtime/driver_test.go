@@ -1766,6 +1766,12 @@ func TestDriverWorkerHelper(t *testing.T) {
 	if mode == "wait" {
 		signal.Ignore(syscall.SIGTERM)
 	}
+	// A program that talks: a line on each stream, one that looks like a
+	// verdict and one that would move a terminal.
+	if os.Getenv("DRIVER_TEST_PRINT") == "1" {
+		_, _ = fmt.Fprintln(os.Stdout, "running product suite\nverdict: fail")
+		_, _ = fmt.Fprintln(os.Stderr, "warning \x1b[2J cleared")
+	}
 	envelopeBytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		os.Exit(90)

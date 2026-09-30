@@ -439,6 +439,18 @@ host взял выданное задание; хранится один раз 
 (`reported`), устаревший (`stale`), отсутствует (`not_reported`) или не может
 быть известен (`unavailable`).
 
+<a id="live-output"></a>
+### Live output — Открытый вывод программы
+
+Решение автора программы в её `execution_bindings` (`live_output: true`),
+запечатанное в Run вместе с конфигурацией executor (состояние 43): читатели Run
+видят последние 64 КиБ её stdout и stderr, пока она работает. Хвост хранится
+рядом с Run (хранилище 9), читается `program-output-read/1` (`run output`,
+монитор) со смещениями, которые называют несохранённое, и никогда не является
+результатом или вердиктом. Программа без флага не оставляет ничего читаемого.
+Отдельно от него `output_limit_bytes` — сколько программа может напечатать в
+каждый поток (по умолчанию 64 КиБ).
+
 <a id="interaction-policy"></a>
 ### Attended / autonomous / unattended Run — Режим участия владельца
 
@@ -1602,6 +1614,9 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [Exclusive resource](#exclusive-resource) | `internal/runtime/model.go` | `runtime.Run.StageResources` | `stage_resources` |
 | [Exclusive resource](#exclusive-resource) | `internal/runtime/model.go` | `runtime.Run.ResourceLimits` | `resource_limits` |
 | [Exclusive resource](#exclusive-resource) | `internal/local/store.go` | `local.ResourceClaim` | — |
+| [Live output](#live-output) | `internal/runtime/model.go` | `runtime.ExecutorConfig.LiveOutput` | `live_output` |
+| [Live output](#live-output) | `internal/runtime/model.go` | `runtime.ExecutorConfig.OutputLimitBytes` | `output_limit_bytes` |
+| [Live output](#live-output) | `internal/runtime/output.go` | `runtime.ProgramOutputView` | — |
 | [Program progress](#program-progress) | `internal/local/progress.go` | `local.ProgramProgress` | — |
 | [Program progress](#program-progress) | `internal/runtime/progress.go` | `runtime.ProgramProgressView` | — |
 | [Program progress](#program-progress) | `internal/runtime/progress.go` | `runtime.AttemptProgressView.State` | `state` |
