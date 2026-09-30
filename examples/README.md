@@ -201,6 +201,9 @@ prifly project start --repository . --launch NAME --input source=./input.csv --a
 `external_write`); `run events RUN` — история по строке на событие. Compile не
 создаёт Run и не исполняет программы. Start требует локальное разрешение и
 `--allow-execution`, закрепляет выбранные programs/argv/files отдельно от inputs.
+Обзор (`--prepare`) проходит и без флага, но запуск с `--expected-launch-digest`
+без него откажет `project_execution_approval_required`; обзор говорит об этом в
+stderr, когда в нём есть программы.
 Программа получает чистое окружение (`PATH=/usr/bin:/bin`, `LANG`, `TMPDIR`,
 `PRIFLY_*`); что ей нужно сверх этого на **этой машине** — `PATH` до php/composer,
 `APP_ENV` — задаётся рядом с бинарём, в ignored `local.yaml`

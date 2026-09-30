@@ -512,6 +512,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				budget = retirement.After
 			}
 			summary.RegistryBudget = &budget
+			// A review passes without the approval; the start it reviews does
+			// not. A host learned that from project_execution_approval_required
+			// on its last command, after the review it had already read. On
+			// stderr, so the summary on stdout stays the reviewed document.
+			if len(summary.Execution) != 0 && !*allowExecution {
+				fmt.Fprintf(c.errout, "project: this launch runs %d workflow program(s), listed in execution; once you have reviewed them, the start with --expected-launch-digest also needs --allow-execution\n", len(summary.Execution))
+			}
 			return c.emit(summary)
 		}
 		// Keep stdout's one final result intact. The pre-dispatch summary is on

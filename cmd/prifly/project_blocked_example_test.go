@@ -238,6 +238,15 @@ func TestCLIBlockedExampleAcceptance(t *testing.T) {
 	if code, _, stderr := runCLI(t, "project", "continue", "--prepare", "--repository", f.root, "--launch", "work", "--allow-execution", "--source-run", blocked.Run.Run.ID, "--from-stage", "prepare"); code == 0 || !strings.Contains(stderr, "resume_prefix_empty") {
 		t.Fatalf("a resume carrying nothing was prepared: exit=%d %s", code, stderr)
 	}
+	// The review of a resume passes without the approval and the start does
+	// not; the review says so beside its summary instead of leaving the host
+	// to meet project_execution_approval_required on its last command.
+	if code, _, stderr := runCLI(t, "project", "continue", "--prepare", "--repository", f.root, "--launch", "work", "--source-run", blocked.Run.Run.ID); code != 0 || !strings.Contains(stderr, "also needs --allow-execution") {
+		t.Fatalf("the review did not say the start needs the approval: exit=%d %s", code, stderr)
+	}
+	if _, _, stderr := runCLI(t, "project", "continue", "--prepare", "--repository", f.root, "--launch", "work", "--allow-execution", "--source-run", blocked.Run.Run.ID); strings.Contains(stderr, "also needs --allow-execution") {
+		t.Fatalf("an approved review still asked for the approval: %s", stderr)
+	}
 	if code, _, stderr := runCLI(t, "project", "continue", "--prepare", "--repository", f.root, "--launch", "work", "--allow-execution", "--source-run", blocked.Run.Run.ID, "--input", "request="+filepath.Join(f.root, "request.json")); code == 0 || !strings.Contains(stderr, "resume_input_override") {
 		t.Fatalf("a resume took another input: exit=%d %s", code, stderr)
 	}
