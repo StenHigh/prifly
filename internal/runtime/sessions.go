@@ -971,7 +971,7 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	if err := checkModelProfileStatement(step.ModelProfile, submission.ModelProfile); err != nil {
 		return local.ApplyResult{}, err
 	}
-	if err := checkAnsweredQuestions(r, step, submission.AnsweredQuestions); err != nil {
+	if err := checkAnsweredQuestions(r, step, attempt.Session.DecisionContext, submission.AnsweredQuestions); err != nil {
 		return local.ApplyResult{}, err
 	}
 	if submission.SchemaVersion != AssistedSessionTreeVersion && submission.SchemaVersion != AssistedSessionDecisionVersion && submission.SchemaVersion != AssistedSessionTimingVersion && submission.SchemaVersion != AssistedSessionRoutedVersion && len(submission.WorkspaceTrees) != 0 {

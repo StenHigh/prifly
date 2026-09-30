@@ -133,21 +133,21 @@ func TestARunSealedBeforeQuestionsNeitherOwesNorTakesThem(t *testing.T) {
 	t.Parallel()
 	step := flow.StepDefinition{Inputs: map[string]flow.InputPort{"handoff": {}}}
 	earlier := Run{SchemaVersion: CoreContinuationStateVersion}
-	if err := checkAnsweredQuestions(earlier, step, nil); err != nil {
+	if err := checkAnsweredQuestions(earlier, step, nil, nil); err != nil {
 		t.Fatalf("an earlier Run was held to the list: %v", err)
 	}
-	if err := checkAnsweredQuestions(earlier, step, &[]AnsweredQuestion{}); refusalCode(err) != "answered_questions_unsupported" {
+	if err := checkAnsweredQuestions(earlier, step, nil, &[]AnsweredQuestion{}); refusalCode(err) != "answered_questions_unsupported" {
 		t.Fatalf("an earlier Run took a list it has no place for: %v", err)
 	}
 	current := Run{SchemaVersion: CoreQuestionStateVersion}
-	if err := checkAnsweredQuestions(current, step, &[]AnsweredQuestion{{Question: "Where does work start?", Answer: "app/Services", Basis: "input", Port: "handoff"}}); err != nil {
+	if err := checkAnsweredQuestions(current, step, nil, &[]AnsweredQuestion{{Question: "Where does work start?", Answer: "app/Services", Basis: "input", Port: "handoff"}}); err != nil {
 		t.Fatalf("an answer resting on an input the step has was refused: %v", err)
 	}
 	many := make([]AnsweredQuestion, MaxAnsweredQuestions+1)
 	for index := range many {
 		many[index] = AnsweredQuestion{Question: "q", Answer: "a", Basis: "judgement"}
 	}
-	if err := checkAnsweredQuestions(current, step, &many); refusalCode(err) != "answered_questions_invalid" {
+	if err := checkAnsweredQuestions(current, step, nil, &many); refusalCode(err) != "answered_questions_invalid" {
 		t.Fatalf("a list over the bound was taken: %v", err)
 	}
 }
@@ -224,5 +224,37 @@ func TestAReportFieldInsideResultIsNamed(t *testing.T) {
 		if !ok || problem.Path != "/result/"+name || !strings.Contains(problem.Message, "top level") {
 			t.Fatalf("%s inside result was refused as %v", name, err)
 		}
+	}
+}
+
+// The host sees a decision only by the key its answer was handed under; the
+// package profile arrives as core:package_profile, whose catalog id is another
+// name. Either name is accepted and the record keeps the catalog's.
+func TestADecisionIsNamedByTheKeyItWasHandedUnder(t *testing.T) {
+	t.Parallel()
+	profile := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "plan_profile", Title: "Planning depth", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "fast", Title: "Fast", Value: json.RawMessage(`"fast"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "package_profile"}}
+	apply := DecisionDefinition{SchemaVersion: DecisionDefinitionVersion, ID: "improve_apply", Title: "Apply", Phase: "preflight", Required: true, Choices: []DecisionChoice{{ID: "all", Title: "All", Value: json.RawMessage(`"all"`)}}, Sensitivity: "ordinary", Destination: DecisionDestination{Kind: "session_context", Name: "apply_improvements"}}
+	r := Run{SchemaVersion: CoreQuestionStateVersion, DecisionCatalog: &DecisionCatalog{SchemaVersion: DecisionCatalogVersion, Decisions: []DecisionDefinition{profile, apply}}}
+	delivered := map[string]json.RawMessage{packageProfileContext: json.RawMessage(`"fast"`), "apply_improvements": json.RawMessage(`"all"`)}
+	questions := []AnsweredQuestion{
+		{Question: "Which planning mode?", Answer: "fast", Basis: "decision", DecisionID: packageProfileContext},
+		{Question: "Apply these improvements?", Answer: "all", Basis: "decision", DecisionID: "apply_improvements"},
+		{Question: "Apply these improvements?", Answer: "all", Basis: "decision", DecisionID: "improve_apply"},
+	}
+	if err := checkAnsweredQuestions(r, flow.StepDefinition{}, delivered, &questions); err != nil {
+		t.Fatalf("a decision named by its handed key was refused: %v", err)
+	}
+	if questions[0].DecisionID != "plan_profile" || questions[1].DecisionID != "improve_apply" || questions[2].DecisionID != "improve_apply" {
+		t.Fatalf("the record does not keep the catalog's id: %+v", questions)
+	}
+	// A key this attempt was not handed is still no decision of the Run.
+	other := []AnsweredQuestion{{Question: "Which mode?", Answer: "fast", Basis: "decision", DecisionID: packageProfileContext}}
+	err := checkAnsweredQuestions(r, flow.StepDefinition{}, nil, &other)
+	if refusalCode(err) != "answered_questions_invalid" || !strings.Contains(err.Error(), "plan_profile") {
+		t.Fatalf("an unhanded key was taken or the refusal names no decision: %v", err)
+	}
+	unknown := []AnsweredQuestion{{Question: "Which mode?", Answer: "fast", Basis: "decision", DecisionID: "nothing"}}
+	if err := checkAnsweredQuestions(r, flow.StepDefinition{}, delivered, &unknown); err == nil || !strings.Contains(err.Error(), "core:package_profile") {
+		t.Fatalf("the refusal does not name the keys the attempt was handed: %v", err)
 	}
 }

@@ -24,3 +24,8 @@
 Ворота 2026-09-30: `make ci-check` и `make e2e` зелёные на одном дереве трёх change (со второго прогона: первый поймал неотформатированный `main.go` и ожидание `core-timing/3` в `test/e2e/verify-context.py`).
 
 Выпущено 2026-09-30 в v0.13.69 (тег на `f867bd3`): GitHub `verify` 36642047819 и `race` 36642084242 зелёные на этом коммите, `release` 36643402546 опубликовал 6 ассетов после подтверждения окружения `release`.
+
+## Находки первого боевого Run (пилот, 0.13.69) — исправлено в 0.13.70
+
+- [x] 7.1 `basis: decision` с `decision_id: core:package_profile` отклонялся: хост видит решение только по ключу `decision_context`, а проверка знала лишь id каталога. Теперь принимается и ключ, под которым ответ передан этой попытке; запись хранит id каталога; отказ перечисляет и id, и переданные ключи. Проверка: `TestADecisionIsNamedByTheKeyItWasHandedUnder`; текст `prifly-run` называет оба имени, прежний текст заморожен.
+- [x] 7.2 `session submit --template` не говорил, что `answered_questions` обязателен. Поле по-прежнему не заполняется шаблоном; при `question_report: required` в stderr печатается, что и где добавить. Проверка: ассерт в `TestSessionTaskLeavesTheHandoffAndItsReportShapeInReach`, красный без подсказки.

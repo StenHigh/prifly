@@ -174,9 +174,13 @@ review) после захвата плана оставался без файл�
 слова, устарели.
 
 **Поле.** `answered_questions`: список `{question, answer, basis}`; `basis` —
-`decision` вместе с `decision_id` (решение, объявленное в Run), `input` вместе с
+`decision` вместе с `decision_id` (решение, объявленное в Run: его id или ключ
+`decision_context`, под которым ответ передан, например `core:package_profile`;
+хранится под id каталога), `input` вместе с
 `port` (вход шага, например `handoff`), `instructions`, `person` или
-`judgement`. Можно добавить `asked_by` и `options`. Пустой список `[]` —
+`judgement`. Можно добавить `asked_by` и `options`. Поле кладётся на верхний
+уровень отчёта рядом с `result`, не внутрь него; `session submit --template`
+само поле не заполняет — только хост знает ответ — и напоминает о нём в stderr. Пустой список `[]` —
 заявление «вопросов не было». `answered_questions_invalid` называет поле
 записи, которое не прошло: неизвестный `decision_id`, порт, которого у шага
 нет, пустой текст. Pri-Fly проверяет форму и ссылки, но не правдивость, и в

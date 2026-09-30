@@ -394,7 +394,8 @@ timed Attempt; preflight и legacy records остаются `/1`.
 `question_report` на Attempt, `question-report/1`): какие вопросы шаг встретил
 за Attempt — в том числе native-вопросы skill в чате агента, — какой ответ
 принят и на чём он основан: `decision` (объявленное решение Run по
-`decision_id`), `input` (вход шага по `port`), `instructions`, `person`,
+`decision_id` — id каталога или ключ `decision_context`, под которым ответ
+передан, например `core:package_profile`; хранится id каталога), `input` (вход шага по `port`), `instructions`, `person`,
 `judgement`. В Run состояния 41 задача несёт `question_report: required`,
 отчёт без списка отклоняется `answered_questions_missing`, пустой список —
 заявление «вопросов не было». Движок проверяет только форму и ссылки, не

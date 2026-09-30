@@ -435,7 +435,7 @@ func (e *Engine) driverLiveFor(runID string) bool {
 		return false
 	}
 	defer f.Close()
-	err = syscall.Flock(int(f.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+	err = flockWithin(f, syscall.LOCK_SH, driverProbeGrace)
 	if errors.Is(err, syscall.EWOULDBLOCK) {
 		if runID == "" {
 			return true
@@ -482,8 +482,14 @@ func driverBusyMessage(held string) string {
 // refused as driver_already_active although nobody was driving, and a monitor
 // polling every 1.5 s made that moment a regular one. A real driver holds the
 // lock for the whole Run, far past this window.
+//
+// driverProbeGrace is the same window for the question "is a driver live",
+// kept short because every read of a Run asks it: a child between fork and
+// exec carries a released lock for moments, a running driver for the whole
+// Run, and each read of a running Run waits the window out.
 const (
 	driverLockProbeGrace = 250 * time.Millisecond
+	driverProbeGrace     = 50 * time.Millisecond
 	driverLockRetryEvery = 5 * time.Millisecond
 )
 
@@ -493,8 +499,10 @@ func flockExclusive(f *os.File) error { return flockWithGrace(f, syscall.LOCK_EX
 // A lock another holder has just released can still be carried for a moment
 // by a child process between fork and exec, which holds a copy of every
 // descriptor until exec closes it.
-func flockWithGrace(f *os.File, mode int) error {
-	deadline := time.Now().Add(driverLockProbeGrace)
+func flockWithGrace(f *os.File, mode int) error { return flockWithin(f, mode, driverLockProbeGrace) }
+
+func flockWithin(f *os.File, mode int, grace time.Duration) error {
+	deadline := time.Now().Add(grace)
 	for {
 		err := syscall.Flock(int(f.Fd()), mode|syscall.LOCK_NB)
 		if !errors.Is(err, syscall.EWOULDBLOCK) || time.Now().After(deadline) {

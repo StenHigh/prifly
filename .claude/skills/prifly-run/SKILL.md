@@ -179,7 +179,9 @@ When the task says `question_report: required`, the report carries
 what the work went on with -- a question the pinned skill asks in its own chat
 included, and a declared decision you took from `decision_context` included.
 Each entry has `question` as it was asked, the `answer` you went on with, and
-`basis`: `decision` with `decision_id` (a decision this Run declares), `input`
+`basis`: `decision` with `decision_id` (a decision this Run declares: its id,
+or the `decision_context` key you were handed it under, such as
+`core:package_profile`), `input`
 with `port` (a step input, such as a handoff, that settled it), `instructions`
 (the step's instructions or context said so), `person` (someone answered in
 this session) or `judgement` (you decided). Add `asked_by` (the skill or step

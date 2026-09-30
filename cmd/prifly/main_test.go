@@ -3225,6 +3225,11 @@ func TestSessionTaskLeavesTheHandoffAndItsReportShapeInReach(t *testing.T) {
 	if result["verdict"] != "" || result["summary"] != "" || result["step_instance_id"] != task.StepInstanceID {
 		t.Fatalf("the skeleton answered the host's half or dropped an identity: %s", skeleton.Result)
 	}
+	// The skeleton leaves the questions to the host; a task that owes them
+	// says so beside it, on stderr, so the host learns the field and its place.
+	if task.QuestionReport == prifly.QuestionReportRequired && (skeleton.AnsweredQuestions != nil || !strings.Contains(stderr, `"answered_questions" at the top level`)) {
+		t.Fatalf("the skeleton does not tell the host the questions are owed: %s", stderr)
+	}
 	// A skeleton is printed, never read from a file, and the refusal for a
 	// report with neither says where the shape comes from.
 	if code, _, stderr := runCLI(t, "--project", authority, "session", "submit", "--template", "--run", started.Run.Run.ID, "--file", "/nonexistent.json"); code == 0 || !strings.Contains(stderr, "--template") {

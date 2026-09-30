@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -66,7 +67,7 @@ const answeredQuestionsShape = "answered_questions is a list, empty when the ste
 // list exists where the Run requires it, each entry has a shape an operator
 // can read, and a reference names a decision or input the step really had.
 // Whether the host listed every question it met is beyond it.
-func checkAnsweredQuestions(r Run, step flow.StepDefinition, questions *[]AnsweredQuestion) error {
+func checkAnsweredQuestions(r Run, step flow.StepDefinition, delivered map[string]json.RawMessage, questions *[]AnsweredQuestion) error {
 	if !isQuestionState(r.SchemaVersion) {
 		if questions != nil {
 			return questionProblem("answered_questions_unsupported", "/answered_questions", "this Run was sealed before reports listed their questions; send the report without answered_questions")
@@ -102,9 +103,13 @@ func checkAnsweredQuestions(r Run, step flow.StepDefinition, questions *[]Answer
 			return questionProblem("answered_questions_invalid", path+"/basis", "basis is one of "+strings.Join(QuestionBases, ", "))
 		}
 		if q.Basis == "decision" {
-			if _, exists := decisionDefinition(r.DecisionCatalog, q.DecisionID); !exists {
-				return questionProblem("answered_questions_invalid", path+"/decision_id", "basis decision names a decision this Run declares; "+declaredDecisionIDs(r.DecisionCatalog))
+			id, exists := answeredDecision(r.DecisionCatalog, delivered, q.DecisionID)
+			if !exists {
+				return questionProblem("answered_questions_invalid", path+"/decision_id", "basis decision names a decision this Run declares, by its id or by the decision_context key it was handed under; "+declaredDecisionIDs(r.DecisionCatalog)+deliveredKeys(delivered))
 			}
+			// Kept under the catalog's id, so every reader finds the decision
+			// whichever of its two names the host used.
+			(*questions)[index].DecisionID = id
 		} else if q.DecisionID != "" {
 			return questionProblem("answered_questions_invalid", path+"/decision_id", "decision_id belongs to basis decision")
 		}
@@ -117,6 +122,37 @@ func checkAnsweredQuestions(r Run, step flow.StepDefinition, questions *[]Answer
 		}
 	}
 	return nil
+}
+
+// answeredDecision resolves a decision named by its catalog id or by the key
+// its answer was handed to this attempt under: the package profile arrives as
+// core:package_profile and a session_context answer under its destination
+// name, which is all the host ever sees of it.
+func answeredDecision(catalog *DecisionCatalog, delivered map[string]json.RawMessage, name string) (string, bool) {
+	if _, exists := decisionDefinition(catalog, name); exists {
+		return name, true
+	}
+	if _, handed := delivered[name]; !handed || catalog == nil {
+		return "", false
+	}
+	for _, definition := range catalog.Decisions {
+		if name == packageProfileContext && definition.Destination.Kind == "package_profile" || definition.Destination.Kind == "session_context" && definition.Destination.Name == name {
+			return definition.ID, true
+		}
+	}
+	return "", false
+}
+
+func deliveredKeys(delivered map[string]json.RawMessage) string {
+	if len(delivered) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(delivered))
+	for key := range delivered {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return "; this attempt was handed " + strings.Join(keys, ", ")
 }
 
 func boundedText(path, text string, limit int, required bool) error {

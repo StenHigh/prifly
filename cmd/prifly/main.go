@@ -1544,6 +1544,13 @@ func (c *cli) session(ctx context.Context, e *prifly.Engine, args []string) erro
 			if err != nil {
 				return err
 			}
+			// Which questions the step met is the host's to say, so the
+			// skeleton leaves it out; a host reading only the skeleton could not
+			// tell the field was owed, or where it goes. On stderr, so the
+			// skeleton on stdout stays the exact document to fill.
+			if task.QuestionReport == prifly.QuestionReportRequired {
+				fmt.Fprintln(c.errout, `session submit: this task requires "answered_questions" at the top level of the report, beside "result": every question the step met with its answer and basis, or [] when there was none`)
+			}
 			return c.emit(skeleton)
 		}
 		// A report names its attempt inside the file it carries. Accepting a

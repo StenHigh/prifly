@@ -192,12 +192,26 @@ var projectRunnerSkillTemplateBeforeQuestions = strings.Replace(projectRunnerSki
 // for an undeclared native question ended in "do not claim that Pri-Fly
 // recorded the answer"; the host's statement is now recorded, so the rule says
 // where it goes instead.
+var projectRunnerSkillTemplateBeforeDecisionKeys = strings.NewReplacer(
+	"\n## 3. Finish\n", "\n"+projectRunnerQuestionInstructionsBeforeDecisionKeys+"## 3. Finish\n",
+	projectRunnerNativeQuestionRuleBeforeQuestions, projectRunnerNativeQuestionRule,
+).Replace(projectRunnerSkillTemplateBeforeQuestions)
+
+// 0.13.69 named a decision only by its catalog id, which a host never sees:
+// the pilot answered the planning mode from core:package_profile and was
+// refused. The id or the handed key are both accepted now, and the text says so.
 var projectRunnerSkillTemplate = strings.NewReplacer(
 	"\n## 3. Finish\n", "\n"+projectRunnerQuestionInstructions+"## 3. Finish\n",
 	projectRunnerNativeQuestionRuleBeforeQuestions, projectRunnerNativeQuestionRule,
 ).Replace(projectRunnerSkillTemplateBeforeQuestions)
 
-const projectRunnerQuestionInstructions = "When the task names `take_command`, run it once as you take the task, before\n" +
+var projectRunnerQuestionInstructions = strings.Replace(projectRunnerQuestionInstructionsBeforeDecisionKeys,
+	"`basis`: `decision` with `decision_id` (a decision this Run declares), `input`\n",
+	"`basis`: `decision` with `decision_id` (a decision this Run declares: its id,\n"+
+		"or the `decision_context` key you were handed it under, such as\n"+
+		"`core:package_profile`), `input`\n", 1)
+
+const projectRunnerQuestionInstructionsBeforeDecisionKeys = "When the task names `take_command`, run it once as you take the task, before\n" +
 	"the work: reading a task records nothing, and without it the operator cannot\n" +
 	"tell the time the task waited for you from your working time.\n\n" +
 	"When the task says `question_report: required`, the report carries\n" +
@@ -2665,6 +2679,14 @@ func projectRunnerSkillBeforeQuestions(host projectHost) string {
 	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeQuestions, "{{host}}", host.ID), "{{question_tool}}", questionTool)
 }
 
+func projectRunnerSkillBeforeDecisionKeys(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeDecisionKeys, "{{host}}", host.ID), "{{question_tool}}", questionTool)
+}
+
 func projectRunnerSkillBeforeResume(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
@@ -2837,7 +2859,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {
