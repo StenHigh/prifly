@@ -184,6 +184,13 @@ function timeBreakdown(timing) {
  }
  return {elapsed:metrics.elapsed,categories,stages:[...stages.values()].sort((a,b)=>b.ms-a.ms)};
 }
+// The exclusive resources this Run sealed, with who holds each now. Holders
+// come from the authority's capacity read and name attempts of any Run.
+function resourceRows(run,capacity) {
+ const byName=new Map();
+ for(const [stage,names] of Object.entries(run.stage_resources||{}))for(const name of names){const r=byName.get(name)||{name,limit:run.resource_limits?.[name]??null,stages:[]};r.stages.push(stage);byName.set(name,r);}
+ return [...byName.values()].sort((a,b)=>a.name.localeCompare(b.name)).map(r=>({...r,stages:r.stages.sort(),holders:capacity?.resources?(capacity.resources[r.name]||[]).map(attempt=>({attempt,run:capacity.held?.[attempt]||'',mine:!!run.attempts?.[attempt]})):null}));
+}
 function attemptPhases(node,assisted) {
  const m={...(node?.metrics||{})};
  // An assisted attempt has no process, so its executor time is not a phase of it.
@@ -191,7 +198,7 @@ function attemptPhases(node,assisted) {
  return [['host_pickup','Ждал, пока агент возьмёт задание'],['host_work','Агент работал'],['decision_wait','Ждал ответа на вопрос'],['executor_time','Программа работала'],['result_to_acceptance','Приёмка результата']]
   .map(([key,title])=>({key,title,d:m[key]})).filter(p=>p.d&&p.d.quality!=='not_applicable');
 }
-if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases};
+if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='',graphFocus='';
@@ -259,6 +266,12 @@ function receiptHTML(run,attempt,inputValues,phases,note='') {
   +(e.effect?row('Что шаг может менять',`<code>${esc(e.effect.class)}</code> · повтор: <code>${esc(e.effect.retry_class)}</code>${e.externalWrite?` · ${esc(e.externalWrite.system)}: ${esc((e.externalWrite.operations||[]).join(', '))} → ${esc(e.externalWrite.target)}`:''}`):'')
   +(e.trees.length?row('Забирается из рабочей копии',e.trees.map(t=>`<code>${esc(t)}</code>`).join(' ')):'');
  return html+'</section>';
+}
+function resourceHTML(run,capacity) {
+ const rows=resourceRows(run,capacity);
+ if(!rows.length)return '';
+ const row=(title,body)=>`<div class="receipt-row"><div class="receipt-key">${title}</div><div>${body}</div></div>`;
+ return '<details class="facts-section" data-key="resources" open><summary>Исключительные ресурсы</summary><div class="facts-body"><p class="muted">Стадии разных Run, держащие один ресурс, не идут одновременно сверх лимита; ждущая стадия допускается на следующем запуске драйвера, когда держатель завершится.</p>'+rows.map(r=>row(`<code>${esc(r.name)}</code><br><small class="muted">лимит ${esc(r.limit)}</small>`,`стадии: ${r.stages.map(s=>`<code>${esc(s)}</code>`).join(' ')}<br>${r.holders===null?'<small class="muted">держатели не прочитаны</small>':r.holders.length?`<small>держат сейчас: ${r.holders.map(h=>`${h.mine?'этот Run':esc(short(h.run))} (${esc(short(h.attempt))})`).join(', ')}</small>`:'<small class="muted">свободен</small>'}`)).join('')+'</div></details>';
 }
 function launchHTML(run,inputValues) {
  const l=launchInputs(run,inputValues);
@@ -445,7 +458,7 @@ function renderDetail() {
  const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Прогон';
  $('detail-id').textContent=run.project_id+' · '+run.id;$('permalink').href=location.hash;
  const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run);
- preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div><h3>Сейчас</h3>${activity.length?activity.map(a=>`<p>${a.node?`<button data-node="${esc(a.node)}">${esc(a.title)}</button>`:a.run?`<a href="#${esc(new URLSearchParams({source,run:a.run}))}">${esc(a.title)}</a>`:`<b>${esc(a.title)}</b>`} <span class="muted">${esc(a.detail)}</span></p>`).join(''):'<p class="muted">Активная работа и ожидания не записаны.</p>'}${timeHTML(state.timing)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
+ preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div><h3>Сейчас</h3>${activity.length?activity.map(a=>`<p>${a.node?`<button data-node="${esc(a.node)}">${esc(a.title)}</button>`:a.run?`<a href="#${esc(new URLSearchParams({source,run:a.run}))}">${esc(a.title)}</a>`:`<b>${esc(a.title)}</b>`} <span class="muted">${esc(a.detail)}</span></p>`).join(''):'<p class="muted">Активная работа и ожидания не записаны.</p>'}${timeHTML(state.timing)}${resourceHTML(run,state.capacity)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
  const invs=values(run.invocations);if(!invocation && !definition)invocation=run.root_workflow_invocation_id || '';
  $('invocation').innerHTML=invs.map(i=>`<option value="${esc(i.id)}">${esc(i.workflow_ref.id)} · ${esc(i.branch_id || '')}${i.iteration?' · итерация '+i.iteration:''} · ${esc(short(i.id))}</option>`).join('')+(!invs.length?'<option value="">Корневой workflow</option>':'')+definitions(run).map(d=>`<option value="def:${esc(d.id)}">План: ${esc(d.title || d.id)}</option>`).join('');
  $('invocation').value=definition?'def:'+definition:invocation;
@@ -483,8 +496,12 @@ async function tick() {
   renderList(data);$('connection').textContent='Обновлено '+new Date().toLocaleTimeString('ru-RU');
   if(selected) {
    try {const next=await get('/api/run',{source,id:selected});if(g!==generation)return;
+    // Who holds an exclusive resource is the authority's, not the Run's: it
+    // changes while this Run's version does not.
+    if(next.run?.stage_resources)next.capacity=await get('/api/capacity',{source});
+    if(g!==generation)return;
     $('detail-error').hidden=true;
-    const version=source+selected+':'+next.run_version+':'+next.event_sequence;
+    const version=source+selected+':'+next.run_version+':'+next.event_sequence+':'+JSON.stringify(next.capacity?.resources||{});
     state=next;if(stamp!==version){stamp=version;renderDetail();}
     if(tab==='journal')await refreshEvents(g);
    }catch(err){if(g===generation){$('detail-error').hidden=false;$('detail-error').textContent='Нет актуального чтения. Последние показанные данные могут устареть: '+err.message;}}

@@ -29,6 +29,9 @@ type projectLocalSettings struct {
 	// name whole rather than merging key by key: a value assembled from two
 	// files is one nobody wrote.
 	ModelProfiles map[string]map[string]map[string]string
+	// ResourceLimits is what THIS machine allows for a project resource; it
+	// replaces the limit extend.yaml gives, not the stages.
+	ResourceLimits map[string]int64
 }
 
 func projectLocalExecution(root string) (authority string, executables map[string]string, err error) {
@@ -178,7 +181,17 @@ func readProjectLocalExecutionAll(root string) ([]byte, projectLocalSettings, er
 		}
 		profiles = parsed
 	}
-	return data, projectLocalSettings{Authority: authority, Executables: executables, Environment: environment, EnvironmentFrom: sources, ModelProfiles: profiles}, nil
+	limits := map[string]int64{}
+	if raw, exists := object["resources"]; exists {
+		parsed, err := projectReadResources(raw, true)
+		if err != nil {
+			return nil, projectLocalSettings{}, err
+		}
+		for name, resource := range parsed {
+			limits[name] = resource.Limit
+		}
+	}
+	return data, projectLocalSettings{Authority: authority, Executables: executables, Environment: environment, EnvironmentFrom: sources, ModelProfiles: profiles, ResourceLimits: limits}, nil
 }
 
 // projectParseEnvironmentSource reads one NAME=SOURCE argument. The forms are

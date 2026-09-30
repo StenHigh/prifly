@@ -292,6 +292,12 @@ const (
 	// its answer can be measured. Both are facts the Run did not hold before.
 	CoreQuestionStateVersion = "core-state/41"
 	CoreQuestionReadVersion  = "core-read/41"
+	// A project names exclusive resources and the stages that hold them, and
+	// the Run seals which of its stages hold which, with each limit: two Runs
+	// of one project then run side by side without both running what the
+	// project said may not overlap.
+	CoreResourceStateVersion = "core-state/42"
+	CoreResourceReadVersion  = "core-read/42"
 	// A terminal Run names where its graph stopped. Both halves were already
 	// held: the finish activation is in the state, and the edge that reached
 	// it is declared in the plan the Run sealed. A host that wanted the reason
@@ -865,6 +871,13 @@ type Run struct {
 	// name means for the host this Run was started with, sealed at its start.
 	// A machine-local edit made afterwards is visibly not part of this Run.
 	ModelProfileTranslations map[string]ModelProfileTranslation `json:"model_profile_translations,omitempty"`
+	// StageResources names, for each stage of the root workflow, the exclusive
+	// resources its attempts hold -- and every attempt inside a call it makes.
+	// ResourceLimits is how many attempts of the whole authority may hold each
+	// at once, as this Run was started with. Both are the project's words; the
+	// engine reads no meaning into the names.
+	StageResources map[string][]string `json:"stage_resources,omitempty"`
+	ResourceLimits map[string]int64    `json:"resource_limits,omitempty"`
 	// TransitionsPartial reports that a read stopped at maxRecordedTransitions
 	// with history still unread. It never leaves this process: it describes one
 	// read, not the Run, and a reader that treated the two as the same said a

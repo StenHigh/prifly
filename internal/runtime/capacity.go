@@ -61,6 +61,12 @@ func (e *Engine) AdmissionCapacity(ctx context.Context) (int64, map[string]strin
 	return capacity, held, err
 }
 
+// HeldResources reports, for each exclusive resource held now, the attempts
+// holding it; capacity show and the monitor name who holds what.
+func (e *Engine) HeldResources(ctx context.Context) (map[string][]string, error) {
+	return e.Store.SlotResources(ctx)
+}
+
 // AdmissionQueue reports which runs are waiting for a slot and since which
 // admission decision. A run holds its place by asking again, so this is what
 // the authority currently believes is waiting, not a promise that each entry

@@ -75,6 +75,7 @@ def check(args, generator):
 		("external-write", ["--external-write"], ("internal/runtime/external-write.schema.json", "schemas/core/external-write.schema.json")),
 		("continuation", ["--continuation"], ("internal/runtime/continuation.schema.json", "schemas/core/continuation.schema.json")),
 		("questions", ["--questions"], ("internal/runtime/questions.schema.json", "schemas/core/questions.schema.json")),
+		("resources", ["--resources"], ("internal/runtime/resources.schema.json", "schemas/core/resources.schema.json")),
 		("next-handoff", ["--next-handoff"], ("internal/runtime/next-handoff.schema.json", "schemas/core/next-handoff.schema.json")),
 		("next-awaiting-host", ["--awaiting-host"], ("internal/runtime/next-awaiting-host.schema.json", "schemas/core/next-awaiting-host.schema.json")),
 		("recovery", ["--recovery"], ("internal/runtime/recovery.schema.json", "schemas/core/recovery.schema.json")),

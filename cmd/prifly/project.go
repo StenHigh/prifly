@@ -200,10 +200,22 @@ var projectRunnerSkillTemplateBeforeDecisionKeys = strings.NewReplacer(
 // 0.13.69 named a decision only by its catalog id, which a host never sees:
 // the pilot answered the planning mode from core:package_profile and was
 // refused. The id or the handed key are both accepted now, and the text says so.
-var projectRunnerSkillTemplate = strings.NewReplacer(
+var projectRunnerSkillTemplateBeforeResources = strings.NewReplacer(
 	"\n## 3. Finish\n", "\n"+projectRunnerQuestionInstructions+"## 3. Finish\n",
 	projectRunnerNativeQuestionRuleBeforeQuestions, projectRunnerNativeQuestionRule,
 ).Replace(projectRunnerSkillTemplateBeforeQuestions)
+
+// From state 42 a stage may wait for an exclusive resource another Run holds.
+// The host is told it is a wait, not a failure, and not its limit to raise.
+var projectRunnerSkillTemplate = strings.Replace(projectRunnerSkillTemplateBeforeResources, "\n## 3. Finish\n", "\n"+projectRunnerResourceInstructions+"## 3. Finish\n", 1)
+
+const projectRunnerResourceInstructions = "A drive refused with `resource_busy` is a wait, not a failure: the project\n" +
+	"said this stage does not run beside the same stage of another Run, and the\n" +
+	"refusal names the Run holding it. Nothing ran. Tell the developer which\n" +
+	"resource and which Run, then drive the same Run again once that holder has\n" +
+	"settled (`capacity show` lists who holds each resource). Do not raise the\n" +
+	"limit yourself: it is the project's in extend.yaml and this machine's in\n" +
+	"local.yaml.\n\n"
 
 var projectRunnerQuestionInstructions = strings.Replace(projectRunnerQuestionInstructionsBeforeDecisionKeys,
 	"`basis`: `decision` with `decision_id` (a decision this Run declares), `input`\n",
@@ -1538,6 +1550,11 @@ type projectWorkflowOptions struct {
 	// project step needed the adapter's digest typed by hand from prifly
 	// inventory, because extend.yaml had no references of its own.
 	References map[string]string
+	// Resources are the project's exclusive resources for this workflow: each
+	// name with its limit and the root stages whose attempts hold it. Two Runs
+	// of the project then run side by side without both running what the
+	// project said may not overlap -- two test suites loading one machine.
+	Resources map[string]projectResource
 }
 
 // projectWorkflowAnswers are the owner's standing answers to a package's
@@ -1725,7 +1742,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	for key := range root {
 		switch key {
-		case "extensions", "settings", "exclude", "profile", "answers", "execution_bindings", "references", "model_profiles":
+		case "extensions", "settings", "exclude", "profile", "answers", "execution_bindings", "references", "model_profiles", "resources":
 		default:
 			return projectWorkflowOptions{}, refusal("project_extension_invalid", "unknown field "+key)
 		}
@@ -1767,6 +1784,13 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 			return projectWorkflowOptions{}, err
 		}
 		result.ModelProfiles = profiles
+	}
+	if raw, exists := root["resources"]; exists {
+		resources, err := projectReadResources(raw, false)
+		if err != nil {
+			return projectWorkflowOptions{}, err
+		}
+		result.Resources = resources
 	}
 	if raw, exists := root["exclude"]; exists {
 		items, ok := raw.([]any)
@@ -2597,8 +2621,24 @@ func ensureProjectAuthority(root string) error {
 		defer engine.Close()
 		return checkProjectAuthority(engine)
 	}
-	return prifly.InitProjectProfile(root)
+	if err := prifly.InitProjectProfile(root); err != nil {
+		return err
+	}
+	// A project authority starts able to run two attempts at once: with one,
+	// a second Run of the project queued behind the first until someone ran
+	// capacity set. Authorities made before keep what they have.
+	engine, err = prifly.Open(root, false)
+	if err != nil {
+		return err
+	}
+	defer engine.Close()
+	_, err = engine.SetAdmissionCapacity(context.Background(), prifly.CapacityRequest{CommandID: "command:project-authority-capacity", Capacity: projectAuthorityCapacity, Reason: "a new project authority runs two Runs side by side"})
+	return err
 }
+
+// projectAuthorityCapacity is the admission capacity a new project authority
+// starts with.
+const projectAuthorityCapacity = 2
 
 // checkProjectAuthority refuses an authority that cannot run project launches.
 // Both refusals carry their own code rather than the generic usage one: a cold
@@ -2685,6 +2725,14 @@ func projectRunnerSkillBeforeDecisionKeys(host projectHost) string {
 		questionTool = "AskUserQuestion"
 	}
 	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeDecisionKeys, "{{host}}", host.ID), "{{question_tool}}", questionTool)
+}
+
+func projectRunnerSkillBeforeResources(host projectHost) string {
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(projectRunnerSkillTemplateBeforeResources, "{{host}}", host.ID), "{{question_tool}}", questionTool)
 }
 
 func projectRunnerSkillBeforeResume(host projectHost) string {
@@ -2859,7 +2907,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

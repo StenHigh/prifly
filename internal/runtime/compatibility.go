@@ -198,6 +198,13 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersions = append(profile.StateVersions, CoreQuestionStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreQuestionReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "answered_questions")
+	// State 42: a project names exclusive resources and the stages holding
+	// them; an attempt is admitted only while each of its resources has room
+	// among the attempts of every Run of the authority.
+	profile.StateVersion, profile.ReadVersion = CoreResourceStateVersion, CoreResourceReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreResourceStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreResourceReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "exclusive_resources")
 	return manifest
 }
 
@@ -242,6 +249,9 @@ func supportedRun(r Run) bool {
 		return false
 	}
 	if !isWorkspaceState(r.SchemaVersion) && hasWorkspaceStateFields(r) {
+		return false
+	}
+	if (len(r.StageResources) != 0 || len(r.ResourceLimits) != 0) && !isResourceState(r.SchemaVersion) {
 		return false
 	}
 	for _, record := range r.DecisionLedger {

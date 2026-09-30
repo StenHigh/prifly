@@ -570,9 +570,15 @@ func TestAtomicWriteAndDriverOwnershipMetadata(t *testing.T) {
 	if !e.driverLiveFor("run:first") || e.driverLiveFor("run:second") {
 		t.Fatal("run confused with another authority driver")
 	}
-	if other, err := e.driverLock("run:second"); err == nil {
-		other.Close()
-		t.Fatal("second driver acquired ownership")
+	// Another Run's driver works beside this one; the same Run gets no second.
+	other, err := e.driverLock("run:second")
+	if err != nil {
+		t.Fatalf("a driver of another Run was held back: %v", err)
+	}
+	other.Close()
+	if again, err := e.driverLock("run:first"); err == nil {
+		again.Close()
+		t.Fatal("second driver acquired ownership of the same Run")
 	}
 }
 

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -321,5 +323,96 @@ func TestProjectStartWithdrawsOldEditionsToFitTheRegistry(t *testing.T) {
 	// The Run that ran on the withdrawn edition still reads.
 	if code, _, stderr := runCLI(t, "--project", authority, "run", "status", held); code != 0 {
 		t.Fatalf("a finished Run on a withdrawn edition no longer reads: %s", stderr)
+	}
+}
+
+// A new project authority admits two attempts, so a second Run of the project
+// does not queue behind the first by default. And a start that created its Run
+// but could not drive it names what stopped it: the refusal used to be
+// project_start_incomplete carrying only the Run id.
+func TestProjectStartRunsBesideAnotherAndNamesWhatStoppedIt(t *testing.T) {
+	t.Parallel()
+	root, authority := singleLaunchFixture(t)
+	engine, err := prifly.Open(authority, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	capacity, _, err := engine.AdmissionCapacity(context.Background())
+	engine.Close()
+	if err != nil || capacity != 2 {
+		t.Fatalf("a new project authority admits %d attempts at once: %v", capacity, err)
+	}
+	first := startSingle(t, root, authority)
+	second := startSingle(t, root, authority)
+	if first == second {
+		t.Fatal("two starts made one Run")
+	}
+	// What may not overlap any driver holds the authority; the next start
+	// creates its Run and says why it did not drive it.
+	lock, err := os.OpenFile(filepath.Join(authority, ".prifly", "state", "driver.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "single", "--host", "codex-cli", "--input", "task="+filepath.Join(root, "task.json"))
+	if code == 0 || !strings.Contains(stderr, `"code":"driver_already_active"`) || !strings.Contains(stderr, "run drive run:") {
+		t.Fatalf("a start that could not drive its Run did not say why: exit=%d %s", code, stderr)
+	}
+}
+
+// The project names a resource and the stage that holds it; Pri-Fly knows only
+// the name. A second Run reaching that stage while the first holds it is
+// created, refused by name with the holder, runs nothing, and is admitted on
+// the next drive once the first settles. A machine may allow more in
+// local.yaml, and a stage the workflow lacks is refused before anything starts.
+func TestProjectResourcesKeepTwoRunsOffOneStage(t *testing.T) {
+	t.Parallel()
+	root, authority := singleLaunchFixture(t)
+	folder := ".prifly/workflows/single/"
+	writeFixtureFile(t, root, folder+"extend.yaml", "resources:\n  heavy:\n    stages: [work]\n")
+	gitFixture(t, root, "commit", "-qam", "resources")
+	first := startSingle(t, root, authority)
+	code, _, stderr := runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "single", "--host", "codex-cli", "--input", "task="+filepath.Join(root, "task.json"))
+	if code == 0 || !strings.Contains(stderr, `"code":"resource_busy"`) || !strings.Contains(stderr, first) {
+		t.Fatalf("a second Run on a held stage was not refused by name with its holder: exit=%d %s", code, stderr)
+	}
+	var list struct {
+		Runs []struct {
+			RunID string `json:"run_id"`
+		} `json:"runs"`
+	}
+	_, out, _ := runCLI(t, "--project", authority, "run", "list", "--json")
+	if err := json.Unmarshal([]byte(out), &list); err != nil {
+		t.Fatalf("run list: %v %s", err, out)
+	}
+	second := ""
+	for _, run := range list.Runs {
+		if run.RunID != first {
+			second = run.RunID
+		}
+	}
+	if second == "" {
+		t.Fatalf("the refused start created no Run: %s", out)
+	}
+	finishSingle(t, authority, first)
+	if code, _, stderr := runCLI(t, "--project", authority, "run", "drive", second); code != 0 {
+		t.Fatalf("the freed resource was not taken on the next drive: %s", stderr)
+	}
+
+	// This machine allows two: both hold it at once.
+	local, err := os.ReadFile(filepath.Join(root, ".prifly", "local.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, root, ".prifly/local.yaml", string(local)+"resources:\n  heavy: {limit: 2}\n")
+	startSingle(t, root, authority)
+
+	writeFixtureFile(t, root, folder+"extend.yaml", "resources:\n  heavy:\n    stages: [nowhere]\n")
+	gitFixture(t, root, "commit", "-qam", "unknown stage")
+	if code, _, stderr := runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "single", "--host", "codex-cli", "--input", "task="+filepath.Join(root, "task.json")); code == 0 || !strings.Contains(stderr, "project_resource_stage_unknown") {
+		t.Fatalf("a resource on a stage the workflow lacks was accepted: exit=%d %s", code, stderr)
 	}
 }

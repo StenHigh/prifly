@@ -69,6 +69,7 @@
 | `neutral_start` | `project start` без RunBrief | project-profile |
 | `execution_bindings` | `execution_bindings` в корне пакета | execution-bindings |
 | `assisted_session_timing` | `session_limits.active_timeout_ms` | step |
+| `exclusive_resources` | `resources` в `extend.yaml`: имя, `limit` и корневые стадии, которые его держат (`call` — со всеми попытками внутри); лимит машины — в `local.yaml`; **состояние 42**. Второй Run на такой стадии получает `resource_busy` с держателем и допускается на следующем `run drive`; `capacity show` и монитор называют держателей | extension, troubleshooting |
 | `declared_technical_retries` | `technical_retries` у шаговой стадии — **ревизия 5** | workflow |
 | `answered_questions` | поведение отчёта сессии, `core-state/41`: в Run проекта отчёт каждого ассистируемого шага обязан нести `answered_questions` — вопросы, на которые шаг ответил за попытку, с ответом и основанием (`decision`, `input`, `instructions`, `person`, `judgement`); пустой список — «вопросов не было», без поля отчёт отклоняется `answered_questions_missing`. Автор шага ничего не объявляет; хосту это объясняет `prifly-run` после `project runners update`; `run status` печатает строки `question`; runtime-решение хранит момент запроса (`requested`), а `session take` — момент, когда хост взял задание, отчего время Run раскладывается по `host_pickup`/`host_work`/`decision_wait`/`idle` (`core-timing/4`) | troubleshooting |
 | `routed_session_verdicts` | `on` у стадии; задача называет маршрутизируемые | workflow |

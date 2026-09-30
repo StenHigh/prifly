@@ -3,8 +3,11 @@ package runtime
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -429,25 +432,53 @@ func (e *Engine) Events(ctx context.Context, id string, after int64, limit int) 
 func (e *Engine) driverLive() bool {
 	return e.driverLiveFor("")
 }
+
+// driverLiveFor answers whether a driver is live: for one Run, or with runID
+// empty, for any Run of this authority. Every driver holds the authority lock
+// shared and its own Run's lock exclusively; a driver of an older build held
+// the authority lock exclusively with its Run id written into it, and still
+// reads as live here.
 func (e *Engine) driverLiveFor(runID string) bool {
-	f, err := os.OpenFile(filepath.Join(e.Root, e.Config.Configuration.StateRoot, "driver.lock"), os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	authority, err := os.OpenFile(e.authorityLockPath(), os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return false
 	}
-	defer f.Close()
-	err = flockWithin(f, syscall.LOCK_SH, driverProbeGrace)
-	if errors.Is(err, syscall.EWOULDBLOCK) {
-		if runID == "" {
-			return true
+	defer authority.Close()
+	if runID == "" {
+		// Any holder -- shared by a driver, exclusive by an older one -- is
+		// a live driver.
+		err = flockWithin(authority, syscall.LOCK_EX, driverProbeGrace)
+		if err == nil {
+			_ = syscall.Flock(int(authority.Fd()), syscall.LOCK_UN)
 		}
-		b := make([]byte, 256)
-		n, err := f.ReadAt(b, 0)
-		return (err == nil || n > 0) && string(b[:n]) == runID
+		return errors.Is(err, syscall.EWOULDBLOCK)
+	}
+	if err = flockWithin(authority, syscall.LOCK_SH, driverProbeGrace); errors.Is(err, syscall.EWOULDBLOCK) {
+		return driverHolder(authority) == runID
 	}
 	if err == nil {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = syscall.Flock(int(authority.Fd()), syscall.LOCK_UN)
 	}
-	return false
+	run, err := os.OpenFile(e.runLockPath(runID), os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return false
+	}
+	defer run.Close()
+	err = flockWithin(run, syscall.LOCK_SH, driverProbeGrace)
+	if err == nil {
+		_ = syscall.Flock(int(run.Fd()), syscall.LOCK_UN)
+	}
+	return errors.Is(err, syscall.EWOULDBLOCK)
+}
+
+func (e *Engine) authorityLockPath() string {
+	return filepath.Join(e.Root, e.Config.Configuration.StateRoot, "driver.lock")
+}
+
+// runLockPath is the lock a driver of one Run holds. The name is a digest of
+// the Run id, so no id can reach outside the directory.
+func (e *Engine) runLockPath(runID string) string {
+	return filepath.Join(e.Root, e.Config.Configuration.StateRoot, "drivers", fmt.Sprintf("%x.lock", sha256.Sum256([]byte(runID))))
 }
 
 // driverHolder reads the Run whose driver holds the lock. The holder writes its
@@ -464,15 +495,13 @@ func driverHolder(f *os.File) string {
 
 // driverBusyMessage says what actually blocks the caller. The refusal used to
 // carry no message at all, so the reader was sent to doctor and run status,
-// neither of which reports on a driver lock: one authority pumps one Run at a
-// time, and that is not the admission bound, so raising capacity does not lift
-// it.
+// neither of which reports on a driver lock -- and it is not the admission
+// bound, so raising capacity does not lift it.
 func driverBusyMessage(held string) string {
-	subject := "another Run"
-	if held != "" {
-		subject = held
+	if held == "" {
+		return "a driver is working in this authority, and this operation may not overlap any driver; let the Runs it drives reach a point where they wait (run status --id ID says where each is), then repeat"
 	}
-	return "a driver for " + subject + " is already pumping this authority, and one authority drives one Run at a time; this is not the admission bound, so capacity set does not lift it — let that Run reach a settled state, or end it with run cancel --id ID, and run status --id ID says where it is"
+	return "a driver for " + held + " is already running it, and one Run has one driver at a time; drivers of other Runs are not held back by it, and capacity set does not change this — let it reach a settled state or a wait, or end it with run cancel --id ID, and run status --id ID says where it is"
 }
 
 // driverLockProbeGrace is how long an exclusive lock -- the driver's, or
@@ -512,26 +541,57 @@ func flockWithin(f *os.File, mode int, grace time.Duration) error {
 	}
 }
 
-func (e *Engine) driverLock(runID string) (*os.File, error) {
-	path := filepath.Join(e.Root, e.Config.Configuration.StateRoot, "driver.lock")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
+// driverLease is what a driver holds while it works: the authority lock,
+// shared with the drivers of other Runs, and its own Run's lock, which no
+// second driver of that Run can take.
+type driverLease struct{ files []*os.File }
+
+func (l *driverLease) Close() error {
+	var err error
+	for index := len(l.files) - 1; index >= 0; index-- {
+		err = errors.Join(err, l.files[index].Close())
+	}
+	return err
+}
+
+// driverLock takes what a driver of runID holds. With runID empty it takes the
+// authority lock exclusively instead, for what may not overlap any driver:
+// releasing a claimed tree a driver may be materializing into.
+//
+// Until 0.13.71 one lock served every Run, so a program of one Run held back
+// every other Run of the project for as long as it ran.
+func (e *Engine) driverLock(runID string) (io.Closer, error) {
+	authority, err := os.OpenFile(e.authorityLockPath(), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
 	if err != nil {
 		return nil, err
 	}
-	if err := flockExclusive(f); err != nil {
-		held := driverHolder(f)
-		f.Close()
+	if runID == "" {
+		if err := flockExclusive(authority); err != nil {
+			authority.Close()
+			return nil, wrapFault("driver_already_active", driverBusyMessage(""), err)
+		}
+		return &driverLease{files: []*os.File{authority}}, nil
+	}
+	if err := flockWithGrace(authority, syscall.LOCK_SH); err != nil {
+		held := driverHolder(authority)
+		authority.Close()
 		return nil, wrapFault("driver_already_active", driverBusyMessage(held), err)
 	}
-	if err := f.Truncate(0); err != nil {
-		f.Close()
+	if err := os.MkdirAll(filepath.Dir(e.runLockPath(runID)), 0700); err != nil {
+		authority.Close()
 		return nil, err
 	}
-	if _, err := f.WriteAt([]byte(runID), 0); err != nil {
-		f.Close()
+	run, err := os.OpenFile(e.runLockPath(runID), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
+	if err != nil {
+		authority.Close()
 		return nil, err
 	}
-	return f, nil
+	if err := flockExclusive(run); err != nil {
+		run.Close()
+		authority.Close()
+		return nil, wrapFault("driver_already_active", driverBusyMessage(runID), err)
+	}
+	return &driverLease{files: []*os.File{authority, run}}, nil
 }
 
 // nextKind is pure. A paused run may accept facts, but cannot create another

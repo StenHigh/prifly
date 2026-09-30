@@ -258,7 +258,7 @@ func TestStoreMigratesV1ForAuthorityControls(t *testing.T) {
 	// Rewinding the marker is not enough: a genuine v1 database also lacks the
 	// structures later versions added, and leaving them makes the fixture test
 	// a migration that never happens in the field.
-	if _, err := s.db.Exec("DROP TABLE pinned_bytes; DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=1"); err != nil {
+	if _, err := s.db.Exec("DROP TABLE slot_resources; DROP TABLE pinned_bytes; DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -1659,7 +1659,7 @@ func TestStoreReadsAnUnmigratedDatabaseReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+	if _, err := db.Exec("DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -1708,7 +1708,7 @@ func TestStoreVerifiesIncrementallyFromItsRecordedCut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+	if _, err := db.Exec("DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -1993,5 +1993,46 @@ func TestASettledRunLeavesTheAdmissionQueueImmediately(t *testing.T) {
 	// And the live run is admitted now, not 128 admission decisions from now.
 	if rejection := admitRun(t, s, "admit-live-3", "run-live", "attempt-live"); rejection != nil {
 		t.Fatalf("a free slot was withheld from the only live waiter: %+v", rejection)
+	}
+}
+
+// An exclusive resource bounds how many admitted attempts of the whole
+// authority hold it, independently of the slot capacity: two Runs may run at
+// once and still not both run what the project said may not overlap.
+func TestAResourceBoundsItsHoldersAcrossRuns(t *testing.T) {
+	t.Parallel()
+	s, _ := testStore(t)
+	if _, err := s.db.Exec("UPDATE authority SET slot_capacity=4 WHERE singleton=1"); err != nil {
+		t.Fatal(err)
+	}
+	admit := func(run, attempt string, claims []ResourceClaim) *Rejection {
+		t.Helper()
+		change := storeChange(fmt.Sprintf(`{"attempt":%q}`, attempt))
+		change.AcquireSlot, change.AcquireResources = attempt, claims
+		return applyChange(t, s, storeCommand("admit-"+attempt, run, 0), change).Receipt.Rejection
+	}
+	heavy := []ResourceClaim{{Name: "heavy", Limit: 1}}
+	if rejection := admit("run-a", "attempt-a", heavy); rejection != nil {
+		t.Fatalf("the first holder was refused: %+v", rejection)
+	}
+	rejection := admit("run-b", "attempt-b", heavy)
+	if rejection == nil || rejection.Code != "resource_busy" || !strings.Contains(rejection.Message, "run-a") {
+		t.Fatalf("a second holder of a resource limited to one was admitted or not told who holds it: %+v", rejection)
+	}
+	if rejection := admit("run-c", "attempt-c", nil); rejection != nil {
+		t.Fatalf("an attempt holding no resource was held back by one: %+v", rejection)
+	}
+	if rejection := admit("run-d", "attempt-d", []ResourceClaim{{Name: "heavy", Limit: 2}}); rejection != nil {
+		t.Fatalf("a Run that allows two holders was refused at one: %+v", rejection)
+	}
+	// Releasing the holder's slot frees the resource for the one refused.
+	release := storeChange(`{"released":true}`)
+	release.ReleaseSlot = "attempt-a"
+	applyChange(t, s, storeCommand("release-a", "run-a", 1), release)
+	release = storeChange(`{"released":true}`)
+	release.ReleaseSlot = "attempt-d"
+	applyChange(t, s, storeCommand("release-d", "run-d", 1), release)
+	if rejection := admit("run-b", "attempt-b2", heavy); rejection != nil {
+		t.Fatalf("a freed resource was not taken: %+v", rejection)
 	}
 }

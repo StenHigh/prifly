@@ -2407,3 +2407,65 @@ func TestAReadersProbeDoesNotRefuseADriver(t *testing.T) {
 		t.Fatalf("a held driver lock did not refuse a second driver: %v", err)
 	}
 }
+
+// One lock used to serve every Run of an authority, so a program of one Run
+// held every other Run back for as long as it ran. A driver now holds its own
+// Run's lock and shares the authority's: another Run drives beside it, the same
+// Run does not get a second driver, and what may not overlap any driver still
+// waits for all of them.
+func TestTwoRunsAreDrivenSideBySide(t *testing.T) {
+	t.Parallel()
+	e, first := driverProject(t, "pass", 10000)
+	started, err := e.Start(context.Background(), StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/driver.json", BriefFile: "brief.json", Inputs: map[string]string{"source": "source.txt"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := started.Receipt.RunID
+	held, err := e.driverLock(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Close()
+	if !e.driverLiveFor(first) || e.driverLiveFor(second) || !e.driverLive() {
+		t.Fatalf("liveness does not follow the Run: first=%v second=%v any=%v", e.driverLiveFor(first), e.driverLiveFor(second), e.driverLive())
+	}
+	if err := e.Drive(context.Background(), second); err != nil {
+		t.Fatalf("a driver of another Run held this one back: %v", err)
+	}
+	if err := e.Drive(context.Background(), first); refusalCode(err) != "driver_already_active" {
+		t.Fatalf("a Run got a second driver: %v", err)
+	}
+	if _, err := e.driverLock(""); refusalCode(err) != "driver_already_active" {
+		t.Fatalf("an operation that may not overlap any driver took the authority: %v", err)
+	}
+}
+
+// Two drivers of one authority write the same store at once. Each commit is a
+// transaction pinned to its Run's version, so both Runs finish and neither
+// loses a fact; the race detector reads the engine's own shared state.
+func TestTwoRunsWithProgramsFinishTogether(t *testing.T) {
+	t.Parallel()
+	e, first := driverProject(t, "pass", 10000)
+	started, err := e.Start(context.Background(), StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/driver.json", BriefFile: "brief.json", Inputs: map[string]string{"source": "source.txt"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := started.Receipt.RunID
+	if _, err := e.SetAdmissionCapacity(context.Background(), CapacityRequest{CommandID: newID("command"), Capacity: 2, Reason: "two Runs"}); err != nil {
+		t.Fatal(err)
+	}
+	errs := make(chan error, 2)
+	for _, id := range []string{first, second} {
+		go func() { errs <- e.Drive(context.Background(), id) }()
+	}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatalf("a driver beside another failed: %v", err)
+		}
+	}
+	for _, id := range []string{first, second} {
+		if r := driveUntilSettled(t, e, id); r.Status != "completed" {
+			t.Fatalf("%s ended %s beside another Run: %+v", id, r.Status, r.Diagnostics)
+		}
+	}
+}

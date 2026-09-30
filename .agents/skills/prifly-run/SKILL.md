@@ -190,6 +190,14 @@ met no question: it is a statement, not a default, and the operator reads this
 list after the Run to see where the work was steered. A report without it is
 refused as `answered_questions_missing`.
 
+A drive refused with `resource_busy` is a wait, not a failure: the project
+said this stage does not run beside the same stage of another Run, and the
+refusal names the Run holding it. Nothing ran. Tell the developer which
+resource and which Run, then drive the same Run again once that holder has
+settled (`capacity show` lists who holds each resource). Do not raise the
+limit yourself: it is the project's in extend.yaml and this machine's in
+local.yaml.
+
 ## 3. Finish
 
 Continue only while the Run permits progress; respect pause, stop, cancel and

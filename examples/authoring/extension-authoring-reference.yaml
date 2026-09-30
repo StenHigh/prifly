@@ -28,6 +28,21 @@ answers:
 references:
   process: core:adapter/local-process@2.0.0
 
+# Exclusive resources (state 42, Pri-Fly 0.13.71+). Two Runs of the project run
+# side by side, but not both through the stages that hold the same resource
+# beyond its limit: a second Run reaching such a stage is refused
+# `resource_busy`, naming the Run that holds it, runs nothing, and is admitted
+# on its next `run drive` once the holder settles. `limit` (default 1) is how
+# many attempts of the whole authority may hold the resource at once; `stages`
+# are root stages of THIS workflow, and a `call` stage holds it for every
+# attempt inside the workflow it calls. A machine may give its own limit in
+# .prifly/local.yaml (`resources: {heavy: {limit: 2}}`); the stages stay here.
+# The name is the project's -- Pri-Fly reads nothing into it.
+resources:
+  heavy:
+    limit: 1
+    stages: [tests, verify]
+
 # Programs for the steps this file's extensions insert (keyed by the extension's
 # short step name). Same form, allowed executable (`project local set
 # --allow-executable shell=/bin/sh`) and `--allow-execution` as a package

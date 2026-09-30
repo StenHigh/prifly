@@ -1318,7 +1318,13 @@ func (c *cli) capacity(ctx context.Context, e *prifly.Engine, args []string) err
 		// way to learn it was to attempt a start -- which creates and queues a
 		// Run, so the question changed its own answer.
 		admission := projectAdmissionState(capacity, len(held), len(queue))
-		return c.emit(map[string]any{"schema_version": "1", "capacity": capacity, "held": held, "waiting": queue, "available": admission.Available, "would_refuse": admission.WouldRefuse})
+		resources, err := e.HeldResources(ctx)
+		if err != nil {
+			return err
+		}
+		// Which exclusive resource each held attempt holds: the answer to
+		// "why does my stage wait" when capacity itself has room.
+		return c.emit(map[string]any{"schema_version": "1", "capacity": capacity, "held": held, "waiting": queue, "available": admission.Available, "would_refuse": admission.WouldRefuse, "resources": resources})
 	case "set":
 		capacity := f.Int64("capacity", 0, "attempts admitted at once")
 		reason := f.String("reason", "", "")

@@ -738,7 +738,7 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		if err := r.setInvocationStatus(a.InvocationID, "running", nil); err != nil {
 			return local.Change{}, err
 		}
-		change := local.Change{AcquireSlot: attemptID}
+		change := local.Change{AcquireSlot: attemptID, AcquireResources: r.resourcesFor(a.ID)}
 		if isInvocationState(r.SchemaVersion) {
 			data, err := canonical(map[string]any{"attempt_id": attemptID, "step_instance_id": a.StepID, "stage_activation_id": a.ID, "workflow_invocation_id": a.InvocationID, "envelope_digest": r.Attempts[attemptID].EnvelopeDigest, "observation": obs})
 			if err != nil {

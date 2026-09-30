@@ -191,7 +191,12 @@ func monitorMux(catalog *monitorCatalog) http.Handler {
 			return
 		}
 		queue, err := engine.AdmissionQueue(r.Context())
-		write(w, map[string]any{"capacity": capacity, "held": held, "waiting": queue}, err)
+		if err != nil {
+			write(w, nil, err)
+			return
+		}
+		resources, err := engine.HeldResources(r.Context())
+		write(w, map[string]any{"capacity": capacity, "held": held, "waiting": queue, "resources": resources}, err)
 	})
 	scoped("/api/run", func(w http.ResponseWriter, r *http.Request, engine *prifly.Engine) {
 		id := r.URL.Query().Get("id")

@@ -72,6 +72,8 @@ var versionContracts = []versionContract{
 	// 41 records the questions a host says its step answered, and when a
 	// runtime decision was requested.
 	{CoreQuestionStateVersion, CoreQuestionReadVersion, "", CoreAwaitingHostNextVersion},
+	// 42 seals which stages hold which exclusive resources, with their limits.
+	{CoreResourceStateVersion, CoreResourceReadVersion, "", CoreAwaitingHostNextVersion},
 	// 36 minted no state row of its own: it is a next-action answer, so every
 	// state that could describe a finished Run and was still being created
 	// took it up, the way 31 and 32 took up 33. 41 is the same kind of answer

@@ -61,6 +61,7 @@ func TestEveryStateNamesItsNextContract(t *testing.T) {
 		{CoreExternalWriteStateVersion, CoreAwaitingHostNextVersion},
 		{CoreContinuationStateVersion, CoreAwaitingHostNextVersion},
 		{CoreQuestionStateVersion, CoreAwaitingHostNextVersion},
+		{CoreResourceStateVersion, CoreAwaitingHostNextVersion},
 	}
 	if len(expected) != len(versionContracts) {
 		t.Fatalf("the ladder has %d rows and this table names %d; a new state version needs its next contract here", len(versionContracts), len(expected))

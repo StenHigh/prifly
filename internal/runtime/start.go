@@ -58,6 +58,11 @@ type StartOptions struct {
 	// must be visibly not part of this Run. The engine reads no meaning from
 	// the values; it hands them to the host in the task.
 	ModelProfiles map[string]ModelProfileTranslation
+	// StageResources and ResourceLimits are the exclusive resources the
+	// project declared for this launch: which root stages hold which, and how
+	// many attempts of the authority may hold each at once.
+	StageResources map[string][]string
+	ResourceLimits map[string]int64
 	// Continuation records a checked source cut for a Project quality-tail Run.
 	// Only the declared source artifacts become inputs; the current
 	// implementation is sealed separately from the selected Git workspace.
@@ -1360,6 +1365,15 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		if configurations != nil && requiresSessionState(defs, plan) {
 			stateVersion = higherState(stateVersion, CoreQuestionStateVersion)
 		}
+		if len(options.StageResources) != 0 {
+			if configurations == nil {
+				return local.Change{}, local.Reject("unsupported_resources", "exclusive resources require the scoped core state")
+			}
+			if err := checkStageResources(plan, options.StageResources, options.ResourceLimits); err != nil {
+				return local.Change{}, err
+			}
+			stateVersion = higherState(stateVersion, CoreResourceStateVersion)
+		}
 		if fork != nil && !isForkState(stateVersion) {
 			stateVersion = CoreForkStateVersion
 		}
@@ -1369,7 +1383,7 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			provenance = &RecoveryProvenance{SchemaVersion: "recovery/2", SourceRunID: recoveryPlan.SourceRunID, SourceRunVersion: recoveryPlan.SourceRunVersion, ReviewDigest: recoveryPlan.ReviewDigest, FrontierStageID: recoveryPlan.FrontierStageID, FrontierAction: recoveryPlan.FrontierAction, CandidateRef: recoveryPlan.CandidateRef, Reused: recoveryPlan.Reused, RootOutputs: recoveryOutputs}
 		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
-		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Recovery: provenance, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{startStage}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles}
+		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Recovery: provenance, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{startStage}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles, StageResources: options.StageResources, ResourceLimits: options.ResourceLimits}
 		if configurations != nil {
 			r.Ready = nil
 			r.WorkflowConfigurations = configurations

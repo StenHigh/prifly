@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases}=require('./monitor.js');
+const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows}=require('./monitor.js');
 assert.equal(esc(`<img src='x' onerror="evil()">&`),'&lt;img src=&#39;x&#39; onerror=&quot;evil()&quot;&gt;&amp;');
 assert.equal(label('ready'),'Подготовлен к выдаче Attempt');
 assert.equal(label('pending'),'Attempt передан агенту');
@@ -138,6 +138,16 @@ assert.match(activityRows(recovered)[0].detail,/1 узлов взято/);
  assert.deepEqual(t.stages.map(s=>[s.stage,s.count,s.ms,s.agentMs]),[['implement',1,5000,4000],['verify',2,3000,2300]]);
  assert.equal(timeBreakdown({root:{metrics:{elapsed:d(1)}}}),null);
  assert.deepEqual(attemptPhases({metrics:{host_work:d(1),executor_time:{quality:'unavailable'}}},true).map(p=>p.key),['host_work']);
+}
+// Exclusive resources: what this Run sealed, and who holds each now.
+{
+ const run={stage_resources:{tests:['heavy'],verify:['heavy','db']},resource_limits:{heavy:1,db:2},attempts:{'attempt:mine':{}}};
+ const rows=resourceRows(run,{held:{'attempt:mine':'run:this','attempt:other':'run:other'},resources:{heavy:['attempt:other']}});
+ assert.deepEqual(rows.map(r=>[r.name,r.limit,r.stages.join(',')]),[['db',2,'verify'],['heavy',1,'tests,verify']]);
+ assert.deepEqual(rows[1].holders,[{attempt:'attempt:other',run:'run:other',mine:false}]);
+ assert.deepEqual(rows[0].holders,[]);
+ assert.equal(resourceRows(run,undefined)[0].holders,null);
+ assert.deepEqual(resourceRows({},{}),[]);
 }
 console.log('monitor UI: status wording, escaping, timing quality, graph paths/ports/parallel/repeat/cycles, file evidence passed');
 

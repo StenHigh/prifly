@@ -325,6 +325,28 @@ func (s *Store) Slots(ctx context.Context) (map[string]string, error) {
 	return held, rows.Err()
 }
 
+// SlotResources reports, for each exclusive resource held now, the admitted
+// attempts holding it. Empty on storage written before resources existed.
+func (s *Store) SlotResources(ctx context.Context) (map[string][]string, error) {
+	held := map[string][]string{}
+	if s.info.StorageVersion < 7 {
+		return held, nil
+	}
+	rows, err := s.db.QueryContext(ctx, "SELECT resource,slot_id FROM slot_resources ORDER BY resource,slot_id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var resource, slot string
+		if err := rows.Scan(&resource, &slot); err != nil {
+			return nil, err
+		}
+		held[resource] = append(held[resource], slot)
+	}
+	return held, rows.Err()
+}
+
 // SlotWaiters reports the admission queue: which runs are waiting and since
 // which cut. The order this map implies is the declared policy's order.
 func (s *Store) SlotWaiters(ctx context.Context) (map[string]int64, error) {

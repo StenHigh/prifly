@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	StorageVersion = 6
+	StorageVersion = 7
 	// MaxSlotWaiters bounds the admission queue. A queue without a bound is a
 	// second unbounded resource hiding behind a bounded one.
 	MaxSlotWaiters = 64
@@ -252,12 +252,24 @@ type Event struct {
 	StateAfter json.RawMessage `json:"state_after,omitempty"`
 }
 
+// ResourceClaim is one named resource an admitted attempt holds and the most
+// attempts of the authority that may hold it at once. The name is the
+// project's; the store reads no meaning into it.
+type ResourceClaim struct {
+	Name  string
+	Limit int64
+}
+
 type Change struct {
 	Data        json.RawMessage
 	Events      []EventInput
 	Result      json.RawMessage
 	AcquireSlot string
-	ReleaseSlot string
+	// AcquireResources are the exclusive resources the attempt taking
+	// AcquireSlot holds with it, each with the limit its Run sealed. The slot is
+	// refused when a resource already has that many holders.
+	AcquireResources []ResourceClaim
+	ReleaseSlot      string
 	// LeaveAdmissionQueue drops this run's place in the admission queue. A queued
 	// run holds its place by asking again, and the store cannot tell a live
 	// waiter from an abandoned one by looking at the row -- so a run that reached
@@ -544,6 +556,7 @@ func (s *Store) initialize(ctx context.Context, conn *sql.Conn, dir string) erro
 	const schema = `
 CREATE TABLE authority(singleton INTEGER PRIMARY KEY CHECK(singleton=1),id TEXT NOT NULL UNIQUE,epoch INTEGER NOT NULL CHECK(epoch>0),state_directory TEXT NOT NULL,cut INTEGER NOT NULL CHECK(cut>=0),slot_id TEXT NOT NULL DEFAULT '',slot_run TEXT NOT NULL DEFAULT '',slot_capacity INTEGER NOT NULL DEFAULT 1 CHECK(slot_capacity>=1),admission_seq INTEGER NOT NULL DEFAULT 0,verified_cut INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE slots(slot_id TEXT PRIMARY KEY,run_id TEXT NOT NULL);
+CREATE TABLE slot_resources(slot_id TEXT NOT NULL,resource TEXT NOT NULL,PRIMARY KEY(slot_id,resource));
 CREATE TABLE slot_waiters(run_id TEXT PRIMARY KEY,since_seq INTEGER NOT NULL,seen_seq INTEGER NOT NULL);
 CREATE TABLE runs(run_id TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),event_seq INTEGER NOT NULL CHECK(event_seq>0),snapshot BLOB NOT NULL,snapshot_digest TEXT NOT NULL,snapshot_packed INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE pinned_bytes(digest TEXT PRIMARY KEY,bytes BLOB NOT NULL);
@@ -556,7 +569,7 @@ CREATE INDEX events_state ON events(run_id,seq) WHERE state_after IS NOT NULL;
 CREATE TABLE authority_states(state_key TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),cut INTEGER NOT NULL UNIQUE,data BLOB NOT NULL,digest TEXT NOT NULL);
 CREATE TABLE authority_commands(actor TEXT NOT NULL,command_id TEXT NOT NULL,state_key TEXT NOT NULL,digest TEXT NOT NULL,cut INTEGER NOT NULL UNIQUE,receipt BLOB NOT NULL,receipt_digest TEXT NOT NULL,PRIMARY KEY(actor,command_id));
 PRAGMA application_id=1347569228;
-PRAGMA user_version=6;`
+PRAGMA user_version=7;`
 	if _, err := conn.ExecContext(ctx, schema); err != nil {
 		return err
 	}
@@ -568,6 +581,9 @@ PRAGMA user_version=6;`
 }
 
 func (s *Store) migrate(ctx context.Context, conn *sql.Conn, version int) error {
+	if version == 6 {
+		return s.migrateSlotResources(ctx, conn)
+	}
 	if version == 5 {
 		return s.migratePinnedBytes(ctx, conn)
 	}
@@ -732,6 +748,50 @@ ALTER TABLE events ADD COLUMN state_packed INTEGER NOT NULL DEFAULT 0;`); err !=
 	}
 	_, err := conn.ExecContext(ctx, "COMMIT")
 	return err
+}
+
+// migrateSlotResources adds the resources an admitted attempt holds. Nothing
+// held one before, so an upgraded installation starts with none.
+func (s *Store) migrateSlotResources(ctx context.Context, conn *sql.Conn) error {
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.Background(), "ROLLBACK")
+	var current int
+	if err := conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
+		return err
+	}
+	if current == StorageVersion {
+		return nil
+	}
+	if current != 6 {
+		return ErrIncompatible
+	}
+	if _, err := conn.ExecContext(ctx, "CREATE TABLE slot_resources(slot_id TEXT NOT NULL,resource TEXT NOT NULL,PRIMARY KEY(slot_id,resource))"); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, "PRAGMA user_version=7"); err != nil {
+		return err
+	}
+	_, err := conn.ExecContext(ctx, "COMMIT")
+	return err
+}
+
+// resourceRefusal is the refusal for an attempt whose resource is full, naming
+// who holds it, or nil when every resource has room. The holders of a resource
+// are counted without the slot this command releases.
+func resourceRefusal(ctx context.Context, conn *sql.Conn, claims []ResourceClaim, release string) (*Rejection, error) {
+	for _, claim := range claims {
+		var held int64
+		var holder sql.NullString
+		if err := conn.QueryRowContext(ctx, "SELECT count(*),min(s.run_id||' (attempt '||s.slot_id||')') FROM slot_resources r JOIN slots s ON s.slot_id=r.slot_id WHERE r.resource=? AND r.slot_id<>?", claim.Name, release).Scan(&held, &holder); err != nil {
+			return nil, err
+		}
+		if held >= claim.Limit {
+			return &Rejection{Code: "resource_busy", Message: fmt.Sprintf("resource %s allows %d attempt(s) at once and %d hold it, among them %s; this Run's attempt was not admitted and nothing ran -- drive it again once that attempt settles (run status names where the holder is)", claim.Name, claim.Limit, held, holder.String)}, nil
+		}
+	}
+	return nil, nil
 }
 
 // admissionTurn decides whether this run may take a free slot now. The declared
@@ -983,6 +1043,14 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 			case err == nil:
 				// An exact re-acquire by the same run is inert, not a second hold.
 			case errors.Is(err, sql.ErrNoRows):
+				busy, err := resourceRefusal(ctx, conn, change.AcquireResources, release)
+				if err != nil {
+					return out, err
+				}
+				if busy != nil {
+					rejection = busy
+					break
+				}
 				var held int64
 				if err := conn.QueryRowContext(ctx, "SELECT count(*) FROM slots WHERE slot_id<>?", release).Scan(&held); err != nil {
 					return out, err
@@ -1065,6 +1133,9 @@ ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.ev
 			if _, err := conn.ExecContext(ctx, "DELETE FROM slots WHERE slot_id=?", release); err != nil {
 				return out, err
 			}
+			if _, err := conn.ExecContext(ctx, "DELETE FROM slot_resources WHERE slot_id=?", release); err != nil {
+				return out, err
+			}
 		}
 		if change.LeaveAdmissionQueue {
 			if _, err := conn.ExecContext(ctx, "DELETE FROM slot_waiters WHERE run_id=?", cmd.RunID); err != nil {
@@ -1074,6 +1145,11 @@ ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.ev
 		if acquire != "" {
 			if _, err := conn.ExecContext(ctx, "INSERT INTO slots(slot_id,run_id) VALUES(?,?)", acquire, cmd.RunID); err != nil {
 				return out, err
+			}
+			for _, claim := range change.AcquireResources {
+				if _, err := conn.ExecContext(ctx, "INSERT OR IGNORE INTO slot_resources(slot_id,resource) VALUES(?,?)", acquire, claim.Name); err != nil {
+					return out, err
+				}
 			}
 		}
 		if controlData != nil {
@@ -1622,6 +1698,14 @@ func (s *Store) validateChange(change Change, mode CommandMode) error {
 	}
 	if change.AcquireSlot != "" && !validIdentity(change.AcquireSlot) || change.ReleaseSlot != "" && !validIdentity(change.ReleaseSlot) {
 		return errors.New("invalid slot identity")
+	}
+	if len(change.AcquireResources) != 0 && change.AcquireSlot == "" {
+		return errors.New("resources are held with an acquired slot")
+	}
+	for _, claim := range change.AcquireResources {
+		if !validIdentity(claim.Name) || claim.Limit < 1 {
+			return errors.New("invalid resource claim")
+		}
 	}
 	return nil
 }

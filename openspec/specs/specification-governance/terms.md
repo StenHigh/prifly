@@ -414,6 +414,18 @@ host взял выданное задание; хранится один раз 
 (`host_take_not_recorded`). Задача называет команду в `take_command`, пока
 задание не взято.
 
+<a id="exclusive-resource"></a>
+### Exclusive resource — Исключительный ресурс
+
+Имя, которое проект объявляет в `extend.yaml` (`resources`), с лимитом и
+корневыми стадиями workflow, чьи попытки его держат — вместе со всеми попытками
+внутри вызова такой стадии. Run запечатывает привязку и лимиты при старте
+(`stage_resources`, `resource_limits`, состояние 42). Попытка допускается, только
+если ресурс держат меньше попыток всей authority, чем лимит её Run; иначе отказ
+`resource_busy` с держателем, и попытка допускается на следующем запуске
+драйвера. Имя непрозрачно для движка; лимит машины задаёт `local.yaml`. Это не
+ёмкость допуска (`capacity`) и не `max_parallelism` внутри одного Run.
+
 <a id="interaction-policy"></a>
 ### Attended / autonomous / unattended Run — Режим участия владельца
 
@@ -1574,6 +1586,9 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [DecisionCatalog](#decision-catalog) | `internal/runtime/decisions.go` | `runtime.DecisionCatalog` | — |
 | [DecisionCatalog](#decision-catalog) | `internal/runtime/decisions.go` | `runtime.DecisionDefinition` | — |
 | [DecisionCatalog](#decision-catalog) | `internal/runtime/model.go` | `runtime.Run.DecisionCatalog` | `decision_catalog` |
+| [Exclusive resource](#exclusive-resource) | `internal/runtime/model.go` | `runtime.Run.StageResources` | `stage_resources` |
+| [Exclusive resource](#exclusive-resource) | `internal/runtime/model.go` | `runtime.Run.ResourceLimits` | `resource_limits` |
+| [Exclusive resource](#exclusive-resource) | `internal/local/store.go` | `local.ResourceClaim` | — |
 | [Session take](#session-take) | `internal/runtime/sessions.go` | `runtime.SessionHandoff.Taken` | `taken` |
 | [Session take](#session-take) | `internal/runtime/sessions.go` | `runtime.SessionTask.TakeCommand` | `take_command` |
 | [Question report](#question-report) | `internal/runtime/questions.go` | `runtime.QuestionReport` | — |

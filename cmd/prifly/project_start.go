@@ -323,6 +323,8 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	var execution *prifly.ExecutionBindings
 	var requirements projectLaunchRequirements
+	var stageResources map[string][]string
+	var resourceLimits map[string]int64
 	var recoveryPlan *prifly.RecoveryPlan
 	// A continuation whose launch runs the source Run's own workflow resumes
 	// that Run: the recovery plan carries what it accepted before where it
@@ -335,6 +337,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return err
 		}
 		launch, err := projectCompileLaunch(preflightEngine, compiled, workflowPath)
+		if err == nil {
+			stageResources, resourceLimits, err = projectLaunchResources(root, compiled.Resources, launch.plan)
+		}
 		if err == nil && continuation {
 			resuming, err = projectResumes(ctx, preflightEngine, *sourceRun, launch.plan)
 		}
@@ -708,6 +713,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if len(reviewedProfiles) != 0 {
 		startOptions.ModelProfiles = reviewedProfiles
 	}
+	startOptions.StageResources, startOptions.ResourceLimits = stageResources, resourceLimits
 	if preflight.Declared {
 		startOptions.DecisionCatalog, startOptions.DecisionSheet = &preflight.Catalog, &preflight.Sheet
 	}
@@ -740,7 +746,14 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	if !recovering || resuming {
 		if err := engine.Drive(ctx, started.Receipt.RunID); err != nil {
-			return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s", started.Receipt.RunID), Cause: err}
+			// The Run exists; what stopped the first drive is the cause, and a
+			// reader needs its code -- driver_already_active, storage_busy --
+			// not a generic one that names only the Run.
+			var cause *prifly.Fault
+			if errors.As(err, &cause) && cause.Code != "" {
+				return &prifly.Fault{Code: cause.Code, Message: fmt.Sprintf("run %s was created and not driven yet: %s; once that clears, prifly run drive %s continues it", started.Receipt.RunID, cause.Message, started.Receipt.RunID), Cause: err}
+			}
+			return &prifly.Fault{Code: "project_start_incomplete", Message: fmt.Sprintf("run %s was created and not driven yet; prifly run drive %s continues it", started.Receipt.RunID, started.Receipt.RunID), Cause: err}
 		}
 	}
 	view, err := engine.View(ctx, started.Receipt.RunID)

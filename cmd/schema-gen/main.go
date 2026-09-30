@@ -62,6 +62,7 @@ type generator struct {
 	nextHandoff           bool
 	awaitingHost          bool
 	questions             bool
+	resources             bool
 	recovery              bool
 }
 
@@ -214,6 +215,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.questions && questionField(t, field.Name) {
 						continue
 					}
+					if !g.resources && t == reflect.TypeFor[prifly.Run]() && (field.Name == "StageResources" || field.Name == "ResourceLimits") {
+						continue
+					}
 					tag := strings.Split(field.Tag.Get("json"), ",")
 					if tag[0] == "-" {
 						continue
@@ -350,6 +354,7 @@ var profileContracts = []struct {
 	{"next-handoff", "generate next version 41 handoff contracts", func(g *generator) { g.nextHandoff = true }},
 	{"awaiting-host", "generate next version 42 awaiting-host contracts", func(g *generator) { g.awaitingHost = true }},
 	{"questions", "generate answered-questions state/read version 41 contracts", func(g *generator) { g.questions = true }},
+	{"resources", "generate exclusive-resources state/read version 42 contracts", func(g *generator) { g.resources = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -949,6 +954,12 @@ func main() {
 			delete(contracts, name+"V40")
 		}
 	}
+	if g.resources {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreCapabilities"} {
+			contracts[name+"V42"] = contracts[name+"V41"]
+			delete(contracts, name+"V41")
+		}
+	}
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1261,6 +1272,18 @@ func main() {
 			bundle["$id"] = "urn:prifly:core-questions:41"
 			bundle["title"] = "Pri-Fly answered-questions contracts"
 			bundle["description"] = "State/read 41 records, for every assisted report of a project Run, the questions the step met during the attempt and how each was answered: the question, the answer and its basis -- a decision the Run declares, an input of the step, the instructions it was handed, a person in the session or the executor's own judgement. The task says question_report required and a report without answered_questions is refused; an empty list is the host saying there were none. The list is the host's statement, kept on the attempt apart from the decision journal: it is no DecisionRecord, no Approval and no evidence of who answered. A runtime decision's record also keeps when it was requested, so the wait for its answer is measured. Next keeps 42 and every earlier bundle is unchanged, byte for byte."
+		}
+		if g.resources {
+			g.property("runtime_Run", "schema_version", map[string]any{"const": prifly.CoreResourceStateVersion})
+			g.property("runtime_RunView", "schema_version", map[string]any{"const": prifly.CoreResourceReadVersion})
+			name := map[string]any{"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"}
+			g.property("runtime_Run", "stage_resources", map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "array", "items": name, "minItems": 1}})
+			g.property("runtime_Run", "resource_limits", map[string]any{"type": "object", "propertyNames": name, "additionalProperties": map[string]any{"type": "integer", "minimum": 1, "maximum": prifly.MaxResourceLimit}})
+			g.describe("runtime_Run", "stage_resources", "For each stage of the root workflow, the exclusive resources its attempts hold, and every attempt inside a call it makes. The names are the project's; the engine reads no meaning into them.")
+			g.describe("runtime_Run", "resource_limits", "How many attempts of the whole authority may hold each resource at once, as this Run was started with. An attempt whose resource is full is refused as resource_busy and admitted on a later drive once a holder settles.")
+			bundle["$id"] = "urn:prifly:core-resources:42"
+			bundle["title"] = "Pri-Fly exclusive-resource contracts"
+			bundle["description"] = "State/read 42 seals which root stages of a Run hold which exclusive resources, and each limit. An attempt of such a stage, or inside a call it makes, is admitted only while each of its resources has fewer holders than the limit among the attempts of every Run of the authority; otherwise it is refused as resource_busy, naming a holder, and nothing runs. Resource names are the project's and carry no meaning here. Next keeps 42 and every earlier bundle is unchanged, byte for byte."
 		}
 		if g.waits && !g.guards {
 			mapConstraints(&g)
