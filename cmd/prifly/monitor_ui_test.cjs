@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
-const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows}=require('./monitor.js');
+const monitorJSSource=require('node:fs').readFileSync(require('node:path').join(__dirname,'monitor.js'),'utf8');
+const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows}=require('./monitor.js');
 assert.equal(esc(`<img src='x' onerror="evil()">&`),'&lt;img src=&#39;x&#39; onerror=&quot;evil()&quot;&gt;&amp;');
 assert.equal(label('ready'),'Подготовлен к выдаче Attempt');
 assert.equal(label('pending'),'Attempt передан агенту');
@@ -149,6 +150,70 @@ assert.match(activityRows(recovered)[0].detail,/1 узлов взято/);
  assert.equal(resourceRows(run,undefined)[0].holders,null);
  assert.deepEqual(resourceRows({},{}),[]);
 }
+// Execution counts are two labelled numbers, never a fraction or a progress.
+{
+ assert.deepEqual(executionCounts({step_instances:4,attempts:4,settled_attempts:3,awaiting_hosts:1}),{steps:4,attempts:4,settled:3,open:1,hosts:1});
+ assert.deepEqual(executionCounts({step_instances:1,attempts:2,settled_attempts:2,awaiting_hosts:0}),{steps:1,attempts:2,settled:2,open:0,hosts:0});
+ assert.deepEqual(executionCounts({step_instances:2,attempts:1,settled_attempts:3}),{steps:2,attempts:1,settled:null,open:null,hosts:null},'more settled than made is unknown, not negative');
+ assert.deepEqual(executionCounts({}),{steps:null,attempts:null,settled:null,open:null,hosts:null},'an absent count is unknown, not zero');
+ assert.doesNotMatch(monitorJSSource,/step_instances \?\? '—'\)\} \/ /,'the list cell went back to a fraction');
+}
+// A terminal Run says it is over; a partial one names only a proven cause.
+{
+ const workflow=JSON.stringify({definition:{stages:{review:{kind:'step',on:{pass:'done',needs_revision:'stop'}},done:{kind:'finish',outcome:'succeeded'},stop:{kind:'finish',outcome:'partial'}}}});
+ const base={id:'run:p',status:'completed',outcome:'partial',workflow,root_workflow_invocation_id:'inv:root',
+  activations:{'act:review':{id:'act:review',stage_id:'review',kind:'step',status:'completed',workflow_invocation_id:'inv:root',step_instance_id:'step:review'},'act:stop':{id:'act:stop',stage_id:'stop',kind:'finish',status:'completed',workflow_invocation_id:'inv:root'}},
+  steps:{'step:review':{id:'step:review',verdict:'needs_revision',attempt_ids:['attempt:r'],outputs:{report:{}}}},
+  attempts:{'attempt:r':{id:'attempt:r',settled:{},accepted:{summary:'Two blocking findings'}}}};
+ assert.deepEqual(partialCause(base),{kind:'verdict',finish:'stop',description:'',stage:'review',verdict:'needs_revision',node:'attempt:r',summary:'Two blocking findings',outputs:['report']});
+ const html=nowHTML(base,activityRows(base));
+ assert.match(html,/ничего не исполняется, и сам он не продолжится/);assert.match(html,/data-node="attempt:r"/);assert.match(html,/Two blocking findings/);
+ assert.doesNotMatch(html,/не записаны|Ожидает агента/);
+ // Two steps route to the same finish: no single one is blamed.
+ const twice={...base,activations:{...base.activations,'act:again':{id:'act:again',stage_id:'review',kind:'step',status:'completed',workflow_invocation_id:'inv:root',step_instance_id:'step:again'}},steps:{...base.steps,'step:again':{id:'step:again',verdict:'needs_revision',attempt_ids:[]}}};
+ assert.equal(partialCause(twice).kind,'unknown');assert.match(nowHTML(twice,[]),/Причина не установлена/);
+ assert.equal(partialCause({...base,activations:{}}).kind,'unknown','no finish reached');
+ // A waiver lowered a finish declared succeeded.
+ const waived={...base,waiver_applied:true,waivers:[{reason:'flaky e2e',approver_id:'owner'}],activations:{...base.activations,'act:stop':{...base.activations['act:stop'],stage_id:'done'}}};
+ assert.equal(partialCause(waived).kind,'waiver');assert.match(nowHTML(waived,[]),/flaky e2e/);
+ // A call whose child ended partial routes to the finish; the cause is followed into the child.
+ const child=JSON.stringify({definition:{stages:{check:{kind:'step',on:{blocked:'halt'}},halt:{kind:'finish',outcome:'partial'}}}});
+ const nested={id:'run:n',status:'completed',outcome:'partial',root_workflow_invocation_id:'inv:root',
+  workflow:{definition:{stages:{verify:{kind:'call',on:{partial:'fix',succeeded:'done'}},fix:{kind:'finish',outcome:'partial'},done:{kind:'finish',outcome:'succeeded'}}}},
+  definitions:[{ref:{digest:'sha256:child'},bytes:child}],
+  invocations:{'inv:root':{id:'inv:root',outcome:'partial'},'inv:child':{id:'inv:child',parent_invocation_id:'inv:root',caller_stage_activation_id:'act:verify',workflow_ref:{digest:'sha256:child'},outcome:'partial'}},
+  activations:{'act:verify':{id:'act:verify',stage_id:'verify',kind:'call',status:'completed',workflow_invocation_id:'inv:root'},'act:fix':{id:'act:fix',stage_id:'fix',kind:'finish',status:'completed',workflow_invocation_id:'inv:root'},
+   'act:check':{id:'act:check',stage_id:'check',kind:'step',status:'completed',workflow_invocation_id:'inv:child',step_instance_id:'step:check'},'act:halt':{id:'act:halt',stage_id:'halt',kind:'finish',status:'completed',workflow_invocation_id:'inv:child'}},
+  steps:{'step:check':{id:'step:check',verdict:'blocked',attempt_ids:['attempt:c']}},attempts:{'attempt:c':{id:'attempt:c',accepted:{summary:'port busy'}}}};
+ const found=partialCause(nested);
+ assert.deepEqual([found.kind,found.stage,found.outcome,found.node,found.inner.kind,found.inner.stage,found.inner.verdict,found.inner.summary],['call','verify','partial','inv:child','verdict','check','blocked','port busy']);
+ assert.match(nowHTML(nested,[]),/вложенный workflow[^]*port busy/);
+ // A recorded choice that routes to the finish is the cause; the finish's own description is shown.
+ const chosen={...base,workflow:JSON.stringify({definition:{stages:{decide:{kind:'choice'},owner:{kind:'finish',outcome:'partial',description:'The developer decides'}}}}),
+  activations:{'act:decide':{id:'act:decide',stage_id:'decide',kind:'choice',status:'completed',workflow_invocation_id:'inv:root'},'act:owner':{id:'act:owner',stage_id:'owner',kind:'finish',status:'completed',workflow_invocation_id:'inv:root'}}};
+ const choices=[{stage_activation_id:'act:decide',branch_id:'owner',next_stage_id:'owner'}];
+ assert.deepEqual(partialCause(chosen,choices),{kind:'choice',finish:'owner',description:'The developer decides',stage:'decide',branch:'owner',node:'act:decide'});
+ assert.equal(partialCause(chosen).kind,'unknown','a choice without its recorded decision is not guessed');
+ assert.match(nowHTML(chosen,[],choices),/выбрала ветвь <b>owner<\/b>[^]*The developer decides/);
+ // Other terminal outcomes get no partial explanation.
+ const rejected=nowHTML({...base,outcome:'rejected'},[]);
+ assert.match(rejected,/не продолжится/);assert.doesNotMatch(rejected,/partial|Причина/);
+ // A live Run with nothing recorded still says so; a stray unsettled row on a terminal one is not shown as work.
+ assert.match(nowHTML({status:'running'},[]),/не записаны/);
+ assert.doesNotMatch(nowHTML({...base,outcome:'succeeded'},[{node:'attempt:x',title:'Внешний host',detail:'host:x'}]),/host:x/);
+}
+// Roles and the admission queue.
+{
+ assert.equal(executionRole({session:{principal_id:'host:a',host_state:'waiting_admission'}}).state,'Ожидает допуска: занята capacity authority');
+ assert.equal(executionRole({session:{principal_id:'host:a',host_state:'waiting_decision'}}).state,'Ожидает решения оператора');
+ const two=activityRows({attempts:{a:{id:'attempt:a',session:{principal_id:'host:a'}},b:{id:'attempt:b',session:{principal_id:'host:b'}}}});
+ assert.deepEqual(two.map(r=>[r.node,r.detail]),[['attempt:a','host:a · Выдано · ожидается отчёт host'],['attempt:b','host:b · Выдано · ожидается отчёт host']]);
+ const queued=activityRows({id:'run:b'},{capacity:1,waiting:{'run:c':9,'run:b':7,'run:a':3}});
+ assert.deepEqual(queued,[{title:'Ожидает допуска',detail:'место 2 из 3 в очереди authority · capacity 1'}]);
+ assert.deepEqual(activityRows({id:'run:z'},{capacity:1,waiting:{'run:a':1}}),[]);
+ const decided=activityRows({pending_decision:{attempt_id:'attempt:q',decision_id:'decision:go'}});
+ assert.deepEqual(decided,[{node:'attempt:q',title:'Ожидается решение',detail:'decision:go'}]);
+}
 console.log('monitor UI: status wording, escaping, timing quality, graph paths/ports/parallel/repeat/cycles, file evidence passed');
 
 // Exercise the actual pre-paint script, including browsers that deny storage.
@@ -163,6 +228,10 @@ assert.match(monitorHTML,/<option value="related-newest">Связанные Run 
 assert.match(monitorHTML,/<option value="flat">Плоский список/);
 assert.match(monitorCSS,/\.run-lineage\.is-child::before/);
 assert.match(monitorCSS,/@media\(max-width:1100px\).*\.run-table\{min-width:820px\}/);
+// The execution column's meaning is visible text before the scrolling table, not a hover title.
+assert.match(monitorHTML,/<p class="muted table-note" id="execution-note">[^<]*не доля сценария\.<\/p><div class="table-wrap"><table class="run-table" aria-describedby="execution-note">/);
+assert.match(monitorHTML,/<th>Исполнение<\/th>/);
+assert.doesNotMatch(monitorJS,/function executionCell[^\n]*badge/,'a settled count must not be coloured as success');
 assert.match(monitorJS,/runStatus\(run\)/);assert.match(monitorJS,/run\.outcome/);
 assert.match(monitorJS,/window\.scrollBy\(0,current\.getBoundingClientRect\(\)\.top-anchorTop\)/);
 assert.match(monitorJS,/if\(child\.context && child\.children\)expandedRuns\.add/);

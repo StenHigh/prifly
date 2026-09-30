@@ -9,13 +9,80 @@ const parseMaybe = value => { if(typeof value !== 'string') return value; try{re
 const values = o => Object.values(o || {}).filter(Boolean);
 const short = s => String(s || '').replace(/^[a-z_]+:/,'').slice(0,12);
 function executionRole(object,stage) {
- if(object?.session)return {kind:'Внешний host',detail:object.session.principal_id || 'host не записан',state:object.started?'Исполнение начато':'Выдано · ожидается отчёт host'};
+ if(object?.session)return {kind:'Внешний host',detail:object.session.principal_id || 'host не записан',state:object.session.host_state==='waiting_admission'?'Ожидает допуска: занята capacity authority':object.session.host_state==='waiting_decision'?'Ожидает решения оператора':object.started?'Исполнение начато':'Выдано · ожидается отчёт host'};
  if(object?.process)return {kind:'Локальная программа',detail:object.process.executable || 'программа не записана',state:object.started?'Исполнение начато':'Процесс ещё не начал работу'};
  if(stage?.kind==='call')return {kind:'Вложенный workflow',detail:'Не является fork Run',state:label(object?.status || 'future')};
  if(stage?.kind)return {kind:'Управляющий узел workflow',detail:label(stage.kind),state:label(object?.status || 'future')};
  return {kind:'Роль не записана',detail:'Нельзя определить по сохранённым фактам',state:''};
 }
-function activityRows(run) {const rows=[];for(const a of values(run.attempts).filter(a=>!a.settled)){const r=executionRole(a);rows.push({node:a.id,title:r.kind,detail:r.detail+' · '+r.state});}for(const a of values(run.activations).filter(a=>a.status==='ready'))rows.push({node:a.id,title:'Готово к выдаче',detail:a.stage_id});if(run.pending_decision)rows.push({node:run.pending_decision.attempt_id,title:'Ожидается решение',detail:run.pending_decision.decision_id});for(const w of values(run.wait_registrations).filter(w=>w.status==='active'))rows.push({node:w.activation_id,title:'Ожидается сигнал',detail:w.target_stage_id});if(run.recovery)rows.push({run:run.recovery.source_run_id,title:'Восстановлен от Run',detail:`${run.recovery.reused.length} узлов взято из источника · ${run.recovery.frontier_stage_id}: ${run.recovery.frontier_action==='revalidate'?'перепроверен без запуска':'новое исполнение'}`});else if(run.fork)rows.push({run:run.fork.source_run_id,title:run.fork.reason==='project continuation'?'Продолжение от Run':'Run создан как fork',detail:run.fork.source_run_id});return rows;}
+// A Run in the admission queue is the authority's fact, not the Run's: it is
+// read from the capacity answer, and only when that answer was fetched.
+function activityRows(run,capacity) {const rows=[];const queue=Object.entries(capacity?.waiting||{}).sort((a,b)=>a[1]-b[1]||a[0].localeCompare(b[0])),place=queue.findIndex(([id])=>id===run.id);if(place>=0)rows.push({title:'Ожидает допуска',detail:`место ${place+1} из ${queue.length} в очереди authority · capacity ${capacity.capacity}`});for(const a of values(run.attempts).filter(a=>!a.settled)){const r=executionRole(a);rows.push({node:a.id,title:r.kind,detail:r.detail+' · '+r.state});}for(const a of values(run.activations).filter(a=>a.status==='ready'))rows.push({node:a.id,title:'Готово к выдаче',detail:a.stage_id});if(run.pending_decision)rows.push({node:run.pending_decision.attempt_id,title:'Ожидается решение',detail:run.pending_decision.decision_id});for(const w of values(run.wait_registrations).filter(w=>w.status==='active'))rows.push({node:w.activation_id,title:'Ожидается сигнал',detail:w.target_stage_id});if(run.recovery)rows.push({run:run.recovery.source_run_id,title:'Восстановлен от Run',detail:`${run.recovery.reused.length} узлов взято из источника · ${run.recovery.frontier_stage_id}: ${run.recovery.frontier_action==='revalidate'?'перепроверен без запуска':'новое исполнение'}`});else if(run.fork)rows.push({run:run.fork.source_run_id,title:run.fork.reason==='project continuation'?'Продолжение от Run':'Run создан как fork',detail:run.fork.source_run_id});return rows;}
+const terminalStatuses=['completed','failed','cancelled'];
+// Why a completed Run ended partial, only as far as the record proves it: the
+// one finish an invocation reached, then either a waiver that changed that
+// finish's declared outcome, or the one settled step whose verdict, call whose
+// child outcome, or repeat or choice whose recorded decision routes straight to
+// it; a call or a repeat is followed into the body that decided. Anything else
+// (a join, two candidates, no finish) is unknown, not "the latest step": parallel and nested branches make that a
+// guess.
+function invocationWorkflow(run,id) {
+ const inv=run.invocations?.[id];
+ if(!inv?.parent_invocation_id)return parseMaybe(run.workflow);
+ return parseMaybe((run.definitions||[]).find(d=>d.ref?.digest===inv.workflow_ref?.digest)?.bytes);
+}
+function partialCause(run,choices=[],id=run.root_workflow_invocation_id||'') {
+ const stages=invocationWorkflow(run,id)?.definition?.stages||{};
+ const here=values(run.activations).filter(a=>(a.workflow_invocation_id||'')===id);
+ const finishes=here.filter(a=>a.kind==='finish'&&a.status==='completed');
+ if(finishes.length!==1)return {kind:'unknown'};
+ const finish=finishes[0].stage_id,description=stages[finish]?.description||'',declared=stages[finish]?.outcome,actual=run.invocations?.[id]?.outcome||run.outcome;
+ if(values(run.waivers).length&&declared&&actual&&declared!==actual)return {kind:'waiver',finish,description,waivers:values(run.waivers)};
+ const routes=here.flatMap(a=>{
+  const on=stages[a.stage_id]?.on||{};
+  if(a.kind==='choice'){const d=choices.find(c=>c.stage_activation_id===a.id);return d?.next_stage_id===finish?[{a,choice:d}]:[];}
+  if(a.kind==='repeat'){const d=a.repeat?.last_decision;return d?.next_stage_id===finish?[{a,repeat:d}]:[];}
+  if(a.kind==='call'){const child=values(run.invocations).find(i=>i.caller_stage_activation_id===a.id);return child?.outcome&&on[child.outcome]===finish?[{a,child}]:[];}
+  const step=run.steps?.[a.step_instance_id];return step?.verdict&&on[step.verdict]===finish?[{a,step}]:[];
+ });
+ if(routes.length!==1)return {kind:'unknown',finish,description};
+ const {a,step,child,repeat,choice}=routes[0];
+ if(choice)return {kind:'choice',finish,description,stage:a.stage_id,branch:choice.branch_id,node:a.id};
+ if(repeat)return {kind:'repeat',finish,description,stage:a.stage_id,route:repeat.route,iteration:repeat.iteration,outcome:repeat.body_outcome,node:repeat.body_workflow_invocation_id,inner:partialCause(run,choices,repeat.body_workflow_invocation_id)};
+ if(child)return {kind:'call',finish,description,stage:a.stage_id,outcome:child.outcome,node:child.id,inner:partialCause(run,choices,child.id)};
+ const attempt=run.attempts?.[step.attempt_ids?.at(-1)];
+ return {kind:'verdict',finish,description,stage:a.stage_id,verdict:step.verdict,node:attempt?.id||step.id,summary:attempt?.accepted?.summary||'',outputs:Object.keys(step.outputs||{}).sort()};
+}
+// The finish's description is the author's, from the sealed definition.
+const finishName = c => `<b>${esc(c.finish)}</b>${c.description?` <span class="muted">— ${esc(c.description.replace(/[.\s]+$/,''))}</span>`:''}`;
+function causeHTML(cause) {
+ if(cause.kind==='choice')return `<p>Развилка <button data-node="${esc(cause.node)}">${esc(cause.stage)}</button> выбрала ветвь <b>${esc(cause.branch)}</b>, и она ведёт к завершению ${finishName(cause)}.</p>`;
+ if(cause.kind==='call')return `<p>Стадия <button data-node="${esc(cause.node)}">${esc(cause.stage)}</button> (вложенный workflow) завершилась с исходом <b>${esc(cause.outcome)}</b>, и маршрут по нему ведёт к завершению ${finishName(cause)}. Внутри неё:</p>`+causeHTML(cause.inner);
+ if(cause.kind==='repeat')return `<p>Стадия <button data-node="${esc(cause.node)}">${esc(cause.stage)}</button> (повтор) после итерации ${esc(cause.iteration)} ${cause.route==='on_limit'?'исчерпала лимит повторов':`получила исход <b>${esc(cause.outcome)}</b> (маршрут ${esc(cause.route)})`}, и это ведёт к завершению ${finishName(cause)}. В последней итерации:</p>`+causeHTML(cause.inner);
+ if(cause.kind==='verdict')return `<p>Стадия <button data-node="${esc(cause.node)}">${esc(cause.stage)}</button> вернула вердикт <b>${esc(cause.verdict)}</b>, и маршрут по нему ведёт к завершению ${finishName(cause)}.</p>${cause.summary?`<blockquote><small>Описание результата, записанное исполнителем</small><p>${esc(cause.summary)}</p></blockquote>`:''}${cause.outputs.length?`<p class="muted">Выходы этой стадии: ${esc(cause.outputs.join(', '))}</p>`:''}`;
+ if(cause.kind==='waiver')return `<p>Завершение ${finishName(cause)} опирается на проверку, снятую waiver, поэтому объявленный исход изменён.</p>${cause.waivers.map(w=>`<p class="muted">${esc(w.reason)} · ${esc(w.approver_id)}</p>`).join('')}`;
+ return '<p class="muted">Причина не установлена по записи Run: завершающий маршрут нельзя однозначно связать с одним результатом.</p>';
+}
+// The "now" section. A terminal Run says it is over instead of "nothing
+// recorded", which read as a pause; a live one lists its recorded activity.
+function nowHTML(run,activity,choices=[]) {
+ const rows=list=>list.map(a=>`<p>${a.node?`<button data-node="${esc(a.node)}">${esc(a.title)}</button>`:a.run?`<a href="#${esc(new URLSearchParams({source:run.source||'',run:a.run}))}">${esc(a.title)}</a>`:`<b>${esc(a.title)}</b>`} <span class="muted">${esc(a.detail)}</span></p>`).join('');
+ if(!terminalStatuses.includes(run.status))return activity.length?rows(activity):'<p class="muted">Активная работа и ожидания не записаны.</p>';
+ let html=`<p><b>${esc(label(run.status))}.</b> Внутри этого Run ничего не исполняется, и сам он не продолжится. Работа хоста вне его попыток к нему не относится.</p>`+rows(activity.filter(a=>a.run));
+ if(run.outcome!=='partial')return html;
+ html+='<p>Outcome <b>partial</b>: сценарий дошёл до завершения, но записал результат как частичный. Причина по записи Run:</p>'+causeHTML(partialCause(run,choices));
+ return html;
+}
+// The list's execution cell: created StepInstances and all Attempts are two
+// separate counts, never a fraction -- a retry raises only the second one, and
+// neither counts future or unchosen stages. A missing or inconsistent value is
+// unknown, never zero or a negative difference.
+function executionCounts(run) {
+ const count=v=>Number.isInteger(v)&&v>=0?v:null,steps=count(run.step_instances),attempts=count(run.attempts),settled=count(run.settled_attempts),hosts=count(run.awaiting_hosts);
+ const consistent=attempts!==null&&settled!==null&&settled<=attempts;
+ return {steps,attempts,settled:consistent?settled:null,open:consistent?attempts-settled:null,hosts};
+}
+const known = v => v===null ? 'неизвестно' : String(v);
 const ms = n => n >= 60000 ? `${(n/60000).toFixed(1)} мин` : n >= 1000 ? `${(n/1000).toFixed(1)} с` : `${n} мс`;
 function spreadPorts(edges,key,port) {
  const groups=new Map();for(const edge of edges){const group=groups.get(edge[key])||[];group.push(edge);groups.set(edge[key],group);}
@@ -198,7 +265,7 @@ function attemptPhases(node,assisted) {
  return [['host_pickup','Ждал, пока агент возьмёт задание'],['host_work','Агент работал'],['decision_wait','Ждал ответа на вопрос'],['executor_time','Программа работала'],['result_to_acceptance','Приёмка результата']]
   .map(([key,title])=>({key,title,d:m[key]})).filter(p=>p.d&&p.d.quality!=='not_applicable');
 }
-if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
+if(typeof module !== 'undefined') module.exports = {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='',graphFocus='';
@@ -363,7 +430,7 @@ function renderList(data) {
   if(more)return `<tr><td colspan="5" class="run-more" style="--run-depth:${depth}"><button type="button" data-more="${esc(runKey(more))}">Показать ещё дочерние Run →</button></td></tr>`;
   const hash=new URLSearchParams({source:run.source,run:run.run_id});
   const task=run.subject || 'Название задачи не записано',project=run.project_title || run.project_fallback || 'Локальное имя не найдено',fallback=!run.project_title;
-  return `<tr data-run-key="${esc(runKey(run))}" class="${run.source===source && run.run_id===selected?'selected':''} ${run.context?'run-context-row':''}"><td>${form.elements.view.value!=='flat'?relatedTitle(run,depth):`<a data-focus="${esc(run.source+run.run_id)}" href="#${esc(hash)}">${esc(task)}</a><small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}`}</td><td>${esc(project)}${fallback?'<small>Локальное имя</small>':''}<small>${esc(run.project)}</small><small>${esc(run.workflow_id)}</small><small>${esc(run.root)}</small></td><td>${runStatus(run)}</td><td>${esc(run.step_instances ?? '—')} / ${esc(run.attempts ?? '—')}<small>${run.settled_attempts ?? '—'} попыток завершено</small></td><td>${esc(date(run.created))}<small>v${esc(run.run_version)} · e${esc(run.event_sequence)}</small></td></tr>`;
+  return `<tr data-run-key="${esc(runKey(run))}" class="${run.source===source && run.run_id===selected?'selected':''} ${run.context?'run-context-row':''}"><td>${form.elements.view.value!=='flat'?relatedTitle(run,depth):`<a data-focus="${esc(run.source+run.run_id)}" href="#${esc(hash)}">${esc(task)}</a><small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}`}</td><td>${esc(project)}${fallback?'<small>Локальное имя</small>':''}<small>${esc(run.project)}</small><small>${esc(run.workflow_id)}</small><small>${esc(run.root)}</small></td><td>${runStatus(run)}</td><td>${executionCell(run)}</td><td>${esc(date(run.created))}<small>v${esc(run.run_version)} · e${esc(run.event_sequence)}</small></td></tr>`;
  }).join(''):'<tr><td colspan="5" class="empty">Прогоны не найдены в прочитанной области. Измените фильтры или проверьте состояние поиска выше.</td></tr>');
  if(!selected && anchorKey && anchorTop!=null){const current=[...$('runs').querySelectorAll('tr[data-run-key]')].find(row=>row.dataset.runKey===anchorKey);if(current)window.scrollBy(0,current.getBoundingClientRect().top-anchorTop);}
  $('matches').textContent=`Найдено: ${data.filtered}`;$('page').textContent=`${page} / ${pages}`;$('previous').disabled=page<=1;$('next').disabled=page>=pages;
@@ -388,6 +455,7 @@ async function loadRelated(rows,params,g,autoExpand) {
  await Promise.all(rows.map(load));
 }
 function definitions(run) {return (run.definitions || []).map(d=>parseMaybe(d.bytes)).filter(d=>d?.definition?.stages);}
+function executionCell(run) {const c=executionCounts(run);return `Шагов создано: ${esc(known(c.steps))}<br>Попыток: ${esc(known(c.attempts))}<small>Учтено: ${esc(known(c.settled))} · не учтено: ${esc(known(c.open))}${c.hosts?` · ожидает агента: ${esc(c.hosts)}`:''}</small>`;}
 function currentWorkflow(run) {
  if(definition) return definitions(run).find(d=>d.id===definition) || run.workflow;
  const ref=run.invocations?.[invocation]?.workflow_ref || run.workflow_ref;
@@ -457,8 +525,8 @@ function renderDetail() {
  const scrollX=window.scrollX,scrollY=window.scrollY;
  const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Прогон';
  $('detail-id').textContent=run.project_id+' · '+run.id;$('permalink').href=location.hash;
- const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run);
- preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div><h3>Сейчас</h3>${activity.length?activity.map(a=>`<p>${a.node?`<button data-node="${esc(a.node)}">${esc(a.title)}</button>`:a.run?`<a href="#${esc(new URLSearchParams({source,run:a.run}))}">${esc(a.title)}</a>`:`<b>${esc(a.title)}</b>`} <span class="muted">${esc(a.detail)}</span></p>`).join(''):'<p class="muted">Активная работа и ожидания не записаны.</p>'}${timeHTML(state.timing)}${resourceHTML(run,state.capacity)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
+ const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run,state.capacity);
+ preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div><h3>Сейчас</h3>${nowHTML({...run,source},activity,state.choices)}${timeHTML(state.timing)}${resourceHTML(run,state.capacity)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
  const invs=values(run.invocations);if(!invocation && !definition)invocation=run.root_workflow_invocation_id || '';
  $('invocation').innerHTML=invs.map(i=>`<option value="${esc(i.id)}">${esc(i.workflow_ref.id)} · ${esc(i.branch_id || '')}${i.iteration?' · итерация '+i.iteration:''} · ${esc(short(i.id))}</option>`).join('')+(!invs.length?'<option value="">Корневой workflow</option>':'')+definitions(run).map(d=>`<option value="def:${esc(d.id)}">План: ${esc(d.title || d.id)}</option>`).join('');
  $('invocation').value=definition?'def:'+definition:invocation;
@@ -498,10 +566,11 @@ async function tick() {
    try {const next=await get('/api/run',{source,id:selected});if(g!==generation)return;
     // Who holds an exclusive resource is the authority's, not the Run's: it
     // changes while this Run's version does not.
-    if(next.run?.stage_resources)next.capacity=await get('/api/capacity',{source});
+    // A live Run also reads it for its place in the admission queue.
+    if(next.run?.stage_resources || !terminalStatuses.includes(next.run?.status))next.capacity=await get('/api/capacity',{source});
     if(g!==generation)return;
     $('detail-error').hidden=true;
-    const version=source+selected+':'+next.run_version+':'+next.event_sequence+':'+JSON.stringify(next.capacity?.resources||{});
+    const version=source+selected+':'+next.run_version+':'+next.event_sequence+':'+JSON.stringify([next.capacity?.resources||{},next.capacity?.waiting||{}]);
     state=next;if(stamp!==version){stamp=version;renderDetail();}
     if(tab==='journal')await refreshEvents(g);
    }catch(err){if(g===generation){$('detail-error').hidden=false;$('detail-error').textContent='Нет актуального чтения. Последние показанные данные могут устареть: '+err.message;}}

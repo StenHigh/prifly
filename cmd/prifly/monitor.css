@@ -60,6 +60,8 @@ button:hover:not(:disabled){background:var(--hover);border-color:var(--node-line
 button:disabled{opacity:.45;cursor:default}
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.table-note{margin:0 0 8px;font-size:12px;max-width:none}
+blockquote{margin:6px 0;padding:4px 10px;border-left:3px solid var(--line)}
 table{border-collapse:collapse;width:100%;text-align:left}
 th{font-size:10px;letter-spacing:.5px;color:var(--muted);background:var(--raised);font-weight:500;text-transform:uppercase}
 td,th{padding:11px 15px;border-bottom:1px solid var(--line);vertical-align:top}

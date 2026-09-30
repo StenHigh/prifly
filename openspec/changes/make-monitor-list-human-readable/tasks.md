@@ -6,4 +6,4 @@
 
 ## 2. Приёмка
 
-- [ ] 2.1 Запустить `go test ./cmd/prifly ./internal/runtime`, `node cmd/prifly/monitor_ui_test.cjs`, `make schemas-check`, `openspec validate make-monitor-list-human-readable --strict` и `git diff --check`; подтвердить отсутствие изменений historical Runs и evidence.
+- [x] 2.1 Запустить `go test ./cmd/prifly ./internal/runtime`, `node cmd/prifly/monitor_ui_test.cjs`, `make schemas-check`, `openspec validate make-monitor-list-human-readable --strict` и `git diff --check`; подтвердить отсутствие изменений historical Runs и evidence. 2026-09-30: `go test` ok, UI-тест, `make schemas-check`, validate, diff-check зелёные.
