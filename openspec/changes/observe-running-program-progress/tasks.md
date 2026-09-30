@@ -17,3 +17,7 @@
 - [ ] 3.2 Показать отдельную read-only панель stdout/stderr лишь для opt-in Attempt: пропуски, усечение, давность, предел процесса и финальный статус. Проверить HTML/ANSI/control escaping, сохранение scroll/selection и отсутствие terminal input/actions в `node cmd/prifly/monitor_ui_test.cjs`.
 - [ ] 3.3 Обновить SMSPlace tests-worker для редких `product`, `extra`, `baseline`, `result` сообщений и коротких stdout summaries; проверить fixture без полного product-suite, не выводя полный PHPUnit log.
 - [ ] 3.4 На нейтральной программе и длительном тестовом Run проверить live-фрагменты во втором read-only клиенте, смену фаз, overflow/gap, terminal/failure без подмены результата и неизменность bytes исторического Run/evidence; выполнить `openspec validate observe-running-program-progress --strict`, `git diff --check` и затронутые Go tests.
+
+## Выпуски
+
+- 0.13.72 (2026-09-30, коммит `9f0f0d2`): часть A — fd 4, хранилище 8, `run progress`, монитор. `verify` и `qualify` зелёные; до этого `qualify` дважды ловил тестовые гонки по времени (`busy_authority_test.go`, окно помощника `early`), исправлены в `648fa3b` и `9f0f0d2`. Часть B (живой вывод, opt-in в executor проекта) — следующим выпуском.
