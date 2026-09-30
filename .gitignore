@@ -7,3 +7,5 @@ node_modules/
 bin/
 dist/
 .idea/
+# A local `go build ./cmd/prifly` writes here; the build output is bin/.
+/prifly
