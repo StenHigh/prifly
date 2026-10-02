@@ -143,6 +143,7 @@ post-RC queue отдельно от catalogue возможных workflow и д�
 runtime contract.
 
 Текущий backlog на 2026-09-23 сверён с неархивированными OpenSpec changes.
+Закрытый срез цепочки возобновлений добавлен 2026-10-02 как release/pilot evidence, а не открытая работа.
 Счётчик означает только отметки в `tasks.md`, а не квалификацию release или
 формальную приёмку milestone. Порядок внутри группы не устанавливает новую
 зависимость между независимыми changes.
@@ -153,6 +154,7 @@ runtime contract.
 | Запуск и решения | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md) | 23/24; открыта 3.5 | Доступ к Codex и Claude Code | Завершить generic host guidance, связать UI evidence и сохранить отдельный commit среза |
 | Продолжение и recovery | [`continue-existing-implementation`](../../changes/continue-existing-implementation/tasks.md) | 10/12; открыты 1.4 и 3.3 | Существующие Project CLI, claims и AI Factory package | Добавить CLI integration cases и провести новый Run до terminal quality outcome |
 | Продолжение и recovery | [`retry-failed-stage-with-new-package`](../../changes/retry-failed-stage-with-new-package/tasks.md) | 5/13 | Sealed source Run, новый package edition и доказательства пригодности результатов | Реализовать recovery command/projection, проверить reuse и сквозной Run |
+| Цепочка восстановления/возобновления | [`fix-chained-workflow-resume`](../../changes/archive/2026-10-02-fix-chained-workflow-resume/tasks.md) | Закрыто: 14/14; release 0.13.75, пилот E succeeded | Immutable source ancestry, доказательства принятого пути и текущий source claim | Приёмка среза завершена; SMSPlace merge/product QA не является gate Pri-Fly |
 | Монитор | [`make-monitor-list-human-readable`](../../changes/make-monitor-list-human-readable/tasks.md) | 3/4; открыта 2.1 | Существующий read-only монитор | Выполнить приёмочные проверки |
 | Монитор | [`clarify-run-list-execution-counts`](../../changes/clarify-run-list-execution-counts/tasks.md) | 0/4 | Существующий RunSummary и read-only список | Переименовать и пояснить счётчики StepInstance/Attempt |
 | Монитор | [`explain-terminal-partial-runs`](../../changes/explain-terminal-partial-runs/tasks.md) | 0/4 | Terminal Run outcome и доказанный маршрут | Разделить terminal/live empty-state и объяснить `partial` |
@@ -335,3 +337,15 @@ source ownership or future plan.
 - **WHEN** старый release snapshot упоминает прежний status или authoring path
 - **THEN** reader использует current OpenSpec snapshot; dated history остаётся
   evidence и не возвращает старую очередь или старый contract
+
+### Requirement: Исправление цепочки возобновлений имеет отдельную границу приёмки
+
+Delivery backlog SHALL учитывать `fix-chained-workflow-resume` как приоритетное исправление блокирующего дефекта существующего пути. Prerequisite — доступные sealed source Runs и доказательства префикса, существующие recovery/resumable contracts и текущий claim. Следующий шаг — воспроизведение цепочки без ИИ, исправление общего planner и выпуск проверенного бинарника. Прогресс SHALL храниться в tasks этого change; закрытие MUST различать инженерную регрессию, поставку и фактическое продолжение пилота SMSPlace #163.
+
+Проверка документа или зелёный fixture MUST NOT объявлять SMSPlace завершённым, закрывать независимый `retry-failed-stage-with-new-package` либо формальную приёмку P1/P2. Живой pilot SHALL использовать read-only prepare от текущего владельца дерева и отдельное проверенное разрешение start; evidence MUST называть installed build, Run IDs, transferred claim и фактический outcome.
+
+Нормативный source set — `openspec/specs/delivery-roadmap/spec.md`; historical release records не изменяются.
+
+#### Scenario: Инженерный фикс готов, пилот ещё не продолжен
+- **WHEN** регрессионная цепочка прошла, но установленный бинарник или живой Run ещё не проверены
+- **THEN** delivery record сохраняет незавершённую поставку/приёмку и не объявляет бизнес-задачу выполненной
