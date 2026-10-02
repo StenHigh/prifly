@@ -381,8 +381,8 @@ finish, а `continuations` — собственный workflow, если он в
 `continuations` — индекс declarations, не проверка admission; используйте
 `project continue --prepare --repository REPOSITORY --launch ID --source-run RUN`.
 Версия 0.13.74 ошибочно теряет inherited prefix. Исправление —
-`fix-chained-workflow-resume`, пока без назначенного release version; проверяйте
-installed build по evidence поставки. Если source имеет `recovery.reused`,
+`fix-chained-workflow-resume`, поставлено в public stable **0.13.75**; проверяйте
+installed version через `prifly --version`. Если source имеет `recovery.reused`,
 ошибка старого бинарника не разрешает очищать дерево или обходить authority.
 В исправленном planner missing ancestor/artifact — `recover_evidence_unavailable`,
 invalid origin/ancestry — `recover_trace_invalid`, changed contract —
