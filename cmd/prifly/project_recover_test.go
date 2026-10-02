@@ -69,6 +69,8 @@ func TestCLIProjectRecoverCarriesAcceptedStagesOntoACorrectedPackage(t *testing.
 	}
 	// A technical failure must end the Run failed, not route to rejected.
 	example["workflow.yaml"] = replace(example["workflow.yaml"], "    on: {pass: done, fail: rejected, needs_revision: rejected, no_work: rejected}\n    on_error: rejected\n", "    on: {pass: done, fail: rejected, needs_revision: rejected, no_work: rejected}\n")
+	example["workflow.yaml"] = replace(example["workflow.yaml"], "entry: parse", "resumable: {from_outcomes: [succeeded]}\nentry: parse")
+	example["workflow.yaml"] = strings.ReplaceAll(example["workflow.yaml"], "needs_revision: rejected, no_work: rejected}", "needs_revision: rejected, no_work: rejected, blocked: rejected}")
 	example["files/worker.mjs"] = replace(example["files/worker.mjs"], "const envelope =", "appendFileSync(process.env.EXECUTIONS, process.argv[2] + '\\n');\nconst envelope =")
 	example["files/worker.mjs"] = replace(example["files/worker.mjs"], "import { readFileSync, writeFileSync } from 'node:fs';", "import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';")
 	corrected := example["steps/report.yaml"]
@@ -124,6 +126,32 @@ launches:
 		t.Fatalf("an unchanged package did not plan to run the failed stage again: %+v", same.Recovery)
 	}
 
+	// Repeated technical recovery must retain the original parse/validate
+	// prefix even when the first recovery fails at report again.
+	chainSource := source
+	for i := 0; i < 2; i++ {
+		chainArgs := []string{"--repository", root, "--launch", "csv-report", "--source-run", chainSource, "--allow-execution"}
+		var review projectLaunchSummary
+		if err := json.Unmarshal([]byte(command(append([]string{"project", "recover", "--prepare"}, chainArgs...)...)), &review); err != nil {
+			t.Fatal(err)
+		}
+		if len(review.Recovery.Reused) != 2 {
+			t.Fatalf("recovery chain lost prefix: %+v", review.Recovery)
+		}
+		code, out, stderr := runCLI(t, append(append([]string{"project", "recover"}, chainArgs...), "--expected-launch-digest", review.ReviewDigest)...)
+		var child projectStartResult
+		if json.Unmarshal([]byte(out), &child) != nil || child.RunID == "" {
+			t.Fatalf("recovery chain failed before creation: %d %s %s", code, out, stderr)
+		}
+		if view := status(child.RunID); view.Run.Status != "failed" || len(view.Run.Steps) != 1 {
+			t.Fatalf("recovery did not fail only at report: %s %+v", view.Run.Status, view.Run.Steps)
+		}
+		chainSource = child.RunID
+	}
+	if !slices.Equal(executions(), []string{"parse", "validate", "report", "report", "report"}) {
+		t.Fatalf("recovery re-executed prefix: %v", executions())
+	}
+
 	// The corrected package.
 	writeFixtureFile(t, folder, "steps/report.yaml", corrected)
 	var plan projectLaunchSummary
@@ -133,7 +161,7 @@ launches:
 	if plan.Recovery == nil || plan.Recovery.FrontierStageID != "report" || len(plan.Recovery.Reused) != 2 || plan.Recovery.FrontierAction != "revalidate" {
 		t.Fatalf("the plan does not carry parse and validate onto report: %+v", plan.Recovery)
 	}
-	if !slices.Equal(executions(), []string{"parse", "validate", "report"}) {
+	if !slices.Equal(executions(), []string{"parse", "validate", "report", "report", "report"}) {
 		t.Fatalf("a recovery review ran a program: %v", executions())
 	}
 	// A package changed after the review is not the reviewed one.
@@ -168,7 +196,7 @@ launches:
 	}
 	// The corrected contract accepts the bytes the failed report left, so
 	// nothing runs again: not parse, not validate, not even report.
-	if ran := executions()[3:]; provenance.FrontierAction != "revalidate" || len(ran) != 0 {
+	if ran := executions()[5:]; provenance.FrontierAction != "revalidate" || len(ran) != 0 {
 		t.Fatalf("recovery ran programs the evidence already settled: %s %v", provenance.FrontierAction, ran)
 	}
 	// The Run's output is the report the failed attempt wrote, carried whole.
@@ -189,4 +217,37 @@ launches:
 	if code, _, stderr := runCLI(t, "project", "recover", "--prepare", "--repository", root, "--launch", "csv-report", "--source-run", recovered.RunID, "--allow-execution"); code == 0 || !strings.Contains(stderr, "recover_source_ineligible") {
 		t.Fatalf("a completed Run was offered for recovery: %d %s", code, stderr)
 	}
+	// A corrected program now emits the extra required output. The candidate
+	// still lacks it, so recovery executes report and a subsequent resume does
+	// so again while both retain the original parse/validate bindings.
+	writeFixtureFile(t, folder, "steps/report.yaml", example["steps/report.yaml"])
+	writeFixtureFile(t, folder, "files/worker.mjs", replace(example["files/worker.mjs"], "result.summary = 'Report produced';", "output('summary', 'Produced\\n');\n      result.summary = 'Report produced';"))
+	chainArgs := []string{"--repository", root, "--launch", "csv-report", "--source-run", chainSource, "--allow-execution"}
+	var chainReview projectLaunchSummary
+	if err := json.Unmarshal([]byte(command(append([]string{"project", "recover", "--prepare"}, chainArgs...)...)), &chainReview); err != nil {
+		t.Fatal(err)
+	}
+	if chainReview.Recovery.FrontierAction != "execute" {
+		t.Fatal("incomplete candidate was revalidated")
+	}
+	var executed projectStartResult
+	if err := json.Unmarshal([]byte(command(append(append([]string{"project", "recover"}, chainArgs...), "--expected-launch-digest", chainReview.ReviewDigest)...)), &executed); err != nil {
+		t.Fatal(err)
+	}
+	chainArgs[5] = executed.RunID
+	var resumeReview projectLaunchSummary
+	if err := json.Unmarshal([]byte(command(append([]string{"project", "continue", "--prepare"}, chainArgs...)...)), &resumeReview); err != nil {
+		t.Fatal(err)
+	}
+	var resumed projectStartResult
+	if err := json.Unmarshal([]byte(command(append(append([]string{"project", "continue"}, chainArgs...), "--expected-launch-digest", resumeReview.ReviewDigest)...)), &resumed); err != nil {
+		t.Fatal(err)
+	}
+	if view := status(resumed.RunID); view.Run.Outcome == nil || *view.Run.Outcome != "succeeded" || len(view.Run.Recovery.Reused) != 2 || len(view.Run.Steps) != 1 {
+		t.Fatalf("recover/resume chain: %+v", view.Run.Diagnostics)
+	}
+	if !slices.Equal(executions(), []string{"parse", "validate", "report", "report", "report", "report", "report"}) {
+		t.Fatalf("mixed chain repeated accepted programs: %v", executions())
+	}
+
 }

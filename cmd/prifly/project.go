@@ -2672,6 +2672,15 @@ func projectRunnerPath(root string, host projectHost) string {
 // said the same thing twice, and a host reading twice the text obeys neither
 // copy more carefully.
 func projectRunnerSkill(host projectHost) string {
+	return strings.NewReplacer(
+		"continuation. Call `project continue --prepare --launch ID --source-run RUN_ID`", "continuation. Call `project continue --prepare --repository REPOSITORY --launch ID --source-run RUN_ID`",
+		"Run; `resume_prefix_empty` means nothing would be carried: start anew.", "Run. Repeated resumes carry inherited and local accepted stages together.\nChoose the current source Run, whose claim is transferred; never reset its tree.\n`--from-stage` may name an inherited accepted root stage, never a nested stage.\n`resume_prefix_empty` means the reviewed prefix is truly empty: preserve dirty work\nbefore reviewing a new start. Missing ancestry is `recover_evidence_unavailable`.",
+		"for the move a Run has; both are answers, not suggestions. Two", "for its current action. The continuations list indexes declarations; it is not admission.\nConcrete prepare checks evidence, compatibility and the source claim. Two",
+	).Replace(projectRunnerSkillBeforeChainedResume(host))
+}
+
+// Keep the previous release byte-identical so runners update recognizes it.
+func projectRunnerSkillBeforeChainedResume(host projectHost) string {
 	questionTool := "request_user_input"
 	if host.ID == "claude-code" {
 		questionTool = "AskUserQuestion"
@@ -2907,7 +2916,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

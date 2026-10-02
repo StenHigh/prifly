@@ -346,3 +346,95 @@ SMS_LAUNCH_DIGEST='<review_digest из prepare>'
 Дополнить этот отчёт фактической версией fixed binary, prepare/launch digests, C и дальнейшими Run IDs, claim transfer и сохранностью dirty work, результатами gates, implementation/fix commits, ссылкой MR при его создании и точным terminal status/outcome. Отдельно указать, были ли ранние стадии исполнены повторно, какие проверки остались и кто сейчас владеет деревом. Даже terminal partial нужно назвать partial, не успешным завершением.
 
 Закрытие change Pri-Fly, прохождение unit/CLI tests и выполнение SMSPlace #163 — отдельные факты. До выполнения описанных действий SMSPlace остаётся в сохранённом B; инструкция является планом, не evidence состоявшегося восстановления.
+
+
+## Реализация инженерного фикса — 2026-10-02
+
+Change: `openspec/changes/fix-chained-workflow-resume`. Planning commit:
+`5b03aee60e9556a9508bdef60ecba9755819aeee`. Инженерный Run Pri-Fly:
+`run:a18fa5be7fb3abf0b5b5cd421ba8dbf0f69ab0f7f4f23c4e6bd07e4a7d59631f`,
+claim-ветка `prifly/4d58103d5bf8fe7c5c843dded89714d6b05a92d1344bd86bc4688d8bec878b96`.
+Правки находятся в этом claim; owner merge в main и выпуск ещё не выполнены.
+
+Общий planner теперь проверяет sealed source ancestry, восстанавливает путь
+из inherited prefix и собственных принятых стадий текущего source. Порядок
+собирается по ancestry; local EventSequence разных Runs не сортируются вместе.
+Каждая запись сверяется с original accepted activation/Attempt и effective
+contract. Root outputs берутся из доступных copies текущего source и его
+собственных результатов; revalidated outputs сохраняются без фиктивных
+исполнений. Inherited root `--from-stage` отсекает выбранную стадию, её subtree
+и хвост. Claim по-прежнему берётся только у непосредственного source.
+
+Сохранённые Runs, JSON fields/editions, historical bundles и release records не
+мигрируются. Missing/unsupported ancestor либо artifact дают
+`recover_evidence_unavailable`, invalid origin/cycle — `recover_trace_invalid`,
+несовместимый accepted contract — `recover_prefix_changed`. Настоящий
+`resume_prefix_empty` требует сохранить dirty work перед рассмотрением нового start.
+`run next.continuations` объяснён как declaration index; admission делает prepare.
+Старые runner bytes остаются pinned и распознаваемыми для штатного update.
+
+Постоянные regressions: `TestCLIResumeChain`,
+`TestCLIResumeChainNestedDirtyClaim`, `TestCLIProjectRecoverCarriesAcceptedStagesOntoACorrectedPackage`,
+`TestResumeChain*`. Первый тест до фикса воспроизвёл `resume_prefix_empty` на
+втором resume. Nested fixture на исходном planner потерял две ранние записи
+(5 вместо 7); исправленный planner сохраняет их, dirty tracked/untracked bytes
+и даёт ровно одного владельца при конкурентных starts. Программные
+recover → recover и recover → resume повторяют только frontier.
+`make check-fast` — PASS (включая Go tests, fmt 363, refusal 188).
+
+### Диагностический prepare SMSPlace B новым локальным build
+
+Собран `/private/tmp/prifly-chain-candidate` из claim фикса; SHA-256:
+`86921cf60bcbe888cb221bdd04cbc0272ba200f9ebe2a76df74566bdf3408a05`.
+Он сообщает development version `0.2.0-dev.5`, потому что собран без release
+ldflags. Это **не установленный релиз** и не доказательство qualification;
+installed `/Users/sh/.local/bin/prifly` остаётся 0.13.74.
+
+Публичный `project continue --prepare` с явным SMSPlace repository выполнен
+дважды; оба раза PASS, одинаковый верхний `review_digest`:
+`sha256:7a037354fc6fc49a55496dcc0fb8f345caf150860f72cd870b6b73574153fab2`.
+Source B version 36; frontier verify, action execute; Reused 13; root outputs
+warmup/plan/improve/implement сохранены. Передаваемый claim — прежний
+`df98f72e4297c34fa926562ddc831d998e8bb4de58c2234b37e18747e961a62e`, generation 2,
+mode worktree. Start не вызывался; SMSPlace C не создан.
+
+Before/after повторного prepare равны: полные A/B Run projections и их
+versions/events (A 61, B 36), claim record, HEAD, tracked binary diff и
+untracked hashes. HEAD по-прежнему `793df111e028a59e52563be58fd447d2d7d56f93`,
+modified files 11, untracked 0; SHA-256 tracked binary diff:
+`325741a53a69a596a890fabdda4bfa8960a1509ad0f8d8ca610c3a603719f5fa`.
+Полный диагностический prepare и сравнение находятся в `/private/tmp/prifly-chain-smsplace-*.json`;
+это временные файлы, поэтому ключевые факты зафиксированы здесь.
+
+Этот digest относится только к диагностической контрольной точке. Агент после
+поставки должен получить **свежий** prepare установленным бинарником, сверить
+все условия из инструкции выше и использовать новый top-level review digest.
+Локальный diagnostic build не устанавливать автоматически и не принимать за
+выполненную задачу 4.3.
+
+### Что остаётся владельцу и следующему агенту
+
+1. Просмотреть инженерный commit claim-ветки и его gates; owner merge в main.
+2. Выполнить штатные verify/qualify и release/tag по правилам поставки. Записать
+   фактическую минимальную исправленную revision в guide и задачу 3.3, installed
+   build/version и release evidence в задачу 4.2. Зелёный local test не закрывает их.
+3. Установить проверенный бинарник; выполнить read-only prepare B по разделу 2
+   инструкции выше и сверить текущего владельца, дерево, answers и effects.
+4. При сохранённом разрешении продолжить работу создать ровно просмотренный C;
+   не использовать старый diagnostic digest. Две согласованные comment-only
+   правки выполнять только в выданном workspace-write fix; verify читает дерево.
+5. Завершить remaining gates/доставку через Attempts и записать фактический
+   business outcome. Если вновь partial, source следующего prepare — текущий
+   Run-владелец claim. Pending release/pilot tasks не превращать в выполненные
+   ради зелёного отчёта или engineering Run.
+
+Если ответ start потерян: сначала `command receipt --id ID` и status
+Run из receipt, затем `run next`. Project-level повтор может назвать active
+child ещё до runtime dedup; это безопасный отказ, не разрешение добавить
+`--allow-duplicate-continuation` или создать новый start.
+
+### Итог инженерного checkpoint (2026-10-02)
+
+`make ci-check` и `make e2e` прошли полностью; `openspec validate --all --strict` — 29/29, `git diff --check` — без замечаний. Historical archive, published schemas и прежние release records не изменены. В OpenSpec выполнено 10/14 задач: 3.3 остаётся открытой только для фактической минимальной release revision; 4.2–4.4 требуют поставки и живого пилота владельцем.
+
+Инженерный commit находится в указанной claim branch и доступен через `git log -1` в claim checkout. Он не слит в main и не поставлен. Development Run не должен получать `pass` за весь план: pinned aif-implement bridge прямо запрещает `pass` с незавершёнными tasks; truthful non-pass завершает этот Run как `abandoned`, сохраняя commit и claim. Это граница поставки, не падение regression или потеря исправления. Владелец сначала рассматривает/сливает инженерный commit, затем выполняет release qualification и инструкции SMSPlace выше. До этого нельзя объявлять incident устранённым в installed binary или успешным бизнес-outcome.

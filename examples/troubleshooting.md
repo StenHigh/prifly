@@ -359,7 +359,7 @@ checkpoint и само дерево с оставленными файлами. 
 возобновляет его, но только по объявлению этого workflow (ревизия 8, поле
 `resumable`). `resume_undeclared` — workflow не объявил исход исходного Run
 (или отмену). `resume_prefix_empty` — до точки остановки ничего не принято, и
-переносить нечего: это новый запуск. `resume_frontier_ambiguous` — из записи
+переносить нечего: новый start рассматривается отдельно после сохранения dirty work. `resume_frontier_ambiguous` — из записи
 Run нельзя однозначно назвать стадию, на которой он остановился;
 `resume_frontier_unsupported` — остановился на стадии не `step`/`call`/`repeat`.
 `resume_from_stage_invalid` — `--from-stage` назвал стадию, которая не принята
@@ -376,6 +376,17 @@ Run нельзя однозначно назвать стадию, на кото
 finish, а `continuations` — собственный workflow, если он возобновляет Run;
 `project continue --prepare` показывает в `recovery` точку
 (`frontier_stage_id`), перенос (`reused`) и дерево (`claim`) до создания Run.
+
+При повторном resume source — последний завершённый Run, владеющий claim.
+`continuations` — индекс declarations, не проверка admission; используйте
+`project continue --prepare --repository REPOSITORY --launch ID --source-run RUN`.
+Версия 0.13.74 ошибочно теряет inherited prefix. Исправление —
+`fix-chained-workflow-resume`, пока без назначенного release version; проверяйте
+installed build по evidence поставки. Если source имеет `recovery.reused`,
+ошибка старого бинарника не разрешает очищать дерево или обходить authority.
+В исправленном planner missing ancestor/artifact — `recover_evidence_unavailable`,
+invalid origin/ancestry — `recover_trace_invalid`, changed contract —
+`recover_prefix_changed`. Сохраните конкретный отказ и остановите зависимый start.
 
 ### `cycle` при `on.blocked`, ведущем в ту же стадию или назад по графу
 

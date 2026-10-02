@@ -148,6 +148,30 @@ workflow. Если точку нельзя назвать однозначно, 
 целиком. Всё после точки исполняется заново. Если до точки ничего не принято,
 будет отказ `resume_prefix_empty`: это новый запуск, а не возобновление.
 
+**Повторное возобновление.** `resumable` по-прежнему требует ревизию 8.
+Исправление chained resume находится в change `fix-chained-workflow-resume`;
+0.13.74 содержит дефект, номер первого исправленного релиза ещё не назначен.
+Перед живым запуском подтвердите installed build по release evidence этого change.
+
+A → B → C переносит унаследованный префикс вместе с собственными принятыми
+стадиями B. На следующем переносе source — B, затем C: это текущий владелец
+claim. Сначала выполните `project continue --prepare --repository REPOSITORY
+--launch ID --source-run B`, проверьте `recovery.reused`, `root_output_refs`,
+`frontier_stage_id`, `claim` и **верхний** `review_digest`. Start использует
+тот же repository, source и параметры плюс `--expected-launch-digest DIGEST`.
+
+`--from-stage` может выбрать принятую root-стадию, унаследованную от A.
+Выбранная стадия, её вложенные исполнения и хвост исключаются из переноса;
+имя nested `fix` не становится root-стадией. При выборе entry префикс пуст.
+Сохраните dirty work перед рассмотрением нового start; отказ не разрешает reset.
+
+Origin записи в `reused` читается через `recovery.source_run_id` и дальнейшую
+source ancestry до Run с указанным `source_stage_activation_id` /
+`source_attempt_id`. Эти identities остаются исходными; `source_event_sequence`
+сравнивается только внутри origin Run. `root_output_refs` — доступные копии
+непосредственного source, с теми же принятыми bytes. Предки и старые schema
+editions не переписываются; отсутствующее evidence отказывает явно.
+
 **Дерево** исходного Run передаётся, как при продолжении, вместе с его режимом
 (`worktree` или `checkout`): `workspace:` у launch и `--workspace` не нужны, а
 `--workspace` при возобновлении — отказ. Если исходный Run дерева не держит, а
@@ -225,6 +249,12 @@ Run, если тот объявил `resumable` для него, — и тогд
 что до этого список может быть пуст. Как процесс пришёл к остановке —
 `arrived_from` того же ответа; см. [`blocked-guide.md`](blocked-guide.md).
 
+Индекс `continuations` показывает declarations установленных workflow. Только
+конкретный prepare проверяет перенос evidence и claim; наличие строки не
+означает, что start будет принят. При потерянном ответе start сначала читайте
+receipt по `command-id` и созданный дочерний Run; `project_continue_active_child`
+не разрешает независимый дубликат для продолжения той же работы.
+
 ## Отказы
 
 | Код | Что значит | Что делать |
@@ -241,7 +271,7 @@ Run, если тот объявил `resumable` для него, — и тогд
 | `recover_source_unsettled` | исходный Run `uncertain`: шаг с внешней записью прервался, или исполнение не завершилось наблюдаемо | `run resolve`, затем повторить |
 | `recover_workspace_released` | дерево упавшего Run освобождено | восстановить нечем |
 | `resume_undeclared` | workflow не объявил `resumable` для этого исхода или отмены | объявить в ревизии 8 или продолжить другим workflow |
-| `resume_prefix_empty` | до точки ничего не принято | запустить заново |
+| `resume_prefix_empty` | до точки ничего не принято | сохранить dirty work; отдельно рассмотреть новый start |
 | `resume_from_stage_invalid` | `--from-stage` не принятая стадия корневого workflow до точки | выбрать принятую стадию раньше точки |
 | `resume_frontier_ambiguous` | точку нельзя назвать из записи Run | указать `--from-stage` |
 | `resume_frontier_unsupported` | Run остановился на стадии не `step`/`call`/`repeat` | указать `--from-stage` |

@@ -10,7 +10,6 @@ import (
 	"math"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -153,11 +152,19 @@ func (e *Engine) PlanRecovery(ctx context.Context, request RecoveryRequest, targ
 	if err != nil {
 		return result, err
 	}
-	point, err := recoveryPointOf(source, oldPlan, target, sequences, request.FromStage)
+	// Preserve source eligibility precedence before following its ancestry.
+	if _, err := recoveryPointOf(source, oldPlan, target, sequences, ""); err != nil {
+		return result, err
+	}
+	history, err := e.recoveryHistory(ctx, source, map[string]bool{source.ID: true})
 	if err != nil {
 		return result, err
 	}
-	reused, rootOutputs, err := recoveryTrace(source, oldPlan, target, definitions, resources, sequences, point)
+	point, inheritedCut, err := recoveryPointWithHistory(source, oldPlan, target, sequences, request.FromStage, history)
+	if err != nil {
+		return result, err
+	}
+	reused, rootOutputs, err := recoveryTraceWithHistory(source, oldPlan, target, definitions, resources, sequences, point, history, inheritedCut)
 	if err != nil {
 		return result, err
 	}
@@ -638,6 +645,48 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 	if oldPlan == nil || newPlan == nil || oldPlan.Workflow.ID != newPlan.Workflow.ID || oldPlan.Workflow.Definition.Entry != newPlan.Workflow.Definition.Entry {
 		return nil, nil, local.Reject("recover_prefix_changed", "root workflow or entry changed")
 	}
+	reused, rootOutputs, err := recoveryAcceptedTrace(source, oldPlan, newPlan, newDefinitions, newResources, sequences, point.Cutoff)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(reused) == 0 {
+		return nil, nil, local.Reject("resume_prefix_empty", "nothing was accepted before "+point.StageID+", so there is nothing to carry; preserve the source workspace before reviewing a new start")
+	}
+	if err := recoveryFrontierShape(source, oldPlan, newPlan, newDefinitions, newResources, point); err != nil {
+		return nil, nil, err
+	}
+	return reused, rootOutputs, nil
+}
+
+func recoveryFrontierShape(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []PinnedDefinition, newResources []PinnedResource, point recoveryPoint) error {
+	oldFrontier, oldOK := oldPlan.Workflow.Definition.Stages[point.StageID]
+	newFrontier, newOK := newPlan.Workflow.Definition.Stages[point.StageID]
+	if !oldOK || !newOK || oldFrontier.Kind != newFrontier.Kind {
+		return local.Reject("recover_frontier_unsupported", "stage "+point.StageID+" is absent from the target workflow or changed its kind")
+	}
+	// The stage run again may change what it runs -- its step or the workflow
+	// it calls; its incoming bindings and route cannot. Otherwise the carried
+	// prefix would feed a different action.
+	oldFrontier.StepRef, newFrontier.StepRef = flow.Ref{}, flow.Ref{}
+	oldFrontier.WorkflowRef, newFrontier.WorkflowRef = flow.Ref{}, flow.Ref{}
+	oldFrontier.BodyWorkflowRef, newFrontier.BodyWorkflowRef = flow.Ref{}, flow.Ref{}
+	oldShape, err := recoveryEffectiveStage(oldFrontier, source.Definitions, source.ContextResources)
+	if err != nil {
+		return err
+	}
+	newShape, err := recoveryEffectiveStage(newFrontier, newDefinitions, newResources)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(oldShape, newShape) {
+		return local.Reject("recover_frontier_changed", "stage "+point.StageID+" changed its bindings or route")
+	}
+	return nil
+}
+
+// recoveryAcceptedTrace checks only executions actually recorded in one Run.
+// Its event sequences are never compared with those of another Run.
+func recoveryAcceptedTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []PinnedDefinition, newResources []PinnedResource, sequences map[string]int64, cutoff int64) ([]RecoveryReuse, map[string]map[string]ArtifactRef, error) {
 	oldPlans, newPlans := map[string]*flow.Plan{source.RootInvocationID: oldPlan}, map[string]*flow.Plan{source.RootInvocationID: newPlan}
 	resolving := map[string]bool{}
 	var resolveInvocation func(string) error
@@ -679,7 +728,10 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 		if a == nil || b == nil {
 			return 0
 		}
-		return cmp.Compare(sequences[a.ID], sequences[b.ID])
+		if order := cmp.Compare(sequences[a.ID], sequences[b.ID]); order != 0 {
+			return order
+		}
+		return strings.Compare(a.ID, b.ID)
 	})
 	// changed names the way out: a root stage can be started again from, a
 	// nested one only from a root stage before it.
@@ -700,7 +752,7 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 		if sequence == 0 {
 			return nil, nil, local.Reject("recover_trace_invalid", "accepted stage is missing from the prefix journal")
 		}
-		if sequence >= point.Cutoff {
+		if sequence >= cutoff {
 			continue
 		}
 		if activation.Status != "completed" || activation.Settled == nil {
@@ -754,37 +806,6 @@ func recoveryTrace(source Run, oldPlan, newPlan *flow.Plan, newDefinitions []Pin
 		}
 		reused = append(reused, entry)
 	}
-	if len(reused) == 0 {
-		return nil, nil, local.Reject("resume_prefix_empty", "nothing was accepted before "+point.StageID+", so there is nothing to carry; start the workflow anew")
-	}
-	oldFrontier, oldOK := oldPlan.Workflow.Definition.Stages[point.StageID]
-	newFrontier, newOK := newPlan.Workflow.Definition.Stages[point.StageID]
-	if !oldOK || !newOK || oldFrontier.Kind != newFrontier.Kind {
-		return nil, nil, local.Reject("recover_frontier_unsupported", "stage "+point.StageID+" is absent from the target workflow or changed its kind")
-	}
-	// The stage run again may change what it runs -- its step or the workflow
-	// it calls; its incoming bindings and route cannot. Otherwise the carried
-	// prefix would feed a different action.
-	oldFrontier.StepRef, newFrontier.StepRef = flow.Ref{}, flow.Ref{}
-	oldFrontier.WorkflowRef, newFrontier.WorkflowRef = flow.Ref{}, flow.Ref{}
-	oldFrontier.BodyWorkflowRef, newFrontier.BodyWorkflowRef = flow.Ref{}, flow.Ref{}
-	oldShape, err := recoveryEffectiveStage(oldFrontier, source.Definitions, source.ContextResources)
-	if err != nil {
-		return nil, nil, err
-	}
-	newShape, err := recoveryEffectiveStage(newFrontier, newDefinitions, newResources)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !bytes.Equal(oldShape, newShape) {
-		return nil, nil, local.Reject("recover_frontier_changed", "stage "+point.StageID+" changed its bindings or route")
-	}
-	sort.Slice(reused, func(i, j int) bool {
-		if reused[i].Sequence != reused[j].Sequence {
-			return reused[i].Sequence < reused[j].Sequence
-		}
-		return reused[i].ActivationID < reused[j].ActivationID
-	})
 	return reused, rootOutputs, nil
 }
 

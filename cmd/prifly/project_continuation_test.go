@@ -117,7 +117,7 @@ func newContinuationCLI(t *testing.T, tailContinuation string) continuationCLI {
 
 // newContinuationCLIResuming is the same project whose source workflow, when
 // resumable, declares that it resumes its own partial Runs.
-func newContinuationCLIResuming(t *testing.T, tailContinuation string, resumable bool) continuationCLI {
+func newContinuationCLIResuming(t *testing.T, tailContinuation string, resumable bool, configure ...func(string)) continuationCLI {
 	t.Helper()
 	root, authority := newProjectFixture(t)
 	writeFixtureFile(t, root, ".prifly/project.yaml", `schema_version: prifly-project-profile/3
@@ -275,6 +275,9 @@ stages:
   done: {kind: finish, outcome: succeeded}
 `
 	writeFixtureFile(t, root, ".prifly/workflows/tail/workflow.yaml", tail)
+	for _, setup := range configure {
+		setup(root)
+	}
 	writeFixtureFile(t, root, "task.json", "{}\n")
 	gitFixture(t, root, "add", ".")
 	gitFixture(t, root, "commit", "-qm", "base")

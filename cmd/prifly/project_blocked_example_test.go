@@ -321,3 +321,50 @@ destination: {kind: launch_input, name: request}
 		t.Fatalf("the resume without answers did not take the source's: %v %+v", view.Run.Outcome, view.Run.Fork)
 	}
 }
+
+// No model participates: the shipped program repeatedly stops at the same
+// nested repeat, then succeeds with the earliest input still bound.
+func TestCLIResumeChain(t *testing.T) {
+	f := newBlockedExample(t)
+	a := f.start(t, "work", "--input", "request="+filepath.Join(f.root, "request.json"))
+	source := a.Run.Run.ID
+	first := f.status(t, source)
+	for i := 0; i < 3; i++ {
+		before := f.status(t, source)
+		args := []string{"project", "continue", "--prepare", "--repository", f.root, "--launch", "work", "--source-run", source}
+		var prepared, repeated projectLaunchSummary
+		if err := json.Unmarshal([]byte(f.command(args...)), &prepared); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal([]byte(f.command(args...)), &repeated); err != nil {
+			t.Fatal(err)
+		}
+		if prepared.ReviewDigest != repeated.ReviewDigest || len(prepared.Recovery.Reused) != 1 {
+			t.Fatalf("unstable or lost prefix: %+v", prepared.Recovery)
+		}
+		if after := f.status(t, source); after.RunVersion != before.RunVersion || after.EventSequence != before.EventSequence {
+			t.Fatal("prepare mutated the source")
+		}
+		if i == 2 {
+			if err := os.WriteFile(f.condition, []byte("present"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		resumed := f.launch(t, "continue", "work", "--source-run", source)
+		view := f.status(t, resumed.Run.Run.ID)
+		if len(verdicts(view)["prepare"]) != 0 || view.Run.Recovery.Reused[0].AttemptID == "" {
+			t.Fatal("accepted prepare ran again or lost its Attempt")
+		}
+		if view.Run.Recovery.Reused[0].StageID != "prepare" || view.Run.Inputs["request"].Digest != first.Run.Inputs["request"].Digest {
+			t.Fatal("lost inherited origin or bindings")
+		}
+		want := "partial"
+		if i == 2 {
+			want = "succeeded"
+		}
+		if view.Run.Outcome == nil || *view.Run.Outcome != want {
+			t.Fatalf("outcome: %v %+v", view.Run.Outcome, view.Run.Diagnostics)
+		}
+		source = view.Run.ID
+	}
+}

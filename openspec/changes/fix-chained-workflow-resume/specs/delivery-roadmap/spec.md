@@ -11,3 +11,12 @@ Current source set остаётся `openspec/specs/delivery-roadmap/spec.md` с
 #### Scenario: Инженерный фикс готов, пилот ещё не продолжен
 - **WHEN** регрессионная цепочка прошла, но установленный бинарник или живой Run ещё не проверены
 - **THEN** delivery record сохраняет незавершённую поставку/приёмку и не объявляет бизнес-задачу выполненной
+
+При sync в текущую таблицу «Очередь дальнейшей поставки» SHALL добавляться
+одна строка: «Цепочка восстановления/возобновления» →
+`fix-chained-workflow-resume/tasks.md`; prerequisite — immutable source ancestry,
+доказательства принятого пути и текущий source claim; следующий шаг после
+инженерных gates — owner merge, qualify/release и read-only prepare SMSPlace B.
+Счётчик берётся из tasks на момент sync. Строка «Продолжение и recovery» для
+`retry-failed-stage-with-new-package` сохраняется: этот change не является
+приёмкой его оставшихся задач и не изменяет historical evidence.
