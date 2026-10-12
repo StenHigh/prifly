@@ -2666,12 +2666,78 @@ func projectRunnerPath(root string, host projectHost) string {
 	return filepath.Join(root, filepath.FromSlash(host.SkillsRoot), "prifly-run")
 }
 
-// projectRunnerSkill renders the current instruction. The three sections that
-// used to be appended -- the native question tool, the decision bridge and the
-// catalog dialogue -- are part of the template now: appending them separately
-// said the same thing twice, and a host reading twice the text obeys neither
-// copy more carefully.
+const projectRunnerLaunchChoiceInstructions = ` lists the current declared launches with exact ID, title,
+description and inputs. An exact valid ID supplied by the developer needs no
+second choice or advice. Never substitute a similar ID for an unknown one.
+If no launches exist, explain that and stop; do not install one automatically.
+
+For a finite launch choice and the declared finite questionnaire answers, call
+{{launch_question_tools}} when provided and applicable under its current tool
+contract and mode. Do not switch host modes to obtain a tool. Use real options
+with exact ID mappings and short descriptions, not Markdown buttons. Without an
+applicable tool, ask one explicit text question and wait for the answer.
+A tool receipt, preselected option, dismissal or timeout is not a user answer.
+For an asynchronous question, wait for the separate actual user reply before
+choosing an ID or reading that launch's questionnaire; independent read-only
+work may continue. Before the answer, do not import a package, acquire a claim,
+create a Run or call project start. A supplied answer must match the current
+list; free text does not authorize a guessed ID. If the set exceeds the tool's
+limit, use deterministic pages with next/back and a way to defer or decline;
+every ID must remain reachable. For a single launch, skip advice and ask for
+explicit selection (a real defer option can satisfy a tool's option minimum).
+Free text, file paths and arbitrary JSON stay free-form, never fake choices.
+A preference tool does not authorize executable effects when its contract
+forbids approvals; use the separate permitted confirmation channel below.
+
+Advice is optional and separate from selection. Only when the developer is
+choosing among multiple launches by a described task, the project allows it
+and the developer has not skipped advice, consider a recommendation. Use the
+listed title/description and PROJECT.md criteria, not words in IDs, package
+names, nearby files or a remote catalog. PROJECT.md may disable advice entirely
+or exclude individual launches from recommendations; all declared launches
+remain selectable, including excluded ones. When purposes justify advice,
+name one exact ID and one short reason, marking it as recommended in the
+choice. Do not claim input, environment or admission compatibility before
+prepare. If purposes are insufficient, say so briefly and leave manual choice
+available. Without task text, offer optional task description for advice or
+direct selection; never require a task solely to choose. With advice skipped
+or disabled, show the same native choice without inventing a recommendation.
+The developer's explicit alternative wins without another recommendation.
+Selection and advice do not confirm the prepared execution summary.
+
+`
+
+const projectRunnerTaskTransferInstructions = `Preserve the original task text and URLs independently of the advice. After
+selection, bind them only to the chosen workflow's declared input and format:
+use the supplied file/ref, or package the original text according to that
+schema. Do not replace the task with the recommendation's reason, invent a
+universal task port or require a RunBrief. If the mapping is unclear, ask;
+collect other missing values normally. A file-only workflow receives only its
+declared files, without a fabricated task.
+
+`
+
+// projectRunnerSkill adds current guidance without altering released templates.
 func projectRunnerSkill(host projectHost) string {
+	tools := "`request_user_input`, otherwise `request_user_input_async`"
+	if host.ID == "claude-code" {
+		tools = "`AskUserQuestion`"
+	}
+	choice := strings.ReplaceAll(projectRunnerLaunchChoiceInstructions, "{{launch_question_tools}}", tools)
+	questionTool := "request_user_input"
+	if host.ID == "claude-code" {
+		questionTool = "AskUserQuestion"
+	}
+	return strings.NewReplacer(
+		" lists launches. If the\ndeveloper named no exact launch ID, show the list and wait; do not infer one\nfrom task wording or nearby files.\n\n", choice,
+		"Collect typed inputs with", projectRunnerTaskTransferInstructions+"Collect typed inputs with",
+		"("+questionTool+") rather than Markdown buttons", "("+tools+") under its current contract and mode rather than Markdown buttons",
+		"is unavailable, ask one explicit text question and wait without mutation.", "is unavailable or inapplicable, ask one explicit text question and wait without mutation.\nFor an asynchronous tool, wait for the actual user reply; its receipt and\npreselection are not answers. Do not switch host modes for a question.",
+	).Replace(projectRunnerSkillBeforeLaunchAdvice(host))
+}
+
+// Preserve the exact runner distributed before optional launch advice.
+func projectRunnerSkillBeforeLaunchAdvice(host projectHost) string {
 	return strings.NewReplacer(
 		"continuation. Call `project continue --prepare --launch ID --source-run RUN_ID`", "continuation. Call `project continue --prepare --repository REPOSITORY --launch ID --source-run RUN_ID`",
 		"Run; `resume_prefix_empty` means nothing would be carried: start anew.", "Run. Repeated resumes carry inherited and local accepted stages together.\nChoose the current source Run, whose claim is transferred; never reset its tree.\n`--from-stage` may name an inherited accepted root stage, never a nested stage.\n`resume_prefix_empty` means the reviewed prefix is truly empty: preserve dirty work\nbefore reviewing a new start. Missing ancestry is `recover_evidence_unavailable`.",
@@ -2916,7 +2982,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host), projectRunnerSkillBeforeLaunchAdvice(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

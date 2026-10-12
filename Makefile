@@ -85,8 +85,8 @@ refusal-check:
 # read here (a shadowed err that left a nil plan for the caller) had passed
 # vet, the tests and two reviews. Both print what they read, so a run that
 # listed no packages cannot pass as a clean one.
-STATICCHECK ?= honnef.co/go/tools/cmd/staticcheck@v0.8.1
-GOVULNCHECK ?= golang.org/x/vuln/cmd/govulncheck@v1.8.0
+STATICCHECK ?= honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45
+GOVULNCHECK ?= golang.org/x/vuln/cmd/govulncheck@v1.9.0
 staticcheck-check:
 	@packages=$$($(GO) list ./... | wc -l | tr -d ' '); \
 	if [ "$$packages" -lt 1 ]; then echo "staticcheck-check listed no packages"; exit 1; fi; \

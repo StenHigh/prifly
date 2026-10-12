@@ -1,0 +1,68 @@
+{
+  "repository": "/private/tmp/prifly-advice-observation-multiple-v2/repository",
+  "authority": "/private/tmp/prifly-advice-observation-multiple-v2/authority",
+  "binary": "/private/tmp/prifly-launch-advice",
+  "variant": "multiple",
+  "launches": {
+    "schema_version": "project-workflows/1",
+    "repository": "/private/tmp/prifly-advice-observation-multiple-v2/repository",
+    "launches": [
+      {
+        "id": "diagnostics",
+        "title": "Local diagnostics",
+        "description": "A technical diagnostic with no task or document input.",
+        "kind": "workflow",
+        "source": ".prifly/workflows/diagnostics/workflow.yaml",
+        "inputs": []
+      },
+      {
+        "id": "repair-fast",
+        "title": "Compose a structured request",
+        "description": "Prepare a structured request from the original description and references.",
+        "kind": "workflow",
+        "source": ".prifly/workflows/alpha/workflow.yaml",
+        "inputs": [
+          {
+            "name": "request",
+            "required": true,
+            "format": "json"
+          }
+        ]
+      },
+      {
+        "id": "review-deep",
+        "title": "Inspect a supplied document",
+        "description": "Inspect a supplied text file; this workflow accepts only a document file.",
+        "kind": "workflow",
+        "source": ".prifly/workflows/beta/workflow.yaml",
+        "inputs": [
+          {
+            "name": "document",
+            "required": true,
+            "format": "blob"
+          }
+        ]
+      }
+    ]
+  },
+  "inventory_before_question": {
+    "packages": {
+      "packages": [],
+      "schema_version": "foundation-packages/1"
+    },
+    "claims": {
+      "claims": [],
+      "schema_version": "foundation-claims/2"
+    },
+    "runs": {
+      "runs": [],
+      "schema_version": "run-list/1",
+      "total": 0
+    }
+  },
+  "runner_sha256": {
+    ".agents/skills/prifly-run/SKILL.md": "88eeec40fb72ae4acadc590d399ab8cdddb6c2a09bcdfe18c156c676c550864b",
+    ".claude/skills/prifly-run/SKILL.md": "829cafc746f1c60df4e67ec4baa42af4fb13e28cd5874fcbbb636f04e77fc0d8",
+    ".codex/skills/prifly-run/SKILL.md": "2a7926a7c8bcabc6bde25f9d9ddd39dc747dfee7c90d2e756ab90245bae6752d"
+  }
+}

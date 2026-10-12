@@ -32,3 +32,9 @@ Python и shell files в `fixtures/foundation/` не описывают workflow
 `fixtures/project-launch/` содержит отдельный public `project start` fixture:
 оба workspace режима доходят до honest host handoff, а dirty checkout получает
 отказ до прямой работы в repository.
+
+`fixtures/project-launch-advice/` — local-only setup для отдельных живых host
+observations. Он создаёт общий /3 профиль с JSON/blob inputs и вариантами списка;
+не запускает модели и не входит в release e2e. Native Codex/Claude диалог
+проверяется в реальном host и фиксируется отдельно от Go assertions и setup.
+Подробности — [fixture guide](fixtures/project-launch-advice/README.md).

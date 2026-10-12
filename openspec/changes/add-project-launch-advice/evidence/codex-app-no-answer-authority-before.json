@@ -1,0 +1,194 @@
+[
+  {
+    "ctime_ns": 1791813606661268518,
+    "gid": 0,
+    "inode": 382325198,
+    "mode": 448,
+    "mtime_ns": 1791812479388591732,
+    "path": ".",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606660466122,
+    "gid": 0,
+    "inode": 382325201,
+    "mode": 448,
+    "mtime_ns": 1791812479370803890,
+    "path": ".prifly",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606660430040,
+    "gid": 0,
+    "inode": 382325211,
+    "mode": 448,
+    "mtime_ns": 1791812479340357732,
+    "path": ".prifly/artifact-refs",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606658613254,
+    "gid": 0,
+    "inode": 382325202,
+    "mode": 448,
+    "mtime_ns": 1791812479340292900,
+    "path": ".prifly/artifacts",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606658975995,
+    "gid": 0,
+    "inode": 382325203,
+    "mode": 384,
+    "mtime_ns": 1791812479361702892,
+    "path": ".prifly/installation.json",
+    "sha256": "e7f1d78640205c7ebf0a8a0ee3347e093593be9c3feacb72c274e14c44dda2bb",
+    "size": 320,
+    "type": 32768,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606660214379,
+    "gid": 0,
+    "inode": 382325209,
+    "mode": 448,
+    "mtime_ns": 1791812479340494145,
+    "path": ".prifly/inventory",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606660322210,
+    "gid": 0,
+    "inode": 382325210,
+    "mode": 448,
+    "mtime_ns": 1791812479340559685,
+    "path": ".prifly/packages",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606659986051,
+    "gid": 0,
+    "inode": 382325204,
+    "mode": 448,
+    "mtime_ns": 1791812479441320941,
+    "path": ".prifly/state",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606659474565,
+    "gid": 0,
+    "inode": 382325205,
+    "mode": 384,
+    "mtime_ns": 1791812479408802256,
+    "path": ".prifly/state/state.sqlite3",
+    "sha256": "758f5f3b139d35dc65c7070578e4655a218bde1ad40c622e59959c5206ef183d",
+    "size": 147456,
+    "type": 32768,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606659795432,
+    "gid": 0,
+    "inode": 382325206,
+    "mode": 384,
+    "mtime_ns": 1791813586574432665,
+    "path": ".prifly/state/state.sqlite3-shm",
+    "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb",
+    "size": 32768,
+    "type": 32768,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606659951803,
+    "gid": 0,
+    "inode": 382325207,
+    "mode": 384,
+    "mtime_ns": 1791812479441197778,
+    "path": ".prifly/state/state.sqlite3-wal",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "size": 0,
+    "type": 32768,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606660097465,
+    "gid": 0,
+    "inode": 382325208,
+    "mode": 448,
+    "mtime_ns": 1791812479340424563,
+    "path": ".prifly/work",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606661234019,
+    "gid": 0,
+    "inode": 382325215,
+    "mode": 384,
+    "mtime_ns": 1791812479371068758,
+    "path": "definitions.json",
+    "sha256": "722b59e8dfc55820b958c1931a899e6ffe1430fb9fe717ea0709e82caab6159d",
+    "size": 45,
+    "type": 32768,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606660810155,
+    "gid": 0,
+    "inode": 382325214,
+    "mode": 448,
+    "mtime_ns": 1791812479340091197,
+    "path": "packages",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606658307304,
+    "gid": 0,
+    "inode": 382325199,
+    "mode": 384,
+    "mtime_ns": 1791812479379849224,
+    "path": "prifly.json",
+    "sha256": "f5a0ae4cad8685c389e8e102cd0f4f0388673ee533f2fecc6d07d24ad6bdcb02",
+    "size": 1051,
+    "type": 32768,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606660574745,
+    "gid": 0,
+    "inode": 382325212,
+    "mode": 448,
+    "mtime_ns": 1791812479340023449,
+    "path": "schemas",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606660694908,
+    "gid": 0,
+    "inode": 382325213,
+    "mode": 448,
+    "mtime_ns": 1791812479339848371,
+    "path": "steps",
+    "type": 16384,
+    "uid": 501
+  },
+  {
+    "ctime_ns": 1791813606658421426,
+    "gid": 0,
+    "inode": 382325200,
+    "mode": 448,
+    "mtime_ns": 1791812479339952701,
+    "path": "workflows",
+    "type": 16384,
+    "uid": 501
+  }
+]

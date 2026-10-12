@@ -1,0 +1,176 @@
+[
+  {
+    "variant": "multiple-v2",
+    "selected_launch": "repair-fast",
+    "input_port": "request",
+    "summary": {
+      "schema_version": "project-launch-summary/3",
+      "repository": "/private/tmp/prifly-advice-observation-multiple-v2/repository",
+      "authority": "/private/tmp/prifly-advice-observation-multiple-v2/authority",
+      "launch": "repair-fast",
+      "package": {
+        "id": "test:package/alpha",
+        "version": "0.0.0-b1.odty5iq4eoqhavpnhomsbslfiyhfwjz4po35fbno6xuhwaarfn5a",
+        "digest": "sha256:d2f2c81231d52b4c0197782a4994c3c87ab898441ccdd922bd9992c8b172acc4"
+      },
+      "author_package": {
+        "id": "test:package/alpha",
+        "version": "1.0.0"
+      },
+      "build_key": "sha256:70e78ea21c23a07055ed3b9920c965460e5b273c7bb7d285aef5e87b00112b7a",
+      "workflow": {
+        "id": "test:workflow/alpha",
+        "version": "0.0.0-b1.2e67eqwwnsb3xmwsttarnrqkirw6wvglgix6uobyonxkcnapdgqq",
+        "digest": "sha256:d737db5c1133b6e87a810c10ed1bcf982829a67316540a4c7a67d1b10a1dc3ab"
+      },
+      "requirements": {
+        "assisted": false,
+        "git_workspace": false,
+        "effect_classes": {}
+      },
+      "input_digests": {
+        "request": "sha256:0b7b561e9a3aae60d46a8c1e38d131ff7803f62695f183451b43a04c3479a78d"
+      },
+      "input_refs": {},
+      "configuration_digest": "sha256:ca70697770b4bc76a2132e493dc67d0b1b015422bfd9ffcbf7637a14c92ec9bf",
+      "execution": [],
+      "registry_budget": {
+        "entries": 2,
+        "limit": 512
+      },
+      "decision_sheet": {
+        "schema_version": "decision-sheet/1",
+        "catalog_digest": "sha256:9ea4e956615bb8f8f855747eb45e6f8c908584927be9e7232d25bbf8ebb9f119",
+        "package_profile": "",
+        "profile_source": "none",
+        "decision_policy": "attended",
+        "records": []
+      },
+      "decision_states": [],
+      "known_questions_only": true,
+      "review_digest": "sha256:6f844daf475ffc4fac1598ded38c197151b49bdc420900a350900a04b36dcf5e",
+      "admission": {
+        "capacity": 2,
+        "held": 0,
+        "waiting": 0,
+        "available": 2
+      }
+    }
+  },
+  {
+    "variant": "renamed",
+    "selected_launch": "review-deep",
+    "input_port": "request",
+    "summary": {
+      "schema_version": "project-launch-summary/3",
+      "repository": "/private/tmp/prifly-advice-observation-renamed/repository",
+      "authority": "/private/tmp/prifly-advice-observation-renamed/authority",
+      "launch": "review-deep",
+      "package": {
+        "id": "test:package/alpha",
+        "version": "0.0.0-b1.odty5iq4eoqhavpnhomsbslfiyhfwjz4po35fbno6xuhwaarfn5a",
+        "digest": "sha256:d2f2c81231d52b4c0197782a4994c3c87ab898441ccdd922bd9992c8b172acc4"
+      },
+      "author_package": {
+        "id": "test:package/alpha",
+        "version": "1.0.0"
+      },
+      "build_key": "sha256:70e78ea21c23a07055ed3b9920c965460e5b273c7bb7d285aef5e87b00112b7a",
+      "workflow": {
+        "id": "test:workflow/alpha",
+        "version": "0.0.0-b1.2e67eqwwnsb3xmwsttarnrqkirw6wvglgix6uobyonxkcnapdgqq",
+        "digest": "sha256:d737db5c1133b6e87a810c10ed1bcf982829a67316540a4c7a67d1b10a1dc3ab"
+      },
+      "requirements": {
+        "assisted": false,
+        "git_workspace": false,
+        "effect_classes": {}
+      },
+      "input_digests": {
+        "request": "sha256:0b7b561e9a3aae60d46a8c1e38d131ff7803f62695f183451b43a04c3479a78d"
+      },
+      "input_refs": {},
+      "configuration_digest": "sha256:1653d452b440bd05c73cb15f8147e88b0826deef98dd74863c4f7ae2533bcd41",
+      "execution": [],
+      "registry_budget": {
+        "entries": 2,
+        "limit": 512
+      },
+      "decision_sheet": {
+        "schema_version": "decision-sheet/1",
+        "catalog_digest": "sha256:9ea4e956615bb8f8f855747eb45e6f8c908584927be9e7232d25bbf8ebb9f119",
+        "package_profile": "",
+        "profile_source": "none",
+        "decision_policy": "attended",
+        "records": []
+      },
+      "decision_states": [],
+      "known_questions_only": true,
+      "review_digest": "sha256:f0510d4e1e5f90c9013c94aa0fa8b0013fbe804686a961e6a51d4f951c714091",
+      "admission": {
+        "capacity": 2,
+        "held": 0,
+        "waiting": 0,
+        "available": 2
+      }
+    }
+  },
+  {
+    "variant": "single",
+    "selected_launch": "review-deep",
+    "input_port": "document",
+    "summary": {
+      "schema_version": "project-launch-summary/3",
+      "repository": "/private/tmp/prifly-advice-observation-single/repository",
+      "authority": "/private/tmp/prifly-advice-observation-single/authority",
+      "launch": "review-deep",
+      "package": {
+        "id": "test:package/beta",
+        "version": "0.0.0-b1.odsk4ochc5y46vmzyzsrttpp36j547qd625xtieccpr6empvrb2q",
+        "digest": "sha256:f363b4e8bb0386b9e0af09459268ba72ff5b73baeca1fef3fe5676b38d1a485c"
+      },
+      "author_package": {
+        "id": "test:package/beta",
+        "version": "1.0.0"
+      },
+      "build_key": "sha256:70e4ae38471771cf5599c66519cdefdf93de7e03f6bb79a08213e3e231f58875",
+      "workflow": {
+        "id": "test:workflow/beta",
+        "version": "0.0.0-b1.2otsbx3pupmvltff4iuhdg64hx2qgfke3ejf2w7cyli6bf2fvf3q",
+        "digest": "sha256:2ada73a7d766a102722ac201d5c462f2b2267fc6cf09fc9869baa23dbac85aa8"
+      },
+      "requirements": {
+        "assisted": false,
+        "git_workspace": false,
+        "effect_classes": {}
+      },
+      "input_digests": {
+        "document": "sha256:95b0a1094abc751440d144f9f5bf4547788be2dfdeb84bf5ff309ad2948562c5"
+      },
+      "input_refs": {},
+      "configuration_digest": "sha256:112a09cb3134e1e7511c03beeffdbad586a692da5e01cde009c6ac649d20ace0",
+      "execution": [],
+      "registry_budget": {
+        "entries": 1,
+        "limit": 512
+      },
+      "decision_sheet": {
+        "schema_version": "decision-sheet/1",
+        "catalog_digest": "sha256:9ea4e956615bb8f8f855747eb45e6f8c908584927be9e7232d25bbf8ebb9f119",
+        "package_profile": "",
+        "profile_source": "none",
+        "decision_policy": "attended",
+        "records": []
+      },
+      "decision_states": [],
+      "known_questions_only": true,
+      "review_digest": "sha256:40063453c24d1103e470d42f97c6c29f90ea5213ccfda2ddd9e16b6e0076d90c",
+      "admission": {
+        "capacity": 2,
+        "held": 0,
+        "waiting": 0,
+        "available": 2
+      }
+    }
+  }
+]

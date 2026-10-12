@@ -1,0 +1,344 @@
+[
+  {
+    "authority": "/private/tmp/prifly-advice-observation-multiple-v2/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-observation-advice-off/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-observation-finite/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-observation-pages/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-observation-single/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-observation-vague/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-observation-empty/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-probes/mapping/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-probes/file-only/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-probes/empty/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-probes/skip/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-probes/exact/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-probes/unknown/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-probes/no-task/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-app-alternative-v2/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-vague/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-single/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-no-task/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  },
+  {
+    "authority": "/private/tmp/prifly-advice-matrix-skip/authority",
+    "inventory_after_dialogues": {
+      "package": {
+        "packages": [],
+        "schema_version": "foundation-packages/1"
+      },
+      "claim": {
+        "claims": [],
+        "schema_version": "foundation-claims/2"
+      },
+      "run": {
+        "runs": [],
+        "schema_version": "run-list/1",
+        "total": 0
+      }
+    }
+  }
+]

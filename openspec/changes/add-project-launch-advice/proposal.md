@@ -36,3 +36,15 @@
 Сопутствующее обновление Go касается локального toolchain, `go.mod` и совместимых точных pins анализаторов в `Makefile`; workflows CI уже читают `go-version-file: go.mod`. Новых нормативных требований к runtime или ownership оно не вводит; historical build/release evidence сохраняет фактически использованные тогда версии.
 
 Нормативная ownership не меняется ни у одной capability: source set остаётся в `openspec/specs/{cli-protocol,control-security-ux,workflow-and-context}/spec.md` по `openspec/SOURCE-OF-TRUTH.md`; delta этого change задаёт целевое поведение до archive/sync. Исторические evidence, archived changes и frozen runner bytes защищены. Отдельный пакет `aif-fix` из [связанного issue](https://github.com/StenHigh/prifly-aif-workflows/issues/4) в этот change не входит.
+
+## Уточнение объёма приёмки владельцем — 2026-10-12
+
+После повторных provider 429 владелец явно указал «пока не тестим claude»,
+а затем выбрал «Отдельная Claude приёмка; завершить verify/review/commit сейчас».
+Оставшиеся Claude finite, страницы по фактическому лимиту и dismissal остаются
+DEFERRED в follow-up observations.md. Они не являются PASS и не блокируют
+текущий commit реализации. Подтверждённые Claude launch/overlay observations
+сохраняются. Нормативное поведение для Claude и поддержка всех hosts не сужаются;
+закрытие формального host acceptance или release qualification не заявляется.
+Codex navigation проверяется отдельно с явно заданными короткими страницами;
+это не доказательство реакции модели на отсутствующий у этого tool лимит.

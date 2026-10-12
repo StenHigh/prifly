@@ -1,0 +1,97 @@
+[
+  {
+    "timestamp": "2026-10-12T13:43:39.698Z",
+    "model": "claude-sonnet-5",
+    "tool": "Bash",
+    "input": {
+      "command": "ls -la /private/tmp/prifly-advice-observation-advice-off/repository/.claude/skills/prifly-run/",
+      "description": "List skill directory contents"
+    }
+  },
+  {
+    "timestamp": "2026-10-12T13:43:46.937Z",
+    "model": "claude-sonnet-5",
+    "tool": "Read",
+    "input": {
+      "file_path": "/private/tmp/prifly-advice-observation-advice-off/repository/.claude/skills/prifly-run/PROJECT.md"
+    }
+  },
+  {
+    "timestamp": "2026-10-12T13:43:46.984Z",
+    "type": "tool_result",
+    "content": "1\tDo not recommend diagnostics by task; keep it selectable. Use descriptions, never ID words.\n2\tDo not offer launch recommendations. Show all choices directly.\n3\t"
+  },
+  {
+    "timestamp": "2026-10-12T13:43:53.603Z",
+    "model": "claude-sonnet-5",
+    "tool": "Bash",
+    "input": {
+      "command": "find /private/tmp/prifly-advice-observation-advice-off -maxdepth 4 -iname 'local.yaml' -o -iname '.prifly' 2>/dev/null",
+      "description": "Locate prifly local config"
+    }
+  },
+  {
+    "timestamp": "2026-10-12T13:44:02.885Z",
+    "model": "claude-sonnet-5",
+    "tool": "Read",
+    "input": {
+      "file_path": "/private/tmp/prifly-advice-observation-advice-off/repository/.prifly/local.yaml"
+    }
+  },
+  {
+    "timestamp": "2026-10-12T13:44:10.501Z",
+    "model": "claude-sonnet-5",
+    "tool": "Bash",
+    "input": {
+      "command": "/tmp/claude-code-proxy-workspace/../prifly-launch-advice project workflows --repository \"/private/tmp/prifly-advice-observation-advice-off/repository\" --json 2>&1 || /private/tmp/prifly-launch-advice project workflows --repository \"/private/tmp/prifly-advice-observation-advice-off/repository\" --json",
+      "description": "List declared launches for this project"
+    }
+  },
+  {
+    "timestamp": "2026-10-12T13:44:26.032Z",
+    "model": "claude-sonnet-5",
+    "tool": "AskUserQuestion",
+    "input": {
+      "questions": [
+        {
+          "question": "Which launch should be selected for this project?",
+          "header": "Launch choice",
+          "options": [
+            {
+              "label": "Local diagnostics",
+              "description": "A technical diagnostic with no task or document input."
+            },
+            {
+              "label": "Compose a structured request",
+              "description": "Prepare a structured request from the original description and references."
+            },
+            {
+              "label": "Inspect a supplied document",
+              "description": "Inspect a supplied text file; this workflow accepts only a document file."
+            }
+          ],
+          "multiSelect": false
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-10-12T13:46:30.981Z",
+    "model": "claude-sonnet-5",
+    "tool": "Bash",
+    "input": {
+      "command": "/private/tmp/prifly-launch-advice project questionnaire --repository \"/private/tmp/prifly-advice-observation-advice-off/repository\" --launch diagnostics --json",
+      "description": "Read declared questionnaire for diagnostics launch"
+    }
+  },
+  {
+    "timestamp": "2026-10-12T13:46:35.268Z",
+    "type": "tool_result",
+    "content": "{\"project_profile_version\":\"prifly-project-profile/3\",\"schema_version\":\"project-questionnaire/4\",\"repository\":\"/private/tmp/prifly-advice-observation-advice-off/repository\",\"package\":{\"id\":\"test:package/diagnostics\",\"version\":\"1.0.0\",\"digest\":\"\"},\"profiles\":[],\"preflight\":[],\"catalog_digest\":\"sha256:9ea4e956615bb8f8f855747eb45e6f8c908584927be9e7232d25bbf8ebb9f119\",\"runtime\":[],\"decision_sheet\":{\"schema_version\":\"decision-sheet/1\",\"catalog_digest\":\"sha256:9ea4e956615bb8f8f855747eb45e6f8c908584927be9e7232d25bbf8ebb9f119\",\"package_profile\":\"\",\"profile_source\":\"none\",\"decision_policy\":\"attended\",\"records\":[]},\"decision_states\":[],\"known_questions_only\":true}"
+  },
+  {
+    "timestamp": "2026-10-12T13:52:21.180Z",
+    "type": "provider_error",
+    "text": "API Error: Request rejected (429) · Rate limit exceeded. Please try again later."
+  }
+]

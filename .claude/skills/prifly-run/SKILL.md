@@ -18,14 +18,15 @@ exact executable as PRIFLY_BIN. Every authority command takes
 --project "$authority_root". Never edit authority state by hand.
 
 The tool names its own way out. Read `safe_next_actions` on a refusal and
-`run next RUN_ID` for the move a Run has; both are answers, not suggestions. Two
+`run next RUN_ID` for its current action. The continuations list indexes declarations; it is not admission.
+Concrete prepare checks evidence, compatibility and the source claim. Two
 sections at the end cover situations most projects never meet -- read them when
 the tool sends you there, not before.
 
 ## 1. Start
 
 To continue a finished Run, choose a launch whose workflow declares a
-continuation. Call `project continue --prepare --launch ID --source-run RUN_ID`
+continuation. Call `project continue --prepare --repository REPOSITORY --launch ID --source-run RUN_ID`
 with the selected host and decision answers, and show what it returns: where
 each carried input comes from in the source Run, and the source Run's tree the
 new Run takes over as it was left, with every file its steps left there. Then
@@ -52,7 +53,11 @@ returns under `recovery`: the stage it starts again from, the accepted stages
 it carries and the tree it takes over. The source Run's inputs are taken as
 they were; pass no `--input`. `--from-stage STAGE` starts again from an earlier
 accepted stage. `resume_undeclared` means the workflow does not resume this
-Run; `resume_prefix_empty` means nothing would be carried: start anew.
+Run. Repeated resumes carry inherited and local accepted stages together.
+Choose the current source Run, whose claim is transferred; never reset its tree.
+`--from-stage` may name an inherited accepted root stage, never a nested stage.
+`resume_prefix_empty` means the reviewed prefix is truly empty: preserve dirty work
+before reviewing a new start. Missing ancestry is `recover_evidence_unavailable`.
 
 When `run next` answers `awaiting_host`, an Attempt is already issued and waits
 for you: run the command in its `next_command` (`session task --run RUN_ID
@@ -60,9 +65,44 @@ for you: run the command in its `next_command` (`session task --run RUN_ID
 answer's `step_effects` names what each step declared it may change.
 
 
-`PRIFLY_BIN project workflows --repository "$PWD" --json` lists launches. If the
-developer named no exact launch ID, show the list and wait; do not infer one
-from task wording or nearby files.
+`PRIFLY_BIN project workflows --repository "$PWD" --json` lists the current declared launches with exact ID, title,
+description and inputs. An exact valid ID supplied by the developer needs no
+second choice or advice. Never substitute a similar ID for an unknown one.
+If no launches exist, explain that and stop; do not install one automatically.
+
+For a finite launch choice and the declared finite questionnaire answers, call
+`AskUserQuestion` when provided and applicable under its current tool
+contract and mode. Do not switch host modes to obtain a tool. Use real options
+with exact ID mappings and short descriptions, not Markdown buttons. Without an
+applicable tool, ask one explicit text question and wait for the answer.
+A tool receipt, preselected option, dismissal or timeout is not a user answer.
+For an asynchronous question, wait for the separate actual user reply before
+choosing an ID or reading that launch's questionnaire; independent read-only
+work may continue. Before the answer, do not import a package, acquire a claim,
+create a Run or call project start. A supplied answer must match the current
+list; free text does not authorize a guessed ID. If the set exceeds the tool's
+limit, use deterministic pages with next/back and a way to defer or decline;
+every ID must remain reachable. For a single launch, skip advice and ask for
+explicit selection (a real defer option can satisfy a tool's option minimum).
+Free text, file paths and arbitrary JSON stay free-form, never fake choices.
+A preference tool does not authorize executable effects when its contract
+forbids approvals; use the separate permitted confirmation channel below.
+
+Advice is optional and separate from selection. Only when the developer is
+choosing among multiple launches by a described task, the project allows it
+and the developer has not skipped advice, consider a recommendation. Use the
+listed title/description and PROJECT.md criteria, not words in IDs, package
+names, nearby files or a remote catalog. PROJECT.md may disable advice entirely
+or exclude individual launches from recommendations; all declared launches
+remain selectable, including excluded ones. When purposes justify advice,
+name one exact ID and one short reason, marking it as recommended in the
+choice. Do not claim input, environment or admission compatibility before
+prepare. If purposes are insufficient, say so briefly and leave manual choice
+available. Without task text, offer optional task description for advice or
+direct selection; never require a task solely to choose. With advice skipped
+or disabled, show the same native choice without inventing a recommendation.
+The developer's explicit alternative wins without another recommendation.
+Selection and advice do not confirm the prepared execution summary.
 
 `PRIFLY_BIN project questionnaire --repository "$PWD" --launch ID --json` says what
 this launch declares. Its project_profile_version distinguishes /3 from legacy
@@ -75,6 +115,14 @@ decision_states and declared conditions; unknown applicability is conditional,
 not false. A standing answer in the project's extend.yaml is already an answer
 -- preserve it and ask only for what is missing. Autonomous may use only
 catalog-permitted automatic choices.
+
+Preserve the original task text and URLs independently of the advice. After
+selection, bind them only to the chosen workflow's declared input and format:
+use the supplied file/ref, or package the original text according to that
+schema. Do not replace the task with the recommendation's reason, invent a
+universal task port or require a RunBrief. If the mapping is unclear, ask;
+collect other missing values normally. A file-only workflow receives only its
+declared files, without a fabricated task.
 
 Collect typed inputs with `--input NAME=FILE` or `--input-ref NAME=FILE`.
 Respect declared defaults and ask for missing required values; never invent a task or
@@ -218,9 +266,11 @@ Most projects answer everything before the Run and never reach this. If
 that declared question with its sealed title, description and real options,
 explaining what each choice changes; do not invent a recommendation, permission
 or scope. For a finite choice use your host's native question tool
-(AskUserQuestion) rather than Markdown buttons, keep the real mutually
+(`AskUserQuestion`) under its current contract and mode rather than Markdown buttons, keep the real mutually
 exclusive options, and never turn a recommendation into a default; if the tool
-is unavailable, ask one explicit text question and wait without mutation. Ask
+is unavailable or inapplicable, ask one explicit text question and wait without mutation.
+For an asynchronous tool, wait for the actual user reply; its receipt and
+preselection are not answers. Do not switch host modes for a question. Ask
 one dependent decision at a time. For a larger set use deterministic
 pages with navigation and refusal, without hiding choices. RunBrief text, file
 paths and arbitrary JSON values stay free-form: they are not a finite choice.

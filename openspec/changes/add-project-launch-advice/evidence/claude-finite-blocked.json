@@ -1,0 +1,35 @@
+[
+  {
+    "timestamp": "2026-10-12T13:46:25.964Z",
+    "model": "claude-sonnet-5",
+    "tool": "Bash",
+    "input": {
+      "command": "cat .prifly/local.yaml",
+      "description": "Read prifly local config for authority_root and executable"
+    }
+  },
+  {
+    "timestamp": "2026-10-12T13:46:33.033Z",
+    "model": "claude-sonnet-5",
+    "tool": "Bash",
+    "input": {
+      "command": "/private/tmp/prifly-launch-advice project questionnaire --repository \"$PWD\" --launch repair-fast --json",
+      "description": "Read repair-fast launch questionnaire"
+    }
+  },
+  {
+    "timestamp": "2026-10-12T13:46:41.887Z",
+    "type": "tool_result",
+    "content": "{\"project_profile_version\":\"prifly-project-profile/3\",\"schema_version\":\"project-questionnaire/4\",\"repository\":\"/private/tmp/prifly-advice-observation-finite/repository\",\"package\":{\"id\":\"test:package/alpha\",\"version\":\"1.0.0\",\"digest\":\"\"},\"profiles\":[],\"preflight\":[{\"schema_version\":\"run-decision/1\",\"id\":\"output_mode\",\"title\":\"Output detail\",\"description\":\"Choose the declared output detail for this request.\",\"phase\":\"preflight\",\"required\":true,\"choices\":[{\"id\":\"compact\",\"title\":\"Compact\",\"value\":\"compact\"},{\"id\":\"detailed\",\"title\":\"Detailed\",\"value\":\"detailed\"}],\"automatic\":false,\"sensitivity\":\"ordinary\",\"destination\":{\"kind\":\"launch_input\",\"name\":\"mode\"}}],\"catalog_digest\":\"sha256:3a84f53d6bf5c2d9c3faaf4d2cff02448827e36a5173bc19cdb96481bbbba438\",\"runtime\":[],\"decision_sheet\":{\"schema_version\":\"decision-sheet/1\",\"catalog_digest\":\"sha256:3a84f53d6bf5c2d9c3faaf4d2cff02448827e36a5173bc19cdb96481bbbba438\",\"package_profile\":\"\",\"profile_source\":\"none\",\"decision_policy\":\"attended\",\"records\":[]},\"decision_states\":[{\"id\":\"output_mode\",\"phase\":\"preflight\",\"applicability\":\"applicable\",\"answered\":false,\"wait_reason\":\"required_before_start\"}],\"known_questions_only\":true}"
+  },
+  {
+    "timestamp": "2026-10-12T13:52:21.851Z",
+    "type": "provider_error",
+    "text": "API Error: Request rejected (429) · Rate limit exceeded. Please try again later."
+  },
+  {
+    "timestamp": "2026-10-12T14:18:46.354Z",
+    "type": "provider_error",
+    "text": "API Error: Request rejected (429) · Rate limit exceeded. Please try again later."
+  }
+]

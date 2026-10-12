@@ -105,3 +105,15 @@ Runtime UI observations закрываются по каждому host отде
 Обновляем установленный Go и локальный `.tools/go` проекта, затем в реализации поднимаем `go.mod` до `go 1.27.2`. Verify, qualify и release уже читают версию из `go.mod`; второго pin в workflows не создаём. Проверки worktree используют явный путь к исправленному toolchain, поскольку `.tools` gitignored и в claim checkout отсутствует. Ворота выполняются без исключений для vulnerability findings; старые release records и public schemas не правятся.
 
 На исправленном Go старый staticcheck `v0.8.1` не прочитал export data version 5. Опубликованной более новой стабильной версии нет; [upstream](https://github.com/dominikh/go-tools/blob/452d5bb86b45416c35891262f6a11dbd6a970117/go.mod) уже обновил загрузчик. Для этого совместимого development tool закрепляем точный `v0.7.0-0.dev.0.20261009230814-452d5bb86b45` вместо плавающего `master`/`latest`; это development snapshot анализатора, а не prerelease Go. `govulncheck` обновляем до опубликованного стабильного `v1.9.0`. Обе версии должны пройти фактическую проверку на целевом Go, без исключения checks или runtime-зависимостей на эти tools.
+
+## Уточнение объёма приёмки владельцем — 2026-10-12
+
+После повторных provider 429 владелец явно указал «пока не тестим claude»,
+а затем выбрал «Отдельная Claude приёмка; завершить verify/review/commit сейчас».
+Оставшиеся Claude finite, страницы по фактическому лимиту и dismissal остаются
+DEFERRED в follow-up observations.md. Они не являются PASS и не блокируют
+текущий commit реализации. Подтверждённые Claude launch/overlay observations
+сохраняются. Нормативное поведение для Claude и поддержка всех hosts не сужаются;
+закрытие формального host acceptance или release qualification не заявляется.
+Codex navigation проверяется отдельно с явно заданными короткими страницами;
+это не доказательство реакции модели на отсутствующий у этого tool лимит.

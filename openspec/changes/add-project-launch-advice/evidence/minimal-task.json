@@ -1,0 +1,83 @@
+{
+  "original_task": "Для теста можно использовать какое то минимальное изменение только для теста",
+  "selected_launch": "repair-fast",
+  "answer_source": "actual owner reply call_581565ca431b44f2ad91e0c18f5958f2",
+  "recommendation": null,
+  "reason": "insufficient title/description evidence",
+  "input": {
+    "description": "Для теста можно использовать какое то минимальное изменение только для теста",
+    "references": []
+  },
+  "command": [
+    "/private/tmp/prifly-launch-advice",
+    "--project",
+    "/private/tmp/prifly-advice-matrix-no-task/authority",
+    "project",
+    "questionnaire",
+    "--repository",
+    "/private/tmp/prifly-advice-matrix-no-task/repository",
+    "--launch",
+    "repair-fast",
+    "--prepare",
+    "--input",
+    "request=/private/tmp/prifly-advice-matrix-no-task/repository/minimal-test-request.json",
+    "--expected-decision-catalog-digest",
+    "sha256:9ea4e956615bb8f8f855747eb45e6f8c908584927be9e7232d25bbf8ebb9f119",
+    "--json"
+  ],
+  "exit": 0,
+  "summary": {
+    "schema_version": "project-launch-summary/3",
+    "repository": "/private/tmp/prifly-advice-matrix-no-task/repository",
+    "authority": "/private/tmp/prifly-advice-matrix-no-task/authority",
+    "launch": "repair-fast",
+    "package": {
+      "id": "test:package/alpha",
+      "version": "0.0.0-b1.odty5iq4eoqhavpnhomsbslfiyhfwjz4po35fbno6xuhwaarfn5a",
+      "digest": "sha256:d2f2c81231d52b4c0197782a4994c3c87ab898441ccdd922bd9992c8b172acc4"
+    },
+    "author_package": {
+      "id": "test:package/alpha",
+      "version": "1.0.0"
+    },
+    "build_key": "sha256:70e78ea21c23a07055ed3b9920c965460e5b273c7bb7d285aef5e87b00112b7a",
+    "workflow": {
+      "id": "test:workflow/alpha",
+      "version": "0.0.0-b1.2e67eqwwnsb3xmwsttarnrqkirw6wvglgix6uobyonxkcnapdgqq",
+      "digest": "sha256:d737db5c1133b6e87a810c10ed1bcf982829a67316540a4c7a67d1b10a1dc3ab"
+    },
+    "requirements": {
+      "assisted": false,
+      "git_workspace": false,
+      "effect_classes": {}
+    },
+    "input_digests": {
+      "request": "sha256:231a33bc8273d78c96e798102bc2076a743ac9b49757e26f9c3ba5ab9a610b1a"
+    },
+    "input_refs": {},
+    "configuration_digest": "sha256:af31cbfe1f021a667b68ca99b39879c7154a4add2b81d70c2d036e87298beedb",
+    "execution": [],
+    "registry_budget": {
+      "entries": 2,
+      "limit": 512
+    },
+    "decision_sheet": {
+      "schema_version": "decision-sheet/1",
+      "catalog_digest": "sha256:9ea4e956615bb8f8f855747eb45e6f8c908584927be9e7232d25bbf8ebb9f119",
+      "package_profile": "",
+      "profile_source": "none",
+      "decision_policy": "attended",
+      "records": []
+    },
+    "decision_states": [],
+    "known_questions_only": true,
+    "review_digest": "sha256:c70c9910a16913b2dee94660a7f86891eea4afe308134d205f6a3fb4bb64b6c3",
+    "admission": {
+      "capacity": 2,
+      "held": 0,
+      "waiting": 0,
+      "available": 2
+    }
+  },
+  "stderr": ""
+}

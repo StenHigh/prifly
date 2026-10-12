@@ -29,8 +29,8 @@ packages:
       catalog: https://github.com/StenHigh/prifly-workflows.git # Catalog that named the entry, when one did.
 launches:
   example:
-    title: Example workflow # Human-facing chooser label.
-    description: A tracked YAML workflow package. # Human-facing chooser explanation.
+    title: Example workflow # Human-facing chooser label; an ID is not a purpose rule.
+    description: A tracked YAML workflow package. # Explain purpose/limits here; the host may use this for optional advice.
     kind: workflow # The only supported launch kind.
     workflow: .prifly/workflows/example/workflow.yaml # Marker file inside the package source.
     workspace: worktree # Optional standing choice; the host does not ask, --workspace still overrides for one Run.
