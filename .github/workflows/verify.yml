@@ -10,16 +10,48 @@ on:
     tags-ignore: ["**"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact candidate SHA; refuse a moved ref before tests
+        type: string
+        required: false
+      force:
+        description: Explicitly execute a fresh full batch
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  actions: read
+
+# Serialize this exact tested commit; a queued duplicate rechecks evidence.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   GOTOOLCHAIN: local
   GOTELEMETRY: off
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      execute: ${{ steps.check.outputs.execute }}
+      source_run: ${{ steps.check.outputs.source_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Existing full batch
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          FORCE_CHECKS: ${{ inputs.force }}
+        run: python3 -B scripts/release_checks.py --preflight verify
   static:
+    needs: preflight
+    if: needs.preflight.outputs.execute == 'true'
     name: static checks
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -42,6 +74,8 @@ jobs:
         run: make vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check GO="$(go env GOROOT)/bin/go"
 
   engine:
+    needs: preflight
+    if: needs.preflight.outputs.execute == 'true'
     name: engine tests ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -64,6 +98,8 @@ jobs:
         run: make test-shard SHARDS=3 SHARD=${{ matrix.shard }} GO="$(go env GOROOT)/bin/go"
 
   packages:
+    needs: preflight
+    if: needs.preflight.outputs.execute == 'true'
     name: other packages
     runs-on: ubuntu-latest
     timeout-minutes: 30

@@ -159,12 +159,43 @@ Claude (`AskUserQuestion`); без такого инструмента ждёт 
 наблюдение диалогов Codex/Claude; его статус указан в
 [плане](openspec/changes/make-project-launch-workflow-neutral/tasks.md).
 
-Для contributor-проверки:
+Для contributor-проверки во время правок используйте `make check-fast`.
+Перед commit итоговый снимок должен пройти полный локальный состав:
 
 ```sh
-make check
-make e2e
+make ci-check-once CHECK_CONTEXT=terminal CHECK_FOR_COMMIT=1
+# Явный повтор: CHECK_FORCE=1. Raw make ci-check всегда выполняет всё.
 ```
+
+`CHECK_CONTEXT` называет фактический профиль исполнения, например `terminal`
+или `codex-app-authorized`; у sandbox и разрешённого запуска разные labels.
+Label не выдаёт прав. Без него helper выполняет весь состав без reuse.
+Локальное evidence действует в одном worktree не более 24 часов и требует
+тех же bytes/modes, HEAD, toolchain и environment. Изменение документа тоже
+инвалидирует его. Logs лежат в `.cache/verification/`; повреждённый log,
+неполный результат или изменение входов во время проверки не дают cached pass.
+Даже при reuse выполняются свежие `vuln-check` и `go mod verify`.
+OpenSpec validation и `git diff --check` проверяются отдельно каждый раз.
+
+Полный race/e2e выполняется в CI qualify перед релизом. Подготовка фиксирует
+точный SHA и сначала находит existing checks:
+
+```sh
+python3 scripts/ensure-release-checks.py --sha COMMIT_SHA --ref main --wait
+python3 scripts/tag-release.py vX.Y.Z --sha COMMIT_SHA --dry-run
+```
+
+`--wait` наблюдает ограниченный интервал (по умолчанию 60 секунд); pending
+не является успехом. Завершённый failure требует явного `--force` для retry.
+Force не разрешает tag до успешного нового batch. После перемещения `main`
+команда с прежним SHA не запускает проверку нового candidate автоматически.
+Каждый новый SHA, включая коммит документации, требует собственных CI gates.
+Локальные результаты не заменяют CI: tag проверяет непосредственно исполненные
+verify/qualify jobs и шаги на том же SHA, а не display name или зелёную оболочку
+с пропусками. CI reuse ограничен 24 часами; при известном изменении внешнего
+контекста нужен свежий batch. Publication сохраняет native build/smoke, подпись
+и отдельное owner approval, без повторного product test batch.
+
 
 `make` использует локально настроенный Go toolchain. Если он расположен не в
 `.tools/go`, передайте свой путь: `make check GO=/path/to/go`.

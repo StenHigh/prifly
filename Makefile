@@ -9,7 +9,7 @@ export GOTELEMETRY := off
 export GOCACHE := $(CURDIR)/.cache/go-build
 export GOMODCACHE := $(CURDIR)/.cache/go-mod
 
-.PHONY: build test race vet check ci-check check-fast test-changed test-shard test-rest shard-check scripts-check qualify fmt schemas schemas-check release-ci-check staticcheck-check vuln-check e2e examples release
+.PHONY: build test race vet check ci-check ci-check-once check-fast test-changed test-shard test-rest shard-check scripts-check qualify fmt schemas schemas-check release-ci-check staticcheck-check vuln-check e2e examples release
 build:
 	$(GO) build -trimpath -buildvcs=false -o bin/prifly ./cmd/prifly
 test:
@@ -35,6 +35,9 @@ test-rest:
 shard-check:
 	python3 scripts/test-shard.py --go "$(GO)" --package $(RUNTIME_PACKAGE) --shards $(SHARDS) --check
 scripts-check:
+	python3 -B scripts/test_release_ci_contract.py
+	python3 -B scripts/test_ensure_release_checks.py
+	python3 -B scripts/test_ensure_ci_check.py
 	python3 -B scripts/test_test_changed.py
 	python3 -B scripts/test_tag_release.py
 # Before a release only, on the exact commit that will be tagged: the race
@@ -56,6 +59,8 @@ vet:
 		echo "vet: $$target read"; \
 	done
 check: test race vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check
+ci-check-once:
+	python3 -B scripts/ensure-ci-check.py --go "$(GO)" $(if $(CHECK_CONTEXT),--context "$(CHECK_CONTEXT)") $(if $(filter 1,$(CHECK_FORCE)),--force) $(if $(filter 1,$(CHECK_FOR_COMMIT)),--for-commit)
 ci-check: test vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check
 fmt:
 	$(GO) fmt ./...

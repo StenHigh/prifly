@@ -14,9 +14,8 @@ answers:
     plan_logging: minimal # the CLI has no logging: one final document on stdout
     gate_warnings: ignore
     gate_checks: |
-      make ci-check GO="$(go env GOROOT)/bin/go"
-      make e2e GO="$(go env GOROOT)/bin/go"
-      openspec validate --all --strict
+      make ci-check-once GO="$(go env GOROOT)/bin/go"
+      openspec validate --all --strict --no-interactive
       git diff --check
 settings:
   improve-batch: {improve_round_limit: 3}

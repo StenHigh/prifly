@@ -9,8 +9,21 @@ what the engine measures (declared effects, claimed workspace, output slots).
   (`profile: full`, `gate_checks`, `gate_warnings`, `plan_tests`, attended
   policy); pass a `--preflight-answer` or `--package-profile` only to override
   one of them for this Run, and say so in the report.
-- `gate_checks` is the whole verify composition. `make race` is a release gate,
-  not a Run gate; never add it inside a Run.
+- `gate_checks` is the whole verify composition. `ci-check-once` runs the full
+  local gate or validates its evidence; set CHECK_CONTEXT to the actual host
+  permission profile (for example codex-app-authorized or claude-terminal).
+  Different sandbox/escalated profiles need different labels; unknown means
+  execute-only. A label grants no permissions. Keep it stable for repeat calls.
+- Full race/e2e belong to release qualify, not the ordinary Run. Explicit
+  targeted scenario tests from the plan still apply. Never replace semantic
+  verify/review or accepted StepResult with a command cache hit.
+- Before commit ensure staged bytes match tested working bytes; helper
+  CHECK_FOR_COMMIT=1 checks that. CHECK_FORCE=1 explicitly reruns the local gate.
+  Raw ci-check always runs. Reuse performs fresh vuln-check and mod verification.
+- For release preparation pin candidate SHA and use scripts/ensure-release-checks.py;
+  observe an active run, reuse a successful direct batch on the same SHA,
+  explicitly retry failures with --force. Every different SHA needs its own CI
+  verify/qualify. Local evidence cannot authorize tag or release.
 - A normative change (spec, glossary, published contract, roadmap) starts with
   an OpenSpec change; a Run without one changes code, tests and references only.
 - Commit messages are English conventional style (`feat:`, `fix:`, `docs:`),
