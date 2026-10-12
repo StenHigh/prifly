@@ -76,7 +76,7 @@ func recoveryPreparationFixture(t *testing.T, kinds ...string) (*Engine, Run, []
 					stage.InitialBindings = root.Definition.Stages["improve"].InputBindings
 					stage.NextBindings = map[string]flow.Binding{"plan": {From: "iteration_output", Port: "improved"}}
 				}
-				stage.On, stage.OnComplete, stage.OnLimit = map[string]string{"succeeded": "implement"}, stage.OnComplete, stage.OnLimit
+				stage.On = map[string]string{"succeeded": "implement"}
 				if stage.Kind == "repeat" {
 					stage.On = nil
 					stage.OnComplete = map[string]string{"succeeded": "implement"}
