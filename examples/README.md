@@ -86,7 +86,7 @@
 | `model_profile_declared` | `model_profile` у шага — контракт 9 | step |
 | `model_profile_translation` | `model_profiles` в профиле проекта | project-profile |
 | `project_title` | `title` в профиле проекта | project-profile |
-| `failed_stage_recovery` | `prifly run reopen` | — |
+| `failed_stage_recovery` | `prifly run reopen`; `project recover --prepare` для root call/repeat и preparation до Attempt — development change `fix-nested-preparation-recovery`; earlier root `--from-stage` | continuation-guide |
 | `run_finish_named` | поведение чтения: `finish` в `run explain` | — |
 | `blocked_verdict` | `required_for: [..., blocked]` — контракт 10 у ассистируемого шага, **контракт 12** у программного; маршрут при **ревизии 6**, `result_schema_ref` → `core:schema/step-result@2.0.0` | step, workflow, blocked-guide |
 | `declared_external_write` | `effects.class: external_write` и блок `external_write` у ассистируемого шага (`prifly-step/2`) — контракт 11; программа объявляет то же по `program_external_write` | step |

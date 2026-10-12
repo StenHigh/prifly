@@ -114,7 +114,7 @@ func treeDecisionSessionFixture(t *testing.T, policy flow.WorkspaceTreeCapturePo
 	return treeFixture(t, policy, catalog, sheet, "worktree", false)
 }
 
-func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *DecisionCatalog, sheet *DecisionSheet, mode string, verify bool) (*Engine, string) {
+func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *DecisionCatalog, sheet *DecisionSheet, mode string, verify bool, configure ...func(*Engine, *flow.WorkflowRevision, *RegistryFile)) (*Engine, string) {
 	t.Helper()
 	e := contextRegistryRuntime(t)
 	claim, err := e.ClaimWorktree(context.Background(), ClaimRequest{CommandID: "command:tree-claim", Repository: gitRepository(t), OwnerID: "session:pilot", WorkspaceMode: mode})
@@ -173,6 +173,10 @@ func treeFixture(t *testing.T, policy flow.WorkspaceTreeCapturePolicy, catalog *
 	if verify {
 		registry.Entries = append(registry.Entries, Definition{Ref: verifyRef, Kind: "step", Path: "steps/tree-verify.json"})
 	}
+	for _, apply := range configure {
+		apply(e, &workflow, &registry)
+	}
+	writeRuntimeJSON(t, filepath.Join(e.Root, "workflows/tree.json"), workflow)
 	writeRuntimeJSON(t, filepath.Join(e.Root, e.Config.Configuration.RegistryFile), registry)
 	e.Config.Configuration.SchemaVersion, e.Config.ConfigurationSchemaRef = CoreContextConfigVersion, builtinVersionRef(definitions, "core:schema/core-configuration", "2.0.0")
 	e.Config.AdapterBindings["local_process"], e.Config.DefaultPolicyRef = builtinVersionRef(definitions, "core:adapter/local-process", "2.0.0"), builtinVersionRef(definitions, "core:policy/local", "2.0.0")

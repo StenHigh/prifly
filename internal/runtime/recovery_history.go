@@ -21,8 +21,8 @@ type recoveryHistoryEntry struct {
 	Revalidated bool
 }
 
-func recoveryPointWithHistory(source Run, oldPlan, target *flow.Plan, sequences map[string]int64, fromStage string, history []recoveryHistoryEntry) (recoveryPoint, int, error) {
-	point, err := recoveryPointOf(source, oldPlan, target, sequences, "")
+func recoveryPointWithHistory(source Run, oldPlan, target *flow.Plan, sequences map[string]int64, fromStage string, history []recoveryHistoryEntry, journals ...[]local.Event) (recoveryPoint, int, error) {
+	point, err := recoveryPointOf(source, oldPlan, target, sequences, "", journals...)
 	if err != nil {
 		return point, 0, err
 	}
@@ -39,7 +39,7 @@ func recoveryPointWithHistory(source Run, oldPlan, target *flow.Plan, sequences 
 			return recoveryPoint{StageID: fromStage, Cutoff: 0, Reason: "the operator chose to start again from this accepted inherited stage"}, i, nil
 		}
 	}
-	point, err = recoveryPointOf(source, oldPlan, target, sequences, fromStage)
+	point, err = recoveryPointOf(source, oldPlan, target, sequences, fromStage, journals...)
 	return point, len(history), err
 }
 
@@ -157,7 +157,7 @@ func (e *Engine) recoveryHistory(ctx context.Context, source Run, visiting map[s
 	if err != nil {
 		return nil, err
 	}
-	natural, _, err := recoveryPointWithHistory(parent, parentPlan, childPlan, sequences, "", inherited)
+	natural, _, err := recoveryPointWithHistory(parent, parentPlan, childPlan, sequences, "", inherited, events)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (e *Engine) recoveryHistory(ctx context.Context, source Run, visiting map[s
 	if chosen != natural.StageID {
 		fromStage = chosen
 	}
-	point, cut, err := recoveryPointWithHistory(parent, parentPlan, childPlan, sequences, fromStage, inherited)
+	point, cut, err := recoveryPointWithHistory(parent, parentPlan, childPlan, sequences, fromStage, inherited, events)
 	if err != nil {
 		return nil, err
 	}
