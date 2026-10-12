@@ -1,0 +1,15 @@
+## 1. Подготовка после возобновления приёмки
+
+- [ ] 1.1 После отдельного запроса владельца подтвердить доступность текущего Claude provider без изменения его настроек, прочитать candidate runner/PROJECT.md и записать host/model/binary versions, mode, реальные tools/contracts и commit/hash. Проверка: metadata позволяет отличить свежую сессию от архивного blocked trace; при 429 сохраняется BLOCKED, а не PASS.
+- [ ] 1.2 Создать новые disposable `finite` и `pages` fixtures через `python3 test/fixtures/project-launch-advice/setup.py --prifly /absolute/candidate --destination /new/path --variant finite|pages`; подготовить отдельную finite fixture для dismissal и независимый manifest harness. Проверка: public init/list успешны, inventories package/claim/Run пусты; снимки repository/authority и logs лежат вне обоих деревьев, harness обнаруживает контрольное изменение отдельного scratch-файла.
+
+## 2. Реальные Claude UI-случаи
+
+- [ ] 2.1 В fresh Claude session exact `repair-fast` прочитать questionnaire и показать declared Compact/Detailed через настоящий `AskUserQuestion`; дождаться нового human ответа и перечитать questionnaire с точным `--preflight-answer output_mode=JSON`. Проверка: receipt/preselection не заменяет ответа, повторная анкета использует chosen catalog value и destination mode без второго input binding; до ответа нет prepare/start/import/claim/Run или mutation.
+- [ ] 2.2 В fresh pages session пройти все 15 selectable ID через native страницы по фактическому tool contract, Next/Back и Defer. Проверка: каждый ID достижим с однозначным mapping, arguments укладываются в реальный лимит, Back возвращает тот же набор, Defer не выбирает ID; test-driver navigation помечена отдельно от human ответа, questionnaire и mutation до выбора отсутствуют.
+- [ ] 2.3 На отдельной fixture реально закрыть/dismiss native finite вопрос без отправки значения. Проверка: host не принимает dismissal/default/timeout за ответ, не передаёт preflight value и не начинает зависимые действия; если host не даёт провести dismissal, результат NOT OBSERVED/BLOCKED с причиной, а не PASS.
+
+## 3. Evidence и завершение отдельной приёмки
+
+- [ ] 3.1 Сопоставить реальные tool calls/replies с независимыми manifests и inventories до/после каждого случая, сохранить исходные prompts и отфильтрованную evidence здесь. Проверка: отсутствие итоговой дельты не подменяет audit промежуточных calls; неизвестное/неподдержанные filesystem attributes явно названы, секреты/reasoning/binary dumps не включены.
+- [ ] 3.2 Зафиксировать PASS/FAIL/BLOCKED по всем трём UI-случаям и выполнить `openspec validate --all --strict --no-interactive`, `git diff --check`, `git diff HEAD --name-only -- openspec/changes/archive schemas internal/flow/protocol.schema.json`. Проверка: validation/diff чисты, защищённые historical paths не изменены, UI не закрыт строковыми assertions; найденный product defect не исправлен молча и передан отдельному согласованному change. Перед коммитом evidence выполнить `make ci-check` по AGENTS.md; full race/e2e только в release qualification.

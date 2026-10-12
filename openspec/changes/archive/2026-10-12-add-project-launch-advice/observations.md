@@ -194,3 +194,22 @@ Native receipts по-прежнему предшествовали отдель�
 штатный Folder access; TERM warning принят, CLI update из баннера не выполнялся.
 Этот результат не подтверждает автоматический split по отсутствующему в
 Codex tool contract лимиту; фактический Claude limit отдельно DEFERRED.
+
+## Состояние при архивировании — 2026-10-12
+
+Реализация зафиксирована в `d0cb89a568eddef08634d2dafba3da55c8cda82b` и
+влита в `main` через fast-forward по явному запросу владельца. Run
+`run:274c1d674dbef5d7d4740702de340aacc5b04da8629bb443a8356ee4a8354fd7`
+завершён с outcome `succeeded`, version 96: verify, security, review и commit
+приняты; gate warnings неблокирующие. Предыдущая «Точка продолжения» выше
+сохраняет состояние промежуточного наблюдения, а не текущий статус Run.
+
+Три delta specs синхронизированы с main source sets; три пересекающихся блока
+активного `make-project-launch-workflow-neutral` приведены к новым требованиям
+без изменения остальных требований, progress или release evidence. Ownership,
+public schemas, glossary bindings и версии контрактов не менялись.
+
+Отложенная Claude-приёмка сохранена в активном follow-up
+[verify-claude-launch-choice-ui](../../verify-claude-launch-choice-ui/tasks.md).
+Чеклист DEFERRED выше не объявляется пройденным; архивирование реализации не
+закрывает эту host-приёмку, product gates или release qualification.

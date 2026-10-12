@@ -55,4 +55,4 @@ fixture; не выдавайте переиспользование уже из�
 от UI. Один успешный question tool call не подтверждает весь сценарий.
 
 Матрица фактических observations и ещё открытые случаи находятся в
-[OpenSpec change](../../../openspec/changes/add-project-launch-advice/observations.md).
+[OpenSpec change](../../../openspec/changes/archive/2026-10-12-add-project-launch-advice/observations.md).

@@ -25,9 +25,39 @@ MUST отказывать лишь из-за конфликта самого nam
 вызов, изменивший одно, не читался как отменивший другое.
 Чтение `/2` и распознавание опубликованных frozen runners MUST сохраняться.
 
+Для конечного developer decision entry point MUST использовать нативный
+question tool своего host, когда этот tool предоставлен runtime и его контракт
+допускает данный вопрос в текущем режиме: Codex runner вызывает применимый
+`request_user_input` либо `request_user_input_async`, а Claude Code runner —
+`AskUserQuestion`. Правило MUST действовать и для предстартового выбора launch,
+Workspace, profile, policy и finite preflight answer, независимо от совета.
+При асинхронном tool entry point MUST ждать фактический ответ до зависимого
+действия; receipt показа и предвыбранный вариант MUST NOT считаться выбором.
+Новый runner для Codex CLI и Codex app MAY разделять один текст template с
+подставленным fixed host ID; Claude Code MUST получать отдельный template.
+Вопрос содержит только реальные взаимоисключающие варианты, short label и
+последствие выбора; рекомендуемый вариант обозначается явно. Runner MUST NOT
+синтезировать Markdown-псевдокнопки, скрывать варианты или выбирать default.
+Если native tool не предоставлен или неприменим, runner MUST ждать явный текстовый ответ и
+MUST NOT начинать mutation. Existing tracked runner остаётся reviewed source:
+новая версия `project init` не перезаписывает его; owner обновляет его отдельным
+commit.
+
 #### Scenario: Claude Code запускает общий проект
 - **WHEN** developer вызывает установленный `.claude/skills/prifly-run`
 - **THEN** он передаёт `claude-code` и не читает Codex root
+
+#### Scenario: Codex показывает конечный выбор нативно
+- **WHEN** Codex runner получил несколько допустимых launch или Workspace
+  вариантов и `request_user_input` предоставлен runtime
+- **THEN** runner вызывает этот tool до создания package, claim или Run и ждёт
+  returned selection
+
+#### Scenario: Native tool недоступен
+- **WHEN** host runner обязан получить конечное решение, но runtime не
+  предоставляет его native question tool
+- **THEN** runner запрашивает один явный текстовый ответ и не выбирает вариант
+  или не меняет authority до ответа
 
 #### Scenario: Existing host runner останавливает init
 - **WHEN** создание выбранного runner конфликтует с существующим файлом
@@ -64,18 +94,6 @@ MUST отказывать лишь из-за конфликта самого nam
   записана в `local.yaml`
 - **THEN** квитанция печатает обе из файла, и владелец не читает её как отмену
   того, чего вызов не касался
-
-#### Scenario: Codex показывает конечный выбор нативно
-- **WHEN** Codex runner получил несколько допустимых launch или Workspace
-  вариантов и `request_user_input` предоставлен runtime
-- **THEN** runner вызывает этот tool до создания package, claim или Run и ждёт
-  returned selection
-
-#### Scenario: Native tool недоступен
-- **WHEN** host runner обязан получить конечное решение, но runtime не
-  предоставляет его native question tool
-- **THEN** runner запрашивает один явный текстовый ответ и не выбирает вариант
-  или не меняет authority до ответа
 
 ### Requirement: CLI запускает declared Project workflow с explicit workspace mode
 CLI SHALL предоставлять один `project start` для declared launch. В profile
@@ -117,16 +135,25 @@ autonomy summary; compile и start одного входа MUST согласов
   а потребитель не принимает author version за alias последнего варианта
 
 ### Requirement: Общий runner не содержит правил отраслевого процесса
+
 Текущий `prifly-run` SHALL исполнять только общий protocol выбранного launch:
 объявленные inputs, ready tasks, effects, typed decisions, control и outputs.
+До явного выбора runner SHALL поддерживать условный совет по назначению
+объявленных launch, не добавляя обязательный этап к каждому workflow.
 Он MUST NOT добавлять improve/review/fix, число рецензентов, обязательный commit
 или правило завершения отраслевого цикла. Такие правила MUST принадлежать
 workflow package. Frozen исторические templates остаются только для exact
 recognition и безопасного upgrade, не как default инструкции нового runner.
 
 #### Scenario: Package использует один шаг без planning/review
+
 - **WHEN** host запускает такой package
 - **THEN** runner не добавляет рецензента, цикл улучшений или commit
+
+#### Scenario: Workflow не нуждается в совете
+
+- **WHEN** launch уже назван пользователем или проектные инструкции отключают совет для него
+- **THEN** runner переходит к существующей процедуре выбранного launch без отдельной стадии подбора, нового Run или новых настроек workflow
 
 ### Requirement: Анкета объясняет запуск до первого эффекта
 `project questionnaire` SHALL давать read-only представление selected profile,
