@@ -39,4 +39,5 @@
 | `internal/runtime/model.go` | Модель authority |
 | `internal/flow/types.go` | Модель workflow и контрактов |
 | `internal/flow/protocol.schema.json` | Источник истины опубликованного контракта |
+| `scripts/ensure-ci-check.py`, `scripts/release_checks.py`, `scripts/ensure-release-checks.py` | Репозиторные helpers локального evidence и exact-SHA CI; не слой runtime |
 | `Makefile` | Ворота: `check`, `ci-check`, `race`, `e2e`, `schemas-check` |

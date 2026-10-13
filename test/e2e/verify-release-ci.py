@@ -107,6 +107,27 @@ def main() -> int:
     if "workflow_dispatch:" not in qualify or "push:" in qualify or "make race" not in qualify or "make e2e" not in qualify:
         print("qualify workflow must be dispatched by hand and run the race detector and the full e2e", file=sys.stderr)
         return 1
+    # Reuse may skip a batch only behind the exact-SHA evidence preflight.
+    for name, workflow, jobs in (("verify", verify, ("static", "engine", "packages")), ("qualify", qualify, ("race", "e2e"))):
+        required = ("actions: read", "concurrency:", "group: ${{ github.workflow }}-${{ github.sha }}",
+                    "cancel-in-progress: false", "expected_sha:", "force:", "type: boolean")
+        if any(item not in workflow for item in required):
+            print(name+" lacks safe exact-SHA serialization/inputs", file=sys.stderr)
+            return 1
+        preflight = job_section(workflow, "preflight")
+        for item in ("GH_TOKEN: ${{ github.token }}", "EXPECTED_SHA: ${{ inputs.expected_sha }}", "FORCE_CHECKS: ${{ inputs.force }}",
+                     "scripts/release_checks.py --preflight "+name, "execute: ${{ steps.check.outputs.execute }}", "source_run: ${{ steps.check.outputs.source_run }}"):
+            if item not in preflight:
+                print(name+" drops a preflight evidence boundary: "+item, file=sys.stderr)
+                return 1
+        for job in jobs:
+            block = job_section(workflow, job)
+            if "needs: preflight" not in block or "if: needs.preflight.outputs.execute == 'true'" not in block:
+                print(name+" has an unguarded or disabled batch job: "+job, file=sys.stderr)
+                return 1
+    if "make verify" in release or "make race" in release or "make e2e" in release or "make ci-check" in release:
+        print("release repeats product tests", file=sys.stderr)
+        return 1
     installer = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
     # A first install trusts HTTPS to GitHub and nothing else, so the one thing
     # it can still check is that the archive it received is the archive this

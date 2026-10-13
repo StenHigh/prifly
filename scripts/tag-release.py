@@ -14,28 +14,15 @@ import json
 import re
 import subprocess
 import sys
-
-REQUIRED = ("verify", "qualify")
+from release_checks import GitHub, REQUIRED, select
 
 
 def run(*args):
     return subprocess.run(args, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def missing_checks(runs):
-    """The required workflows without a successful run, each with what it found."""
-    missing = []
-    for name in REQUIRED:
-        mine = [r for r in runs if r.get("name") == name]
-        if any(r.get("status") == "completed" and r.get("conclusion") == "success" for r in mine):
-            continue
-        if not mine:
-            missing.append(f"{name}: never ran on this commit")
-        elif any(r.get("status") != "completed" for r in mine):
-            missing.append(f"{name}: still running")
-        else:
-            missing.append(f"{name}: {', '.join(sorted({r.get('conclusion') or 'unknown' for r in mine}))}")
-    return missing
+def missing_checks(states):
+    return [name+": "+r['state']+" ("+r['reason']+")" for name,r in states.items() if r['state']!='success']
 
 
 def main():
@@ -49,13 +36,15 @@ def main():
     sha = run("git", "rev-parse", args.sha + "^{commit}")
     if "[skip ci]" in run("git", "log", "-1", "--format=%B", sha):
         sys.exit(f"tag-release: {sha[:7]} is a [skip ci] commit; the release workflow builds nothing from it")
-    repo = run("gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
-    runs = json.loads(run("gh", "api", f"repos/{repo}/actions/runs?head_sha={sha}&per_page=100", "--jq", "[.workflow_runs[] | {name, status, conclusion}]"))
-    missing = missing_checks(runs)
+    client = GitHub()
+    states = {name: select(client, name, sha) for name in REQUIRED}
+    missing = missing_checks(states)
     if missing:
         sys.exit(f"tag-release: {sha[:7]} is not qualified for a release -- " + "; ".join(missing)
-                 + ". Run `gh workflow run qualify.yml --ref main` for this commit and tag once both are green.")
-    print(f"tag-release: {sha[:7]} has verify and qualify green")
+                 + ". Use scripts/ensure-release-checks.py --sha SHA --ref REF; retry a failed batch explicitly with --force.")
+    print(f"tag-release: {sha[:7]} has full verify and qualify on exact SHA")
+    for name, evidence in states.items():
+        print(name+": "+evidence['url']+" (direct batch, attempt "+str(evidence['attempt'])+")")
     if args.dry_run:
         return 0
     run("git", "tag", "-a", args.version, sha, "-m", args.version)
@@ -65,4 +54,7 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        sys.exit("tag-release: evidence unavailable: "+str(error))

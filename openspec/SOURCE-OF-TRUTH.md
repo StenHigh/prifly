@@ -60,6 +60,10 @@ binary: `npm install -g @fission-ai/openspec@1.11.0`. После установ�
 `openspec status` показывает активные changes. Архивированный change сохраняет
 историю планирования в `openspec/changes/archive/`.
 
+Пока `reuse-unchanged-verification-results` активен, его delta уточняет
+локальное повторное использование и exact-SHA release gates для source sets
+`quality-and-acceptance` и `release-distribution`; ownership не переносится.
+
 ## Границы
 
 OpenSpec не меняет Go runtime, user-facing YAML, sealed JSON package или

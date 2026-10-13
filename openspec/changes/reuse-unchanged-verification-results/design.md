@@ -55,7 +55,11 @@ OpenSpec, README, fixtures, schemas или scripts как «только док�
 external inputs: версии/hash toolchain из `.tools` и внешнего Go тоже входят
 в контекст. Build/module cache и собственные logs не входят в source snapshot.
 При неизвестном input, environment override или невозможности подтвердить
-контекст reuse отключается; helper не угадывает эквивалентность. В evidence
+контекст reuse отключается; helper не угадывает эквивалентность. Caller явно
+называет permission context через CHECK_CONTEXT/--context; пустое значение
+означает execute-only. Label — cooperative assertion host, не новое разрешение
+и не доказательство изоляции. При reuse свежий go mod verify проверяет integrity
+module cache; custom compiler flags/external workspace или GOFLAGS отключают reuse. В evidence
 не писать значения secrets из environment.
 
 Перед commit индекс должен соответствовать проверенным bytes публикуемых
