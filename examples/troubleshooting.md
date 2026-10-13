@@ -353,6 +353,22 @@ checkpoint и само дерево с оставленными файлами. 
 `checkpoint` исходного Run; `project continue --prepare` показывает, откуда
 будет взят каждый вход, до создания claim и Run.
 
+### `recover_frontier_unsupported` после nested preparation failure
+
+Если `workspace_tree_input_drift` записан до admission, новой Attempt нет.
+Propagated `child_failed` у нескольких caller не означает несколько независимых
+причин. Stable 0.13.76 не поддерживает этот recovery path; development исправление
+`fix-nested-preparation-recovery` проверяет одну цепочку и возвращается к целому
+root call/repeat. Выполните обе `project recover --prepare` (default и
+`--from-stage` с ранее принятой root stage), затем покажите владельцу digest.
+Подробности и команды — [continuation-guide](authoring/continuation-guide.md#вложенный-отказ-и-отказ-до-admission).
+
+При missing/cyclic caller evidence, несовпадении repeat decision или независимых
+отказах отказ остаётся. Выбор более ранней stage его не обходит. Prepare не
+исправляет dirty файлы: текущий plan сохраните, `exact_file` не разрешает
+перезапись unattributed output, а default start с прежним manifest вновь может
+дать drift. Не подменяйте результатом несуществующую Attempt и не очищайте claim.
+
 ### `resume_undeclared`, `resume_prefix_empty`, `resume_frontier_ambiguous`, `resume_from_stage_invalid`
 
 **Причина.** `project continue` с launch собственного workflow исходного Run

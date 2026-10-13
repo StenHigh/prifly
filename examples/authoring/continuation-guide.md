@@ -191,6 +191,42 @@ resume_stopped_run`, а перенесённое видно в `recovery.reused`
 содержимое артефактов для выбора дерева не используются; `--prepare`
 показывает передаваемое дерево и последний checkpoint.
 
+### Вложенный отказ и отказ до admission
+
+Recovery возвращается к **root stage**. Если preparation отказала до создания
+Attempt (например, `workspace_tree_input_drift`), `frontier_action` — `execute`;
+`source_frontier_attempt_id` и `candidate_ref` отсутствуют. Отказ внутри `call`
+или `repeat` выбирает целый root call/repeat: его subtree, включая прежние
+итерации, не переносится. Причину доказывают записанные invocation/caller
+связи и решения; независимые отказы дают `recover_frontier_unsupported`.
+`--from-stage` не обходит эту проверку. Это исправление
+`fix-nested-preparation-recovery`: пока только development CLI, ещё не stable
+release. Новых полей YAML нет; `call` требует WorkflowRevision **1**, `repeat`
+— **1**, а `resumable` для Run с исходом или отменой — **8**. Технический
+recovery не требует декларации `resumable`.
+
+```sh
+prifly project recover --prepare --repository . --launch SAME --source-run RUN --host HOST
+# Или начать заново с более ранней принятой root stage (например, plan):
+prifly project recover --prepare --repository . --launch SAME --source-run RUN --host HOST --from-stage plan
+# После просмотра выбранной точки, reused и claim используйте верхний review_digest:
+prifly project recover --repository . --launch SAME --source-run RUN --host HOST --from-stage plan \
+  --expected-launch-digest DIGEST
+```
+
+Prepare читает evidence, не меняя source Run или claim. Start передаёт текущее
+дерево без reset: dirty/untracked файлы остаются, claim generation увеличивается.
+Inputs и ответы сохраняются. Более ранняя stage должна быть принятой root
+stage до точки отказа, в том числе унаследованной; её результат и хвост не
+переносятся. При пустом prefix — `resume_prefix_empty`.
+
+Recovery не устраняет drift автоматически. Если заново читать прежний manifest,
+посторонняя запись снова даст тот же отказ. Для новой output-only capture
+`exact_file` уже существующий unattributed файл даёт `workspace_tree_output_exists`.
+Сохраните его; если автор объявил `direct_child_file`, можно явно выбрать новую
+разрешённую location. Нельзя удалять неизвестные bytes или расширять capture
+policy только ради обхода отказа.
+
 Если стадия упала на проверке своего результата (программа завершилась с кодом
 0, а выход не прошёл контракт пакета) и исправленный пакет этот результат
 принимает, стадия не исполняется снова: `recovery.frontier_action: revalidate`,
@@ -269,6 +305,7 @@ receipt по `command-id` и созданный дочерний Run; `project_c
 | `project_continue_active_child` | у исходного Run уже есть незавершённое продолжение | проверить его; `--allow-duplicate-continuation` для независимой работы |
 | `invalid_checkpoint` | компиляция: порт или схема checkpoint не сходятся | см. раздел про checkpoint |
 | `recover_source_unsettled` | исходный Run `uncertain`: шаг с внешней записью прервался, или исполнение не завершилось наблюдаемо | `run resolve`, затем повторить |
+| `recover_frontier_unsupported` | нет одной доказанной текущей failure chain; отсутствуют caller/decision/pre-admission facts или есть независимые причины | сохранить evidence; `--from-stage` не обходит отказ |
 | `recover_workspace_released` | дерево упавшего Run освобождено | восстановить нечем |
 | `resume_undeclared` | workflow не объявил `resumable` для этого исхода или отмены | объявить в ревизии 8 или продолжить другим workflow |
 | `resume_prefix_empty` | до точки ничего не принято | сохранить dirty work; отдельно рассмотреть новый start |

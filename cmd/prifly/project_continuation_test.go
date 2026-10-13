@@ -108,6 +108,7 @@ type continuationCLI struct {
 	command               func(...string) string
 	refuse                func(string, ...string) string
 	submit                func(map[string]string, []prifly.WorkspaceTreeLocation)
+	submitOnly            func(map[string]string, []prifly.WorkspaceTreeLocation)
 }
 
 func newContinuationCLI(t *testing.T, tailContinuation string) continuationCLI {
@@ -310,7 +311,7 @@ stages:
 	if source.WorkspacePath == "" || source.Workspace == nil {
 		t.Fatal("source Run has no claim worktree")
 	}
-	submit := func(outputs map[string]string, trees []prifly.WorkspaceTreeLocation) {
+	submitOnly := func(outputs map[string]string, trees []prifly.WorkspaceTreeLocation) {
 		t.Helper()
 		var task prifly.SessionTask
 		if err := json.Unmarshal([]byte(command("--project", authority, "session", "task", "--run", source.Run.Run.ID)), &task); err != nil {
@@ -338,9 +339,12 @@ stages:
 			t.Fatal(err)
 		}
 		command("--project", authority, "session", "submit", "--file", path)
+	}
+	submit := func(outputs map[string]string, trees []prifly.WorkspaceTreeLocation) {
+		submitOnly(outputs, trees)
 		command("--project", authority, "run", "drive", source.Run.Run.ID)
 	}
-	return continuationCLI{root: root, authority: authority, base: base, source: source, command: command, refuse: refuse, submit: submit}
+	return continuationCLI{root: root, authority: authority, base: base, source: source, command: command, refuse: refuse, submit: submit, submitOnly: submitOnly}
 }
 
 // The source reaches partial and the tail, continuing partial Runs, takes over

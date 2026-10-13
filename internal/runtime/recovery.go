@@ -153,14 +153,14 @@ func (e *Engine) PlanRecovery(ctx context.Context, request RecoveryRequest, targ
 		return result, err
 	}
 	// Preserve source eligibility precedence before following its ancestry.
-	if _, err := recoveryPointOf(source, oldPlan, target, sequences, ""); err != nil {
+	if _, err := recoveryPointOf(source, oldPlan, target, sequences, "", events); err != nil {
 		return result, err
 	}
 	history, err := e.recoveryHistory(ctx, source, map[string]bool{source.ID: true})
 	if err != nil {
 		return result, err
 	}
-	point, inheritedCut, err := recoveryPointWithHistory(source, oldPlan, target, sequences, request.FromStage, history)
+	point, inheritedCut, err := recoveryPointWithHistory(source, oldPlan, target, sequences, request.FromStage, history, events)
 	if err != nil {
 		return result, err
 	}
@@ -322,29 +322,26 @@ type recoveryPoint struct {
 
 // recoveryFrontier identifies one settled technical failure. It does not
 // authorize reuse: that decision also needs pinned bytes, route and subject.
-func recoveryFrontier(source Run) (*Activation, *Attempt, error) {
+func recoveryFrontier(source Run, journals ...[]local.Event) (*Activation, *Attempt, error) {
 	if source.Status != "failed" || source.Outcome != nil || source.Settled == nil {
 		return nil, nil, local.Reject("recover_source_ineligible", "recovery requires a technically failed Run without an outcome")
 	}
 	if source.CancelRequested || source.restricted() || recoverySourceUnsettled(source) {
 		return nil, nil, local.Reject("recover_source_unsettled", "source Run holds a stop, active work or unresolved obligation")
 	}
-	frontier := source.brokenStage()
-	if frontier == nil || frontier.Kind != "step" {
-		return nil, nil, local.Reject("recover_frontier_unsupported", "source Run has no single failed step frontier")
+	var events []local.Event
+	if len(journals) != 0 {
+		events = journals[0]
 	}
-	step := source.Steps[frontier.StepID]
-	if step == nil || step.Status != "failed" || len(step.AttemptIDs) == 0 {
-		return nil, nil, local.Reject("recover_frontier_unsupported", "failed step has no recorded Attempt")
+	frontier, err := recoveryFailureRoot(source, events)
+	if err != nil {
+		return nil, nil, err
 	}
-	attempt := source.Attempts[step.AttemptIDs[len(step.AttemptIDs)-1]]
-	if attempt == nil || attempt.StepID != step.ID || attempt.ActivationID != frontier.ID || attempt.Settled == nil || attempt.ProcessOutcome != nil && attempt.ProcessOutcome.Uncertain {
-		return nil, nil, local.Reject("recover_source_unsettled", "failed Attempt is missing settlement or has an uncertain process")
+	if frontier.Kind != "step" {
+		return frontier, nil, nil
 	}
-	if frontier.InvocationID != source.RootInvocationID {
-		return nil, nil, local.Reject("recover_frontier_unsupported", "recovery runs again a failed step of the root workflow")
-	}
-	return frontier, attempt, nil
+	attempt, err := recoveryFailedAttempt(source, frontier, events)
+	return frontier, attempt, err
 }
 
 func recoverySourceUnsettled(source Run) bool {
@@ -357,7 +354,7 @@ func recoverySourceUnsettled(source Run) bool {
 // workflow -- declares resumable for it: it stopped at the stage whose
 // accepted result led to finish, or at the stage it was cancelled at. An
 // operator may name an accepted root stage run before that point instead.
-func recoveryPointOf(source Run, oldPlan, target *flow.Plan, sequences map[string]int64, fromStage string) (recoveryPoint, error) {
+func recoveryPointOf(source Run, oldPlan, target *flow.Plan, sequences map[string]int64, fromStage string, journals ...[]local.Event) (recoveryPoint, error) {
 	var point recoveryPoint
 	if oldPlan == nil || target == nil || oldPlan.Workflow.ID != target.Workflow.ID {
 		return point, local.Reject("recover_prefix_changed", "root workflow changed")
@@ -368,11 +365,15 @@ func recoveryPointOf(source Run, oldPlan, target *flow.Plan, sequences map[strin
 		// the unresolved execution did, and that is the one step to name.
 		return point, local.Reject("recover_source_unsettled", "source Run holds an execution whose outcome nobody observed; attest it with run resolve --outcome applied|not_applied, then run it again")
 	case source.Status == "failed" && source.Outcome == nil:
-		frontier, attempt, err := recoveryFrontier(source)
+		frontier, attempt, err := recoveryFrontier(source, journals...)
 		if err != nil {
 			return point, err
 		}
-		point = recoveryPoint{StageID: frontier.StageID, Activation: frontier, Attempt: attempt, Cutoff: sequences[frontier.ID], Reason: "failed Attempt outputs were not all sealed"}
+		reason := "failed Attempt outputs were not all sealed"
+		if attempt == nil {
+			reason = "recorded technical failure runs the whole root stage again"
+		}
+		point = recoveryPoint{StageID: frontier.StageID, Activation: frontier, Attempt: attempt, Cutoff: sequences[frontier.ID], Reason: reason}
 	case source.Status == "completed" && source.Outcome != nil, source.Status == "cancelled":
 		declared := target.Workflow.Resumable
 		if source.Status == "cancelled" && (declared == nil || !declared.FromCancelled) {
