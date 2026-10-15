@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -125,6 +126,10 @@ func (e *Engine) applyControlledWithControlMutation(ctx context.Context, control
 }
 
 func (e *Engine) applyControlledWithSourcePin(ctx context.Context, control *local.ControlPin, pins []local.ControlPin, source *local.RunPin, controlMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error), actor, id, runID, eventType string, payload any, expected *int64, mode local.CommandMode, fn mutation) (local.ApplyResult, error) {
+	return e.applyWithAuthorityGuards(ctx, control, pins, source, controlMutation, nil, actor, id, runID, eventType, payload, expected, mode, fn)
+}
+
+func (e *Engine) applyWithAuthorityGuards(ctx context.Context, control *local.ControlPin, pins []local.ControlPin, source *local.RunPin, controlMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error), authorityGuards []local.AuthorityGuard, actor, id, runID, eventType string, payload any, expected *int64, mode local.CommandMode, fn mutation) (local.ApplyResult, error) {
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
@@ -137,7 +142,7 @@ func (e *Engine) applyControlledWithSourcePin(ctx context.Context, control *loca
 	}
 	started := time.Now()
 	var observed Observation
-	command := local.Command{ID: id, Actor: actor, RunID: runID, Payload: commandBytes, ExpectedVersion: expected, Mode: mode, Control: control, Pins: pins, SourceRun: source, Samples: e.commandTelemetry(id, runID, started)}
+	command := local.Command{ID: id, Actor: actor, RunID: runID, Payload: commandBytes, ExpectedVersion: expected, Mode: mode, Control: control, Pins: pins, SourceRun: source, AuthorityGuards: authorityGuards, Samples: e.commandTelemetry(id, runID, started)}
 	if controlMutation != nil {
 		command.ControlMutation = func(snapshot local.AuthoritySnapshot) (json.RawMessage, error) {
 			return controlMutation(snapshot, observed)
@@ -165,6 +170,12 @@ func (e *Engine) applyControlledWithSourcePin(ctx context.Context, control *loca
 		} else if eventType != "run.created" {
 			return local.Change{}, local.Reject("not_found", "run not found")
 		}
+		var queueBefore *QueueTaskBinding
+		if r.QueueTask != nil {
+			copy := *r.QueueTask
+			queueBefore = &copy
+		}
+		queueRequestBefore := append([]byte(nil), r.QueueRequestBytes...)
 		before := states(r)
 		previousAcceptance := ""
 		if r.PendingAcceptance != nil {
@@ -175,6 +186,12 @@ func (e *Engine) applyControlledWithSourcePin(ctx context.Context, control *loca
 		change, err := fn(&r, s, observed)
 		if err != nil {
 			return local.Change{}, err
+		}
+		if err := queueBindingInvariant(r); err != nil {
+			return local.Change{}, err
+		}
+		if len(s.Data) != 0 && (!reflect.DeepEqual(queueBefore, r.QueueTask) || !bytes.Equal(queueRequestBefore, r.QueueRequestBytes)) {
+			return local.Change{}, local.ErrIntegrity
 		}
 		if len(s.Data) != 0 && (r.Profile != profile || r.SchemaVersion != stateVersion) {
 			return local.Change{}, local.Reject("incompatible_run", "pinned profile and state contract cannot change")
@@ -1517,7 +1534,15 @@ func (e *Engine) Reopen(ctx context.Context, runID, commandID, reason string, ex
 	if err := flow.ValidateProtocol("ResumeCommand", b); err != nil {
 		return local.ApplyResult{}, err
 	}
-	return e.apply(ctx, e.owner, commandID, runID, "run.reopened", command, &expected, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	original, _, err := e.load(ctx, runID)
+	if err != nil {
+		return local.ApplyResult{}, err
+	}
+	var guards []local.AuthorityGuard
+	if original.QueueTask != nil {
+		guards = append(guards, e.queueReopenGuard(*original.QueueTask))
+	}
+	return e.applyWithAuthorityGuards(ctx, nil, nil, nil, nil, guards, e.owner, commandID, runID, "run.reopened", command, &expected, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if r.Status != "failed" || r.Outcome != nil {
 			return local.Change{}, local.Reject("not_a_broken_run", "reopen takes a Run that failed technically and reached no outcome; a Run with an outcome answered its question")
 		}

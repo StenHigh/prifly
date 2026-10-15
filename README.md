@@ -375,3 +375,12 @@ openspec validate my-change --strict
 
 Правила для агентов и contributors находятся в
 [governance](openspec/specs/specification-governance/spec.md).
+
+Локальная очередь задач включается только явными `project queue` командами:
+`add --input TASK.json --command-id ID`, `list`, `show --task-id ID`,
+`claim-next --owner SESSION --command-id ID`, `update`, `release`, `complete`
+и `reconcile`. Захват сохраняет request и владельца; выбор launch и typed inputs
+проходит обычные questionnaire/prepare/review. Все четыре selection flags и
+минимальные версии показаны в [справочнике профиля](examples/authoring/project-profile-authoring-reference.yaml).
+`complete` означает локальное завершение обработки. Неизвестный dispatch требует
+явного reconcile; таймер или повтор команды не разрешает второй запуск.

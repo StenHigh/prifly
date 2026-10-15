@@ -15,6 +15,7 @@ import (
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/projectwire"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
@@ -64,6 +65,7 @@ type generator struct {
 	questions             bool
 	resources             bool
 	liveOutput            bool
+	taskQueue             bool
 	recovery              bool
 }
 
@@ -219,6 +221,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if !g.resources && t == reflect.TypeFor[prifly.Run]() && (field.Name == "StageResources" || field.Name == "ResourceLimits") {
 						continue
 					}
+					if t == reflect.TypeFor[prifly.Run]() && (field.Name == "QueueTask" || field.Name == "QueueRequestBytes") {
+						continue
+					}
 					if !g.liveOutput && t == reflect.TypeFor[prifly.ExecutorConfig]() && (field.Name == "LiveOutput" || field.Name == "OutputLimitBytes") {
 						continue
 					}
@@ -360,6 +365,7 @@ var profileContracts = []struct {
 	{"questions", "generate answered-questions state/read version 41 contracts", func(g *generator) { g.questions = true }},
 	{"resources", "generate exclusive-resources state/read version 42 contracts", func(g *generator) { g.resources = true }},
 	{"live-output", "generate program live-output state/read version 43 contracts", func(g *generator) { g.liveOutput = true }},
+	{"task-queue", "generate queue-bound Run state/read version 44 contracts", func(g *generator) { g.taskQueue = true }},
 }
 
 // documentContracts are the author-facing documents, each produced whole by the
@@ -368,6 +374,10 @@ var documentContracts = []struct {
 	flag, description string
 	build             func() ([]byte, error)
 }{
+	{"project-task-queue", "generate local task queue ledger", func() ([]byte, error) { return flow.ProtocolSchema("ProjectTaskQueue") }},
+	{"project-task-queue-read", "generate task queue read", func() ([]byte, error) { return flow.ProtocolSchema("ProjectTaskQueueRead") }},
+	{"project-queue-task", "generate one queue task read", func() ([]byte, error) { return flow.ProtocolSchema("ProjectQueueTaskRead") }},
+
 	{"step-definition-v3", "generate StepDefinition v3 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV3") }},
 	{"step-definition-v4", "generate StepDefinition v4 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV4") }},
 	{"step-definition-v5", "generate StepDefinition v5 author contract", func() ([]byte, error) { return flow.ProtocolSchema("StepDefinitionV5") }},
@@ -975,6 +985,17 @@ func main() {
 			delete(contracts, name+"V42")
 		}
 	}
+	if g.taskQueue {
+		for _, name := range []string{"CoreRunView", "CoreRunState", "CoreCapabilities"} {
+			contracts[name+"V44"] = contracts[name+"V43"]
+			delete(contracts, name+"V43")
+		}
+		contracts["ProjectLaunchSummaryV4"] = reflect.TypeFor[projectwire.LaunchSummary]()
+		contracts["ProjectStartV4"] = reflect.TypeFor[projectwire.StartResult]()
+		contracts["ProjectQueueCommand"] = reflect.TypeFor[projectwire.QueueCommand]()
+
+	}
+
 	names := make([]string, 0, len(contracts))
 	for name, t := range contracts {
 		g.defs[name] = g.schema(t)
@@ -1310,6 +1331,48 @@ func main() {
 			bundle["title"] = "Pri-Fly program live-output contracts"
 			bundle["description"] = "State/read 43 seals, in a program's executor config, whether its stdout and stderr are opened to readers of the Run and how much it may print per stream. A Run is sealed at 43 only when an executor declares either. The output itself is not Run state: the newest bytes are kept beside the Run and read as program-output-read/1. Next keeps 42 and every earlier bundle is unchanged, byte for byte."
 		}
+		if g.taskQueue {
+			g.property("runtime_Run", "schema_version", map[string]any{"const": prifly.CoreQueueStateVersion})
+			g.property("runtime_RunView", "schema_version", map[string]any{"const": prifly.CoreQueueReadVersion})
+			for _, contract := range []string{"QueueTaskBinding", "QueueTaskSummary", "QueueLaunchIntent"} {
+				raw, err := flow.ProtocolSchema(contract)
+				if err != nil {
+					panic(err)
+				}
+				var binding map[string]any
+				if err := json.Unmarshal(raw, &binding); err != nil {
+					panic(err)
+				}
+				for name, def := range binding["$defs"].(map[string]any) {
+					g.defs[name] = def
+				}
+			}
+			g.property("runtime_Run", "queue_task", map[string]any{"$ref": "#/$defs/QueueTaskBinding"})
+			g.property("runtime_Run", "queue_request_bytes", map[string]any{"type": "string", "minLength": 1, "contentEncoding": "base64", "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"})
+			def := g.defs["runtime_Run"].(map[string]any)
+			def["required"] = append(def["required"].([]string), "queue_task", "queue_request_bytes")
+			g.property("projectwire_LaunchSummary", "schema_version", map[string]any{"const": "project-launch-summary/4"})
+			g.property("projectwire_LaunchSummary", "queue_task", map[string]any{"$ref": "#/$defs/QueueTaskSelection"})
+			summaryDef := g.defs["projectwire_LaunchSummary"].(map[string]any)
+			summaryDef["required"] = append(summaryDef["required"].([]string), "review_digest")
+			g.property("projectwire_StartResult", "schema_version", map[string]any{"const": "project-start/4"})
+			g.property("projectwire_StartResult", "queue_task", map[string]any{"$ref": "#/$defs/QueueTaskBinding"})
+			g.property("projectwire_StartResult", "launch_summary", map[string]any{"$ref": "#/$defs/ProjectLaunchSummaryV4"})
+			for _, name := range []string{"projectwire_LaunchSummary", "projectwire_StartResult"} {
+				def := g.defs[name].(map[string]any)
+				def["required"] = append(def["required"].([]string), "queue_task", "author_package", "build_key")
+			}
+			def = g.defs["projectwire_StartResult"].(map[string]any)
+			def["required"] = append(def["required"].([]string), "launch_summary", "run_id", "next_command")
+			g.property("projectwire_QueueCommand", "schema_version", map[string]any{"const": "project-queue-command/1"})
+			g.property("projectwire_QueueCommand", "operation", enum("add", "update", "claim-next", "release", "complete", "reconcile"))
+			g.property("projectwire_QueueCommand", "result", map[string]any{"oneOf": []any{map[string]any{"$ref": "#/$defs/QueueTaskSummary"}, map[string]any{"$ref": "#/$defs/QueueLaunchIntent"}}})
+
+			bundle["$id"] = "urn:prifly:core-task-queue:44"
+			bundle["title"] = "Pri-Fly queue-bound Run contracts"
+			bundle["description"] = "State/read 44 requires the immutable queue task selection and launch intent admitted with this Run. Ordinary Runs retain their previous contract. Queue ownership is local and does not change the Run outcome."
+		}
+
 		if g.waits && !g.guards {
 			mapConstraints(&g)
 			waitConstraints(&g)

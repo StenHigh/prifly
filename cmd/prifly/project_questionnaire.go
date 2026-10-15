@@ -9,16 +9,11 @@ import (
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/projectwire"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
-type projectDecisionState struct {
-	ID            string `json:"id"`
-	Phase         string `json:"phase"`
-	Applicability string `json:"applicability"`
-	Answered      bool   `json:"answered"`
-	WaitReason    string `json:"wait_reason,omitempty"`
-}
+type projectDecisionState = projectwire.DecisionState
 
 func projectDecisionStates(selection projectPreflight) []projectDecisionState {
 	answers := map[string]json.RawMessage{}
@@ -76,52 +71,7 @@ func projectDecisionStates(selection projectPreflight) []projectDecisionState {
 // a separate human answered. No input-file, supporting-file or environment
 // bytes are printed. Declared decision values and shared argv are owner-visible
 // like the existing final Decision Sheet; they are not secret storage.
-type projectLaunchSummary struct {
-	SchemaVersion       string                        `json:"schema_version"`
-	Repository          string                        `json:"repository"`
-	Authority           string                        `json:"authority"`
-	Launch              string                        `json:"launch"`
-	Host                string                        `json:"host,omitempty"`
-	WorkspaceMode       string                        `json:"workspace_mode,omitempty"`
-	Package             flow.Ref                      `json:"package"`
-	AuthorPackage       *projectBuildIdentity         `json:"author_package,omitempty"`
-	BuildKey            string                        `json:"build_key,omitempty"`
-	Workflow            flow.Ref                      `json:"workflow"`
-	Requirements        *projectLaunchRequirements    `json:"requirements,omitempty"`
-	InputDigests        map[string]string             `json:"input_digests"`
-	InputRefs           map[string]prifly.ArtifactRef `json:"input_refs"`
-	BriefDigest         string                        `json:"brief_digest,omitempty"`
-	ConfigurationDigest string                        `json:"configuration_digest"`
-	Execution           []projectExecutionReview      `json:"execution"`
-	// RegistryBudget is how full the authority's definition budget is after
-	// this launch's edition: a project that follows every release fills it by
-	// being diligent, and the refusal came without warning.
-	RegistryBudget *prifly.RegistryBudget `json:"registry_budget,omitempty"`
-	// RegistryRetirement is the older editions of this package the launch
-	// withdraws so its edition fits the registry, and the ones it keeps and
-	// why. Present only when the edition does not fit as things are. The
-	// review digest covers it: a Run or package changed since the review makes
-	// the plan, and the reviewed launch, stale.
-	RegistryRetirement *prifly.RegistryRetirement   `json:"registry_retirement,omitempty"`
-	SessionLimits      []prifly.SessionLimitPreview `json:"session_limits,omitempty"`
-	// ModelProfiles is what this launch would seal as the meaning of each
-	// declared profile name for the selected host. It belongs in the summary
-	// because the Run seals it: without it the digest this summary is checked
-	// by says nothing about a machine-local table edited between the review
-	// and the start, and the staleness check exists for exactly that class.
-	ModelProfiles              map[string]prifly.ModelProfileTranslation `json:"model_profiles,omitempty"`
-	DecisionSheet              prifly.DecisionSheet                      `json:"decision_sheet"`
-	DecisionStates             []projectDecisionState                    `json:"decision_states"`
-	KnownQuestionsOnly         bool                                      `json:"known_questions_only"`
-	ReviewDigest               string                                    `json:"review_digest,omitempty"`
-	Continuation               *projectContinuationReview                `json:"continuation,omitempty"`
-	AllowDuplicateContinuation bool                                      `json:"allow_duplicate_continuation,omitempty"`
-	Recovery                   *prifly.RecoveryPlan                      `json:"recovery,omitempty"`
-	// Admission is filled only by --prepare, and deliberately after the review
-	// digest is computed: it reads a quantity other Runs move, and folding it in
-	// would make the digest go stale on its own.
-	Admission *projectAdmissionPreview `json:"admission,omitempty"`
-}
+type projectLaunchSummary = projectwire.LaunchSummary
 
 // projectAdmissionState turns a reading of the authority's slots into the
 // answer a caller wanted from an attempt: would this launch be admitted now.
@@ -140,36 +90,9 @@ func projectAdmissionState(capacity int64, held, waiting int) *projectAdmissionP
 // without changing the answer, and no stand compared that refusal between
 // releases. This is a reading, not a promise: a slot can be taken or freed
 // between this answer and the start that follows it.
-type projectAdmissionPreview struct {
-	Capacity    int64  `json:"capacity"`
-	Held        int64  `json:"held"`
-	Waiting     int64  `json:"waiting"`
-	Available   int64  `json:"available"`
-	WouldRefuse string `json:"would_refuse,omitempty"`
-}
+type projectAdmissionPreview = projectwire.AdmissionPreview
 
-type projectExecutionReview struct {
-	DefinitionRef       flow.Ref          `json:"definition_ref"`
-	Executable          string            `json:"executable"`
-	ExecutableDigest    string            `json:"executable_digest"`
-	Args                []string          `json:"args"`
-	FileDigests         map[string]string `json:"file_digests"`
-	ConfigurationDigest string            `json:"configuration_digest"`
-	// EnvironmentNames are the machine-local variables this program runs with,
-	// by name only. The values are what a project puts its database password
-	// into, and this document goes to a terminal and a host's log; README
-	// promised they were not printed, and until 0.13.33 they were. The values
-	// still enter the configuration digest, so a changed one still invalidates
-	// a reviewed launch.
-	EnvironmentNames []string `json:"environment_names,omitempty"`
-	// EnvironmentSources says where a value that is not written down comes
-	// from: the reviewer sees the place, never the secret.
-	EnvironmentSources map[string]string `json:"environment_sources,omitempty"`
-	// LiveOutput says a reader of the Run will see this program's newest
-	// output while it works; OutputLimitBytes is what it may print per stream.
-	LiveOutput       bool  `json:"live_output,omitempty"`
-	OutputLimitBytes int64 `json:"output_limit_bytes,omitempty"`
-}
+type projectExecutionReview = projectwire.ExecutionReview
 
 func projectReviewDigest(value any) (string, error) {
 	data, err := json.Marshal(value)

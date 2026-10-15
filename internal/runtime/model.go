@@ -303,6 +303,8 @@ const (
 	// config, so a Run that declares either is sealed at 43.
 	CoreLiveOutputStateVersion = "core-state/43"
 	CoreLiveOutputReadVersion  = "core-read/43"
+	CoreQueueStateVersion      = "core-state/44"
+	CoreQueueReadVersion       = "core-read/44"
 	// A terminal Run names where its graph stopped. Both halves were already
 	// held: the finish activation is in the state, and the edge that reached
 	// it is declared in the plan the Run sealed. A host that wanted the reason
@@ -815,6 +817,8 @@ type PublishCommand struct {
 	ItemKeys             []string        `json:"item_keys,omitempty"`
 }
 type Run struct {
+	QueueRequestBytes      []byte                    `json:"queue_request_bytes,omitempty"`
+	QueueTask              *QueueTaskBinding         `json:"queue_task,omitempty"`
 	SchemaVersion          string                    `json:"schema_version"`
 	ID                     string                    `json:"id"`
 	AuthorityID            string                    `json:"authority_id"`

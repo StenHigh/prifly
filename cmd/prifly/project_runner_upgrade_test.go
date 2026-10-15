@@ -57,9 +57,9 @@ func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
 func TestProjectRunnerTextIsPinned(t *testing.T) {
 	t.Parallel()
 	pinned := map[string]string{
-		"codex-cli":   "sha256:2a7926a7c8bcabc6bde25f9d9ddd39dc747dfee7c90d2e756ab90245bae6752d",
-		"codex-app":   "sha256:88eeec40fb72ae4acadc590d399ab8cdddb6c2a09bcdfe18c156c676c550864b",
-		"claude-code": "sha256:829cafc746f1c60df4e67ec4baa42af4fb13e28cd5874fcbbb636f04e77fc0d8",
+		"codex-cli":   "sha256:8893834b96d1c734e7ac189d2530a5fbb17cdc772d1cd3b7e98dff02232efbbe",
+		"codex-app":   "sha256:caa8e9b64ce05b2033de31a59adcf6e114519dc2b8571145764f08e10b063614",
+		"claude-code": "sha256:bc09b8871a8f6dce192ff083361c85d6ec7dcd12854a36ae2c37ea538e94d115",
 	}
 	for _, host := range projectHosts {
 		sum := sha256.Sum256([]byte(projectRunnerSkill(host)))
@@ -105,6 +105,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:aae2f729b5c0c54c4b884fe05d5c197d8476cd3a33f0c78c4576fac7dc22e9b6",
 			"sha256:bbcd1d3429b336c7ae47b1de87925d7b92a82c10a5bca8e7aaaca7bbb61c19d0",
 			"sha256:d7c895ff5ded3938622d81e6c5b80b14cfc6e6d7f06d69d0164108d6d4da8c24",
+			"sha256:2a7926a7c8bcabc6bde25f9d9ddd39dc747dfee7c90d2e756ab90245bae6752d",
 		},
 		"codex-app": {
 			"sha256:0fecbf3f6b3b67b2347896025b6f0e28f64d7cf6002b5151790bcb8352623376",
@@ -135,6 +136,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:1f6fc9b545c375ab3f1dd7f8fba7a10b763dd54a9af4c006a59b78a329f2d574",
 			"sha256:f1f8ba5ebc2a920a562c7a7c0ac691b6dff43dea1e2c0c66b5b7259956f5b6ed",
 			"sha256:b56110298b16a89e50783f614ac84fa1a8b15403a1080a9b717ede54ea80d162",
+			"sha256:88eeec40fb72ae4acadc590d399ab8cdddb6c2a09bcdfe18c156c676c550864b",
 		},
 		"claude-code": {
 			"sha256:416af8429794e5adef4b7180427c3b74b517404b44f36be226f752aa0f61196d",
@@ -165,6 +167,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:c39d43a4bf22fea3ede2b0fcfc6dc0e48bba6b8bc4338e34f223cac12b22ec14",
 			"sha256:24524bcb1a5fd0990ab09ca46c1e57d1ff691f659d6cee7d080e5d6c59cd4d0c",
 			"sha256:ac8610ed91648612f5bcbf23302012ef4bfe65aaadf685a5808d72f6d0fda432",
+			"sha256:829cafc746f1c60df4e67ec4baa42af4fb13e28cd5874fcbbb636f04e77fc0d8",
 		},
 	}
 	for _, host := range projectHosts {

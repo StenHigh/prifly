@@ -32,6 +32,7 @@ func startGrantRefs(grantID string) []any {
 }
 
 type StartOptions struct {
+	QueueTask *QueueTaskBinding
 	// Empty and "1" retain the mandatory RunBrief contract. Version 2 admits
 	// declared workflow inputs without manufacturing a separate task document.
 	SchemaVersion string
@@ -677,6 +678,27 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
+	if options.QueueTask == nil {
+		if err := e.checkUnboundQueueRun(ctx, e.IntendedRunID(options.CommandID)); err != nil {
+			return local.ApplyResult{}, err
+		}
+	}
+	sourceID := ""
+	if options.Continuation != nil {
+		sourceID = options.Continuation.RunID
+	}
+	if options.Recovery != nil {
+		sourceID = options.Recovery.SourceRunID
+	}
+	if sourceID != "" {
+		source, _, err := e.load(ctx, sourceID)
+		if err != nil {
+			return local.ApplyResult{}, err
+		}
+		if source.QueueTask != nil && (options.QueueTask == nil || options.QueueTask.Selection.TaskID != source.QueueTask.Selection.TaskID) {
+			return local.ApplyResult{}, fault("queue_source_identity_conflict", "continuation must retain the source Run's queue Task identity")
+		}
+	}
 	if err := executorBindingVersion(options.SchemaVersion, options.ExecutionBindings); err != nil {
 		return local.ApplyResult{}, err
 	}
@@ -1222,7 +1244,32 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		sourcePin = &local.RunPin{ID: recoverySource.ID, Version: options.Recovery.SourceRunVersion}
 		startPayload = map[string]any{"run_start": startCommand, "fork": fork, "recovery_plan_digest": recoveryPlan.ReviewDigest}
 	}
-	return e.applyControlledWithSourcePin(ctx, pin, pins, sourcePin, controlMutation, e.owner, options.CommandID, runID, "run.created", startPayload, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	var queueRequestBytes []byte
+	queueGuards := []local.AuthorityGuard{e.queueUnboundRunGuard(runID)}
+	if options.QueueTask != nil {
+		if plan.Profile != flow.CoreProfile || configurations == nil {
+			return local.ApplyResult{}, fault("queue_requires_core", "a queue task requires a scoped core Run")
+		}
+		// Read immutable revision bytes before entering the transaction. The
+		// scoped guard fences the selection again at commit.
+		selection := options.QueueTask.Selection
+		view, err := e.QueueTask(ctx, selection.TaskID)
+		if err != nil {
+			return local.ApplyResult{}, err
+		}
+		if selection.TaskRevision < 1 || selection.TaskRevision > int64(len(view.Task.Revisions)) {
+			return local.ApplyResult{}, fault("queue_task_revision_conflict", "reviewed request revision is not recorded")
+		}
+		revision := view.Task.Revisions[selection.TaskRevision-1]
+		if revision.RequestDigest != selection.RequestDigest {
+			return local.ApplyResult{}, fault("queue_task_revision_conflict", "request digest differs from the reviewed selection")
+		}
+		request := revision.RequestBytes
+		queueRequestBytes = request
+		startPayload = map[string]any{"start": startPayload, "queue_task": options.QueueTask}
+		queueGuards = []local.AuthorityGuard{e.queueAdmissionGuard(*options.QueueTask, runID)}
+	}
+	return e.applyWithAuthorityGuards(ctx, pin, pins, sourcePin, controlMutation, queueGuards, e.owner, options.CommandID, runID, "run.created", startPayload, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if blocked != nil {
 			return local.Change{}, blocked
 		}
@@ -1403,8 +1450,11 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 			stateVersion = higherState(stateVersion, CoreRecoveryStateVersion)
 			provenance = &RecoveryProvenance{SchemaVersion: "recovery/2", SourceRunID: recoveryPlan.SourceRunID, SourceRunVersion: recoveryPlan.SourceRunVersion, ReviewDigest: recoveryPlan.ReviewDigest, FrontierStageID: recoveryPlan.FrontierStageID, FrontierAction: recoveryPlan.FrontierAction, CandidateRef: recoveryPlan.CandidateRef, Reused: recoveryPlan.Reused, RootOutputs: recoveryOutputs}
 		}
+		if options.QueueTask != nil {
+			stateVersion = higherState(stateVersion, CoreQueueStateVersion)
+		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
-		*r = Run{SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Recovery: provenance, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{startStage}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles, StageResources: options.StageResources, ResourceLimits: options.ResourceLimits}
+		*r = Run{QueueTask: options.QueueTask, QueueRequestBytes: queueRequestBytes, SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Recovery: provenance, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{startStage}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles, StageResources: options.StageResources, ResourceLimits: options.ResourceLimits}
 		if configurations != nil {
 			r.Ready = nil
 			r.WorkflowConfigurations = configurations

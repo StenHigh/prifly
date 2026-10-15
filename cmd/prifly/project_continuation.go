@@ -7,6 +7,7 @@ import (
 	"regexp"
 
 	"github.com/stenhigh/prifly/internal/flow"
+	"github.com/stenhigh/prifly/internal/projectwire"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
@@ -15,10 +16,7 @@ var projectCommitID = regexp.MustCompile(`^[0-9a-f]{40}$`)
 // projectContinuationReview is what a continuation takes, as its workflow
 // declared it, and the tree it starts in: the source Run's own, handed over,
 // unless the operator names a commit to claim instead.
-type projectContinuationReview struct {
-	Source          prifly.ContinuationSource `json:"source"`
-	WorkspaceCommit string                    `json:"workspace_commit,omitempty"`
-}
+type projectContinuationReview = projectwire.ContinuationReview
 
 func projectCheckActiveContinuation(ctx context.Context, engine *prifly.Engine, sourceRunID string) error {
 	runs, err := engine.Runs(ctx)

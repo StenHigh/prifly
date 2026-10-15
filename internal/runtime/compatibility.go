@@ -214,6 +214,11 @@ func Capabilities() CapabilityManifest {
 	// A program may report its own progress over fd 4. The report is kept
 	// beside the Run, never in it, so no state or read version is minted.
 	profile.Capabilities = append(profile.Capabilities, "program_progress")
+	profile.StateVersion, profile.ReadVersion = CoreQueueStateVersion, CoreQueueReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreQueueStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreQueueReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "project_task_queue")
+
 	return manifest
 }
 

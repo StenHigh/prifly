@@ -101,6 +101,14 @@ func decodeState(data []byte, value any) error {
 		if err := json.Unmarshal(data, &fields); err != nil {
 			return err
 		}
+		_, queueBindingPresent := fields["queue_task"]
+		_, queueRequestPresent := fields["queue_request_bytes"]
+		if (queueBindingPresent || queueRequestPresent) && !atLeast(r.SchemaVersion, CoreQueueStateVersion) {
+			return errors.New("older state cannot contain a queue task binding")
+		}
+		if err := queueBindingInvariant(*r); err != nil {
+			return err
+		}
 		if err := contextWireFields(fields, r.SchemaVersion); err != nil {
 			return err
 		}

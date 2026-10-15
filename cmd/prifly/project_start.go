@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,42 +14,11 @@ import (
 
 	"github.com/stenhigh/prifly/internal/flow"
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/projectwire"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
-type projectStartResult struct {
-	SchemaVersion string `json:"schema_version"`
-	// RunID, NextCommand and RetiredEditions lead the document: the full Run
-	// view below runs to tens of kilobytes, and a model reading a started
-	// launch could not find the new Run's id in it and fell back to run list.
-	RunID string `json:"run_id,omitempty"`
-	// NextCommand is what to run next for this Run: the command that takes a
-	// task waiting for its host, otherwise run next.
-	NextCommand string `json:"next_command,omitempty"`
-	// RetiredEditions are the older editions this launch withdrew to fit its
-	// own into the registry; package restore undoes each.
-	RetiredEditions []prifly.RetiredEdition `json:"retired_editions,omitempty"`
-	Repository      string                  `json:"repository"`
-	Launch          string                  `json:"launch"`
-	Package         flow.Ref                `json:"package"`
-	AuthorPackage   *projectBuildIdentity   `json:"author_package,omitempty"`
-	BuildKey        string                  `json:"build_key,omitempty"`
-	PackageProfile  string                  `json:"package_profile,omitempty"`
-	DecisionSheet   *prifly.DecisionSheet   `json:"decision_sheet,omitempty"`
-	// A pointer so an autonomous launch with nothing blocked still reports an
-	// empty list: an absent field would read as "nothing to say" rather than
-	// "the policy can take every declared runtime decision".
-	AutonomyUnanswered *[]prifly.UnansweredDecision `json:"autonomy_unanswered,omitempty"`
-	Run                prifly.RunView               `json:"run"`
-	Workspace          *prifly.WorktreeClaim        `json:"workspace,omitempty"`
-	// WorkspacePath is where that claim actually is. The record's own path is
-	// relative to the authority that holds it, and beside repository.toplevel
-	// it reads as relative to the repository: a cold start looked for the tree
-	// under the repository, found nothing, and fell back to git worktree list.
-	WorkspacePath string                `json:"workspace_path,omitempty"`
-	LaunchSummary *projectLaunchSummary `json:"launch_summary,omitempty"`
-	Recovery      *prifly.RecoveryPlan  `json:"recovery,omitempty"`
-}
+type projectStartResult = projectwire.StartResult
 
 type projectPreflight struct {
 	PackageProfile string
@@ -80,6 +50,7 @@ func (c *cli) projectRecover(ctx context.Context, args []string) error {
 
 func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare, continuation, recovering bool) error {
 	f := flags("project start")
+	queueFlags := projectQueueFlags(f)
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
 	host := f.String("host", "", "host entry point that selects project skills")
@@ -106,6 +77,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if err := parse(f, args); err != nil {
 		return err
 	}
+	if err := queueFlags.validate(); err != nil {
+		return err
+	}
 	if *launchID == "" {
 		return usageError("project start requires --launch")
 	}
@@ -127,9 +101,19 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if *workspace != "" && *workspace != "worktree" && *workspace != "checkout" {
 		return refusal("project_start_invalid_workspace", "use worktree or checkout")
 	}
+	if queueFlags.present() && !prepare && *command == "" {
+		return usageError("queue launches require an explicit stable --command-id")
+	}
 	if *command == "" {
 		*command = commandID()
 	}
+	fingerprintFields := map[string]any{"continuation": continuation, "recovering": recovering, "inputs": inputs, "input_refs": refFiles, "preflight_answers": answers, "runtime_answers": runtimeAnswers}
+	f.VisitAll(func(option *flag.Flag) {
+		if option.Name != "input" && option.Name != "input-ref" && option.Name != "preflight-answer" && option.Name != "runtime-answer" {
+			fingerprintFields[option.Name] = option.Value.String()
+		}
+	})
+
 	root, err := projectRoot(ctx, *repository)
 	if err != nil {
 		return err
@@ -156,6 +140,51 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if err := c.projectAuthority(root, profile); err != nil {
 		return err
 	}
+	fingerprintFields["repository"] = root
+	queueCommandDigest, err := projectReviewDigest(fingerprintFields)
+	if err != nil {
+		return err
+	}
+	var queueSelection *prifly.QueueTaskSelection
+	var queueRequest []byte
+	if queueFlags.present() && !neutral {
+		return refusal("queue_requires_profile_3", "queue selection requires project profile /3")
+	}
+	if queueFlags.present() && !prepare && *expectedLaunch == "" {
+		return usageError("a queue launch requires --expected-launch-digest from questionnaire --prepare")
+	}
+	if queueFlags.present() || *sourceRun != "" || !prepare {
+		reader, err := prifly.Open(c.project, true)
+		if err != nil {
+			return err
+		}
+		if !prepare {
+			previous, lookupErr := reader.QueueLaunchCommand(ctx, *command, queueCommandDigest, *expectedLaunch)
+			if lookupErr != nil {
+				reader.Close()
+				return lookupErr
+			}
+			if previous != nil {
+				reader.Close()
+				if len(previous.ResultBytes) > 0 {
+					return c.emit(json.RawMessage(previous.ResultBytes))
+				}
+				return refusal("queue_reconcile_required", fmt.Sprintf("intent %s records intended Run %s in phase %s; inspect project queue show/reconcile before any further launch", previous.ID, previous.RunID, previous.State))
+			}
+		}
+		queueSelection, queueRequest, err = queueFlags.resolve(ctx, reader)
+		if err == nil && *sourceRun != "" {
+			source, readErr := reader.View(ctx, *sourceRun)
+			err = readErr
+			if err == nil && source.Run.QueueTask != nil && (queueSelection == nil || queueSelection.TaskID != source.Run.QueueTask.Selection.TaskID) {
+				err = &prifly.Fault{Code: "queue_source_identity_conflict", Message: "source Run belongs to a queue Task; select that same Task with its current owner and revision"}
+			}
+		}
+		reader.Close()
+		if err != nil {
+			return err
+		}
+	}
 	launch, exists := profile.Launches[*launchID]
 	if !exists || launch.Kind != "workflow" {
 		return refusal("project_start_unknown_launch", *launchID)
@@ -169,7 +198,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	// The project's preflight runs before the tree is read for compilation
 	// and before anything is taken; the read-only review does not run it.
-	if !prepare {
+	if !prepare && queueSelection == nil {
 		if err := runProjectLaunchPreflight(ctx, root, *launchID, launch.Preflight); err != nil {
 			return err
 		}
@@ -259,6 +288,16 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		var confirmed prifly.Brief
 		if err := json.Unmarshal(briefBytes, &confirmed); err != nil || confirmed.Confirmation != "explicit" {
 			return refusal("project_start_invalid_brief", "RunBrief requires explicit owner confirmation")
+		}
+	}
+	if queueSelection != nil && len(briefBytes) == 0 && !continuation && !recovering {
+		input, err := prifly.ParseTaskInput(queueRequest)
+		if err != nil {
+			return err
+		}
+		briefBytes, err = canonicalTaskBrief(input.RunBrief(input.SourceRefs))
+		if err != nil {
+			return err
 		}
 	}
 	refs := map[string]prifly.ArtifactRef{}
@@ -447,10 +486,14 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	var retirement *prifly.RegistryRetirement
 	if neutral {
 		summary = projectLaunchSummary{SchemaVersion: "project-launch-summary/3", Repository: root, Authority: c.project, Launch: *launchID, Host: *host, WorkspaceMode: *workspace, Package: compiled.Package, AuthorPackage: compiled.AuthorPackage, BuildKey: compiled.BuildKey, InputDigests: map[string]string{}, InputRefs: refs, ConfigurationDigest: configurationDigest, DecisionSheet: preflight.Sheet, DecisionStates: projectDecisionStates(preflight), KnownQuestionsOnly: true, SessionLimits: requirements.sessionLimits, ModelProfiles: reviewedProfiles}
+		if queueSelection != nil {
+			summary.SchemaVersion = "project-launch-summary/4"
+			summary.QueueTask = queueSelection
+		}
 		summary.Continuation = continuationReview
 		summary.AllowDuplicateContinuation = *allowDuplicateContinuation
 		summary.Recovery = recoveryPlan
-		summary.Requirements = &requirements
+		summary.Requirements = &projectwire.LaunchRequirements{Assisted: requirements.Assisted, GitWorkspace: requirements.GitWorkspace, EffectClasses: requirements.EffectClasses}
 		for _, component := range compiled.Components {
 			if component.Path == workflowPath {
 				summary.Workflow = component.Ref
@@ -553,6 +596,49 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return err
 	}
 	defer func() { _ = engine.Close() }()
+	var queueBinding *prifly.QueueTaskBinding
+	if queueSelection != nil {
+		summaryBytes, err := json.Marshal(summary)
+		if err != nil {
+			return err
+		}
+		reserved, err := engine.QueueReserve(ctx, prifly.QueueReserveRequest{CommandID: *command, Selection: *queueSelection, CommandDigest: queueCommandDigest, ReviewDigest: summary.ReviewDigest, SummaryBytes: summaryBytes})
+		if err != nil {
+			return err
+		}
+		if reserved.Receipt.Rejection != nil {
+			return reserved.Receipt.Rejection
+		}
+		if reserved.Duplicate {
+			return refusal("queue_reconcile_required", "another dispatcher reserved this command; inspect the recorded intent")
+		}
+		var intent prifly.QueueLaunchIntent
+		if err := json.Unmarshal(reserved.Receipt.Result, &intent); err != nil {
+			return err
+		}
+		queueBinding = &prifly.QueueTaskBinding{Selection: *queueSelection, IntentID: intent.ID}
+		dispatched, err := engine.QueueDispatch(ctx, *queueBinding)
+		if err != nil {
+			return err
+		}
+		if dispatched.Receipt.Rejection != nil {
+			return dispatched.Receipt.Rejection
+		}
+		if dispatched.Duplicate {
+			return refusal("queue_reconcile_required", "this intent already crossed dispatch; inspect its recorded Run or reconcile")
+		}
+		if err := runProjectLaunchPreflight(ctx, root, *launchID, launch.Preflight); err != nil {
+			return err
+		}
+		// Recheck task ownership after executable preflight, before workspace claims.
+		current, _, err := engine.QueueSelection(ctx, queueSelection.TaskID, queueSelection.Owner, queueSelection.TaskRevision, queueSelection.ClaimGeneration)
+		if err != nil {
+			return err
+		}
+		if current != *queueSelection {
+			return refusal("queue_task_revision_conflict", "queue selection changed during preflight")
+		}
+	}
 	if neutral {
 		// Recheck mutable machine configuration after publishing the summary.
 		// Package/source/input bytes are already held in the prepared request.
@@ -703,6 +789,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	startOptions := prifly.StartOptions{CommandID: *command, ProjectTitle: profile.Title, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
 	startOptions.WorkspaceClaim = claim
+	startOptions.QueueTask = queueBinding
 	if neutral {
 		startOptions.SchemaVersion, startOptions.ExecutionBindings = "2", execution
 		startOptions.Inputs, startOptions.InputValues = nil, inputValues
@@ -741,6 +828,15 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
 		}
 		return err
+	}
+	if queueBinding != nil {
+		finalized, err := engine.QueueFinalize(ctx, *queueBinding, nil)
+		if err != nil {
+			return err
+		}
+		if finalized.Receipt.Rejection != nil {
+			return finalized.Receipt.Rejection
+		}
 	}
 	if neutral {
 		expected := map[string]string{}
@@ -820,6 +916,21 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	if retirement != nil {
 		result.RetiredEditions = retirement.Retire
+	}
+	if queueBinding != nil {
+		result.SchemaVersion = "project-start/4"
+		result.QueueTask = queueBinding
+		resultBytes, err := json.Marshal(result)
+		if err != nil {
+			return err
+		}
+		finalized, err := engine.QueueFinalize(ctx, *queueBinding, resultBytes)
+		if err != nil {
+			return err
+		}
+		if finalized.Receipt.Rejection != nil {
+			return finalized.Receipt.Rejection
+		}
 	}
 	return c.emit(result)
 }

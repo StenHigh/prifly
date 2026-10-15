@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
+	"github.com/stenhigh/prifly/internal/projectwire"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
@@ -24,10 +25,7 @@ const projectBuildVersion = "prifly-build-provenance/1"
 //go:embed project_build.schema.json
 var projectBuildSchema []byte
 
-type projectBuildIdentity struct {
-	ID      string `json:"id"`
-	Version string `json:"version"`
-}
+type projectBuildIdentity = projectwire.BuildIdentity
 
 type projectBuildMapping struct {
 	Kind        string   `json:"kind"`

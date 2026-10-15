@@ -10,6 +10,7 @@
 |---|---|
 | `cmd/prifly/` | CLI: разбор команд, Problem-конверты и exit-коды, проектный профиль (`project *`), host runners, монитор (`monitor*.go`) |
 | `internal/runtime/` | Authority: admission, lifecycle Run/Attempt/Session, локальный протокол, claim рабочих копий и снимки деревьев |
+| `internal/projectwire/` | Формы ответов Project CLI, общие для вывода и генерации новых closed schemas; не authority и не driver |
 | `internal/flow/` | Версионная детерминированная модель workflow: контракты, схемы, канонизация, компиляция YAML в sealed package |
 | `internal/local/` | Локальное хранилище: SQLite store, blob'ы, транзакции и их guard, ошибки драйвера, запуск процессов |
 | `internal/purity/` | Guard: transform-команда не читает файлы и не запускает процессы внутри write-транзакции |
@@ -35,6 +36,7 @@
 |---|---|
 | `cmd/prifly/main.go` | Диспетчер команд и вывод |
 | `cmd/prifly/project.go` | `project init/workflows/questionnaire/runners`, discovery профиля |
+| `cmd/prifly/project_queue.go` | Явные local queue команды, selection и передача в reviewed launch |
 | `cmd/prifly/project_start.go` | Запуск объявленного launch: анкета, seal, claim, первый handoff |
 | `internal/runtime/model.go` | Модель authority |
 | `internal/flow/types.go` | Модель workflow и контрактов |

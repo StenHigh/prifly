@@ -14,7 +14,7 @@ Current source sets: `project-task-queue` создаётся этим change; CL
 
 ### 1. Один durable authority ledger, отдельный QueueTaskClaim
 
-Queue хранится в отдельном authority key `task-queue` со schema version `project-task-queue/1`, использует existing authority receipts/command identity. Файловый JSON backlog и отдельная БД отвергнуты: они не дают общей транзакции с Run admission. Storage schema мигрировать не требуется ради пустой queue; чтение отсутствующего key возвращает uninitialized/empty без записи.
+Queue хранится в отдельном authority key `task_queue` со schema version `project-task-queue/1`, использует existing authority receipts/command identity. Файловый JSON backlog и отдельная БД отвергнуты: они не дают общей транзакции с Run admission. Storage schema мигрировать не требуется ради пустой queue; чтение отсутствующего key возвращает uninitialized/empty без записи.
 
 Канонические понятия: QueueTask (устойчивая задача), QueueTaskClaim (owner + generation), QueueLaunchIntent (один reviewed start), QueueTaskBinding (immutable связь конкретного Run). Их точные Go/JSON соответствия добавляются в словарь с реализацией, без переименования TaskInput или WorkspaceClaim.
 
@@ -34,30 +34,36 @@ Reviewed selection содержит Task ID/revision, request digest, owner и c
 
 Перед preflight/programs, workspace claim и Run admission launcher проверяет selection, резервирует intent, затем устойчиво отмечает возможный dispatch. Prepare не резервирует intent и не выполняет эти эффекты. Редактирование request/priority при open intent запрещено, поэтому start не действует от устаревшего request между проверкой и admission.
 
-Run creation атомарно переводит intent в admitted и добавляет association. Для этого local получает runtime-owned pure дополнительную authority mutation с per-task/intent CAS в той же транзакции, где уже меняются Run и Workspace claim/control grant. Не объединять queue с claims key и не делать storage driver частью runtime API. Независимые записи queue не должны теряться от обновления чужой задачи: transform читает текущую queue в write transaction и проверяет свой scoped CAS. Все связанные изменения откатываются вместе при любом отказе; receipt replay не вызывает reducers повторно.
+Canonical association — immutable QueueTaskBinding самого Run: она фиксируется атомарно с Run admission. Queue intent уже содержит предназначенный Run ID до dispatch, поэтому binding всегда имеет достижимое происхождение. Local получает runtime-owned pure дополнительный authority guard: он читает текущую queue внутри той же write transaction, проверяет task/claim/intent scoped CAS и ничего в ней не пишет. Workspace claim/control grant и Run сохраняют существующую составную запись. Не объединять queue с claims key и не делать storage driver частью runtime API.
 
-Queue binding попадает в immutable start payload/dedup identity и Run state. При exact retry сначала читается durable intent/результат, а не повторяется preflight. Итог project start сохраняется до выдачи stdout, чтобы известный завершённый вызов воспроизводился. Если ответ потерян до его сохранения, reconcile сообщает известный admission и exact Run; неизвестный ответ не подделывается под прежнюю успешную квитанцию.
+Queue intent/admitted association index финализируется после admission отдельной durable command, до успешного ответа CLI. Crash между этими транзакциями оставляет recoverable intent и canonical binding Run; show/reconcile восстанавливает known admission из них и не допускает второй start. Queue index — проверяемая проекция, не второй источник association: отсутствие cached записи не скрывает Run, а несовпадение с immutable binding является integrity error. Read объединяет queue и snapshots всех её intended/associated Runs согласованно; read-only inspection не финализирует index записью. Finalization не вызывает Drive и не зависит от mutable исхода Run.
+
+Этот путь выбран после воспроизведения ограничения storage v9: authority_states.cut UNIQUE допускает одну изменённую authority-запись на cut. Два keyed reducers требуют новой storage boundary. Recoverable intent плюс атомарный read-only guard закрывает те же crash windows без миграции legacy; scope issue явно допускает этот вариант. Независимое изменение другой QueueTask не вызывает ложный whole-queue CAS, поскольку guard проверяет свой selection по текущему snapshot. Любой отказ откатывает Run/Workspace control вместе; receipt replay не вызывает guards/reducers повторно.
+
+Namespace original Run command identity общий: reserve атомарно проверяет отсутствие прежней Run command receipt и intended Run, а обычные Start/Fork отказывают при queue-reserved intended ID до подготовки и снова внутри write transaction. Отказ чужого payload не расходует original command identity. Это fencing, не новый legacy payload или storage migration.
+
+Queue binding попадает в immutable start payload/dedup identity и Run state. Queue Run также запечатывает exact `queue_request_bytes` выбранного TaskInput независимо от typed workflow inputs; digest обязан совпадать с selection. Последующее изменение или завершение QueueTask не меняет эти bytes. При exact retry сначала читается durable intent/результат, а не повторяется preflight. Итог project start сохраняется до выдачи stdout, чтобы известный завершённый вызов воспроизводился. Если ответ потерян до его сохранения, reconcile сообщает известный admission и exact Run; неизвестный ответ не подделывается под прежнюю успешную квитанцию.
 
 | Crash window | Сохранённый факт | Восстановление |
 |---|---|---|
 | До claim commit | Нет claim | Повтор той же команды выполняет/читает единственный claim |
 | После claim до intent | Claimed Task, Run отсутствует | Show/replay возвращает claim; явный release при безопасном состоянии |
-| Reserved intent, dispatch не отмечен | Известно отсутствие разрешённого dispatch | Reconcile после завершения dispatcher фиксирует not-started; без автоматического requeue |
+| Reserved intent, dispatch не отмечен | Известно отсутствие разрешённого dispatch | Reconcile после завершения dispatcher фиксирует not_started; без автоматического requeue |
 | Dispatch отмечен, Run отсутствует | Возможны preflight/claim effects | Reconcile required, без повторного исполнения; owner устанавливает исход возможных эффектов |
-| Во время admission | Run + queue + Workspace control одна транзакция | Либо всё записано, либо ни Run, ни association не записаны |
-| После admission до stdout | Admitted intent + Run + association | Найти тот же Run; exact известный result воспроизвести, иначе показать восстановленный факт |
+| Во время admission | Run + immutable binding + Workspace control одна транзакция, queue guarded | Либо Run с binding записан, либо ни Run, ни association не записаны |
+| После admission до index/result/stdout | Durable intended Run ID + Run с immutable binding, index может отставать | Show/reconcile находит тот же Run и финализирует index явно; exact известный result воспроизвести, иначе показать восстановленный факт |
 
 Идемпотентность не превращает неизвестный executable dispatch в безопасный retry. При известном отказе до эффектов можно записать отказ intent; возможные эффекты требуют reconcile. Production test backdoors/crash environment flags не вводятся: deterministic unit fault injection остаётся в test adapters, CLI replay использует процессы, SQLite contention и контролируемые declared fixture programs с внешними барьерами.
 
 ### 4. Reconcile имеет явную границу знания
 
-Reconcile без resolution сначала читает intent/Run и ничего не запускает. Known admission проверяется по authority, Run ID и immutable binding. При отсутствии Run владелец явно выбирает not-started только для reserved intent либо effects-resolved для возможного dispatch, указывает reason и подтверждение установленного исхода эффектов. Перед разрешением проверяется завершение прежнего dispatcher; неоднозначный/live процесс не считается завершённым. Проверка процесса выполняется до write transaction и фиксируется как evidence, не как lease timeout.
+Reconcile без resolution сначала читает intent/Run и ничего не запускает. Known admission проверяется по authority, Run ID и immutable binding. При отсутствии Run владелец явно выбирает not_started только для reserved intent либо effects_resolved для возможного dispatch, указывает reason и подтверждение установленного исхода эффектов. Перед разрешением проверяется завершение прежнего dispatcher; неоднозначный/live процесс не считается завершённым. Проверка процесса выполняется до write transaction и фиксируется как evidence, не как lease timeout. Native evidence новой boot identity на той же машине либо другого StartID у того же PID устанавливает завершение прежнего локального process lifetime. Одной смены UID, другого hostname, отсутствующих identity fields или недоступного native probe недостаточно. Эта проверка не сигналит найденному процессу и не устанавливает исход child/external effects: для dispatching по-прежнему требуется явное owner effects_resolved.
 
 Resolve CAS инвалидирует intent для позднего admission. Живой dispatcher не разрешается чужой сессией; после его завершения возможные дочерние/внешние эффекты не объявляются исчезнувшими только из-за PID. Для dispatching требуется отдельное утверждение владельца об установленном исходе. Reconcile не создаёт Run и не снимает runtime uncertain obligations.
 
 ### 5. Release/complete и повторное оживление Run
 
-Снимки всех associated Runs читаются и проверяются до transform, их exact versions пинятся внутри authority transaction. Open intent, нетерминальный Run, pending decision/acceptance или uncertainty запрещают release/complete. Один временно недоступный/повреждённый Run также не считается terminal.
+Снимки всех associated и intended Runs читаются и проверяются до transform, их exact versions пинятся внутри authority transaction. Reducer также сравнивает полный текущий набор intents/associations с доказанным набором: concurrent новый intent не должен теряться только потому, что прежние Run versions не изменились. Open intent, нетерминальный Run, pending decision/acceptance или uncertainty запрещают release/complete. Один временно недоступный/повреждённый Run также не считается terminal.
 
 Run reopen и любой путь создания продолжения сохраняют queue guard. Reopen старого Run после окончания его claim отказывает; актуальное новое владение допускает новый reviewed continue/fork с тем же Task ID, не переписывание старого binding. Проверка queue и release Run pins сериализуют гонку reopen/release. Обычные шаги уже активного Run не требуют current content revision: последующая правка task не меняет sealed inputs. Cancellation, result settlement и диагностика должны оставаться доступны.
 
@@ -80,7 +86,7 @@ Queue — machine-local authority state. Shared profile clone/init не пере
 ## Risks / Trade-offs
 
 - [Unknown pre-Run effects] → durable intent + отказ blind retry, явное owner reconcile с основанием; отсутствие Run не доказательство отсутствия эффектов.
-- [Составная admission] → атомарные multiple authority reducers, scoped CAS, rejection/replay/rollback tests и purity guard; no I/O в reducers.
+- [Составная admission] → scoped read-only authority guard, атомарный Run binding, recoverable finalization, rejection/replay/rollback tests и purity guard; no I/O в callbacks.
 - [Release против reopen] → coupled queue guard и exact Run pins, concurrency regression.
 - [Рост inline request history] → existing explicit document limits; компактный list, полный show по запросу, никакого скрытого удаления evidence.
 - [Потеря native question wait] → live host qualification, не только сравнение template strings.

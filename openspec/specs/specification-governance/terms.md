@@ -151,6 +151,49 @@ Jira или иной provider частью ядра Pri-Fly. Право проч
 отдельный внешний ActionIntent с явным решением владельца. Это не общий plugin
 framework и не текущая реализованная capability.
 
+<a id="project-task-queue"></a>
+### Project task queue — Локальная очередь задач проекта
+
+Opt-in коллекция QueueTask в одной local project authority. Она атомарно
+распределяет владение до Run и сохраняет связи с последующими исполнениями;
+не является scheduler, общим Run status или shared project YAML. Go-имя
+контейнера — `runtime.TaskQueue`, read DTO — `runtime.TaskQueueView`.
+Нормативный source set указан в [карте источников](../../SOURCE-OF-TRUTH.md).
+
+<a id="queue-task"></a>
+### QueueTask — Задача локальной очереди
+
+Устойчивая identity работы до первого Run с exact TaskInput bytes/provenance,
+историей content revisions, priority и порядком добавления. `ready`, `claimed`
+и `done` описывают её локальную обработку, не исход Run. Новая revision request
+не переписывает inputs и evidence прежних исполнений. Go: `runtime.QueueTask`.
+
+<a id="queue-task-claim"></a>
+### QueueTaskClaim — Владение задачей очереди
+
+Закреплённые owner и generation для одной QueueTask. Поколение владения
+отделено от content revision и не возвращает задачу в ready по timeout.
+Это не Workspace claim и не разрешение executable effects. Go:
+`runtime.QueueTaskClaim`.
+
+<a id="queue-launch-intent"></a>
+### QueueLaunchIntent — Намерение запуска задачи очереди
+
+Устойчивая запись одного reviewed start до возможного dispatch: exact task
+selection, command identity, launch digest, intended Run и dispatcher evidence.
+Различает reserved, возможный dispatch и admitted association; неизвестный
+исход требует reconcile, не повторного исполнения. Go: `runtime.QueueLaunchIntent`.
+
+<a id="queue-task-binding"></a>
+### QueueTaskBinding — Закреплённая связь Run с задачей очереди
+
+Immutable task identity/revision, request digest, owner/claim generation и
+intent identity конкретного Run. Продолжения сохраняют Task identity с
+самостоятельными outcomes/evidence. Предстартовый DTO `runtime.QueueTaskSelection`
+несёт те же task поля без ещё не созданного intent; `runtime.QueueTaskBinding`
+связывает этот selection с intent после reviewed start. Current queue не нужна
+для чтения исторического binding и не переинтерпретирует его.
+
 <a id="project-execution-profile"></a>
 ### Project execution profile — Версионируемый профиль исполнения проекта
 
@@ -1751,6 +1794,21 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [TelemetryQuery](#telemetry-report) | `internal/runtime/telemetry.go` | `runtime.TelemetryQuery` | — |
 | [TelemetryReport](#telemetry-report) | `internal/runtime/telemetry.go` | `runtime.TelemetryResponse` | — |
 | [ReadCut](#read-cut) | `internal/runtime/telemetry.go` | `runtime.TelemetryQuery.Cut` | `cut` |
+| [Project task queue](#project-task-queue) | `internal/runtime/task_queue.go` | `runtime.TaskQueue` | — |
+| [QueueTask](#queue-task) | `internal/runtime/task_queue.go` | `runtime.QueueTask` | — |
+| [QueueTask](#queue-task) | `internal/runtime/task_queue.go` | `runtime.QueueTask.ID` | `id` |
+| [QueueTask](#queue-task) | `internal/runtime/task_queue.go` | `runtime.QueueTask.Revision` | `revision` |
+| [QueueTaskClaim](#queue-task-claim) | `internal/runtime/task_queue.go` | `runtime.QueueTaskClaim` | — |
+| [QueueTaskClaim](#queue-task-claim) | `internal/runtime/task_queue.go` | `runtime.QueueTaskClaim.Owner` | `owner` |
+| [QueueTaskClaim](#queue-task-claim) | `internal/runtime/task_queue.go` | `runtime.QueueTaskClaim.Generation` | `generation` |
+| [QueueLaunchIntent](#queue-launch-intent) | `internal/runtime/task_queue.go` | `runtime.QueueLaunchIntent` | — |
+| [QueueLaunchIntent](#queue-launch-intent) | `internal/runtime/task_queue.go` | `runtime.QueueLaunchIntent.RunID` | `run_id` |
+| [QueueTaskBinding](#queue-task-binding) | `internal/runtime/task_queue.go` | `runtime.QueueTaskSelection` | — |
+| [QueueTaskBinding](#queue-task-binding) | `internal/runtime/task_queue.go` | `runtime.QueueTaskSelection.TaskRevision` | `task_revision` |
+| [QueueTaskBinding](#queue-task-binding) | `internal/runtime/task_queue.go` | `runtime.QueueTaskBinding` | — |
+| [QueueTaskBinding](#queue-task-binding) | `internal/runtime/task_queue.go` | `runtime.QueueTaskBinding.IntentID` | `intent_id` |
+| [QueueTaskBinding](#queue-task-binding) | `internal/runtime/model.go` | `runtime.Run.QueueTask` | `queue_task` |
+| [TaskInput](#task-input) | `internal/runtime/model.go` | `runtime.Run.QueueRequestBytes` | `queue_request_bytes` |
 <!-- glossary-bindings:end -->
 
 Имена в колонках Go/JSON — совместимые текущие соответствия, не список обязательных переименований. Например, `runtime.Result` не нужно срочно заменять новым wire-полем `step_result`. При целевом переименовании меняются все затронутые ссылки и тесты; сохранённые контракты учитываются отдельно.

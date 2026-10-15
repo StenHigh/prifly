@@ -124,6 +124,12 @@ type AuthorityCommand struct {
 	// Run holds -- is refused if a Run appeared meanwhile, in the same
 	// transaction that would have written it.
 	ExpectedRuns *int64
+	// RunPins are facts read by runtime, not caller-requested semantics. They
+	// are checked at commit but do not change a command's retry identity.
+	RunPins         []RunPin
+	AuthorityGuards []AuthorityGuard
+	// AbsentCommandID fences the caller actor's original Run command namespace.
+	AbsentCommandID string
 }
 
 type AuthorityChange struct {
@@ -184,11 +190,19 @@ type Command struct {
 	// it must be pure just like the Run transform. Receipt-only retries never
 	// invoke it, so a consumed decision cannot be spent twice.
 	ControlMutation func(AuthoritySnapshot) (json.RawMessage, error)
+	// AuthorityGuards check current scoped authority facts before commit.
+	// They are pure, never write, and are skipped on receipt-only retries.
+	AuthorityGuards []AuthorityGuard
 	// Samples supplies this command's own telemetry. The store calls it once,
 	// immediately before commit, with the timings it measured, so recording a
 	// command costs no second write transaction. Telemetry never fails a
 	// command: a batch that no longer fits the diagnostic allowance is dropped.
 	Samples CommandTelemetry
+}
+
+type AuthorityGuard struct {
+	Key   string
+	Check func(AuthoritySnapshot) error
 }
 
 type RunPin struct {
@@ -222,6 +236,7 @@ type LinkedRunCommand struct {
 	Payload         json.RawMessage
 	ExpectedVersion int64
 	Pins            []ControlPin
+	AuthorityGuards []AuthorityGuard
 }
 
 // ControlPin makes a stop and an admission prepared before it mutually
@@ -1022,6 +1037,19 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 			return out, errors.New("control mutation requires bounded valid authority state")
 		}
 	}
+	// A conflicting reserved identity must roll back even when a stale CAS or
+	// control pin already refused the wrong request; recording that refusal
+	// would consume the identity reserved for its actual caller.
+	if rejection != nil || !change.ReceiptOnly {
+		guardErr := checkAuthorityGuards(ctx, conn, cmd.AuthorityGuards)
+		var guardRejection *Rejection
+		if guardErr != nil && !errors.As(guardErr, &guardRejection) {
+			return out, guardErr
+		}
+		if rejection == nil {
+			rejection = guardRejection
+		}
+	}
 	var cut, capacity int64
 	if err := conn.QueryRowContext(ctx, "SELECT cut,slot_capacity FROM authority WHERE singleton=1").Scan(&cut, &capacity); err != nil {
 		return out, err
@@ -1165,6 +1193,7 @@ ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.ev
 				return out, err
 			}
 		}
+
 	}
 	if err := insertReceipt(ctx, conn, out.Receipt); err != nil {
 		return out, err
@@ -1316,6 +1345,15 @@ func (s *Store) CreateLinkedRun(ctx context.Context, cmd LinkedRunCommand, trans
 			return out, err
 		}
 	}
+	guardErr := checkAuthorityGuards(ctx, conn, cmd.AuthorityGuards)
+	var guardRejection *Rejection
+	if guardErr != nil && !errors.As(guardErr, &guardRejection) {
+		return out, guardErr
+	}
+	if rejection == nil {
+		rejection = guardRejection
+	}
+
 	var change Change
 	if rejection == nil {
 		if transform == nil {
@@ -1465,6 +1503,33 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 			rejection = &Rejection{Code: "runs_changed", Message: "a Run was created or removed after this decision counted them; prepare it again"}
 		}
 	}
+	if rejection == nil && cmd.AbsentCommandID != "" {
+		var used int
+		if err := conn.QueryRowContext(ctx, "SELECT count(*) FROM commands WHERE actor=? AND command_id=?", cmd.Actor, cmd.AbsentCommandID).Scan(&used); err != nil {
+			return out, err
+		}
+		if used != 0 {
+			rejection = &Rejection{Code: "command_conflict", Message: "the original Run command identity is already recorded for another request"}
+		}
+	}
+	if rejection == nil {
+		for _, pin := range cmd.RunPins {
+			run, err := loadSnapshot(ctx, conn, pin.ID)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return out, err
+			}
+			if run.Version != pin.Version {
+				rejection = &Rejection{Code: "runs_changed", Message: "an associated Run changed after this decision read it; inspect it again"}
+				break
+			}
+		}
+	}
+	if rejection == nil {
+		err = checkAuthorityGuards(ctx, conn, cmd.AuthorityGuards)
+		if err != nil && !errors.As(err, &rejection) {
+			return out, err
+		}
+	}
 	var change AuthorityChange
 	if rejection == nil {
 		if transform == nil {
@@ -1599,6 +1664,9 @@ func commandDigest(cmd Command) (string, error) {
 	if _, err := commandPins(cmd.Pins, cmd.Control); err != nil {
 		return "", err
 	}
+	if _, err := orderedAuthorityGuards(cmd.AuthorityGuards); err != nil {
+		return "", err
+	}
 	// Hash all protected request fields, not merely the business payload. Extra
 	// authority pins are current commit guards, not caller-requested semantics:
 	// excluding them preserves receipt retries made after an authority change.
@@ -1632,6 +1700,9 @@ func commandPins(pins []ControlPin, control *ControlPin) ([]ControlPin, error) {
 }
 
 func linkedRunCommandDigest(cmd LinkedRunCommand) (string, error) {
+	if _, err := orderedAuthorityGuards(cmd.AuthorityGuards); err != nil {
+		return "", err
+	}
 	pins := append([]ControlPin(nil), cmd.Pins...)
 	sort.Slice(pins, func(i, j int) bool { return pins[i].Key < pins[j].Key })
 	for i, pin := range pins {
@@ -1662,6 +1733,19 @@ func linkedRunCommandDigest(cmd LinkedRunCommand) (string, error) {
 func authorityCommandDigest(cmd AuthorityCommand) (string, error) {
 	if !validIdentity(cmd.ID) || !validIdentity(cmd.Actor) || !validAuthorityKey(cmd.Key) || len(cmd.Payload) > MaxCommandBytes || !json.Valid(cmd.Payload) || cmd.ExpectedVersion != nil && (*cmd.ExpectedVersion < 0 || *cmd.ExpectedVersion > 1<<53-1) || cmd.ExpectedRuns != nil && *cmd.ExpectedRuns < 0 {
 		return "", errors.New("invalid authority command envelope")
+	}
+	if _, err := orderedAuthorityGuards(cmd.AuthorityGuards); err != nil {
+		return "", err
+	}
+	if cmd.AbsentCommandID != "" && !validIdentity(cmd.AbsentCommandID) {
+		return "", errors.New("invalid original Run command identity fence")
+	}
+	seenRuns := map[string]bool{}
+	for _, pin := range cmd.RunPins {
+		if !validIdentity(pin.ID) || pin.Version < 0 || pin.Version > 1<<53-1 || seenRuns[pin.ID] {
+			return "", errors.New("invalid authority command Run pins")
+		}
+		seenRuns[pin.ID] = true
 	}
 	// ExpectedRuns joins the digest only when set, so every command recorded
 	// before it existed keeps the digest it was recorded under.

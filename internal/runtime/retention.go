@@ -165,6 +165,16 @@ func (e *Engine) PreviewCleanup(ctx context.Context, selected string) (CleanupPl
 			return plan, local.ErrNotFound
 		}
 	}
+	queue, _, err := e.readTaskQueue(ctx)
+	if err != nil {
+		return plan, err
+	}
+	for _, id := range queueRunIDs(queue) {
+		if _, ok := plan.Runs[id]; ok {
+			delete(plan.Runs, id)
+			plan.Protected[id] = "Сохраняется история задачи очереди"
+		}
+	}
 	claims, _, err := e.readClaims(ctx)
 	if err != nil {
 		return plan, err
@@ -513,7 +523,18 @@ func (e *Engine) Cleanup(ctx context.Context, selected, digest string) (CleanupR
 		return result, err
 	}
 	id := newID("retention")
-	applied, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: id, Actor: e.owner, Key: "retention:r" + strings.TrimPrefix(id, "retention:")[:30], Payload: payload}, func(local.AuthoritySnapshot) (local.AuthorityChange, error) {
+	applied, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: id, Actor: e.owner, Key: "retention:r" + strings.TrimPrefix(id, "retention:")[:30], Payload: payload, AuthorityGuards: []local.AuthorityGuard{{Key: TaskQueueKey, Check: func(snapshot local.AuthoritySnapshot) error {
+		queue, err := e.queueSnapshot(snapshot)
+		if err != nil {
+			return err
+		}
+		for _, id := range queueRunIDs(queue) {
+			if _, deleting := plan.Runs[id]; deleting {
+				return local.Reject("queue_history_retained", "a queue intent or association retains this Run")
+			}
+		}
+		return nil
+	}}}}, func(local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		return local.AuthorityChange{Data: payload, Result: payload, PruneRuns: plan.Runs}, nil
 	})
 	if err != nil {

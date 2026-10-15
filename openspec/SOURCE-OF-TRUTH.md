@@ -24,6 +24,7 @@
 | Каталог и жизненный цикл решений Run | `openspec/specs/run-decisions/spec.md` | Перенесено | `run-decisions` |
 | Runtime, ресурсы и хранение | `openspec/specs/runtime-resources/spec.md` | Перенесено | `runtime-resources` |
 | Управление, безопасность и интерфейс | `openspec/specs/control-security-ux/spec.md` | Перенесено | `control-security-ux` |
+| Локальная очередь задач проекта | `openspec/changes/add-project-task-queue/specs/project-task-queue/spec.md` до sync | Новая capability; активный source set установлен в `add-project-task-queue` | `project-task-queue` |
 | Локальный монитор Run | `openspec/specs/local-run-monitor/spec.md` | Новая capability; source set установлен в `add-local-run-monitor` | `local-run-monitor` |
 | Канонический AI Factory workflow | `openspec/specs/aif-classic-workflow/spec.md` | Новая capability; source set установлен в `harden-aif-classic-gate-routing` | `aif-classic-workflow` |
 | CLI и публичный протокол | `openspec/specs/cli-protocol/spec.md` | Перенесено | `cli-protocol` |

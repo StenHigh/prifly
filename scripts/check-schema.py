@@ -77,6 +77,11 @@ def check(args, generator):
 		("questions", ["--questions"], ("internal/runtime/questions.schema.json", "schemas/core/questions.schema.json")),
 		("resources", ["--resources"], ("internal/runtime/resources.schema.json", "schemas/core/resources.schema.json")),
 		("live-output", ["--live-output"], ("internal/runtime/live-output.schema.json", "schemas/core/live-output.schema.json")),
+        ("task-queue", ["--task-queue"], ("internal/runtime/task-queue.schema.json", "schemas/core/task-queue.schema.json")),
+        ("project-task-queue", ["--project-task-queue"], ("schemas/core/project-task-queue.schema.json",)),
+        ("project-task-queue-read", ["--project-task-queue-read"], ("schemas/core/project-task-queue-read.schema.json",)),
+        ("project-queue-task", ["--project-queue-task"], ("schemas/core/project-queue-task.schema.json",)),
+
 		("next-handoff", ["--next-handoff"], ("internal/runtime/next-handoff.schema.json", "schemas/core/next-handoff.schema.json")),
 		("next-awaiting-host", ["--awaiting-host"], ("internal/runtime/next-awaiting-host.schema.json", "schemas/core/next-awaiting-host.schema.json")),
 		("recovery", ["--recovery"], ("internal/runtime/recovery.schema.json", "schemas/core/recovery.schema.json")),

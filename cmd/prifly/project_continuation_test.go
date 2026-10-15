@@ -119,6 +119,14 @@ func newContinuationCLI(t *testing.T, tailContinuation string) continuationCLI {
 // newContinuationCLIResuming is the same project whose source workflow, when
 // resumable, declares that it resumes its own partial Runs.
 func newContinuationCLIResuming(t *testing.T, tailContinuation string, resumable bool, configure ...func(string)) continuationCLI {
+	return continuationCLIFixture(t, tailContinuation, resumable, false, configure...)
+}
+
+func newQueueContinuationCLI(t *testing.T, tailContinuation string, configure ...func(string)) continuationCLI {
+	return continuationCLIFixture(t, tailContinuation, false, true, configure...)
+}
+
+func continuationCLIFixture(t *testing.T, tailContinuation string, resumable, queue bool, configure ...func(string)) continuationCLI {
 	t.Helper()
 	root, authority := newProjectFixture(t)
 	writeFixtureFile(t, root, ".prifly/project.yaml", `schema_version: prifly-project-profile/3
@@ -300,6 +308,14 @@ stages:
 		return stderr
 	}
 	startArgs := []string{"--repository", root, "--launch", "source", "--host", "codex-cli", "--workspace", "worktree", "--input", "task=" + filepath.Join(root, "task.json")}
+	if queue {
+		input := queueCLIRequest(t, root, "preserve this original Task")
+		queueCLISummary(t, command("project", "queue", "add", "--repository", root, "--input", input, "--command-id", "command:source-task"))
+		claimed := queueCLISummary(t, command("project", "queue", "claim-next", "--repository", root, "--owner", "host:source", "--command-id", "command:source-task-claim"))
+		startArgs = append(startArgs, queueSelectionArgs(claimed)...)
+		startArgs = append(startArgs, "--command-id", "command:queue-source-start")
+	}
+
 	var sourceReview projectLaunchSummary
 	if err := json.Unmarshal([]byte(command(append([]string{"project", "questionnaire", "--prepare"}, startArgs...)...)), &sourceReview); err != nil {
 		t.Fatal(err)

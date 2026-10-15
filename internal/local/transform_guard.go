@@ -23,3 +23,13 @@ func applyControlMutation(mutation func(AuthoritySnapshot) (json.RawMessage, err
 	defer purity.Enter()()
 	return mutation(snapshot)
 }
+
+func applyAuthorityGuard(check func(AuthoritySnapshot) error, snapshot AuthoritySnapshot) error {
+	defer purity.Enter()()
+	return check(snapshot)
+}
+
+func authorityRunIDs(selectIDs func(AuthoritySnapshot) ([]string, error), snapshot AuthoritySnapshot) ([]string, error) {
+	defer purity.Enter()()
+	return selectIDs(snapshot)
+}

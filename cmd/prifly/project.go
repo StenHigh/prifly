@@ -1097,6 +1097,8 @@ func (c *cli) projectCommand(ctx context.Context, args []string) error {
 		return operationError("project", args)
 	}
 	switch args[0] {
+	case "queue":
+		return c.projectQueue(ctx, args[1:])
 	case "init":
 		return c.projectInit(ctx, args[1:])
 	case "workflows":
@@ -1293,6 +1295,7 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 		return c.projectPrepareAndStart(ctx, append(append([]string{}, args[:index]...), args[index+1:]...), true, false, false)
 	}
 	f := flags("project questionnaire")
+	queueFlags := projectQueueFlags(f)
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	name := f.String("package", "", "named package from project.yaml")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
@@ -1309,6 +1312,9 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	if err := parse(f, args); err != nil {
 		return err
 	}
+	if err := queueFlags.validate(); err != nil {
+		return err
+	}
 	if (*name == "" && *launchID == "") || (*name != "" && *launchID != "") {
 		return usageError("project questionnaire requires exactly one of --package or --launch")
 	}
@@ -1319,6 +1325,20 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	profile, err := readProjectProfile(root)
 	if err != nil {
 		return err
+	}
+	if queueFlags.present() {
+		if err := c.projectAuthority(root, profile); err != nil {
+			return err
+		}
+		reader, err := prifly.Open(c.project, true)
+		if err != nil {
+			return err
+		}
+		_, _, resolveErr := queueFlags.resolve(ctx, reader)
+		reader.Close()
+		if resolveErr != nil {
+			return resolveErr
+		}
 	}
 	if *launchID != "" {
 		launch, exists := profile.Launches[*launchID]
@@ -2718,7 +2738,50 @@ declared files, without a fabricated task.
 `
 
 // projectRunnerSkill adds current guidance without altering released templates.
+const projectRunnerQueueInstructions = `
+## Optional local task queue
+
+Only when the developer asks for queue intake, use project queue list/show.
+To take the next task, choose a unique owner session identity and call
+project queue claim-next --repository REPOSITORY --owner OWNER --command-id ID.
+This records ownership only. It chooses no launch and starts no program or Run.
+Read project queue show --task-id TASK_ID; preserve the exact request_bytes
+(base64 UTF-8 TaskInput), revision, request digest, owner and claim generation.
+Keep raw_text separately from the chosen workflow's declared typed input.
+
+Show project workflows and wait for the actual launch choice, using this host's
+native question tool under its current contract. Never infer the launch or
+required typed JSON from the task title, priority or prose. A question-tool
+receipt or preselection is not an answer. While a choice or required answer is
+missing, keep the claim and stop execution; do not drain another task.
+
+Carry --task-id ID --task-owner OWNER --task-revision N
+--task-claim-generation G through questionnaire, questionnaire --prepare and
+project start/continue/recover. Queue prepare returns project-launch-summary/4;
+review its queue_task and typed input digests and use its exact
+--expected-launch-digest plus a stable --command-id for start. The original
+request is independent of those typed inputs; do not discard it. After start,
+run status exposes sealed queue_request_bytes and queue_task: use that Run's
+request revision even if the queue task is edited later. Source-bound
+continuation keeps the same Task ID with the current reviewed selection.
+
+Before retrying, read show and its intents/associations. A recorded result or
+Run is the existing launch. queue_reconcile_required means inspect that intent
+with project queue reconcile, never repeat preflight or create another Run.
+A dispatching intent without a Run may still have external or child effects;
+only the owner can establish effects_resolved with a reason after dispatcher
+termination. No timeout makes a claim ready. Release/complete are explicit
+owner decisions with the same selection and a stable command identity;
+complete means local processing done, never tracker acceptance or publication.
+Never automatically launch or claim the next task when this Run finishes.
+
+`
+
 func projectRunnerSkill(host projectHost) string {
+	return strings.Replace(projectRunnerSkillBeforeQueue(host), "## 1. Start\n", projectRunnerQueueInstructions+"## 1. Start\n", 1)
+}
+
+func projectRunnerSkillBeforeQueue(host projectHost) string {
 	tools := "`request_user_input`, otherwise `request_user_input_async`"
 	if host.ID == "claude-code" {
 		tools = "`AskUserQuestion`"
@@ -2982,7 +3045,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host), projectRunnerSkillBeforeLaunchAdvice(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host), projectRunnerSkillBeforeLaunchAdvice(host), projectRunnerSkillBeforeQueue(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

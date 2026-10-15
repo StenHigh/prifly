@@ -142,6 +142,9 @@ var questionPublicContracts []byte
 //go:embed live-output.schema.json
 var liveOutputPublicContracts []byte
 
+//go:embed task-queue.schema.json
+var taskQueuePublicContracts []byte
+
 //go:embed resources.schema.json
 var resourcePublicContracts []byte
 
@@ -159,7 +162,7 @@ var recoveryPublicContracts []byte
 // publicBundles is the ordered set PublicSchema searches. Listing and lookup
 // read the same set, so a listed name always resolves.
 func publicBundles() [][]byte {
-	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts, neutralStartPublicContracts, executionBindingPublicContracts, timedSessionPublicContracts, routedSessionPublicContracts, effectsSessionPublicContracts, materializedSessionPublicContracts, stageWorkPublicContracts, environmentSourcePublicContracts, programEnvironmentPublicContracts, modelProfilePublicContracts, profileTranslationPublicContracts, runFinishPublicContracts, recoveryPublicContracts, externalWritePublicContracts, continuationPublicContracts, nextHandoffPublicContracts, nextAwaitingHostPublicContracts, questionPublicContracts, resourcePublicContracts, executionBindingSourceContracts, programProgressContracts, executionBindingOutputContracts, liveOutputPublicContracts}
+	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts, neutralStartPublicContracts, executionBindingPublicContracts, timedSessionPublicContracts, routedSessionPublicContracts, effectsSessionPublicContracts, materializedSessionPublicContracts, stageWorkPublicContracts, environmentSourcePublicContracts, programEnvironmentPublicContracts, modelProfilePublicContracts, profileTranslationPublicContracts, runFinishPublicContracts, recoveryPublicContracts, externalWritePublicContracts, continuationPublicContracts, nextHandoffPublicContracts, nextAwaitingHostPublicContracts, questionPublicContracts, resourcePublicContracts, executionBindingSourceContracts, programProgressContracts, executionBindingOutputContracts, liveOutputPublicContracts, taskQueuePublicContracts}
 }
 
 // PublicSchemaNames lists every contract PublicSchema answers for.

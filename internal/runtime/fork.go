@@ -55,9 +55,16 @@ func (e *Engine) fork(ctx context.Context, command ForkCommand) (local.ApplyResu
 	if command.SchemaVersion != "1" || command.CommandID == "" || command.RunID == "" || command.ExpectedRunVersion < 1 {
 		return local.ApplyResult{}, errors.New("invalid fork command")
 	}
+	if err := e.checkUnboundQueueRun(ctx, e.IntendedRunID(command.CommandID)); err != nil {
+		return local.ApplyResult{}, err
+	}
+
 	source, sourceView, err := e.load(ctx, command.RunID)
 	if err != nil {
 		return local.ApplyResult{}, err
+	}
+	if source.QueueTask != nil {
+		return local.ApplyResult{}, fault("queue_fork_requires_project_launch", "continue or recover this task through a reviewed project launch with its queue selection")
 	}
 	if sourceView.Snapshot.Version != command.ExpectedRunVersion {
 		return local.ApplyResult{}, local.Reject("version_conflict", "expected source run version differs from current version")
@@ -85,7 +92,7 @@ func (e *Engine) fork(ctx context.Context, command ForkCommand) (local.ApplyResu
 		pins = append(pins, *reusePin)
 	}
 	newRunID := startRunID(e.owner, command.CommandID)
-	return e.Store.CreateLinkedRun(ctx, local.LinkedRunCommand{ID: command.CommandID, Actor: e.owner, SourceRunID: command.RunID, NewRunID: newRunID, Payload: encoded, ExpectedVersion: command.ExpectedRunVersion, Pins: pins}, func(snapshot local.Snapshot) (local.Change, error) {
+	return e.Store.CreateLinkedRun(ctx, local.LinkedRunCommand{ID: command.CommandID, Actor: e.owner, SourceRunID: command.RunID, NewRunID: newRunID, Payload: encoded, ExpectedVersion: command.ExpectedRunVersion, Pins: pins, AuthorityGuards: []local.AuthorityGuard{e.queueUnboundRunGuard(newRunID)}}, func(snapshot local.Snapshot) (local.Change, error) {
 		if blocked != nil {
 			return local.Change{}, blocked
 		}

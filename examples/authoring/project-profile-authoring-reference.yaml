@@ -1,3 +1,24 @@
+# Optional local queue is authority state, never an extra YAML key here.
+# Requires queue-bound core-state/44, core-read/44 and Project profile /3;
+# questionnaire --prepare: project-launch-summary/4; start: project-start/4.
+# prifly project queue add --input TASK.json --priority 10 --command-id add:one
+# prifly project queue claim-next --owner session:one --command-id claim:one
+# prifly project queue show --task-id TASK_ID
+# Preserve request_bytes (base64 exact UTF-8 TaskInput) and request_digest.
+# Pass all four selection fields through questionnaire/prepare/start/continue:
+# --task-id TASK_ID --task-owner session:one --task-revision 1 --task-claim-generation 1
+# Read declared typed inputs independently, obtain actual answers, then prepare
+# and start with --expected-launch-digest DIGEST --command-id start:one.
+# Read fields: queue_task.selection.{task_id,task_revision,request_digest,owner,
+# claim_generation}, queue_task.intent_id, queue_request_bytes (exact TaskInput);
+# no queue fields on legacy Runs.
+# A missing answer/launch waits; claim-next never dispatches. A stale revision
+# refuses before preflight. queue_reconcile_required never authorizes a retry:
+# inspect project queue reconcile --intent-id INTENT_ID with the same selection
+# and --command-id reconcile:one. Explicit --resolution not_started (reserved)
+# or effects_resolved (dispatching) needs --reason after dispatcher termination.
+# release/complete use the same selection and --reason, with a new command-id;
+# they refuse active/uncertain Runs. complete records local processing only.
 # yaml-language-server: $schema=../../schemas/authoring/project-profile-v3.schema.json
 # Complete reference for .prifly/project.yaml. Git is optional in profile /3.
 # hosts is optional: omit it entirely for command-only workflows. Any selected
