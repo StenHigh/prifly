@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../schemas/authoring/project-profile-v3.schema.json
 # Optional local queue is authority state, never an extra YAML key here.
 # Requires queue-bound core-state/44, core-read/44 and Project profile /3;
 # questionnaire --prepare: project-launch-summary/4; start: project-start/4.
@@ -19,7 +20,6 @@
 # or effects_resolved (dispatching) needs --reason after dispatcher termination.
 # release/complete use the same selection and --reason, with a new command-id;
 # they refuse active/uncertain Runs. complete records local processing only.
-# yaml-language-server: $schema=../../schemas/authoring/project-profile-v3.schema.json
 # Complete reference for .prifly/project.yaml. Git is optional in profile /3.
 # hosts is optional: omit it entirely for command-only workflows. Any selected
 # host uses its fixed root; install it with project runners add --host HOST.
