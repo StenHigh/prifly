@@ -1,4 +1,11 @@
-# Engineering evidence: project task queue
+# Приёмка project task queue
+
+Поставка v0.13.77 принята в явно согласованной владельцем границе:
+released CLI, codex-app и codex-cli — PASS; недоступный Claude исключён
+только из этой приёмки, его qualification — `pending`. Факты поставки,
+решение владельца и raw evidence приведены в заключительном разделе.
+
+## Исторический инженерный снимок до выпуска
 
 Engineering implementation of #5 / E2-P3. **E2-A10 remains pending.** No released
 asset or live generated-host run is claimed by these development checks. The
@@ -132,3 +139,72 @@ Raw local log: `/tmp/prifly-issue5-ci-namespace.log`; source fingerprint
 Only this progress/evidence metadata follows that batch, and the exact staged
 snapshot is gated again. Engineering tasks 1.1–4.3 are complete; E2-A10 and
 released/live qualification remain pending before archive or issue closure.
+
+
+## Поставка v0.13.77 и решение владельца
+
+Выпуск: [v0.13.77](https://github.com/StenHigh/prifly/releases/tag/v0.13.77),
+exact commit `16c3dfdd1e8ed4c72ea986f9f27dee45ae57e326`.
+[verify](https://github.com/StenHigh/prifly/actions/runs/38816209303),
+[qualify: race и e2e](https://github.com/StenHigh/prifly/actions/runs/38816215122)
+и [release](https://github.com/StenHigh/prifly/actions/runs/38817679654) — PASS
+на этом SHA. Первый candidate обнаружил прежний editor-modeline дефект;
+отдельный canonical Run исправил положение modeline в первой строке
+(`16c3dfdd`), существующий regression и полный e2e прошли. Выпущен именно
+исправленный SHA; неуспешный candidate не выдаётся за release qualification.
+
+Фактический опубликованный
+[Linux/amd64 archive](https://github.com/StenHigh/prifly/releases/download/v0.13.77/prifly-linux-amd64.tar.gz)
+скачан из GitHub Release. SHA-256 архива:
+`fa4b40eb0b13e0b5862f9c8c89707f31aa16fb0d545f3ad5f1419d5aaf02220b`,
+совпадает с опубликованным manifest. Официальный installer установил его в
+изолированный `/tmp` prefix; owner installation не заменена. Версия binary
+`0.13.77`, Go `go1.27.2`, SHA-256 binary:
+`d0848b299c49206aa59a069cc7e924b36f52b883067180018be7fdd4ee85b6aa`.
+Actual released CLI concurrency/crash/recovery replay — PASS. Его собственный
+`e2_a10: pending` сохранён: отдельный CLI replay не аттестует live hosts.
+
+| Живой host | Фактический результат | Run |
+|---|---|---|
+| codex-app | PASS; native request_user_input_async и фактические ответы владельца | `run:24d033141fd2498709ae07e07e74f0e40f399d070b754cfa9c1229af210945b4` |
+| Codex CLI 0.162.1 | PASS; реальная отдельная сессия, native questions и переданные фактические ответы владельца | `run:24d590379deffcb687f714eba4e14b0b206c934aebf1e921de9de9d146ceb9af` |
+| Claude Code | Не запускался по запрету владельца; live qualification `pending` | Нет |
+
+Оба Codex-host работали в отдельных fresh fixtures на actual released binary
+с freshly generated runner. До ответа о launch, до ответа `compact` и до
+подтверждения подготовленного review сохранены public inventory cuts:
+0 Runs, 0 Workspace claims, 0 associations. Владелец фактически выбрал
+`repair-fast`, затем `compact` и подтвердил старт одного Run в каждой сессии.
+Typed `request.json` предоставлен fixture, исходный TaskInput сохранён отдельно.
+Review `/4`, start `/4`, sealed state/read `/44`, request bytes/digest и typed
+input digests проверены. Оба Run завершились `succeeded`; задачи остались
+`claimed`, по одной association. Exact retry тех же command ID и аргументов
+вернул побайтно тот же stdout и не создал второй Run или association.
+В workflow нет executable programs/preflight, поэтому live проверка не
+приписывает себе наблюдение повторного процесса; dispatch/crash поведение
+доказано отдельно actual released CLI replay и semantic tests.
+
+Оба host сначала передали `--input` обычному questionnaire и получили
+`invalid_usage`; после проверки контракта использовали `--prepare`.
+Этот реальный отказ сохранён, а не удалён из успешного отчёта. При ожидании и
+подтверждении не создавались programs или Workspace claims. Сессия Codex CLI
+завершена штатно с exit 0 после записи результата и exact retry.
+
+Владелец явно ответил:
+«Изменить приёмку v0.13.77: принять два Codex-хоста, явно исключить недоступный
+Claude и закрыть #5 после оформления evidence».
+Итог E2-A10 — **accepted with owner exception для v0.13.77**.
+Это не PASS Claude и не полная трёххостовая qualification. Поддержка host,
+future matrix, formal P1/P2 acceptance и другие product gates не меняются.
+
+[Структурированная приёмка](delivery-acceptance.json) содержит decision source,
+provenance, CI links и границы результата.
+[Raw bundle](delivery-evidence-v0.13.77.tar.gz), SHA-256
+`54d4657e0fbb0f72c4f0a80239687de9d4ce6cbe73369028cda60f98a534db27`,
+содержит 140 файлов: фактические команды/stdout, inventory cuts, generated
+runners, actual Codex CLI TTY и ответы с указанием их происхождения.
+Корень архива — `prifly-issue5-delivery-evidence-v0.13.77`; `manifest.json`
+позволяет проверить каждый файл. Authority databases, credentials и binary
+не включены. Raw bundle записан до решения об исключении; его pending A10
+сохранён как наблюдавшееся состояние и разрешён отдельным owner decision
+в `delivery-acceptance.json`, без переписывания raw evidence.

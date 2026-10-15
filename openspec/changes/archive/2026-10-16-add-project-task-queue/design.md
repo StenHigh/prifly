@@ -97,5 +97,14 @@ Queue — machine-local authority state. Shared profile clone/init не пере
 1. Commit planning artifacts, затем engineering Run в worktree по всем engineering tasks.
 2. Реализовать opt-in queue и schemas без миграции legacy, прогнать targeted CLI/tests и full staged gate, commit/merge в main.
 3. Зафиксировать candidate SHA; по существующему release процессу пройти verify/qualify exact SHA. Push/tags принадлежат владельцу; локальные checks их не заменяют.
-4. После выпуска выполнить reusable CLI replay на exact released binary и live generated runner на каждом поддерживаемом host (`codex-app`, `codex-cli`, `claude-code`), сохранить version/digest, selection/question wait и admission count evidence.
-5. Только после E2-A1–A10 PASS sync/archive с удалением AIF plan и закрытие #5. При откате старый reader сохраняет guards и отказывает `/44`, не меняет историю.
+4. После выпуска выполнить reusable CLI replay на exact released binary и live generated runner на каждом поддерживаемом host (`codex-app`, `codex-cli`, `claude-code`), сохранить version/digest, selection/question wait и admission count evidence. Для v0.13.77 действует явное решение владельца: принять два Codex-host, а недоступный Claude исключить из приёмки этого выпуска, сохранив его qualification `pending`.
+5. После E2-A1–A9 PASS и E2-A10 в согласованной границе v0.13.77 выполнить sync/archive с удалением только этого AIF plan и закрытие #5. Evidence различает фактические PASS, исключение и непроверенный Claude; исключение не переносится на следующие выпуски. При откате старый reader сохраняет guards и отказывает `/44`, не меняет историю.
+
+## Решение владельца о поставке v0.13.77
+
+Владелец разрешил агенту push и выпуск. После actual released replay и двух
+живых проверок он явно выбрал: «Изменить приёмку v0.13.77: принять два
+Codex-хоста, явно исключить недоступный Claude и закрыть #5 после оформления
+evidence». До этого Claude был запрещён к запуску как неработающий; сессия
+Claude не запускалась. Это разовое изменение release acceptance, не доказательство
+работы Claude, изменение host support или разрешение игнорировать будущие gates.

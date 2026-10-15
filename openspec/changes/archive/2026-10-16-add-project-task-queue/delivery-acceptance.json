@@ -1,0 +1,75 @@
+{
+  "release": "v0.13.77",
+  "release_commit": "16c3dfdd1e8ed4c72ea986f9f27dee45ae57e326",
+  "release_url": "https://github.com/StenHigh/prifly/releases/tag/v0.13.77",
+  "archive_url": "https://github.com/StenHigh/prifly/releases/download/v0.13.77/prifly-linux-amd64.tar.gz",
+  "archive_sha256": "fa4b40eb0b13e0b5862f9c8c89707f31aa16fb0d545f3ad5f1419d5aaf02220b",
+  "binary_sha256": "d0848b299c49206aa59a069cc7e924b36f52b883067180018be7fdd4ee85b6aa",
+  "checks": {
+    "verify": {
+      "id": 38816209303,
+      "head_sha": "16c3dfdd1e8ed4c72ea986f9f27dee45ae57e326",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/StenHigh/prifly/actions/runs/38816209303",
+      "updated_at": "2026-10-15T22:21:17Z"
+    },
+    "qualify": {
+      "id": 38816215122,
+      "head_sha": "16c3dfdd1e8ed4c72ea986f9f27dee45ae57e326",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/StenHigh/prifly/actions/runs/38816215122",
+      "updated_at": "2026-10-15T22:30:19Z"
+    },
+    "release": {
+      "id": 38817679654,
+      "head_sha": "16c3dfdd1e8ed4c72ea986f9f27dee45ae57e326",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/StenHigh/prifly/actions/runs/38817679654",
+      "updated_at": "2026-10-15T22:34:15Z"
+    }
+  },
+  "released_cli": {
+    "result": "passed",
+    "raw_summary": "released-cli/summary.json",
+    "scope": "CLI concurrency/crash/recovery; raw report e2_a10 remains pending because it does not attest live hosts"
+  },
+  "live_hosts": {
+    "codex-app": {
+      "result": "passed",
+      "run_id": "run:24d033141fd2498709ae07e07e74f0e40f399d070b754cfa9c1229af210945b4",
+      "runner_sha256": "caa8e9b64ce05b2033de31a59adcf6e114519dc2b8571145764f08e10b063614",
+      "host_version": "not exposed by this app session; actual native request_user_input_async used",
+      "raw_result": "codex-app/live-host-result.json"
+    },
+    "codex-cli": {
+      "result": "passed",
+      "run_id": "run:24d590379deffcb687f714eba4e14b0b206c934aebf1e921de9de9d146ceb9af",
+      "runner_sha256": "8893834b96d1c734e7ac189d2530a5fbb17cdc772d1cd3b7e98dff02232efbbe",
+      "host_version": "Codex CLI 0.162.1",
+      "raw_result": "codex-cli/live-host-result.json"
+    },
+    "claude-code": {
+      "result": "not_run",
+      "qualification": "pending",
+      "excluded_from_v0_13_77_acceptance": true,
+      "reason": "Owner forbade starting the unavailable host and explicitly changed acceptance of this release."
+    }
+  },
+  "e2_a10": {
+    "status": "accepted_with_owner_exception",
+    "applies_only_to": "v0.13.77 / issue #5",
+    "owner_decision": "Изменить приёмку v0.13.77: принять два Codex-хоста, явно исключить недоступный Claude и закрыть #5 после оформления evidence",
+    "answer_source": "actual user async reply call_72e5aa9cbc3c48c8b1c46ff5474348da item 0",
+    "changes_future_host_matrix": false
+  },
+  "raw_bundle": {
+    "file": "delivery-evidence-v0.13.77.tar.gz",
+    "sha256": "54d4657e0fbb0f72c4f0a80239687de9d4ce6cbe73369028cda60f98a534db27",
+    "root": "prifly-issue5-delivery-evidence-v0.13.77",
+    "files": 140
+  },
+  "recorded_at": "2026-10-15T23:13:42.951784+00:00"
+}

@@ -27,4 +27,11 @@
 - [x] 4.2 Подготовить воспроизводимый live generated-runner сценарий для codex-app/codex-cli/claude-code и evidence matrix E2-A1–A10; проверить, что только фактический released/live PASS закрывает A10, а неподтверждённые строки остаются pending.
 - [x] 4.3 Выполнить targeted tests/make check-fast, openspec validate add-project-task-queue --strict --no-interactive, protected-history diff audit и полные staged ворота make ci-check-once CHECK_CONTEXT=codex-app-authorized CHECK_FOR_COMMIT=1; зафиксировать инженерную готовность к canonical verify/security/review/commit.
 
-Галочки выше относятся к инженерной реализации и подготовке воспроизводимой квалификации. Canonical Run заканчивается commit, после него claim-ветка вливается в main. Они **не закрывают E2-A10**: до sync/archive и закрытия #5 обязательны actual release verify/qualify на фиксированном SHA, fixtures на реально released binary и live generated runner на всех трёх поддерживаемых hosts по design.md/Migration Plan. Evidence обязан различать engineering PASS и эту последующую поставку; push и release tags остаются действиями владельца. AIF plan удаляется только в том же коммите, что archive после завершения всех критериев.
+Галочки выше относятся к инженерной реализации и подготовке воспроизводимой квалификации. Canonical Run заканчивается commit, после него claim-ветка вливается в main. Они сами по себе **не закрывают E2-A10**. Поставка ниже проверена отдельно; для v0.13.77 владелец явно исключил недоступный Claude из приёмки, оставив его qualification `pending`, и разрешил агенту push/выпуск. Критерии следующих выпусков не изменены. AIF plan удаляется только в том же коммите, что archive после завершения согласованных критериев.
+
+## 5. Поставка v0.13.77 и согласованная приёмка
+
+- [x] 5.1 Пройти GitHub verify/qualify на exact SHA `16c3dfdd1e8ed4c72ea986f9f27dee45ae57e326`, выпустить v0.13.77 и проверить происхождение/хеш фактического опубликованного binary.
+- [x] 5.2 Выполнить released CLI concurrency/crash/recovery replay без подмены development binary.
+- [x] 5.3 Провести живые generated runners codex-app и codex-cli с фактическими ответами владельца, нулём Runs при ожидании, exact review/start и одним Run/association после точного повтора.
+- [x] 5.4 Записать явное исключение владельца для недоступного Claude только в приёмке v0.13.77; сохранить его qualification pending и приложить actual evidence перед sync/archive.

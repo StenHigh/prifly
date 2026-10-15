@@ -1,8 +1,10 @@
+# project-task-queue Specification
+
 ## Purpose
 
 Определяет локальную очередь проекта: устойчивую identity задачи до Run, атомарное владение, связь с reviewed execution и восстановление после сбоя без повторного старта или потери истории.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: QueueTask существует до Run и сохраняет исходный запрос
 
@@ -106,6 +108,18 @@ Reconcile SHALL находить известный admission, а unresolved dis
 
 E2-A1–A9 SHALL проверяться CLI concurrency/crash/recovery fixtures и semantic tests. E2-A10 SHALL отдельно подтверждать те же CLI fixtures на реально released binary с version/digest и живой generated runner на поддерживаемых hosts: явный выбор launch, prepare, ожидание ответа и отсутствие повторного start. Development build, synthetic transcript и schema validation MUST NOT заменять released/live qualification. До этого issue #5 и product gate MUST оставаться открытыми.
 
+Исключительно для приёмки v0.13.77 и закрытия #5 SHALL применяться явно
+согласованная владельцем граница: actual released CLI replay и live PASS
+`codex-app`/`codex-cli`. Недоступный `claude-code` исключён из этой приёмки;
+его live qualification SHALL оставаться `pending` и MUST NOT представляться
+как PASS. Решение и фактические наблюдения SHALL храниться в archived evidence
+этого change. Исключение MUST NOT менять host support или переноситься на
+следующие выпуски.
+
 #### Scenario: Инженерные tests прошли до выпуска
 - **WHEN** код и полный gate прошли на development build, но released/live qualification ещё отсутствует
 - **THEN** evidence отдельно называет инженерный PASS и незавершённый E2-A10; capability не объявляется полностью квалифицированной
+
+#### Scenario: Приёмка v0.13.77 с исключением недоступного host
+- **WHEN** actual released CLI и оба Codex-host прошли проверки, а владелец явно исключил недоступный Claude из приёмки v0.13.77
+- **THEN** #5 допускается закрыть в этой согласованной границе с recorded owner decision; Claude остаётся непроверенным, а будущая host matrix не сокращается

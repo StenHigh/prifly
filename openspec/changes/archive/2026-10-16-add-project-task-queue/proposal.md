@@ -30,3 +30,9 @@ Ownership существующих capabilities не переносится; и�
 Затронуты `internal/runtime` (очередь, admission, read/binding), `internal/local` (атомарная запись authority и Run), `cmd/prifly` (queue и launcher/runner), canonical/public schemas, tests/replay, `examples/`, README, словарь и карта источников. SQLite driver остаётся внутри local; transform-команды остаются чистыми. Queue не создаётся автоматически в legacy authority и не требует Git; Git/workspace claim остаётся отдельным механизмом.
 
 Инженерная реализация проходит отдельный `aif-classic` Run, полные ворота и commit/merge. Закрытие #5 и archive требуют дополнительно E2-A10: fixtures на реально released binary и живой generated runner на поддерживаемых hosts. Development build и schema tests не заменяют эту квалификацию. Push и release tags остаются действиями владельца по правилам репозитория.
+
+Для v0.13.77 владелец явно изменил приёмку: принять actual released CLI и
+живые `codex-app`/`codex-cli`, исключив недоступный `claude-code`. Его live
+qualification остаётся `pending`, а не PASS. Исключение относится только к
+этому выпуску и закрытию #5; поддержка host и критерии следующих выпусков
+не меняются. Владелец также явно разрешил агенту push и выпуск.

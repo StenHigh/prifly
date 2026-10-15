@@ -84,3 +84,9 @@ Archive/issue closure requires E2-A1–A9 semantic/concurrency evidence, actual
 released CLI evidence, and PASS for all three live hosts. Missing or failed
 observations remain pending. Local `complete` is an explicit queue decision,
 never acceptance by an external tracker or publication.
+
+Для v0.13.77 владелец явно согласовал единственное исключение: принять
+released CLI и два живых Codex-host, исключив недоступный Claude Code.
+Его live qualification остаётся `pending`, а не PASS; следующие выпуски
+сохраняют полную host matrix. Решение и фактические наблюдения сохранены в
+[архивном evidence](../../../openspec/changes/archive/2026-10-16-add-project-task-queue/evidence.md).
