@@ -264,10 +264,17 @@ func (r Run) parallelProgressInvariant(a *Activation) error {
 		}
 		return nil
 	}
+	// A later scope cancellation may settle the activation independently of
+	// its last join decision. Keep that decision as history, but only after
+	// every entered branch has actually stopped.
+	cancelled := a.Status == "cancelled" && a.Settled != nil && r.cancelRequestedFor(a.InvocationID)
+	for _, inv := range entered {
+		cancelled = cancelled && inv.Settled != nil && invocationTerminal(inv.Status)
+	}
 	// A cancelling decision fixed the verdict and asked the remainder to stop.
 	// It settles nothing: a stop requested is not a stop confirmed.
 	if d.Route == "cancelling" {
-		if d.NextBranchID != "" || d.NextBranchInvocationID != "" || d.NextStageID != "" || d.Failure != "" || a.Settled != nil || a.Parallel.ResultsRef != nil {
+		if d.NextBranchID != "" || d.NextBranchInvocationID != "" || d.NextStageID != "" || d.Failure != "" || a.Settled != nil && !cancelled || a.Parallel.ResultsRef != nil {
 			return fmt.Errorf("parallel invariant: a cancelling decision created or settled something")
 		}
 		if d.Verdict == "undecided" || d.RemainderDisposition != "cancel_requested" {
@@ -279,7 +286,7 @@ func (r Run) parallelProgressInvariant(a *Activation) error {
 	// creates nothing and settles nothing, which is the honest shape when the
 	// remaining branches are already live.
 	if d.Route == "recorded" {
-		if d.NextBranchID != "" || d.NextBranchInvocationID != "" || d.NextStageID != "" || d.Failure != "" || d.RemainderDisposition != "" || a.Settled != nil || a.Parallel.ResultsRef != nil {
+		if d.NextBranchID != "" || d.NextBranchInvocationID != "" || d.NextStageID != "" || d.Failure != "" || d.RemainderDisposition != "" || a.Settled != nil && !cancelled || a.Parallel.ResultsRef != nil {
 			return fmt.Errorf("parallel invariant: a recorded decision created or settled something")
 		}
 		if d.Verdict == "satisfied" || d.Verdict == "unsatisfied" {

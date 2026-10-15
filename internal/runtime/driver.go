@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"maps"
 	"os"
 	"path/filepath"
@@ -2164,6 +2165,9 @@ func (e *Engine) finishCancellation(ctx context.Context, runID, invocationID str
 		r.Ready = []string{}
 		return local.Change{}, nil
 	})
+	if os.Getenv("LOG_LEVEL") == "debug" {
+		log.Printf("[FIX:parallel-cancel] finish run=%s invocation=%s error=%v", runID, invocationID, err)
+	}
 	return err
 }
 
