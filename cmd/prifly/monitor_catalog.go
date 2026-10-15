@@ -21,11 +21,6 @@ import (
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
-// monitorBusyCode is the refusal an authority gives while another process
-// holds its lock; it says the source could not be read now, never that it is
-// empty.
-const monitorBusyCode = "storage_busy"
-
 type monitorSource struct {
 	physical [2]uint64
 	// mark is the storage fingerprint the last successful read saw. A refresh
@@ -480,7 +475,7 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 					m.mu.RLock()
 					cached := m.runs[s.ID][revision.RunID]
 					m.mu.RUnlock()
-					if cached.Version == revision.Version && cached.Events == revision.EventSeq && cached.Error == "" {
+					if cached.Version == revision.Version && cached.Events == revision.EventSeq && cached.Error == "" && (cached.Status == "completed" || cached.Status == "failed" || cached.Status == "cancelled") {
 						next[revision.RunID] = cached
 						continue
 					}
@@ -511,19 +506,10 @@ func (m *monitorCatalog) refresh(ctx context.Context) {
 		}
 		m.mu.Lock()
 		m.sources[s.ID] = s
-		// A source that cannot be read contributes nothing -- except when the
-		// reason is that someone holds the authority for a moment. Every
-		// maintenance request takes it exclusively, so the refresh running
-		// beside one fails to open, and blanking the rows there reported zero
-		// Runs until the next refresh: on a screen whose whole job is
-		// visibility, a refused cleanup looked exactly like a completed one.
-		// The source still carries the error, so the rows read as stale, not
-		// as current.
-		switch {
-		case err == nil:
+		// A failed read is not an empty authority. Keep the last complete rows
+		// with the source error, so every view can mark them as stale.
+		if err == nil {
 			m.runs[s.ID] = next
-		case !monitorAuthorityBusy(err):
-			m.runs[s.ID] = map[string]monitorRun{}
 		}
 		m.mu.Unlock()
 	}
@@ -558,13 +544,6 @@ func monitorStorageMark(root string) string {
 		}
 	}
 	return mark
-}
-
-// monitorAuthorityBusy reports the one open failure that says nothing about
-// the source's contents: another process holds its lock right now.
-func monitorAuthorityBusy(err error) bool {
-	var fault *prifly.Fault
-	return errors.As(err, &fault) && fault.Code == monitorBusyCode
 }
 
 func (m *monitorCatalog) open(id string) (*prifly.Engine, error) {

@@ -21,6 +21,12 @@ type monitorRelatedRun struct {
 	LatestDescendant *monitorBranchTip `json:"latest_descendant,omitempty"`
 }
 
+type monitorBoardRun struct {
+	monitorRun
+	ForkSourceAvailable bool               `json:"fork_source_available"`
+	RelatedRuns         []monitorBranchTip `json:"related_runs"`
+}
+
 type monitorBranchTip struct {
 	ID           string  `json:"run_id"`
 	Status       string  `json:"status"`
@@ -168,7 +174,7 @@ func (m *monitorCatalog) listHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := q.Get("view")
-	if view != "" && view != "related" && view != "related-newest" && view != "flat" {
+	if view != "" && view != "related" && view != "related-newest" && view != "flat" && view != "board" {
 		http.Error(w, "invalid view", 400)
 		return
 	}
@@ -301,6 +307,26 @@ func (m *monitorCatalog) listHTTP(w http.ResponseWriter, r *http.Request) {
 	var result any = rows
 	if isRelated {
 		result = related
+	}
+	if view == "board" {
+		children := map[string][]monitorBranchTip{}
+		for _, run := range all {
+			if run.ForkSourceRunID != "" {
+				key := run.Source + "\x00" + run.ForkSourceRunID
+				children[key] = append(children[key], monitorBranchTip{ID: run.ID, Status: run.Status, Outcome: run.Outcome, LastObserved: run.LastObserved})
+			}
+		}
+		cards := make([]monitorBoardRun, 0, len(rows))
+		for _, run := range rows {
+			links := children[monitorRunKey(run)]
+			sort.Slice(links, func(i, j int) bool { return links[i].ID < links[j].ID })
+			if links == nil {
+				links = []monitorBranchTip{}
+			}
+			_, parentAvailable := all[run.Source+"\x00"+run.ForkSourceRunID]
+			cards = append(cards, monitorBoardRun{monitorRun: run, ForkSourceAvailable: parentAvailable && run.ForkSourceRunID != "", RelatedRuns: links})
+		}
+		result = cards
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"runs": result, "page": page, "pages": pages, "filtered": filtered, "total": total, "active": active, "sources": m.sourceList(), "discovery": discovery, "filters": map[string]any{"statuses": keys(statuses), "projects": keys(projects), "executors": keys(executors)}})
 }

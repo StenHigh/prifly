@@ -191,3 +191,14 @@ footer{max-width:1680px;margin:auto;padding:18px 28px;color:var(--muted);font-si
 @media(max-width:760px){.flight-deck{min-height:218px;padding:20px;gap:20px}.flight-deck h1{font-size:25px}.flight-deck::before{background:linear-gradient(90deg,#0c1829f5,#0c1829ce 65%,#0c182975),url('/monitor-hero.jpg') 68% center/cover no-repeat}.flight-deck::after{left:20px}.flight-deck .heading-note{max-width:250px}}
 @media(max-width:480px){header{display:grid;grid-template-columns:auto minmax(0,1fr)}.header-tools{display:grid;justify-items:end;gap:5px;min-width:0}.theme-picker select{max-width:125px}#connection{width:auto}}
 .program-output{max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:11px/1.5 var(--mono);background:var(--raised);padding:8px;border:1px solid var(--line);border-radius:4px}
+
+.board-grid{display:grid;grid-template-columns:repeat(6,minmax(270px,1fr));gap:14px;overflow-x:auto;align-items:start;padding:8px 0 18px}
+.board-column{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0;max-height:72vh;overflow-y:auto}
+.board-column>h2{position:sticky;top:-12px;background:var(--panel);padding:10px 0;z-index:1;font-size:15px;margin:0 0 14px;display:flex;justify-content:space-between;gap:8px}
+.board-column>h2 span{color:var(--muted)}
+.board-card{background:var(--raised);border:1px solid var(--line);border-radius:8px;margin:10px 0;padding:14px;overflow-wrap:anywhere}
+.board-card h3{font-size:16px;line-height:1.4;margin:0 0 8px}.board-card h4{font-size:12px;margin:14px 0 6px}
+.board-card small{display:block;color:var(--muted);font-size:11px;line-height:1.5}.board-card p{font-size:13px;margin:10px 0}
+.board-card ul{padding-left:17px;margin:8px 0;font-size:12px}.board-card li{margin:7px 0}.board-card nav{font-size:12px;margin:14px 0 8px}
+.board-branches{font-weight:600}.board-card .error{border-left:3px solid var(--bad);padding-left:8px}.board-note{font-size:13px}
+[hidden]{display:none!important}

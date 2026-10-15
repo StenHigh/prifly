@@ -59,6 +59,9 @@ func TestMonitorPageKeepsSnapshotIntegrity(t *testing.T) {
 	if err != nil || len(page) != 1 {
 		t.Fatal(page, err)
 	}
+	if _, err := s.ReadMonitor(context.Background(), page[0].RunID); !errors.Is(err, ErrIntegrity) {
+		t.Fatalf("corrupt monitor snapshot was served: %v", err)
+	}
 	if _, err := s.Read(context.Background(), page[0].RunID, 0, 1); !errors.Is(err, ErrIntegrity) {
 		t.Fatalf("corrupt snapshot was served: %v", err)
 	}

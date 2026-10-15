@@ -148,7 +148,7 @@ func TestMonitorCatalogAndScopedReads(t *testing.T) {
 	}
 	catalog.refresh(context.Background())
 	list = request("GET", "/api/runs")
-	if !strings.Contains(list.Body.String(), `"total":1`) || !strings.Contains(list.Body.String(), `"error":`) {
+	if !strings.Contains(list.Body.String(), `"total":2`) || !strings.Contains(list.Body.String(), `"error":`) {
 		t.Fatal(list.Body.String())
 	}
 	if err = os.RemoveAll(first); err != nil {
@@ -488,13 +488,13 @@ func TestMonitorCatalogKeepsRunsWhileTheAuthorityIsBusy(t *testing.T) {
 	if !strings.Contains(busy, "storage_busy") || catalog.sources[id].Indexed {
 		t.Fatalf("the source did not report itself unread while busy: %q indexed=%v", busy, catalog.sources[id].Indexed)
 	}
-	// And a source that is genuinely unreadable still contributes nothing.
+	// A broken source retains its last successful rows, explicitly stale.
 	if err = os.WriteFile(filepath.Join(source, "prifly.json"), []byte("{}"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	catalog.refresh(context.Background())
-	if len(catalog.runs[id]) != 0 {
-		t.Fatalf("a broken source kept %d Runs", len(catalog.runs[id]))
+	if len(catalog.runs[id]) != 1 || catalog.sources[id].Error == "" || catalog.sources[id].Indexed {
+		t.Fatalf("a broken source lost stale rows or its error: %+v", catalog.sources[id])
 	}
 }
 

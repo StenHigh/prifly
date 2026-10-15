@@ -13,27 +13,28 @@ import (
 // MonitorMaxRuns bounds one metadata page, not the complete Run population.
 const MonitorMaxRuns = 200
 
-// RunSummary is the compact projection a monitor lists. Every field is copied
-// from the recorded Run: nothing here is derived, estimated or filled in.
+// RunSummary is the compact local monitor projection. Recorded fields retain
+// their meaning; Board derives presentation categories from one authority cut.
 type RunSummary struct {
-	Subject         string   `json:"subject"`
-	ProjectTitle    string   `json:"project_title,omitempty"`
-	ForkSourceRunID string   `json:"fork_source_run_id,omitempty"`
-	ForkReason      string   `json:"fork_reason,omitempty"`
-	Executors       []string `json:"executors"`
-	SchemaVersion   string   `json:"schema_version"`
-	ID              string   `json:"run_id"`
-	WorkflowID      string   `json:"workflow_id"`
-	Profile         string   `json:"profile"`
-	Status          string   `json:"status"`
-	Outcome         *string  `json:"outcome"`
-	Created         string   `json:"created"`
-	LastObserved    string   `json:"last_observed"`
-	Steps           int      `json:"step_instances"`
-	Attempts        int      `json:"attempts"`
-	Invocations     int      `json:"invocations"`
-	Active          int      `json:"active_attempts"`
-	AwaitingHosts   int      `json:"awaiting_hosts"`
+	Board           *MonitorBoard `json:"board,omitempty"`
+	Subject         string        `json:"subject"`
+	ProjectTitle    string        `json:"project_title,omitempty"`
+	ForkSourceRunID string        `json:"fork_source_run_id,omitempty"`
+	ForkReason      string        `json:"fork_reason,omitempty"`
+	Executors       []string      `json:"executors"`
+	SchemaVersion   string        `json:"schema_version"`
+	ID              string        `json:"run_id"`
+	WorkflowID      string        `json:"workflow_id"`
+	Profile         string        `json:"profile"`
+	Status          string        `json:"status"`
+	Outcome         *string       `json:"outcome"`
+	Created         string        `json:"created"`
+	LastObserved    string        `json:"last_observed"`
+	Steps           int           `json:"step_instances"`
+	Attempts        int           `json:"attempts"`
+	Invocations     int           `json:"invocations"`
+	Active          int           `json:"active_attempts"`
+	AwaitingHosts   int           `json:"awaiting_hosts"`
 	// Settled counts what is already behind: with one work finishing as another
 	// starts, the momentary counters can repeat while the Run is moving.
 	SettledAttempts int   `json:"settled_attempts"`
@@ -106,7 +107,11 @@ func (e *Engine) MonitorSummary(ctx context.Context, id string) (RunSummary, err
 	if _, err := e.readAccess(ctx); err != nil {
 		return RunSummary{}, err
 	}
-	r, view, err := e.load(ctx, id)
+	view, err := e.Store.ReadMonitor(ctx, id)
+	if err != nil {
+		return RunSummary{}, err
+	}
+	r, err := e.decodeSnapshot(view.Snapshot)
 	if err != nil {
 		return RunSummary{}, err
 	}
@@ -160,7 +165,7 @@ func (e *Engine) MonitorSummary(ctx context.Context, id string) (RunSummary, err
 	if r.Fork != nil {
 		sourceRunID, forkReason = r.Fork.SourceRunID, r.Fork.Reason
 	}
-	return RunSummary{Subject: brief.Subject, ProjectTitle: r.ProjectTitle, ForkSourceRunID: sourceRunID, ForkReason: forkReason, Executors: executors,
+	return RunSummary{Board: monitorBoard(r, view), Subject: brief.Subject, ProjectTitle: r.ProjectTitle, ForkSourceRunID: sourceRunID, ForkReason: forkReason, Executors: executors,
 		SchemaVersion: r.SchemaVersion, ID: r.ID, WorkflowID: r.WorkflowRef.ID, Profile: r.Profile,
 		Status: r.Status, Outcome: r.Outcome, Created: r.Created.UTC, LastObserved: r.LastObserved.UTC,
 		Steps: len(r.Steps), Attempts: len(r.Attempts), Invocations: len(r.Invocations),

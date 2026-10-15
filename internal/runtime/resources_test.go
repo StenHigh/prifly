@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/stenhigh/prifly/internal/local"
 )
 
 // Two Runs of one project may run side by side, and still not both run what
@@ -45,11 +47,33 @@ func TestAResourceKeepsTwoRunsFromOverlappingOnAStage(t *testing.T) {
 	if r := driverRun(t, e, b); len(r.Attempts) != 0 {
 		t.Fatalf("a refused attempt left a trace: %+v", r.Attempts)
 	}
+	before, monitorErr := e.MonitorSummary(ctx, b)
+	if monitorErr != nil || before.Board == nil || before.Board.Category != "resource" {
+		t.Fatalf("resource wait missing from board: %+v %v", before, monitorErr)
+	}
+	// Before a new Step is admitted its input check can still own the
+	// frontier; the check itself acquires no exclusive resource.
+	checking := driverRun(t, e, b)
+	activation := checking.activationForInvocation(checking.RootInvocationID, "plan")
+	checking.ActiveCheckID = "check:input"
+	checking.CheckExecutions = map[string]*CheckExecution{"check:input": {ID: "check:input", Status: "pending"}}
+	checking.PendingAcceptance = &PendingAcceptance{Kind: "step_input", ActivationID: activation.ID, Status: "pending"}
+	if board := monitorBoard(checking, local.MonitorRead{Resources: map[string]int64{"heavy": 1}}); board.Category == "resource" {
+		t.Fatalf("input check was labelled as resource admission: %+v", board)
+	}
+	waiters, monitorErr := e.Store.SlotWaiters(ctx)
+	if monitorErr != nil || len(waiters) != 0 {
+		t.Fatalf("resource fixture unexpectedly registered a slot waiter: %v %v", waiters, monitorErr)
+	}
 	if _, err := e.SubmitSession(ctx, hostResult(t, e, held, "planned")); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.Drive(ctx, a); err != nil {
 		t.Fatal(err)
+	}
+	freed, monitorErr := e.MonitorSummary(ctx, b)
+	if monitorErr != nil || freed.Version != before.Version || freed.Events != before.Events || freed.Board.Category == "resource" {
+		t.Fatalf("authority resource release was not visible at unchanged Run revision: %+v %v", freed, monitorErr)
 	}
 	if err := e.Drive(ctx, b); err != nil {
 		t.Fatalf("the freed resource was not taken on the next drive: %v", err)

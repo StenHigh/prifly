@@ -27,23 +27,28 @@ func (e *Engine) load(ctx context.Context, id string) (Run, local.ReadView, erro
 	if err != nil {
 		return Run{}, v, err
 	}
+	r, err := e.decodeSnapshot(v.Snapshot)
+	return r, v, err
+}
+
+func (e *Engine) decodeSnapshot(snapshot local.Snapshot) (Run, error) {
 	var r Run
-	if err := decodeState(v.Snapshot.Data, &r); err != nil {
-		return r, v, err
+	if err := decodeState(snapshot.Data, &r); err != nil {
+		return r, err
 	}
 	if !supportedRun(r) || r.AuthorityID != e.Installation.ID || r.ProjectID != e.Config.ID {
-		return r, v, errors.New("unsupported or foreign run manifest")
+		return r, errors.New("unsupported or foreign run manifest")
 	}
 	if err := invocationInvariant(r); err != nil {
-		return r, v, err
+		return r, err
 	}
 	if err := contextPinnedInvariant(r); err != nil {
-		return r, v, err
+		return r, err
 	}
 	if err := acceptanceInvariant(r); err != nil {
-		return r, v, err
+		return r, err
 	}
-	return r, v, nil
+	return r, nil
 }
 
 func invariant(r Run) error {
