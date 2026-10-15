@@ -85,3 +85,12 @@ production monitor не получает дополнительных console lo
 `5ec5fc8551dd4639b77cc78676163b86979b2b4c258d51536dc12021e645c08d`,
 log `/tmp/prifly-issue4-filter-ci.log`; CLI tests 130.021s, остальные Go packages,
 vet/staticcheck, vuln/schema/release/scripts и modules verified.
+
+Canonical Run `run:20c44358e3d3cc9ca50c73bca03198805612ff9cf46395aff9a6b6c37c3d41e1`
+завершился terminal после принятых verify/security/review и одного fix-round.
+Implementation commit `e199d617ed41f898829a44ccec891868f4ac77d7` создан штатным commit Step и влит
+fast-forward в main. Окончательный staged gate PASS, fingerprint
+`baa4b9a8dad9b3ace67cb25e7bb6af445bda61fdfa53201acb675aa928f0ead4`,
+log `/tmp/prifly-issue4-filter-ci-final.log`. Sync переносит три ADDED
+requirements в local-run-monitor с сохранением всех прежних scenarios;
+архивирование удаляет только plan этого Run.
