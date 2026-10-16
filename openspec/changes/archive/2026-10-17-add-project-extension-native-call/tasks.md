@@ -41,8 +41,17 @@
 ## 7. Released CLI и host qualification
 
 - [x] 7.1 Для fixed release SHA выполнить existing `verify` / `qualify` процедуру: `python3 scripts/ensure-release-checks.py --sha SHA --ref main --wait`; publication/tag остаются у владельца по правилам репозитория. После stable release запустить тот же E5 harness exact released CLI. Проверка: записаны version/commit/SHA256 бинарника и outcomes всех fixtures; v0.13.77 отмечен только как baseline unsupported syntax. Эта задача остаётся открытой до фактического выпуска.
-- [ ] 7.2 Выполнить native generated-runner harness на `codex-app`, `codex-cli`, `claude-code` с synthetic task payload и отдельно live host handoff/control check в заявленном release profile. Проверка: по каждому host сохранены version и invocation/task/submit/settlement evidence, scope live/synthetic обозначен; недоступный host — pending до проверки или явного release-scope решения владельца, не PASS по template tests.
-- [ ] 7.3 Свести E5-A1…A10 evidence и blockers, передать released Core version пакетному W6 для независимых consumer tests. Проверка: release acceptance относится только к Core; #7/#8 и незавершённые host/release проверки остаются видимыми; закрытие issue/archive или P2 milestone не объявляется по одному document/compile check.
+- [x] 7.2 Выполнить native generated-runner harness на `codex-app`, `codex-cli`, `claude-code` с synthetic task payload и отдельно live host handoff/control check в заявленном release profile. Проверка: по каждому host сохранены version и invocation/task/submit/settlement evidence, scope live/synthetic обозначен; недоступный host — pending до проверки или явного release-scope решения владельца, не PASS по template tests.
+- [x] 7.3 Свести E5-A1…A10 evidence и blockers, передать released Core version пакетному W6 для независимых consumer tests. Проверка: release acceptance относится только к Core; #7/#8 и незавершённые host/release проверки остаются видимыми; закрытие issue/archive или P2 milestone не объявляется по одному document/compile check.
+
+Завершение 2026-10-17: synthetic runners всех трёх hosts PASS на released
+0.13.78; live success/control Codex app и CLI PASS. Владелец явно исключил
+live Claude Code из приёмки 0.13.78 из-за отсутствия подписки/авторизации,
+проверка вынесена в отдельный pending follow-up, а не объявлена PASS.
+Факты и решение — [live-host-evidence.md](live-host-evidence.md) и
+[live-host-results.json](live-host-results.json). Пункт 7.3 выполнен как
+подготовленный [handoff W6](handoff-w6.md), согласно уточнению владельца;
+независимые consumer/browser tests и продуктовые milestones не закрыты.
 
 ## Acceptance traceability
 

@@ -1,0 +1,1666 @@
+{
+  "scope": "Core 0.13.78 native Call leaf host transport; producer/downstream synthetic",
+  "completion_local_date": "2026-10-17",
+  "release_version": "0.13.78",
+  "source_sha": "201d4428b60e6afc9aef84fc5197a3185cf2f20b",
+  "binary_sha256": "sha256:60a6dd1ca0524b4927418a64311207b4d6739080a8f518374d1889726d68ab5f",
+  "claude_live": {
+    "status": "excluded_from_0.13.78_acceptance_by_owner",
+    "host_version": "2.1.287",
+    "logged_in": false,
+    "reason": "Нет подписки/авторизации",
+    "owner_decision": "Исключить live Claude Code из приёмки 0.13.78, записать отдельный follow-up и архивировать после остальных проверок",
+    "follow_up": ".ai-factory/plans/qualify-claude-native-call-host.md"
+  },
+  "cases": [
+    {
+      "host": "codex-app",
+      "mode": "pass",
+      "run_id": "run:d1ddad020820f17c2ba02f73c58aa328e01b4c58f5740e97911db85e80871cde",
+      "attempt_id": "attempt:11b7f37bb23a1dc75627a3dcbc8c566f",
+      "child_invocation": "invocation:42fe235e8be5f6df0b3cd33bc18993e33b2f24f5acddd6a8fae5cd7d842db510",
+      "claim_id": "claim:d77324616f63fd43430ac816a72accebcfddf737bfd30cebfc7ac57c8d91cb3d",
+      "claim_generation": 1,
+      "taken": {
+        "utc": "2026-10-16T22:23:26.659492045Z",
+        "session": "clock:b42115df30625fc0ff6460959ef17aac",
+        "monotonic_ms": 18,
+        "source": "go.time.monotonic",
+        "suspend_basis": "excludes_suspend_on_darwin",
+        "utc_trust": "local_wall_unqualified"
+      },
+      "binary_sha256": "sha256:60a6dd1ca0524b4927418a64311207b4d6739080a8f518374d1889726d68ab5f",
+      "checked_exports": 2,
+      "case_outcome": "succeeded",
+      "invocations": 4,
+      "sessions": [
+        "prepare",
+        "assessment",
+        "reader",
+        "commit"
+      ],
+      "sources_unchanged": true,
+      "accepted": {
+        "schema_version": "1",
+        "run_id": "run:d1ddad020820f17c2ba02f73c58aa328e01b4c58f5740e97911db85e80871cde",
+        "step_instance_id": "step:29809ace1846f980bf6382d91cb0efdb",
+        "attempt_id": "attempt:11b7f37bb23a1dc75627a3dcbc8c566f",
+        "envelope_digest": "sha256:09b23d89a3dc11089d8e3abf5a26ca2d3d9bf690b76497151feb3f26290e87a3",
+        "verdict": "pass",
+        "outputs": {
+          "gate": {
+            "artifact_id": "artifact:c2cdf9225146fa3a7664e73cbf0c1b187f88de332bb7fe4701e7f874ed6a701d",
+            "revision": 1,
+            "digest": "sha256:1af5f592215904c09f7e3cea70fcb560408668f3ce737e528ada25c74e682986"
+          },
+          "report": {
+            "artifact_id": "artifact:f5870b5b5ebe9ad35ea278b7858971dbb07ce9cd75d96e607e44c986b385229f",
+            "revision": 1,
+            "digest": "sha256:a1cff7f8acc11d2af1581379256f0096b5d92cc6468b625b1a3053dc1d3d4094"
+          }
+        },
+        "evidence_refs": [],
+        "effect_receipt_refs": [],
+        "summary": "Live Codex app read native nested leaf request and produced report/gate in the same Run/claim."
+      },
+      "case_id": "codex-app-pass",
+      "result": "PASS",
+      "host_execution": {
+        "host": "codex-app",
+        "host_runtime_version": "0.162.1",
+        "thread_id": "01a14484-2ae5-7140-89b0-795b3e73e416",
+        "app_ui_build": "not exposed; version records execution runtime",
+        "mode": "current live Codex desktop chat; no separate agent/fork",
+        "model_selection": "not requested by task"
+      },
+      "host_exit": {
+        "exit_code": 0,
+        "scope": "current chat tool actions completed"
+      },
+      "task_contract": {
+        "workspace": "/tmp/prifly-issue9-live-xhfuzyd6/codex-app-pass/authority/.prifly/work/11b7f37bb23a1dc75627a3dcbc8c566f",
+        "context": {
+          "schema_version": "local-context/1",
+          "inputs": {
+            "request": {
+              "ref": {
+                "artifact_id": "artifact:d5c75d43e22b4cdb38fe6b3cb061905a3de4256d0b9c422ba70671b665fb28cc",
+                "revision": 1,
+                "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+              },
+              "path": "inputs/request"
+            }
+          },
+          "outputs": {
+            "gate": {
+              "artifact_id": "artifact:c2cdf9225146fa3a7664e73cbf0c1b187f88de332bb7fe4701e7f874ed6a701d",
+              "revision": 1,
+              "path": "outputs/gate"
+            },
+            "report": {
+              "artifact_id": "artifact:f5870b5b5ebe9ad35ea278b7858971dbb07ce9cd75d96e607e44c986b385229f",
+              "revision": 1,
+              "path": "outputs/report"
+            }
+          },
+          "dependencies": [
+            {
+              "id": "core:adapter/assisted-session",
+              "version": "1.0.0",
+              "digest": "sha256:691e19e2c2179d8fc697b29b1e2d3e29593f12b4738683ccb9f2e739849f7888"
+            },
+            {
+              "id": "core:adapter/local-process",
+              "version": "1.0.0",
+              "digest": "sha256:0358d4b5da39c89f4e4304a7e89c228373aa946cad638028b7216f9270a9b40d"
+            },
+            {
+              "id": "core:adapter/local-process",
+              "version": "2.0.0",
+              "digest": "sha256:cb5218f0692cdaabc9b94a5cf95c8439564045dbaf3f3b083ddd8680cb29d08e"
+            },
+            {
+              "id": "core:assembly/local-json",
+              "version": "1.0.0",
+              "digest": "sha256:5a3a5798ce9db1ea997ad00a1af8a61bfd2e4cc78795c2c739d07e33dde6b569"
+            },
+            {
+              "id": "core:context/local-json",
+              "version": "1.0.0",
+              "digest": "sha256:5acf83b9d79689aa334babc04d4b629056b7b898dbebfa9a39a8697c809bccfa"
+            },
+            {
+              "id": "core:policy/local",
+              "version": "1.0.0",
+              "digest": "sha256:95b274a39a66d0da2b94c0a8233cae74b41a030eb0f67ee3d8b181cf617bcb4c"
+            },
+            {
+              "id": "core:policy/local",
+              "version": "3.0.0",
+              "digest": "sha256:d5ce88e82e0427393c99de440f3344773bd3e5793c279bd7464a61d9618552dc"
+            },
+            {
+              "id": "core:profile/redaction",
+              "version": "1.0.0",
+              "digest": "sha256:fdc3ab92846f57fc86161ac74e91ea231b279fb6fad82df5f62465a7446f8957"
+            },
+            {
+              "id": "core:resolver/local",
+              "version": "1.0.0",
+              "digest": "sha256:09f0f9a7341ee3e9daf8b2f6576fdaeac5fd588d8103f14d69d720471b0952ad"
+            },
+            {
+              "id": "core:resolver/local",
+              "version": "2.0.0",
+              "digest": "sha256:00139654df57289dc603714b48eea3f8794ce160063b222d7a194a56ca7919fe"
+            },
+            {
+              "id": "core:schema/context-json",
+              "version": "1.0.0",
+              "digest": "sha256:b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+            },
+            {
+              "id": "core:schema/context-profile",
+              "version": "1.0.0",
+              "digest": "sha256:5ca19aff078592e2e46e85edfde1e1d59cd65b213b4d9bb9f9dd6aad49148280"
+            },
+            {
+              "id": "core:schema/core-configuration",
+              "version": "2.0.0",
+              "digest": "sha256:b66051157ba59b55cd5adf13dfe8a4801e8910a24501516a7a990bc2fdc17b94"
+            },
+            {
+              "id": "core:schema/evidence",
+              "version": "1.0.0",
+              "digest": "sha256:66010ed4a1338f704fdd568eda922798d690f080037b79293151074f28736195"
+            },
+            {
+              "id": "core:schema/full-context",
+              "version": "1.0.0",
+              "digest": "sha256:fea9a316a9654a77b63a2a302f96dfdd2dc8e72bc1a7cf2c8d3ee3f1ff75e339"
+            },
+            {
+              "id": "core:schema/json-projection",
+              "version": "1.0.0",
+              "digest": "sha256:e6a532398f7a219a61c63f7e60d281feb2aa72ea1f6e79f60de1972121bc4ba4"
+            },
+            {
+              "id": "core:schema/local-configuration",
+              "version": "1.0.0",
+              "digest": "sha256:c386bdf29f98a6d44fa592d6ea0a95c44b40bd8c71cac261ba56a0661c9b469a"
+            },
+            {
+              "id": "core:schema/local-context",
+              "version": "1.0.0",
+              "digest": "sha256:8a870566875ae9e68a0ed95eacc7f324c53f5413b6d3c418a930c006f77221bb"
+            },
+            {
+              "id": "core:schema/local-context",
+              "version": "2.0.0",
+              "digest": "sha256:a5b9db266c22ed48fb48e86c3d80080f0421c4cf2d7183c3105ae1f958edc7ca"
+            },
+            {
+              "id": "core:schema/step-result",
+              "version": "1.0.0",
+              "digest": "sha256:0b2a5e44aa00299185d42d092b9f0136bec54359c7f6542c907ad188ad5493dd"
+            },
+            {
+              "id": "fixture:schema/object",
+              "version": "0.0.0-b1.a4wofdnbkrxtkt6n5amj3jmayeww7eog3q7cgexaqhe6rmk7sz5q",
+              "digest": "sha256:a710862eb406f23a6d51ff88c65258afaf73bcfb9226431ef49bbf68e83342e7"
+            },
+            {
+              "id": "fixture:step/commit",
+              "version": "0.0.0-b1.jbvyp56sqvmh2zltr4zcnaezhcfsb4okkndjc66t3iorrmxg4aja",
+              "digest": "sha256:daea080ca3b9b170e4c3a226d05910bc2a155cedeb0ffdbd049189b927298dd7"
+            },
+            {
+              "id": "fixture:step/prepare",
+              "version": "0.0.0-b1.bjfxb5hmysxqc7u6vbtenmfoiwrvwcv7ac4g6qna7ylyadox2uxa",
+              "digest": "sha256:4a9e00f1d41fe7f31b142dade935eef87e85934028d22d944557bae9d314dc72"
+            },
+            {
+              "id": "fixture:step/review-leaf",
+              "version": "0.0.0-b1.vh5nh5i27x62puknciz3nicbm6szwuvbinupxd4wdnxhf2ra3t6a",
+              "digest": "sha256:87c979685570f138202fed5ece0dae71a8cd9bda9cdc7290ff28521f5d742133"
+            },
+            {
+              "id": "fixture:step/review-reader",
+              "version": "0.0.0-b1.dqiklxb2tylyeba6n5o5csn4ajejgmjq6662tb6hf6favb33d7sq",
+              "digest": "sha256:9ff042b89ec91cf15230615cd3d7c8f81d79d61b9e0c3ae7fc3e52b444a489dc"
+            },
+            {
+              "id": "fixture:workflow/review-consumer",
+              "version": "0.0.0-b1.stk2te35cvun45rwelzo537aoi2zsclg5qsaq5hhfj7eqgtroooq",
+              "digest": "sha256:e08934e2053cbf6e784c83246a9c40af72b11a1fb2069b25541ff1ba86714957"
+            },
+            {
+              "id": "fixture:workflow/review-inner",
+              "version": "0.0.0-b1.dyoewjx2t44obb4c3es2ej3vnndp7im7oz7n367y6sxlc3pigneq",
+              "digest": "sha256:81dd9d002ea8a1027051f19b119735aa88826e1b68c499a1149761c9445d13ea"
+            },
+            {
+              "id": "fixture:workflow/review",
+              "version": "0.0.0-b1.fys6f4aifld67ugic52oresw53cidl4v2wrl2dwj4gwgca233xxq",
+              "digest": "sha256:09a7e92f761ad68fdc031c0076b97db14e8c6b10d2a147711eedd3be77422b81"
+            },
+            {
+              "id": "fixture:workflow/consumer",
+              "version": "0.0.0-b1.vqdxrlg3ayfjnwiwof3sngcssdvupeysz2d63j4dx5xdyolv563q",
+              "digest": "sha256:bdda4bdcb382f9f99f41798a00570c550635f3e3db51fa0a31d16c48c45bea75"
+            },
+            {
+              "id": "snapshot:executors/0c5241b9e375a8c9798ca707790842db084000f15265d89ea42dbce0b47458f8",
+              "version": "1.0.0",
+              "digest": "sha256:0c5241b9e375a8c9798ca707790842db084000f15265d89ea42dbce0b47458f8"
+            },
+            {
+              "id": "snapshot:context-resources/9afefadb8124de79051046b206fc2cecd46ce1ac870244cbf818e94b50859623",
+              "version": "1.0.0",
+              "digest": "sha256:9afefadb8124de79051046b206fc2cecd46ce1ac870244cbf818e94b50859623"
+            },
+            {
+              "id": "lock:68a74cc8bfdc296b38accfa922720a83ea87602ebe83d86b9fb518b41bb6cc12",
+              "version": "1.0.0",
+              "digest": "sha256:103958d93822298ea280049de8cba082d5b9ad791ef2aa4c82a069dabb132656"
+            }
+          ]
+        }
+      },
+      "native_final": {
+        "run_status": "completed",
+        "run_outcome": "succeeded",
+        "settled": {
+          "utc": "2026-10-16T22:24:43.859225676Z",
+          "session": "clock:72d6f98c0841ff845f7d83f6870fec1b",
+          "monotonic_ms": 142,
+          "source": "go.time.monotonic",
+          "suspend_basis": "excludes_suspend_on_darwin",
+          "utc_trust": "local_wall_unqualified"
+        },
+        "active_attempt_ids": [],
+        "attempt_status": "completed",
+        "child_invocation": {
+          "id": "invocation:42fe235e8be5f6df0b3cd33bc18993e33b2f24f5acddd6a8fae5cd7d842db510",
+          "run_id": "run:d1ddad020820f17c2ba02f73c58aa328e01b4c58f5740e97911db85e80871cde",
+          "parent_invocation_id": "invocation:ce1e1ef52ea5da1259131061d4b02d46689cadb8afaa1eb097609215e32d88e6",
+          "caller_stage_activation_id": "activation:f1c83e2a29d042f0196c69bd2c55368c",
+          "workflow_ref": {
+            "id": "fixture:workflow/review-inner",
+            "version": "0.0.0-b1.dyoewjx2t44obb4c3es2ej3vnndp7im7oz7n367y6sxlc3pigneq",
+            "digest": "sha256:81dd9d002ea8a1027051f19b119735aa88826e1b68c499a1149761c9445d13ea"
+          },
+          "status": "completed",
+          "outcome": "succeeded",
+          "input_refs": {
+            "request": {
+              "artifact_id": "artifact:d5c75d43e22b4cdb38fe6b3cb061905a3de4256d0b9c422ba70671b665fb28cc",
+              "revision": 1,
+              "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+            }
+          },
+          "output_refs": {
+            "gate": {
+              "artifact_id": "artifact:c2cdf9225146fa3a7664e73cbf0c1b187f88de332bb7fe4701e7f874ed6a701d",
+              "revision": 1,
+              "digest": "sha256:1af5f592215904c09f7e3cea70fcb560408668f3ce737e528ada25c74e682986"
+            },
+            "report": {
+              "artifact_id": "artifact:f5870b5b5ebe9ad35ea278b7858971dbb07ce9cd75d96e607e44c986b385229f",
+              "revision": 1,
+              "digest": "sha256:a1cff7f8acc11d2af1581379256f0096b5d92cc6468b625b1a3053dc1d3d4094"
+            }
+          },
+          "ready_stages": [],
+          "created": {
+            "utc": "2026-10-16T22:21:42.663895812Z",
+            "session": "clock:639d988f5e79f6932737b52bbff6685c",
+            "monotonic_ms": 174,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "settled": {
+            "utc": "2026-10-16T22:24:39.164435785Z",
+            "session": "clock:389475e3221ecde764cc307ea929a77e",
+            "monotonic_ms": 100,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "control_transitions": 2,
+          "step_instances": 1,
+          "resume_required": false,
+          "cancel_requested": false
+        }
+      },
+      "raw_root": "/tmp/prifly-issue9-live-xhfuzyd6/codex-app-pass",
+      "raw_file_hashes": {
+        "live-state.json": "sha256:ab8af790f5a8b43f0f7c9b2bee76cc7ab336d65e99b74711996a67bf80af90fb",
+        "launch-review.json": "sha256:1f400c6fe64af5acf71e88320f04a74a6c3736928707a7afaa07542471c4c84b",
+        "host-prompt.txt": "sha256:ffcec871e90df420be93fd0cfbdc322ad681b9fd56b23248de8c805801ffe94b",
+        "actor-command.json": "sha256:c51f13466698fa15caa2e24dc7e1f5556fadbc4f6720952ff584dfeac169ee51",
+        "actor-exit.json": "sha256:1d6564f40f5eadb3aa73a659fccde2933fb9dc826e2b93e1730c1ed00910d02c",
+        "app-take.json": "sha256:8827fc2a91a322a636caeb5c5f75c14a5de04b1bdb259fbd8629b5e20ce88bb9",
+        "app-report.json": "sha256:3bf5dbac6589aec7ad05fa9a2e10c8668332be0d09361c70c90d74d08e62a885",
+        "app-accepted.json": "sha256:501cc6f3d7ee894bf639d6633e1cb92a81bf1e126f4c27e689ffeb69e31543a4",
+        "app-next.json": "sha256:929c35f2989fa3f02501e347bdb022dcc464e75549622b94e2dcf00419b869ac",
+        "final-run.json": "sha256:7528079e1b72d60f76d90f84713097c7e5756d2375a7fb14eaa2537f16e86e09",
+        "live-result.json": "sha256:a2b3b6918852d6f567449d8859ff79b92bd5b145c3e89472814c23645ce36a2a"
+      }
+    },
+    {
+      "host": "codex-app",
+      "mode": "cancel",
+      "run_id": "run:b3ed510d052920135b0ba9a34eb3cfa083ae7e5317ef239f69fc19a96b0630cc",
+      "attempt_id": "attempt:4bed31dd54ad68431ec6b7f4748f545e",
+      "child_invocation": "invocation:b71ac1f42498868c92f751662d5514a1c4113549e0df38e31b1be6aef57f781a",
+      "claim_id": "claim:fd13a200a2d157ae5fe98a8663019eb3c353187cedef42c4a69d8e60706a0ba4",
+      "claim_generation": 1,
+      "taken": {
+        "utc": "2026-10-16T22:25:20.315568894Z",
+        "session": "clock:e754dcf29e1dae06d23b499d61580e18",
+        "monotonic_ms": 18,
+        "source": "go.time.monotonic",
+        "suspend_basis": "excludes_suspend_on_darwin",
+        "utc_trust": "local_wall_unqualified"
+      },
+      "binary_sha256": "sha256:60a6dd1ca0524b4927418a64311207b4d6739080a8f518374d1889726d68ab5f",
+      "caller_action": "blocked_child",
+      "final_status": "cancelled",
+      "no_exports": true,
+      "no_fabricated_report": true,
+      "external_actor_stop_proven": false,
+      "case_id": "codex-app-cancel",
+      "result": "PASS",
+      "host_execution": {
+        "host": "codex-app",
+        "host_runtime_version": "0.162.1",
+        "thread_id": "01a14484-2ae5-7140-89b0-795b3e73e416",
+        "control": "current app took and read readonly task, then observed native cancellation and stopped without writing outputs or report",
+        "arbitrary_external_actor_stop_proven": false
+      },
+      "host_exit": {
+        "exit_code": 0,
+        "scope": "current app cancelled-task handling ceased cooperatively"
+      },
+      "task_contract": {
+        "workspace": "/tmp/prifly-issue9-live-xhfuzyd6/codex-app-cancel-retry1/authority/.prifly/work/4bed31dd54ad68431ec6b7f4748f545e",
+        "context": {
+          "schema_version": "local-context/1",
+          "inputs": {
+            "request": {
+              "ref": {
+                "artifact_id": "artifact:4a427018f24a2a13d408728edb639225733d5032e547334939a37cebb5a07ca0",
+                "revision": 1,
+                "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+              },
+              "path": "inputs/request"
+            }
+          },
+          "outputs": {
+            "gate": {
+              "artifact_id": "artifact:4e176292c5b68146267a22fdbb38f32956a3963707f2fad8ee81f15ab25f7ac8",
+              "revision": 1,
+              "path": "outputs/gate"
+            },
+            "report": {
+              "artifact_id": "artifact:61e8bfb0f918c12bca6c360c1ecad1c4f77dfd6b9e148c8838556a3550f8cb37",
+              "revision": 1,
+              "path": "outputs/report"
+            }
+          },
+          "dependencies": [
+            {
+              "id": "core:adapter/assisted-session",
+              "version": "1.0.0",
+              "digest": "sha256:691e19e2c2179d8fc697b29b1e2d3e29593f12b4738683ccb9f2e739849f7888"
+            },
+            {
+              "id": "core:adapter/local-process",
+              "version": "1.0.0",
+              "digest": "sha256:0358d4b5da39c89f4e4304a7e89c228373aa946cad638028b7216f9270a9b40d"
+            },
+            {
+              "id": "core:adapter/local-process",
+              "version": "2.0.0",
+              "digest": "sha256:cb5218f0692cdaabc9b94a5cf95c8439564045dbaf3f3b083ddd8680cb29d08e"
+            },
+            {
+              "id": "core:assembly/local-json",
+              "version": "1.0.0",
+              "digest": "sha256:5a3a5798ce9db1ea997ad00a1af8a61bfd2e4cc78795c2c739d07e33dde6b569"
+            },
+            {
+              "id": "core:context/local-json",
+              "version": "1.0.0",
+              "digest": "sha256:5acf83b9d79689aa334babc04d4b629056b7b898dbebfa9a39a8697c809bccfa"
+            },
+            {
+              "id": "core:policy/local",
+              "version": "1.0.0",
+              "digest": "sha256:95b274a39a66d0da2b94c0a8233cae74b41a030eb0f67ee3d8b181cf617bcb4c"
+            },
+            {
+              "id": "core:policy/local",
+              "version": "3.0.0",
+              "digest": "sha256:d5ce88e82e0427393c99de440f3344773bd3e5793c279bd7464a61d9618552dc"
+            },
+            {
+              "id": "core:profile/redaction",
+              "version": "1.0.0",
+              "digest": "sha256:fdc3ab92846f57fc86161ac74e91ea231b279fb6fad82df5f62465a7446f8957"
+            },
+            {
+              "id": "core:resolver/local",
+              "version": "1.0.0",
+              "digest": "sha256:09f0f9a7341ee3e9daf8b2f6576fdaeac5fd588d8103f14d69d720471b0952ad"
+            },
+            {
+              "id": "core:resolver/local",
+              "version": "2.0.0",
+              "digest": "sha256:00139654df57289dc603714b48eea3f8794ce160063b222d7a194a56ca7919fe"
+            },
+            {
+              "id": "core:schema/context-json",
+              "version": "1.0.0",
+              "digest": "sha256:b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+            },
+            {
+              "id": "core:schema/context-profile",
+              "version": "1.0.0",
+              "digest": "sha256:5ca19aff078592e2e46e85edfde1e1d59cd65b213b4d9bb9f9dd6aad49148280"
+            },
+            {
+              "id": "core:schema/core-configuration",
+              "version": "2.0.0",
+              "digest": "sha256:b66051157ba59b55cd5adf13dfe8a4801e8910a24501516a7a990bc2fdc17b94"
+            },
+            {
+              "id": "core:schema/evidence",
+              "version": "1.0.0",
+              "digest": "sha256:66010ed4a1338f704fdd568eda922798d690f080037b79293151074f28736195"
+            },
+            {
+              "id": "core:schema/full-context",
+              "version": "1.0.0",
+              "digest": "sha256:fea9a316a9654a77b63a2a302f96dfdd2dc8e72bc1a7cf2c8d3ee3f1ff75e339"
+            },
+            {
+              "id": "core:schema/json-projection",
+              "version": "1.0.0",
+              "digest": "sha256:e6a532398f7a219a61c63f7e60d281feb2aa72ea1f6e79f60de1972121bc4ba4"
+            },
+            {
+              "id": "core:schema/local-configuration",
+              "version": "1.0.0",
+              "digest": "sha256:c386bdf29f98a6d44fa592d6ea0a95c44b40bd8c71cac261ba56a0661c9b469a"
+            },
+            {
+              "id": "core:schema/local-context",
+              "version": "1.0.0",
+              "digest": "sha256:8a870566875ae9e68a0ed95eacc7f324c53f5413b6d3c418a930c006f77221bb"
+            },
+            {
+              "id": "core:schema/local-context",
+              "version": "2.0.0",
+              "digest": "sha256:a5b9db266c22ed48fb48e86c3d80080f0421c4cf2d7183c3105ae1f958edc7ca"
+            },
+            {
+              "id": "core:schema/step-result",
+              "version": "1.0.0",
+              "digest": "sha256:0b2a5e44aa00299185d42d092b9f0136bec54359c7f6542c907ad188ad5493dd"
+            },
+            {
+              "id": "fixture:schema/object",
+              "version": "0.0.0-b1.djdvqk2iuwtwagnpr2kxngisnzxihtyyf3caryffkphymnmvabqq",
+              "digest": "sha256:2388d0d39daa41b31c2c67e052b1b5037e9c68a6dd2fd6fb189bf38a78b5f5fe"
+            },
+            {
+              "id": "fixture:step/commit",
+              "version": "0.0.0-b1.hxcbjueazibrclme5hrl74yaxlglt3psaxb4j54o2rs4mplnrb7a",
+              "digest": "sha256:5299b4ac54770e278db27196fc5985358ae9ba6d348fd94fbcbe3dd4c3f994dc"
+            },
+            {
+              "id": "fixture:step/prepare",
+              "version": "0.0.0-b1.kxkidlsghu2uydgycrwmuwtaemv5qsimznai3avtnutbyf33sdra",
+              "digest": "sha256:53ef379e64c8c1c8f0124095e38cd8eda9804da9dae8fa07cdd719f1684c0246"
+            },
+            {
+              "id": "fixture:step/review-leaf",
+              "version": "0.0.0-b1.s2m7zxze5y7l45npvq52lognbudcfhn67xlq7er7rd5bywunofrq",
+              "digest": "sha256:93a69d00afd0659405389da69338a2b96aa8549018bace206cb61757f431112a"
+            },
+            {
+              "id": "fixture:step/review-reader",
+              "version": "0.0.0-b1.xvzomtq3d4qoupd5seljep3iykie57k7myknnx5wvgsrgzr723yq",
+              "digest": "sha256:d01dee5a5c983398c330d36e837f39a6e70e395cda4b2c41f584b0f61bff588c"
+            },
+            {
+              "id": "fixture:workflow/review-consumer",
+              "version": "0.0.0-b1.6lsdyznffdj7ajidn36bqbqh4mytcg4bxuu4uf55paqbcdfnhitq",
+              "digest": "sha256:3749863f9a564af8f0c6f07764ce019c03112076c8e4b0617280e3ccfd098880"
+            },
+            {
+              "id": "fixture:workflow/review-inner",
+              "version": "0.0.0-b1.5z7ioqh6bcq3ahix7qcvu55rj7ca5aybwh3jw6f5tjuxucjsb7iq",
+              "digest": "sha256:99b42531214e117d4e2a22b1bc2f67084174c6f3ac7966bddbe58c8cba56f17c"
+            },
+            {
+              "id": "fixture:workflow/review",
+              "version": "0.0.0-b1.pfgxpxpapgrg5n7gx4myuw4mgx5jt4cvrgbolyyurefrnncfgeva",
+              "digest": "sha256:2c2bc0ecf118f46b84dc6cc8fbe00df45566842b7c0d8131abbb0d2a65fc85a6"
+            },
+            {
+              "id": "fixture:workflow/consumer",
+              "version": "0.0.0-b1.bcz2oz5o34cvmtrdzognpegllsdgsjlecgpy5aczrnzyp6x3lynq",
+              "digest": "sha256:950b03d0d42eb6eeecf34c01750a55f7280fc5bfd1ee2824f1d30ff369505d86"
+            },
+            {
+              "id": "snapshot:executors/e46133f67c5586935f17e8edd27e5dc9b447a85a5388c8e7d0344b483e146dba",
+              "version": "1.0.0",
+              "digest": "sha256:e46133f67c5586935f17e8edd27e5dc9b447a85a5388c8e7d0344b483e146dba"
+            },
+            {
+              "id": "snapshot:context-resources/d85d8bd2127128b0a1cde3507d043ba4f306a538f16cd881e786a1af86a39f13",
+              "version": "1.0.0",
+              "digest": "sha256:d85d8bd2127128b0a1cde3507d043ba4f306a538f16cd881e786a1af86a39f13"
+            },
+            {
+              "id": "lock:d7138290a0cd3f99b0bd5bbdc68b348e50b81d108797263a9eae852d1f42d00d",
+              "version": "1.0.0",
+              "digest": "sha256:09c9c3dfd49eb2a2a6d5ec12974bd83f622553bb4cdf62713613572134e4ce5a"
+            }
+          ]
+        }
+      },
+      "native_final": {
+        "run_status": "cancelled",
+        "run_outcome": null,
+        "settled": {
+          "utc": "2026-10-16T22:26:10.810913862Z",
+          "session": "clock:8088384a0748ebf83243ccc61127a59d",
+          "monotonic_ms": 71,
+          "source": "go.time.monotonic",
+          "suspend_basis": "excludes_suspend_on_darwin",
+          "utc_trust": "local_wall_unqualified"
+        },
+        "active_attempt_ids": [],
+        "attempt_status": "cancelled",
+        "child_invocation": {
+          "id": "invocation:b71ac1f42498868c92f751662d5514a1c4113549e0df38e31b1be6aef57f781a",
+          "run_id": "run:b3ed510d052920135b0ba9a34eb3cfa083ae7e5317ef239f69fc19a96b0630cc",
+          "parent_invocation_id": "invocation:2a1f1c88d60a4979f9a0500dccefc0f6f8384b926b40124deca9b64c0ca171de",
+          "caller_stage_activation_id": "activation:b1e51977e491fea9eeaf15f423a4da03",
+          "workflow_ref": {
+            "id": "fixture:workflow/review-inner",
+            "version": "0.0.0-b1.5z7ioqh6bcq3ahix7qcvu55rj7ca5aybwh3jw6f5tjuxucjsb7iq",
+            "digest": "sha256:99b42531214e117d4e2a22b1bc2f67084174c6f3ac7966bddbe58c8cba56f17c"
+          },
+          "status": "cancelled",
+          "outcome": null,
+          "input_refs": {
+            "request": {
+              "artifact_id": "artifact:4a427018f24a2a13d408728edb639225733d5032e547334939a37cebb5a07ca0",
+              "revision": 1,
+              "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+            }
+          },
+          "output_refs": {},
+          "ready_stages": [],
+          "created": {
+            "utc": "2026-10-16T22:22:59.13895579Z",
+            "session": "clock:4b7dd634f37b11e04c706d611804c72d",
+            "monotonic_ms": 172,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "settled": {
+            "utc": "2026-10-16T22:25:23.560052458Z",
+            "session": "clock:d796084d882ca6afacfe7c43cfbaa2a8",
+            "monotonic_ms": 129,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "control_transitions": 1,
+          "step_instances": 1,
+          "resume_required": false,
+          "cancel_requested": true
+        }
+      },
+      "raw_root": "/tmp/prifly-issue9-live-xhfuzyd6/codex-app-cancel-retry1",
+      "actor_control_observation": {
+        "next": {
+          "schema_version": "core-next/42",
+          "run_id": "run:b3ed510d052920135b0ba9a34eb3cfa083ae7e5317ef239f69fc19a96b0630cc",
+          "run_version": 15,
+          "cut": 20,
+          "action": "blocked_child",
+          "work_id": "invocation:b71ac1f42498868c92f751662d5514a1c4113549e0df38e31b1be6aef57f781a",
+          "read_only": true,
+          "admission": false,
+          "driver_live": false,
+          "control_epoch": 1,
+          "resume_required": false,
+          "safe_next_actions": [
+            "run.status",
+            "run.events",
+            "run.cancel"
+          ],
+          "workflow_invocation_id": "invocation:b71ac1f42498868c92f751662d5514a1c4113549e0df38e31b1be6aef57f781a",
+          "step_effects": [
+            {
+              "step_instance_id": "step:8156e1c4c956d0c5ff407fa99e4a85fe",
+              "stage_id": "prepare",
+              "class": "workspace_write",
+              "retry_class": "never"
+            },
+            {
+              "step_instance_id": "step:46fd57115ab7d865c70dbc58074c4b17",
+              "stage_id": "assess",
+              "class": "none",
+              "retry_class": "never"
+            }
+          ]
+        },
+        "child": {
+          "id": "invocation:b71ac1f42498868c92f751662d5514a1c4113549e0df38e31b1be6aef57f781a",
+          "run_id": "run:b3ed510d052920135b0ba9a34eb3cfa083ae7e5317ef239f69fc19a96b0630cc",
+          "parent_invocation_id": "invocation:2a1f1c88d60a4979f9a0500dccefc0f6f8384b926b40124deca9b64c0ca171de",
+          "caller_stage_activation_id": "activation:b1e51977e491fea9eeaf15f423a4da03",
+          "workflow_ref": {
+            "id": "fixture:workflow/review-inner",
+            "version": "0.0.0-b1.5z7ioqh6bcq3ahix7qcvu55rj7ca5aybwh3jw6f5tjuxucjsb7iq",
+            "digest": "sha256:99b42531214e117d4e2a22b1bc2f67084174c6f3ac7966bddbe58c8cba56f17c"
+          },
+          "status": "cancelled",
+          "outcome": null,
+          "input_refs": {
+            "request": {
+              "artifact_id": "artifact:4a427018f24a2a13d408728edb639225733d5032e547334939a37cebb5a07ca0",
+              "revision": 1,
+              "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+            }
+          },
+          "output_refs": {},
+          "ready_stages": [],
+          "created": {
+            "utc": "2026-10-16T22:22:59.13895579Z",
+            "session": "clock:4b7dd634f37b11e04c706d611804c72d",
+            "monotonic_ms": 172,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "settled": {
+            "utc": "2026-10-16T22:25:23.560052458Z",
+            "session": "clock:d796084d882ca6afacfe7c43cfbaa2a8",
+            "monotonic_ms": 129,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "control_transitions": 1,
+          "step_instances": 1,
+          "resume_required": false,
+          "cancel_requested": true
+        },
+        "attempt": {
+          "id": "attempt:4bed31dd54ad68431ec6b7f4748f545e",
+          "step_instance_id": "step:46fd57115ab7d865c70dbc58074c4b17",
+          "stage_activation_id": "activation:b3c4b4b78d5b0fb72caf8e214e69688b",
+          "status": "cancelled",
+          "execution_admission_id": "admission:ce191a595926ef838a538df5182fb0f2",
+          "budget_reservation_id": "reservation:1a27553267a23e74a47545cba502c331",
+          "admitted_run_version": 11,
+          "control_epoch": 0,
+          "envelope": null,
+          "envelope_digest": "sha256:a74ad4cfacd40159ce42cd3254a958ff6f2686381acc92bd56e5204d6ac792be",
+          "token_hash": "",
+          "workspace": "/tmp/prifly-issue9-live-xhfuzyd6/codex-app-cancel-retry1/authority/.prifly/work/4bed31dd54ad68431ec6b7f4748f545e",
+          "context": {
+            "schema_version": "local-context/1",
+            "inputs": {
+              "request": {
+                "ref": {
+                  "artifact_id": "artifact:4a427018f24a2a13d408728edb639225733d5032e547334939a37cebb5a07ca0",
+                  "revision": 1,
+                  "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+                },
+                "path": "inputs/request"
+              }
+            },
+            "outputs": {
+              "gate": {
+                "artifact_id": "artifact:4e176292c5b68146267a22fdbb38f32956a3963707f2fad8ee81f15ab25f7ac8",
+                "revision": 1,
+                "path": "outputs/gate"
+              },
+              "report": {
+                "artifact_id": "artifact:61e8bfb0f918c12bca6c360c1ecad1c4f77dfd6b9e148c8838556a3550f8cb37",
+                "revision": 1,
+                "path": "outputs/report"
+              }
+            },
+            "dependencies": [
+              {
+                "id": "core:adapter/assisted-session",
+                "version": "1.0.0",
+                "digest": "sha256:691e19e2c2179d8fc697b29b1e2d3e29593f12b4738683ccb9f2e739849f7888"
+              },
+              {
+                "id": "core:adapter/local-process",
+                "version": "1.0.0",
+                "digest": "sha256:0358d4b5da39c89f4e4304a7e89c228373aa946cad638028b7216f9270a9b40d"
+              },
+              {
+                "id": "core:adapter/local-process",
+                "version": "2.0.0",
+                "digest": "sha256:cb5218f0692cdaabc9b94a5cf95c8439564045dbaf3f3b083ddd8680cb29d08e"
+              },
+              {
+                "id": "core:assembly/local-json",
+                "version": "1.0.0",
+                "digest": "sha256:5a3a5798ce9db1ea997ad00a1af8a61bfd2e4cc78795c2c739d07e33dde6b569"
+              },
+              {
+                "id": "core:context/local-json",
+                "version": "1.0.0",
+                "digest": "sha256:5acf83b9d79689aa334babc04d4b629056b7b898dbebfa9a39a8697c809bccfa"
+              },
+              {
+                "id": "core:policy/local",
+                "version": "1.0.0",
+                "digest": "sha256:95b274a39a66d0da2b94c0a8233cae74b41a030eb0f67ee3d8b181cf617bcb4c"
+              },
+              {
+                "id": "core:policy/local",
+                "version": "3.0.0",
+                "digest": "sha256:d5ce88e82e0427393c99de440f3344773bd3e5793c279bd7464a61d9618552dc"
+              },
+              {
+                "id": "core:profile/redaction",
+                "version": "1.0.0",
+                "digest": "sha256:fdc3ab92846f57fc86161ac74e91ea231b279fb6fad82df5f62465a7446f8957"
+              },
+              {
+                "id": "core:resolver/local",
+                "version": "1.0.0",
+                "digest": "sha256:09f0f9a7341ee3e9daf8b2f6576fdaeac5fd588d8103f14d69d720471b0952ad"
+              },
+              {
+                "id": "core:resolver/local",
+                "version": "2.0.0",
+                "digest": "sha256:00139654df57289dc603714b48eea3f8794ce160063b222d7a194a56ca7919fe"
+              },
+              {
+                "id": "core:schema/context-json",
+                "version": "1.0.0",
+                "digest": "sha256:b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+              },
+              {
+                "id": "core:schema/context-profile",
+                "version": "1.0.0",
+                "digest": "sha256:5ca19aff078592e2e46e85edfde1e1d59cd65b213b4d9bb9f9dd6aad49148280"
+              },
+              {
+                "id": "core:schema/core-configuration",
+                "version": "2.0.0",
+                "digest": "sha256:b66051157ba59b55cd5adf13dfe8a4801e8910a24501516a7a990bc2fdc17b94"
+              },
+              {
+                "id": "core:schema/evidence",
+                "version": "1.0.0",
+                "digest": "sha256:66010ed4a1338f704fdd568eda922798d690f080037b79293151074f28736195"
+              },
+              {
+                "id": "core:schema/full-context",
+                "version": "1.0.0",
+                "digest": "sha256:fea9a316a9654a77b63a2a302f96dfdd2dc8e72bc1a7cf2c8d3ee3f1ff75e339"
+              },
+              {
+                "id": "core:schema/json-projection",
+                "version": "1.0.0",
+                "digest": "sha256:e6a532398f7a219a61c63f7e60d281feb2aa72ea1f6e79f60de1972121bc4ba4"
+              },
+              {
+                "id": "core:schema/local-configuration",
+                "version": "1.0.0",
+                "digest": "sha256:c386bdf29f98a6d44fa592d6ea0a95c44b40bd8c71cac261ba56a0661c9b469a"
+              },
+              {
+                "id": "core:schema/local-context",
+                "version": "1.0.0",
+                "digest": "sha256:8a870566875ae9e68a0ed95eacc7f324c53f5413b6d3c418a930c006f77221bb"
+              },
+              {
+                "id": "core:schema/local-context",
+                "version": "2.0.0",
+                "digest": "sha256:a5b9db266c22ed48fb48e86c3d80080f0421c4cf2d7183c3105ae1f958edc7ca"
+              },
+              {
+                "id": "core:schema/step-result",
+                "version": "1.0.0",
+                "digest": "sha256:0b2a5e44aa00299185d42d092b9f0136bec54359c7f6542c907ad188ad5493dd"
+              },
+              {
+                "id": "fixture:schema/object",
+                "version": "0.0.0-b1.djdvqk2iuwtwagnpr2kxngisnzxihtyyf3caryffkphymnmvabqq",
+                "digest": "sha256:2388d0d39daa41b31c2c67e052b1b5037e9c68a6dd2fd6fb189bf38a78b5f5fe"
+              },
+              {
+                "id": "fixture:step/commit",
+                "version": "0.0.0-b1.hxcbjueazibrclme5hrl74yaxlglt3psaxb4j54o2rs4mplnrb7a",
+                "digest": "sha256:5299b4ac54770e278db27196fc5985358ae9ba6d348fd94fbcbe3dd4c3f994dc"
+              },
+              {
+                "id": "fixture:step/prepare",
+                "version": "0.0.0-b1.kxkidlsghu2uydgycrwmuwtaemv5qsimznai3avtnutbyf33sdra",
+                "digest": "sha256:53ef379e64c8c1c8f0124095e38cd8eda9804da9dae8fa07cdd719f1684c0246"
+              },
+              {
+                "id": "fixture:step/review-leaf",
+                "version": "0.0.0-b1.s2m7zxze5y7l45npvq52lognbudcfhn67xlq7er7rd5bywunofrq",
+                "digest": "sha256:93a69d00afd0659405389da69338a2b96aa8549018bace206cb61757f431112a"
+              },
+              {
+                "id": "fixture:step/review-reader",
+                "version": "0.0.0-b1.xvzomtq3d4qoupd5seljep3iykie57k7myknnx5wvgsrgzr723yq",
+                "digest": "sha256:d01dee5a5c983398c330d36e837f39a6e70e395cda4b2c41f584b0f61bff588c"
+              },
+              {
+                "id": "fixture:workflow/review-consumer",
+                "version": "0.0.0-b1.6lsdyznffdj7ajidn36bqbqh4mytcg4bxuu4uf55paqbcdfnhitq",
+                "digest": "sha256:3749863f9a564af8f0c6f07764ce019c03112076c8e4b0617280e3ccfd098880"
+              },
+              {
+                "id": "fixture:workflow/review-inner",
+                "version": "0.0.0-b1.5z7ioqh6bcq3ahix7qcvu55rj7ca5aybwh3jw6f5tjuxucjsb7iq",
+                "digest": "sha256:99b42531214e117d4e2a22b1bc2f67084174c6f3ac7966bddbe58c8cba56f17c"
+              },
+              {
+                "id": "fixture:workflow/review",
+                "version": "0.0.0-b1.pfgxpxpapgrg5n7gx4myuw4mgx5jt4cvrgbolyyurefrnncfgeva",
+                "digest": "sha256:2c2bc0ecf118f46b84dc6cc8fbe00df45566842b7c0d8131abbb0d2a65fc85a6"
+              },
+              {
+                "id": "fixture:workflow/consumer",
+                "version": "0.0.0-b1.bcz2oz5o34cvmtrdzognpegllsdgsjlecgpy5aczrnzyp6x3lynq",
+                "digest": "sha256:950b03d0d42eb6eeecf34c01750a55f7280fc5bfd1ee2824f1d30ff369505d86"
+              },
+              {
+                "id": "snapshot:executors/e46133f67c5586935f17e8edd27e5dc9b447a85a5388c8e7d0344b483e146dba",
+                "version": "1.0.0",
+                "digest": "sha256:e46133f67c5586935f17e8edd27e5dc9b447a85a5388c8e7d0344b483e146dba"
+              },
+              {
+                "id": "snapshot:context-resources/d85d8bd2127128b0a1cde3507d043ba4f306a538f16cd881e786a1af86a39f13",
+                "version": "1.0.0",
+                "digest": "sha256:d85d8bd2127128b0a1cde3507d043ba4f306a538f16cd881e786a1af86a39f13"
+              },
+              {
+                "id": "lock:d7138290a0cd3f99b0bd5bbdc68b348e50b81d108797263a9eae852d1f42d00d",
+                "version": "1.0.0",
+                "digest": "sha256:09c9c3dfd49eb2a2a6d5ec12974bd83f622553bb4cdf62713613572134e4ce5a"
+              }
+            ]
+          },
+          "admitted": {
+            "utc": "2026-10-16T22:22:59.361053424Z",
+            "session": "clock:4b7dd634f37b11e04c706d611804c72d",
+            "monotonic_ms": 395,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "deadline": {
+            "utc": "2026-10-16T23:22:59.361053424Z",
+            "session": "clock:4b7dd634f37b11e04c706d611804c72d",
+            "monotonic_ms": 3600395,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "dispatch_deadline": {
+            "utc": "2026-10-16T23:22:59.361053424Z",
+            "session": "clock:4b7dd634f37b11e04c706d611804c72d",
+            "monotonic_ms": 3600395,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "settled": {
+            "utc": "2026-10-16T22:25:23.444880609Z",
+            "session": "clock:d796084d882ca6afacfe7c43cfbaa2a8",
+            "monotonic_ms": 13,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "candidate_conflict": false,
+          "session": {
+            "schema_version": "assisted-session/7",
+            "principal_id": "local:uid:1001",
+            "skill_refs": [
+              {
+                "id": "fixture:context/task",
+                "version": "0.0.0-b1.oxg52vcpvp4yusi5k6xkxlu66i5melbcsyednhu5bm56nn3loyuq",
+                "digest": "sha256:d326e08c9c83cae45196e02e7b4c0b963bef62896546cb79d5e8c3b0e99791c3"
+              }
+            ],
+            "workspace_marks": {
+              "claim:fd13a200a2d157ae5fe98a8663019eb3c353187cedef42c4a69d8e60706a0ba4": "sha256:054b00ec8a4166002f4ea603f7353c2433c2d00ca7f0f9171e7c1cd6e467e566"
+            },
+            "workspace_status": {
+              "claim:fd13a200a2d157ae5fe98a8663019eb3c353187cedef42c4a69d8e60706a0ba4": "?? candidate.txt"
+            },
+            "delivery_generation": 1,
+            "host_state": "disconnected",
+            "deadline_trust": "local_wall_unqualified",
+            "handed": {
+              "utc": "2026-10-16T22:22:59.361053424Z",
+              "session": "clock:4b7dd634f37b11e04c706d611804c72d",
+              "monotonic_ms": 395,
+              "source": "go.time.monotonic",
+              "suspend_basis": "excludes_suspend_on_darwin",
+              "utc_trust": "local_wall_unqualified"
+            },
+            "taken": {
+              "utc": "2026-10-16T22:25:20.315568894Z",
+              "session": "clock:e754dcf29e1dae06d23b499d61580e18",
+              "monotonic_ms": 18,
+              "source": "go.time.monotonic",
+              "suspend_basis": "excludes_suspend_on_darwin",
+              "utc_trust": "local_wall_unqualified"
+            }
+          }
+        }
+      },
+      "raw_file_hashes": {
+        "live-state.json": "sha256:8b4892223bc852713c6f60f2f27701178b23eb547095a3afdab493d4d64cf8cb",
+        "launch-review.json": "sha256:0486e4c04b983c7c7877a69d28d7193b3f0caf3ba82a294c712975372b13b746",
+        "host-prompt.txt": "sha256:4e8fffbe0eb5b310b8defa0b04cd4b5de97f6bdfc49bdb432d74f242063c1f7f",
+        "actor-command.json": "sha256:e827cfdee4d273f9c893af0bcead1cc1081045012657afd3d2c2326f93d2d674",
+        "actor-exit.json": "sha256:c5ed5f22894a0c338773285f490061d36819eccb1c5e433552771001a48c1b09",
+        "controller-next.json": "sha256:f3a2b4795ab6839a76a8dc60987f5b46bc1af27e420e47f879e401759dd0611e",
+        "app-control-observation.json": "sha256:13b4d13382f05ee23567ad6f92fe0aeb4d90b112a2546362c3627e4b6bdb1ec9",
+        "app-take.json": "sha256:195c30b072b82320d16ffaca6806e76fc946fe9e1cd677a06a9c89089c508cd2",
+        "final-run.json": "sha256:838142017421c0aa90e87e5242239b8a8070369f0184916462fb961134705f02",
+        "live-result.json": "sha256:82a36984cd931885b87a70ec0e440809350e866eef712407e2277f4e87027fee"
+      }
+    },
+    {
+      "host": "codex-cli",
+      "mode": "pass",
+      "run_id": "run:27304a8955fba41e7c9db61a39e215bb893bc640d2bb2e668cd9bc0d6b645f05",
+      "attempt_id": "attempt:eb85d35bd9d0753fa38d008eb796fc4e",
+      "child_invocation": "invocation:20de0b21d0301402aac510448a540f85f81af4d997bc4139d0ea9555d3eb8251",
+      "claim_id": "claim:18141d6a96027a1f9c93526d4bf3afc93709ed7e61a072b158cbb3086329dbf9",
+      "claim_generation": 1,
+      "taken": {
+        "utc": "2026-10-16T22:24:53.556224436Z",
+        "session": "clock:330a6f225adb7dfa4e5db2fb01f219e3",
+        "monotonic_ms": 13,
+        "source": "go.time.monotonic",
+        "suspend_basis": "excludes_suspend_on_darwin",
+        "utc_trust": "local_wall_unqualified"
+      },
+      "binary_sha256": "sha256:60a6dd1ca0524b4927418a64311207b4d6739080a8f518374d1889726d68ab5f",
+      "checked_exports": 2,
+      "case_outcome": "succeeded",
+      "invocations": 4,
+      "sessions": [
+        "prepare",
+        "assessment",
+        "reader",
+        "commit"
+      ],
+      "sources_unchanged": true,
+      "accepted": {
+        "schema_version": "1",
+        "run_id": "run:27304a8955fba41e7c9db61a39e215bb893bc640d2bb2e668cd9bc0d6b645f05",
+        "step_instance_id": "step:8d0f9c94fbaf5f91e32563ad08766a24",
+        "attempt_id": "attempt:eb85d35bd9d0753fa38d008eb796fc4e",
+        "envelope_digest": "sha256:d08987eecc6713374b2022b3e5539aaef93fbcfa1dba11428facac928873c45c",
+        "verdict": "pass",
+        "outputs": {
+          "gate": {
+            "artifact_id": "artifact:0151f8b519f325059eb48b88a51813a5b832abceaa22470f1f2632ce4710880d",
+            "revision": 1,
+            "digest": "sha256:d0bed944d0f86a75084838611b61f62f7443888ebd2a3ce1fd9f8e02adb274d2"
+          },
+          "report": {
+            "artifact_id": "artifact:2df6ba0ebb0a3a58581f5e96d899c9ca8a273f03cbe576cdf2f3a2c26b6327fb",
+            "revision": 1,
+            "digest": "sha256:9fe51e97367183114b35081aa0bf1643685f0a5b5e9896c59915f36cccb95c77"
+          }
+        },
+        "evidence_refs": [],
+        "effect_receipt_refs": [],
+        "summary": "Wrote all declared output ports with the actual decoded request input and pinned live_nonce."
+      },
+      "case_id": "codex-cli-pass",
+      "result": "PASS",
+      "host_execution": {
+        "argv": [
+          "/home/dev/.local/bin/codex",
+          "exec",
+          "--json",
+          "--approve-for-me",
+          "--ephemeral",
+          "--cd",
+          "/tmp/prifly-issue9-live-xhfuzyd6/codex-cli-pass/authority/.prifly/work/claims/18141d6a96027a1f9c93526d4bf3afc93709ed7e61a072b158cbb3086329dbf9",
+          "--add-dir",
+          "/tmp/prifly-issue9-live-xhfuzyd6/codex-cli-pass",
+          "-"
+        ],
+        "host_version": "codex-cli 0.162.1",
+        "scope": "live CLI host; producer/downstream remain synthetic"
+      },
+      "host_exit": {
+        "exit_code": 0
+      },
+      "task_contract": {
+        "workspace": "/tmp/prifly-issue9-live-xhfuzyd6/codex-cli-pass/authority/.prifly/work/eb85d35bd9d0753fa38d008eb796fc4e",
+        "context": {
+          "schema_version": "local-context/1",
+          "inputs": {
+            "request": {
+              "ref": {
+                "artifact_id": "artifact:09aba5c72a8330936ff230a0a200f029f7d687b30e8b3987993e53ad7fdc6191",
+                "revision": 1,
+                "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+              },
+              "path": "inputs/request"
+            }
+          },
+          "outputs": {
+            "gate": {
+              "artifact_id": "artifact:0151f8b519f325059eb48b88a51813a5b832abceaa22470f1f2632ce4710880d",
+              "revision": 1,
+              "path": "outputs/gate"
+            },
+            "report": {
+              "artifact_id": "artifact:2df6ba0ebb0a3a58581f5e96d899c9ca8a273f03cbe576cdf2f3a2c26b6327fb",
+              "revision": 1,
+              "path": "outputs/report"
+            }
+          },
+          "dependencies": [
+            {
+              "id": "core:adapter/assisted-session",
+              "version": "1.0.0",
+              "digest": "sha256:691e19e2c2179d8fc697b29b1e2d3e29593f12b4738683ccb9f2e739849f7888"
+            },
+            {
+              "id": "core:adapter/local-process",
+              "version": "1.0.0",
+              "digest": "sha256:0358d4b5da39c89f4e4304a7e89c228373aa946cad638028b7216f9270a9b40d"
+            },
+            {
+              "id": "core:adapter/local-process",
+              "version": "2.0.0",
+              "digest": "sha256:cb5218f0692cdaabc9b94a5cf95c8439564045dbaf3f3b083ddd8680cb29d08e"
+            },
+            {
+              "id": "core:assembly/local-json",
+              "version": "1.0.0",
+              "digest": "sha256:5a3a5798ce9db1ea997ad00a1af8a61bfd2e4cc78795c2c739d07e33dde6b569"
+            },
+            {
+              "id": "core:context/local-json",
+              "version": "1.0.0",
+              "digest": "sha256:5acf83b9d79689aa334babc04d4b629056b7b898dbebfa9a39a8697c809bccfa"
+            },
+            {
+              "id": "core:policy/local",
+              "version": "1.0.0",
+              "digest": "sha256:95b274a39a66d0da2b94c0a8233cae74b41a030eb0f67ee3d8b181cf617bcb4c"
+            },
+            {
+              "id": "core:policy/local",
+              "version": "3.0.0",
+              "digest": "sha256:d5ce88e82e0427393c99de440f3344773bd3e5793c279bd7464a61d9618552dc"
+            },
+            {
+              "id": "core:profile/redaction",
+              "version": "1.0.0",
+              "digest": "sha256:fdc3ab92846f57fc86161ac74e91ea231b279fb6fad82df5f62465a7446f8957"
+            },
+            {
+              "id": "core:resolver/local",
+              "version": "1.0.0",
+              "digest": "sha256:09f0f9a7341ee3e9daf8b2f6576fdaeac5fd588d8103f14d69d720471b0952ad"
+            },
+            {
+              "id": "core:resolver/local",
+              "version": "2.0.0",
+              "digest": "sha256:00139654df57289dc603714b48eea3f8794ce160063b222d7a194a56ca7919fe"
+            },
+            {
+              "id": "core:schema/context-json",
+              "version": "1.0.0",
+              "digest": "sha256:b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+            },
+            {
+              "id": "core:schema/context-profile",
+              "version": "1.0.0",
+              "digest": "sha256:5ca19aff078592e2e46e85edfde1e1d59cd65b213b4d9bb9f9dd6aad49148280"
+            },
+            {
+              "id": "core:schema/core-configuration",
+              "version": "2.0.0",
+              "digest": "sha256:b66051157ba59b55cd5adf13dfe8a4801e8910a24501516a7a990bc2fdc17b94"
+            },
+            {
+              "id": "core:schema/evidence",
+              "version": "1.0.0",
+              "digest": "sha256:66010ed4a1338f704fdd568eda922798d690f080037b79293151074f28736195"
+            },
+            {
+              "id": "core:schema/full-context",
+              "version": "1.0.0",
+              "digest": "sha256:fea9a316a9654a77b63a2a302f96dfdd2dc8e72bc1a7cf2c8d3ee3f1ff75e339"
+            },
+            {
+              "id": "core:schema/json-projection",
+              "version": "1.0.0",
+              "digest": "sha256:e6a532398f7a219a61c63f7e60d281feb2aa72ea1f6e79f60de1972121bc4ba4"
+            },
+            {
+              "id": "core:schema/local-configuration",
+              "version": "1.0.0",
+              "digest": "sha256:c386bdf29f98a6d44fa592d6ea0a95c44b40bd8c71cac261ba56a0661c9b469a"
+            },
+            {
+              "id": "core:schema/local-context",
+              "version": "1.0.0",
+              "digest": "sha256:8a870566875ae9e68a0ed95eacc7f324c53f5413b6d3c418a930c006f77221bb"
+            },
+            {
+              "id": "core:schema/local-context",
+              "version": "2.0.0",
+              "digest": "sha256:a5b9db266c22ed48fb48e86c3d80080f0421c4cf2d7183c3105ae1f958edc7ca"
+            },
+            {
+              "id": "core:schema/step-result",
+              "version": "1.0.0",
+              "digest": "sha256:0b2a5e44aa00299185d42d092b9f0136bec54359c7f6542c907ad188ad5493dd"
+            },
+            {
+              "id": "fixture:schema/object",
+              "version": "0.0.0-b1.okb2bc3g53gvxeklve5tecxmazbnjxgrmms2cvn3kepcn37jth5a",
+              "digest": "sha256:2d09ff85a1c85eb60501b67dddafb0f2c3d048ea1aefe837080173613b115f76"
+            },
+            {
+              "id": "fixture:step/commit",
+              "version": "0.0.0-b1.u5po62wu4brwmpv34vtfbnsw2v4t3gsyi7ex5u55d25pvkqkruva",
+              "digest": "sha256:9c17ec667fc78a5192d09c3208ba22f606b3eca847eee2f267fe652cccd8fa8c"
+            },
+            {
+              "id": "fixture:step/prepare",
+              "version": "0.0.0-b1.3mtgnadgmnwpnabwfzqix4wmar55jdwd64sixucssxp443rttbwa",
+              "digest": "sha256:ab58b155278ad0ae6b188745783ac211155fe8680fa4975b9b3c0068cf64ef55"
+            },
+            {
+              "id": "fixture:step/review-leaf",
+              "version": "0.0.0-b1.nowqcktzx4nkllgzfratdeijkni3p6hxoxoof2zd6ow3sdlvaezq",
+              "digest": "sha256:cd2ecf908ac1c4b3cb1494b9a294b3c79daf55c2848c7a1723e6f681bf951c56"
+            },
+            {
+              "id": "fixture:step/review-reader",
+              "version": "0.0.0-b1.zazwgjj3vvwpfimbx3evuvxp5jm5igsg6x3nxn56jmcvvclsyfua",
+              "digest": "sha256:775e988a4db4f703de8dfd0170879dff0f7fef16b26375b8cf94a0aef0295f1e"
+            },
+            {
+              "id": "fixture:workflow/review-consumer",
+              "version": "0.0.0-b1.adxx2u6g2cipjmkdnuvi7emz232ljep45gddvm25h6d73hw3k3za",
+              "digest": "sha256:0799cb420de8352723c81df261d280122fd418c530d952ff9ceeb1c609d7aafb"
+            },
+            {
+              "id": "fixture:workflow/review-inner",
+              "version": "0.0.0-b1.w4ertdxodvdqlnkwqyxcd7lzxxask62cz76iuigfjgk54kff4shq",
+              "digest": "sha256:03e4d5d53c0f67a338b8f524159f9117b7bf87e303b8bcb2dbcaeeba0e13280d"
+            },
+            {
+              "id": "fixture:workflow/review",
+              "version": "0.0.0-b1.qc256jezm5yzxwjxwfait66ulyffb7duebhvdszucdngi3dw64rq",
+              "digest": "sha256:fb110ffb9a3ee837fe645d016c8cd69921dfc4993b903fffa6051575f467f894"
+            },
+            {
+              "id": "fixture:workflow/consumer",
+              "version": "0.0.0-b1.ghzlxsba5lojfr4jmuabzu3mwofg5xmwul2srmftfk3knsfujs3a",
+              "digest": "sha256:ed40d4d9b36d2090a6099ebde3baea5e76faf423d56cb278eb0e872686e13023"
+            },
+            {
+              "id": "snapshot:executors/9f66821c2003edb1491d29e0718fa92ba95bbc693f3cb47c872ddbd63eded31a",
+              "version": "1.0.0",
+              "digest": "sha256:9f66821c2003edb1491d29e0718fa92ba95bbc693f3cb47c872ddbd63eded31a"
+            },
+            {
+              "id": "snapshot:context-resources/a250823c4814a7b095a1a765bbba5693d8bdcbf2c8d81a2bb08472c9f8beeb55",
+              "version": "1.0.0",
+              "digest": "sha256:a250823c4814a7b095a1a765bbba5693d8bdcbf2c8d81a2bb08472c9f8beeb55"
+            },
+            {
+              "id": "lock:78651a7560b1ebd4795a2fad5681897f10d345cfd7bade72f74ca4a7605e24db",
+              "version": "1.0.0",
+              "digest": "sha256:a99632a804882675fd900e1d76c4e97e5ece146758405b6d5a03c754aa8529f2"
+            }
+          ]
+        }
+      },
+      "native_final": {
+        "run_status": "completed",
+        "run_outcome": "succeeded",
+        "settled": {
+          "utc": "2026-10-16T22:26:19.754982604Z",
+          "session": "clock:30a8ca56772023f60cc04da08a64799c",
+          "monotonic_ms": 178,
+          "source": "go.time.monotonic",
+          "suspend_basis": "excludes_suspend_on_darwin",
+          "utc_trust": "local_wall_unqualified"
+        },
+        "active_attempt_ids": [],
+        "attempt_status": "completed",
+        "child_invocation": {
+          "id": "invocation:20de0b21d0301402aac510448a540f85f81af4d997bc4139d0ea9555d3eb8251",
+          "run_id": "run:27304a8955fba41e7c9db61a39e215bb893bc640d2bb2e668cd9bc0d6b645f05",
+          "parent_invocation_id": "invocation:169f10064e804b063d2a87328a51918104e5d78151cb7d0706c445e9e92edca0",
+          "caller_stage_activation_id": "activation:32c4ace2a26fecb00da359e622bab02b",
+          "workflow_ref": {
+            "id": "fixture:workflow/review-inner",
+            "version": "0.0.0-b1.w4ertdxodvdqlnkwqyxcd7lzxxask62cz76iuigfjgk54kff4shq",
+            "digest": "sha256:03e4d5d53c0f67a338b8f524159f9117b7bf87e303b8bcb2dbcaeeba0e13280d"
+          },
+          "status": "completed",
+          "outcome": "succeeded",
+          "input_refs": {
+            "request": {
+              "artifact_id": "artifact:09aba5c72a8330936ff230a0a200f029f7d687b30e8b3987993e53ad7fdc6191",
+              "revision": 1,
+              "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+            }
+          },
+          "output_refs": {
+            "gate": {
+              "artifact_id": "artifact:0151f8b519f325059eb48b88a51813a5b832abceaa22470f1f2632ce4710880d",
+              "revision": 1,
+              "digest": "sha256:d0bed944d0f86a75084838611b61f62f7443888ebd2a3ce1fd9f8e02adb274d2"
+            },
+            "report": {
+              "artifact_id": "artifact:2df6ba0ebb0a3a58581f5e96d899c9ca8a273f03cbe576cdf2f3a2c26b6327fb",
+              "revision": 1,
+              "digest": "sha256:9fe51e97367183114b35081aa0bf1643685f0a5b5e9896c59915f36cccb95c77"
+            }
+          },
+          "ready_stages": [],
+          "created": {
+            "utc": "2026-10-16T22:23:07.122499693Z",
+            "session": "clock:80e2c07d3cb15978c04ec025d88e836b",
+            "monotonic_ms": 203,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "settled": {
+            "utc": "2026-10-16T22:26:13.644287152Z",
+            "session": "clock:b842c728a9aa215099622d68cb6e842d",
+            "monotonic_ms": 195,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "control_transitions": 2,
+          "step_instances": 1,
+          "resume_required": false,
+          "cancel_requested": false
+        }
+      },
+      "raw_root": "/tmp/prifly-issue9-live-xhfuzyd6/codex-cli-pass",
+      "actor_trace_summary": {
+        "thread_id": "01a146d0-f091-7f02-a6ed-9a88aa21b8b9",
+        "event_types": [
+          "item.completed",
+          "item.started",
+          "thread.started",
+          "turn.completed",
+          "turn.started"
+        ],
+        "completed_command_executions": 10,
+        "final_message": "{\"host\":\"codex-cli\",\"run_id\":\"run:27304a8955fba41e7c9db61a39e215bb893bc640d2bb2e668cd9bc0d6b645f05\",\"attempt_id\":\"attempt:eb85d35bd9d0753fa38d008eb796fc4e\",\"accepted\":true,\"verdict\":\"pass\",\"outputs\":[\"gate\",\"report\"],\"run_next_read_once\":true,\"stopped\":true}"
+      },
+      "raw_file_hashes": {
+        "live-state.json": "sha256:17b92ada17813309d4af43112f729e13d98698ae502a4a2ca7ffa6387edb212d",
+        "launch-review.json": "sha256:1172b054091b53a12a8cf533f1fddbcb787d7753417c3e5223f38454021b3200",
+        "host-prompt.txt": "sha256:7adab43b3fc73c14db395205cc92814301f5c24957b87291e80c73181b023438",
+        "actor-command.json": "sha256:ce3442fe9147e9deb9a873d25bccd50959f6b4c0de7322dbdd588e7abdbe475d",
+        "actor-exit.json": "sha256:124fd50cb6d223cdd18fedc166d00af7254199b6e6dedf9be82f71db87af6d01",
+        "actor-events.jsonl": "sha256:b472baba6c147654f1d1f6a6281002c5665749852af89bd92a38d17fe307767b",
+        "actor-stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actor-trace-summary.json": "sha256:c3f04198326324119901f5f3beeccf47356ede0551d0e48ab25e31fe996f9541",
+        "final-run.json": "sha256:56b50d8ae9588d801e594deb4ec25edec68d97438103f360eff8a7bd4340f175",
+        "live-result.json": "sha256:d40016b90f28fe9ca354308627d50ae87a92dde2f6bc6bafc6bc5bff9fe1f42b"
+      }
+    },
+    {
+      "host": "codex-cli",
+      "mode": "cancel",
+      "run_id": "run:9463ee8c48a766851c6d43039ab3c0f7dc018009a5c94c33764148fa7f6f5d5f",
+      "attempt_id": "attempt:f5b1c65f40a36c9d42d652095b37d0c5",
+      "child_invocation": "invocation:96f4f438e201615e868d0538bf769dc3508960f5dc4b50a84cecabd00f9dc5e8",
+      "claim_id": "claim:c41b6ce66b4ad7d76cc255608cfa6dd8e0a8c044d7e9b44f8e36db01fd3b47d1",
+      "claim_generation": 1,
+      "taken": {
+        "utc": "2026-10-16T22:26:34.992716374Z",
+        "session": "clock:d3222e3e595e729c5147456924af76f2",
+        "monotonic_ms": 16,
+        "source": "go.time.monotonic",
+        "suspend_basis": "excludes_suspend_on_darwin",
+        "utc_trust": "local_wall_unqualified"
+      },
+      "binary_sha256": "sha256:60a6dd1ca0524b4927418a64311207b4d6739080a8f518374d1889726d68ab5f",
+      "caller_action": "blocked_child",
+      "final_status": "cancelled",
+      "no_exports": true,
+      "no_fabricated_report": true,
+      "external_actor_stop_proven": false,
+      "case_id": "codex-cli-cancel",
+      "result": "PASS",
+      "host_execution": {
+        "argv": [
+          "/home/dev/.local/bin/codex",
+          "exec",
+          "--json",
+          "--approve-for-me",
+          "--ephemeral",
+          "--cd",
+          "/tmp/prifly-issue9-live-xhfuzyd6/codex-cli-cancel/authority/.prifly/work/claims/c41b6ce66b4ad7d76cc255608cfa6dd8e0a8c044d7e9b44f8e36db01fd3b47d1",
+          "--add-dir",
+          "/tmp/prifly-issue9-live-xhfuzyd6/codex-cli-cancel",
+          "-"
+        ],
+        "host_version": "codex-cli 0.162.1",
+        "scope": "live CLI observes child cancellation; coordinator controls native state"
+      },
+      "host_exit": {
+        "exit_code": 0
+      },
+      "task_contract": {
+        "workspace": "/tmp/prifly-issue9-live-xhfuzyd6/codex-cli-cancel/authority/.prifly/work/f5b1c65f40a36c9d42d652095b37d0c5",
+        "context": {
+          "schema_version": "local-context/1",
+          "inputs": {
+            "request": {
+              "ref": {
+                "artifact_id": "artifact:a0150b70232c019af2007d1888437b3d1fd39c094597cb5bd69bcc9f19c27b4c",
+                "revision": 1,
+                "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+              },
+              "path": "inputs/request"
+            }
+          },
+          "outputs": {
+            "gate": {
+              "artifact_id": "artifact:f8ad6373728ad2924b3d1a3214fcae5eca549883ba54b172eec13c49b73586fe",
+              "revision": 1,
+              "path": "outputs/gate"
+            },
+            "report": {
+              "artifact_id": "artifact:7010b3e33d900b279f317ecfe91eb2397238017e83e4c2248592f7417981256d",
+              "revision": 1,
+              "path": "outputs/report"
+            }
+          },
+          "dependencies": [
+            {
+              "id": "core:adapter/assisted-session",
+              "version": "1.0.0",
+              "digest": "sha256:691e19e2c2179d8fc697b29b1e2d3e29593f12b4738683ccb9f2e739849f7888"
+            },
+            {
+              "id": "core:adapter/local-process",
+              "version": "1.0.0",
+              "digest": "sha256:0358d4b5da39c89f4e4304a7e89c228373aa946cad638028b7216f9270a9b40d"
+            },
+            {
+              "id": "core:adapter/local-process",
+              "version": "2.0.0",
+              "digest": "sha256:cb5218f0692cdaabc9b94a5cf95c8439564045dbaf3f3b083ddd8680cb29d08e"
+            },
+            {
+              "id": "core:assembly/local-json",
+              "version": "1.0.0",
+              "digest": "sha256:5a3a5798ce9db1ea997ad00a1af8a61bfd2e4cc78795c2c739d07e33dde6b569"
+            },
+            {
+              "id": "core:context/local-json",
+              "version": "1.0.0",
+              "digest": "sha256:5acf83b9d79689aa334babc04d4b629056b7b898dbebfa9a39a8697c809bccfa"
+            },
+            {
+              "id": "core:policy/local",
+              "version": "1.0.0",
+              "digest": "sha256:95b274a39a66d0da2b94c0a8233cae74b41a030eb0f67ee3d8b181cf617bcb4c"
+            },
+            {
+              "id": "core:policy/local",
+              "version": "3.0.0",
+              "digest": "sha256:d5ce88e82e0427393c99de440f3344773bd3e5793c279bd7464a61d9618552dc"
+            },
+            {
+              "id": "core:profile/redaction",
+              "version": "1.0.0",
+              "digest": "sha256:fdc3ab92846f57fc86161ac74e91ea231b279fb6fad82df5f62465a7446f8957"
+            },
+            {
+              "id": "core:resolver/local",
+              "version": "1.0.0",
+              "digest": "sha256:09f0f9a7341ee3e9daf8b2f6576fdaeac5fd588d8103f14d69d720471b0952ad"
+            },
+            {
+              "id": "core:resolver/local",
+              "version": "2.0.0",
+              "digest": "sha256:00139654df57289dc603714b48eea3f8794ce160063b222d7a194a56ca7919fe"
+            },
+            {
+              "id": "core:schema/context-json",
+              "version": "1.0.0",
+              "digest": "sha256:b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+            },
+            {
+              "id": "core:schema/context-profile",
+              "version": "1.0.0",
+              "digest": "sha256:5ca19aff078592e2e46e85edfde1e1d59cd65b213b4d9bb9f9dd6aad49148280"
+            },
+            {
+              "id": "core:schema/core-configuration",
+              "version": "2.0.0",
+              "digest": "sha256:b66051157ba59b55cd5adf13dfe8a4801e8910a24501516a7a990bc2fdc17b94"
+            },
+            {
+              "id": "core:schema/evidence",
+              "version": "1.0.0",
+              "digest": "sha256:66010ed4a1338f704fdd568eda922798d690f080037b79293151074f28736195"
+            },
+            {
+              "id": "core:schema/full-context",
+              "version": "1.0.0",
+              "digest": "sha256:fea9a316a9654a77b63a2a302f96dfdd2dc8e72bc1a7cf2c8d3ee3f1ff75e339"
+            },
+            {
+              "id": "core:schema/json-projection",
+              "version": "1.0.0",
+              "digest": "sha256:e6a532398f7a219a61c63f7e60d281feb2aa72ea1f6e79f60de1972121bc4ba4"
+            },
+            {
+              "id": "core:schema/local-configuration",
+              "version": "1.0.0",
+              "digest": "sha256:c386bdf29f98a6d44fa592d6ea0a95c44b40bd8c71cac261ba56a0661c9b469a"
+            },
+            {
+              "id": "core:schema/local-context",
+              "version": "1.0.0",
+              "digest": "sha256:8a870566875ae9e68a0ed95eacc7f324c53f5413b6d3c418a930c006f77221bb"
+            },
+            {
+              "id": "core:schema/local-context",
+              "version": "2.0.0",
+              "digest": "sha256:a5b9db266c22ed48fb48e86c3d80080f0421c4cf2d7183c3105ae1f958edc7ca"
+            },
+            {
+              "id": "core:schema/step-result",
+              "version": "1.0.0",
+              "digest": "sha256:0b2a5e44aa00299185d42d092b9f0136bec54359c7f6542c907ad188ad5493dd"
+            },
+            {
+              "id": "fixture:schema/object",
+              "version": "0.0.0-b1.m2z32gd3t65nu5jcgaduykju5o2rquxo2gdoeidsrok57hl3xena",
+              "digest": "sha256:19c71b2174acf4137160c1b0d0a20d47ff4e831759e79b1b3f4496ca1623a95f"
+            },
+            {
+              "id": "fixture:step/commit",
+              "version": "0.0.0-b1.tvxseszg4ha6uri7btalqnxpprhhjgegupsmttuuajuhws2x7ava",
+              "digest": "sha256:0fa8e9e732174e056bff8f84b5aec5fcb6759359a39a42cfadfdfeb82bac7eed"
+            },
+            {
+              "id": "fixture:step/prepare",
+              "version": "0.0.0-b1.yr75vo3cvyq77bmvjar3mhuakgtir36l7elvzwkvlfvzsll3ybea",
+              "digest": "sha256:4dd4399ef6ff75e8afcea9a0ec183758bf63cb50eadc71ab5c3f19d488fc77e5"
+            },
+            {
+              "id": "fixture:step/review-leaf",
+              "version": "0.0.0-b1.snojtmrjh6hvevib2xc7etaoo7xbx3j7qsmlsodefafdrkqvdxsq",
+              "digest": "sha256:e443c2ba75900e1144db6c9f21596369861ecc917ab379642e4255f746074fc8"
+            },
+            {
+              "id": "fixture:step/review-reader",
+              "version": "0.0.0-b1.347sbxxcyjs3j3wr72ysqpjpnm5mfh5mrbztul4s4h2hd6w25waq",
+              "digest": "sha256:652607d383b2db44b909a9f81d15b0cc85e212236fcd1190f90e8a3251247005"
+            },
+            {
+              "id": "fixture:workflow/review-consumer",
+              "version": "0.0.0-b1.gjd4u4rm76hr73jemwhclasiclvfacvdjksmjqlgqj3vw4byy6zq",
+              "digest": "sha256:5ca3fb55cb822eeb3ca8a382bf93334ff3b850b169eaf6ad55a9fa2cdb0ced80"
+            },
+            {
+              "id": "fixture:workflow/review-inner",
+              "version": "0.0.0-b1.fzglxaqzps2mzgog3lpv4pmbbfwwtuh52sgogu2ecjb34w6tmhxa",
+              "digest": "sha256:e676fe9b49d4dbc7c335d97aa3d136afc87f4e7573187e08deb1e4ed0d525565"
+            },
+            {
+              "id": "fixture:workflow/review",
+              "version": "0.0.0-b1.xpdlwubwofcjqjl65re4easp3avgqyx6hrrnh3dmqz7whzobtgqa",
+              "digest": "sha256:5c1706c86b7b9cc606f5cfc4996ec0d6cb57c363e5da3bdfada888c5cf17eae1"
+            },
+            {
+              "id": "fixture:workflow/consumer",
+              "version": "0.0.0-b1.3cva3rxjz3wzra4y5zk2i7vyrd22i7udqpulnjm2opyapub4kyba",
+              "digest": "sha256:12a4540c09064da05c339f068527831843a17bc9a2faed14be985aa4d84dfb46"
+            },
+            {
+              "id": "snapshot:executors/2f4970263a01705da407280fe40b98355671725e8b4be2a425651d27ee9a33cf",
+              "version": "1.0.0",
+              "digest": "sha256:2f4970263a01705da407280fe40b98355671725e8b4be2a425651d27ee9a33cf"
+            },
+            {
+              "id": "snapshot:context-resources/992f30c6f3782d0f9e5100d22fcbf1a9392a6f7a86cf66feadbb79b9c117917a",
+              "version": "1.0.0",
+              "digest": "sha256:992f30c6f3782d0f9e5100d22fcbf1a9392a6f7a86cf66feadbb79b9c117917a"
+            },
+            {
+              "id": "lock:1504ecc0d9eab976958caaa2862bd22175c8c6a54e8e2213bb03e783f7a7c5d2",
+              "version": "1.0.0",
+              "digest": "sha256:5c2d17fb38df97f942cfb16a21a5ada120298104f9c0fd97b8bfbdd9e6f030ad"
+            }
+          ]
+        }
+      },
+      "native_final": {
+        "run_status": "cancelled",
+        "run_outcome": null,
+        "settled": {
+          "utc": "2026-10-16T22:27:57.906510619Z",
+          "session": "clock:760a91b3bf41ae583e8fc6b1c6388831",
+          "monotonic_ms": 14,
+          "source": "go.time.monotonic",
+          "suspend_basis": "excludes_suspend_on_darwin",
+          "utc_trust": "local_wall_unqualified"
+        },
+        "active_attempt_ids": [],
+        "attempt_status": "cancelled",
+        "child_invocation": {
+          "id": "invocation:96f4f438e201615e868d0538bf769dc3508960f5dc4b50a84cecabd00f9dc5e8",
+          "run_id": "run:9463ee8c48a766851c6d43039ab3c0f7dc018009a5c94c33764148fa7f6f5d5f",
+          "parent_invocation_id": "invocation:3e3667b514892593ab92b18bb7b154631de9530648391c25b7613a14d27c35ac",
+          "caller_stage_activation_id": "activation:b81972453ae43a0062e5c708186ef539",
+          "workflow_ref": {
+            "id": "fixture:workflow/review-inner",
+            "version": "0.0.0-b1.fzglxaqzps2mzgog3lpv4pmbbfwwtuh52sgogu2ecjb34w6tmhxa",
+            "digest": "sha256:e676fe9b49d4dbc7c335d97aa3d136afc87f4e7573187e08deb1e4ed0d525565"
+          },
+          "status": "cancelled",
+          "outcome": null,
+          "input_refs": {
+            "request": {
+              "artifact_id": "artifact:a0150b70232c019af2007d1888437b3d1fd39c094597cb5bd69bcc9f19c27b4c",
+              "revision": 1,
+              "digest": "sha256:b1834d8a97e9a386960b078bbd998523d26b6de6e178b4ff65bf66616fcf2eb6"
+            }
+          },
+          "output_refs": {},
+          "ready_stages": [],
+          "created": {
+            "utc": "2026-10-16T22:23:13.899632436Z",
+            "session": "clock:da5a3a0da7fedbe1009b77e29a7b7a39",
+            "monotonic_ms": 233,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "settled": {
+            "utc": "2026-10-16T22:26:35.825976856Z",
+            "session": "clock:79824b44ffe2d821aa0ce143bd82d69d",
+            "monotonic_ms": 100,
+            "source": "go.time.monotonic",
+            "suspend_basis": "excludes_suspend_on_darwin",
+            "utc_trust": "local_wall_unqualified"
+          },
+          "control_transitions": 1,
+          "step_instances": 1,
+          "resume_required": false,
+          "cancel_requested": true
+        }
+      },
+      "raw_root": "/tmp/prifly-issue9-live-xhfuzyd6/codex-cli-cancel",
+      "actor_trace_summary": {
+        "thread_id": "01a146d2-abae-7201-9280-a6240a634f77",
+        "event_types": [
+          "item.completed",
+          "item.started",
+          "thread.started",
+          "turn.completed",
+          "turn.started"
+        ],
+        "completed_command_executions": 9,
+        "final_message": "{\n  \"host\": \"codex-cli\",\n  \"run_id\": \"run:9463ee8c48a766851c6d43039ab3c0f7dc018009a5c94c33764148fa7f6f5d5f\",\n  \"attempt_id\": \"attempt:f5b1c65f40a36c9d42d652095b37d0c5\",\n  \"take_count\": 1,\n  \"take_duplicate\": false,\n  \"pinned_context_and_inputs_read\": true,\n  \"actual_inputs\": {\n    \"request\": {\"inputs\": {}, \"port\": \"request\"}\n  },\n  \"observed_action\": \"blocked_child\",\n  \"run_version\": 15,\n  \"child_status\": \"cancelled\",\n  \"attempt_status\": \"cancelled\",\n  \"child_output_refs\": {},\n  \"step_outputs\": {},\n  \"output_files\": [],\n  \"result_submitted\": false,\n  \"source_candidate_or_git_modified\": false,\n  \"control_actions_issued\": [],\n  \"exit\": \"cooperative after observing cancellation\",\n  \"external_actor_termination\": \"not established\"\n}"
+      },
+      "raw_file_hashes": {
+        "live-state.json": "sha256:740fef12bdbfc1c0c6d6e9d8253c5dd75bdb58e96f66a15b4f9ac74e9143c8aa",
+        "launch-review.json": "sha256:2966735e3902e0cb86750d3e4d5b3f046ed38af6e5ab1c943fc0c48f501bc84a",
+        "host-prompt.txt": "sha256:5ca5605aebab6f895adc02ffc4e0ac77cb5ba581898b133b502add2d0f3cb40c",
+        "actor-command.json": "sha256:069852e5181d4206c8b1721d104bcd16877048a1328953d714252d487c54c162",
+        "actor-exit.json": "sha256:124fd50cb6d223cdd18fedc166d00af7254199b6e6dedf9be82f71db87af6d01",
+        "actor-events.jsonl": "sha256:4ceb31bf9b2d738e7572599d4317a62f557d60249ab350b3c8b7e45f0ea056d0",
+        "actor-stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actor-trace-summary.json": "sha256:91e8a564b50d9b4a8ef7dea0e684103fad3538bb6dea84eae25301e250429a56",
+        "controller-next.json": "sha256:eb63ba8ee8aa3311a9b050769b32efd4df560eaf92e744aacaf786ec4a4b8736",
+        "final-run.json": "sha256:c65f4c7d992bfcefe8dc5d38c2061c316935317d0483695a8cdea24b386fc55f",
+        "live-result.json": "sha256:ccf4e1045310d4fcab01267f1a986bf4a13516098962a984ebb9b4b8fa23a32b"
+      }
+    }
+  ],
+  "coordinator_sha256": "sha256:2ac8a9a22e8379a45a2adbc675462d786d6d53ab3bb6bc2728358f35fe072cc3"
+}

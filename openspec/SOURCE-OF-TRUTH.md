@@ -69,10 +69,11 @@ Authority storage budget и owner recovery включены в main source sets
 `runtime-resources`, `cli-protocol`, `published-contracts` и
 `specification-governance`; storage-only migration не меняет saved Run contracts.
 
-Пока `add-project-extension-native-call` активен, его deltas уточняют marked
-Project step/call extensions для `workflow-and-context`, `cli-protocol` и
-`specification-governance`; source ownership остаётся прежним. Native Call и
-saved Run contracts не получают новой версии только из-за authoring вставки.
+Marked Project step/call extensions включены в main source sets
+`workflow-and-context`, `cli-protocol` и `specification-governance`; source
+ownership остаётся прежним. Приёмка Core 0.13.78 и отдельный W6 handoff сохранены
+в archived `2026-10-17-add-project-extension-native-call`. Native Call и saved
+Run contracts не получают новой версии только из-за authoring вставки.
 
 ## Границы
 
