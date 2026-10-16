@@ -1,6 +1,6 @@
 # Словарь Pri-Fly
 
-Редакция 1.35. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
+Редакция 1.36. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
 
 Используем привычный отраслевой термин, когда его смысл подходит. Собственные понятия Pri-Fly определяем явно; сходство названий не означает совместимости с Temporal, Argo, OpenTelemetry или другим продуктом. Английское название закрепляет понятие, русский текст объясняет его. Краткие имена существующего Go-кода перечислены как соответствия, а не как новые сущности.
 
@@ -81,13 +81,20 @@ StepDefinition v11), и шаг-программа (`prifly-step/1`, StepDefiniti
 <a id="workflow-extension"></a>
 ### Workflow extension — Простое расширение сценария
 
-Версионируемая YAML-запись проекта, которая вставляет один уже объявленный
-Project step между двумя exact соседними stages выбранного Workflow authoring
-source. `between.from` и `between.to` должны находить ровно один прямой route;
-иначе compiler отказывает до package sealing. Extension не изменяет прошлую
-WorkflowRevision и не предназначен для repeat, parallel, map, join или
-нескольких маршрутов: такие изменения остаются явной правкой полного YAML
-graph. Это не runtime operator, plugin и не скрытая автоматика маршрутизации.
+Версионируемая YAML-запись проекта, которая при compilation вставляет один
+объявленный Project step либо native [Call](#call) в exact прямой route root
+Workflow authoring source выбранной folder. Немаркированная форма остаётся
+step-only: stage ID берётся из `step`, допускается не более одного binding.
+`authoring: prifly-extension/2` с Project profile `/3` добавляет ветвь `call`:
+цель — exact local WorkflowRevision, stage ID — отдельный extension `id`,
+bindings могут быть множественными, маршруты отвечают за outcomes callee.
+Его WorkflowInvocation живёт внутри того же Run, claim и candidate контекста.
+`between.from` / `between.to` должны находить ровно один прямой root route;
+compiler не изменяет source bytes или pinned Runs. Extension не предназначен
+для repeat, parallel, map, join, нескольких routes или рекурсивного patch
+internal graphs; сложный callee исполняется своим native graph. Это не
+runtime operator, plugin или отдельный Run. Точный контракт — в
+[workflow and context](../workflow-and-context/spec.md).
 
 <a id="project-workflow-setting"></a>
 ### Project workflow setting — Настройка сценария проекта

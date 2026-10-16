@@ -1,0 +1,60 @@
+{
+  "authoring": "prifly-workflow/1",
+  "schema_version": "8",
+  "id": "fixture:workflow/review-consumer",
+  "version": "1.0.0",
+  "inputs": {
+    "report": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "gate": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    }
+  },
+  "outputs": {},
+  "allowed_outcomes": [
+    "succeeded",
+    "partial",
+    "rejected"
+  ],
+  "entry": "assess",
+  "limits": {
+    "max_step_instances": 8,
+    "max_control_transitions": 32,
+    "max_child_depth": 4
+  },
+  "policy_ref": "{{policy}}",
+  "stages": {
+    "assess": {
+      "kind": "step",
+      "step_ref": "{{step_review-reader}}",
+      "input_bindings": {
+        "report": "$inputs.report",
+        "gate": "$inputs.gate"
+      },
+      "on": {
+        "pass": "done",
+        "fail": "rejected",
+        "needs_revision": "partial",
+        "no_work": "partial",
+        "blocked": "partial"
+      },
+      "on_error": "rejected"
+    },
+    "done": {
+      "kind": "finish",
+      "outcome": "succeeded",
+      "output_bindings": {}
+    },
+    "partial": {
+      "kind": "finish",
+      "outcome": "partial"
+    },
+    "rejected": {
+      "kind": "finish",
+      "outcome": "rejected"
+    }
+  }
+}

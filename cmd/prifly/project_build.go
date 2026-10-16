@@ -104,6 +104,9 @@ func writeProjectComponent(output string, component projectCompileComponent) err
 func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, selectedProfile string, source projectPackageSource, registry flow.Registry, packages prifly.PackageRecord, values map[string]any, options projectWorkflowOptions) (projectCompileResult, error) {
 	variant := profileVersion == projectVariantProfileVersion
 	if !variant {
+		if options.Authoring != "" {
+			return projectCompileResult{}, refusal("project_compile_profile_required", "prifly-extension/2 requires Project profile /3")
+		}
 		object, _ := source.RootValue.(map[string]any)
 		if _, exists := object["execution_bindings"]; exists {
 			return projectCompileResult{}, refusal("project_compile_profile_required", "execution bindings require profile /3")
@@ -121,6 +124,9 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	parameters := maps.Clone(values)
 	components, err := compileProjectPackage(root, skillsRoot, intermediateOutput, source, values, options)
 	if err != nil {
+		return projectCompileResult{}, err
+	}
+	if err := projectValidateCallExtensionBindings(components, options); err != nil {
 		return projectCompileResult{}, err
 	}
 	source.ExecutionBindings, err = projectReadExecution(root, source, components, values, options.ExecutionBindings)
@@ -153,8 +159,15 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 			raisedByInsertion = true
 		}
 	}
+	callExtensions := false
+	for _, extension := range options.Extensions {
+		if extension.Call != "" {
+			callExtensions = true
+			break
+		}
+	}
 	var unclosed []string
-	if err := projectValidatePackageWorkflows(components, registry, raisedByInsertion, &unclosed); err != nil {
+	if err := projectValidatePackageWorkflows(components, registry, raisedByInsertion, &unclosed, callExtensions); err != nil {
 		return projectCompileResult{}, err
 	}
 	if variant {
@@ -171,8 +184,19 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	// The profile is read on every compile and is where each package's source is
 	// declared, so it belongs in the list a reader checks their edit against.
 	sources := append([]string{filepath.ToSlash(filepath.Join(".prifly", "project.yaml"))}, source.ReadPaths...)
+	if callExtensions && source.ExecutionBindings != nil {
+		for _, binding := range source.ExecutionBindings.Bindings {
+			for name := range binding.Files {
+				relative, err := projectRelativePath(root, filepath.Join(source.Folder, filepath.FromSlash(name)))
+				if err != nil {
+					return projectCompileResult{}, err
+				}
+				sources = append(sources, relative)
+			}
+		}
+	}
 	slices.Sort(sources)
-	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings, PackageVerdictsUnclosed: unclosed, Sources: slices.Compact(sources), ModelProfiles: options.ModelProfiles, Resources: options.Resources}
+	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings, PackageVerdictsUnclosed: unclosed, Sources: slices.Compact(sources), ModelProfiles: options.ModelProfiles, Resources: options.Resources, CallExtensions: callExtensions}
 	if source.Build != nil {
 		result.SchemaVersion = "project-compile/2"
 		result.AuthorPackage = &source.Build.AuthorPackage
@@ -269,6 +293,14 @@ func projectBuildVariant(source projectPackageSource, components []projectCompil
 	}
 	if source.ExecutionBindings != nil {
 		input["execution_bindings"] = source.ExecutionBindings
+	}
+	// The marked call path seals its declared resource contract as part of
+	// the reviewed package. Legacy b1 inputs must keep their exact encoding.
+	for _, extension := range options.Extensions {
+		if extension.Call != "" {
+			input["call_resources"] = options.Resources
+			break
+		}
 	}
 	data, err := projectCanonicalJSON(input)
 	if err != nil {

@@ -1,0 +1,22 @@
+{
+  "schema_version": "prifly-project-profile/3",
+  "packages": {
+    "quality": {
+      "source": ".prifly/workflows/quality"
+    }
+  },
+  "launches": {
+    "quality": {
+      "title": "Native quality fixture",
+      "description": "A project-owned native call without upstream edits.",
+      "kind": "workflow",
+      "workflow": ".prifly/workflows/quality/workflow.yaml",
+      "workspace": "worktree"
+    }
+  },
+  "hosts": {
+    "codex-app": ".agents/skills",
+    "codex-cli": ".codex/skills",
+    "claude-code": ".claude/skills"
+  }
+}

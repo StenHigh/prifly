@@ -1,0 +1,62 @@
+{
+  "authoring": "prifly-step/1",
+  "id": "fixture:step/product-leaf",
+  "version": "1.0.0",
+  "kind": "worker",
+  "inputs": {
+    "configuration": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "ui": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "ux": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    }
+  },
+  "outputs": {
+    "gate": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    },
+    "ui_report": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    },
+    "ux_report": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    },
+    "environment": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    },
+    "release": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    }
+  },
+  "executor": {
+    "adapter_ref": "{{assisted}}",
+    "operation": "session"
+  },
+  "instructions_ref": "{{context_task}}",
+  "effects": {
+    "class": "workspace_write",
+    "retry_class": "never"
+  },
+  "result_schema_ref": "{{result}}"
+}

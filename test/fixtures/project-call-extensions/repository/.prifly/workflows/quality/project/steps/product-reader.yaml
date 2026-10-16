@@ -1,0 +1,39 @@
+{
+  "authoring": "prifly-step/1",
+  "id": "fixture:step/product-reader",
+  "version": "1.0.0",
+  "kind": "worker",
+  "inputs": {
+    "gate": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "ui_report": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "ux_report": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "environment": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "release": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    }
+  },
+  "outputs": {},
+  "executor": {
+    "adapter_ref": "{{assisted}}",
+    "operation": "session"
+  },
+  "instructions_ref": "{{context_task}}",
+  "effects": {
+    "class": "workspace_write",
+    "retry_class": "never"
+  },
+  "result_schema_ref": "{{result}}"
+}

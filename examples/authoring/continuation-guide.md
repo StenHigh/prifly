@@ -317,3 +317,17 @@ receipt по `command-id` и созданный дочерний Run; `project_c
 | `project_continue_from_stage_unsupported` | `--from-stage` с launch другого workflow | `--from-stage` только для возобновления |
 | `recover_context_changed` | ответы анкеты или профиль модели не те, что у исходного Run | ответить так же |
 | `recover_prefix_changed`, `recover_frontier_changed` | в новой редакции изменилась перенесённая стадия или вход/маршрут точки | `recover_prefix_changed` называет первую изменившуюся стадию и подсказывает `--from-stage` с ней: она и всё после неё исполнятся заново |
+
+### Native call из Project extension
+
+`prifly-extension/2` в Project `/3` вставляет обычный Call: descendant задачи
+остаются в том же Run/claim. Host обслуживает leaf `session task`; не запускайте
+вложенный `project start`. После prepare любое изменение callee/dependency,
+binding, outcome/error route, ресурса, limits или supporting bytes требует
+нового review; старый digest даёт `project_start_stale_launch` до dispatch.
+Continue проверяет effective accepted prefix вместе с subtree. Изменённый
+принятый child не переиспользует stale exports: нужен разрешённый root
+`--from-stage <extension-id>` (whole child replay) либо named refusal.
+Cancel child оставляет native waiting/`blocked_child` до обычного settlement;
+он не подтверждает остановку внешнего actor. Source-built harness не заменяет
+released CLI и live host qualification.

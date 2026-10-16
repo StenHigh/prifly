@@ -105,8 +105,9 @@ type projectCompileResult struct {
 	// ModelProfiles is what the package's extend.yaml said a declared profile
 	// name means, by host. It rides here because start seals it and needs it
 	// after the compile that read it. Opaque to this tool.
-	ModelProfiles map[string]map[string]map[string]string `json:"-"`
-	Resources     map[string]projectResource              `json:"-"`
+	ModelProfiles  map[string]map[string]map[string]string `json:"-"`
+	Resources      map[string]projectResource              `json:"-"`
+	CallExtensions bool                                    `json:"-"`
 	// Sources names every file under the repository this compile read, so a
 	// reader can tell an edit that did not matter from an edit that was never
 	// read. It is always present: a caller may rely on it being the whole list,
@@ -983,6 +984,10 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 			pending = append(pending, projectPendingDocument{document: declaration, value: value, index: index})
 		}
 	}
+	callTargets, err := projectExtensionCallTargets(pending, options.Extensions)
+	if err != nil {
+		return nil, err
+	}
 	if err := projectApplyWorkflowOptions(pending, options); err != nil {
 		return nil, err
 	}
@@ -990,6 +995,10 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 		next := make([]projectPendingDocument, 0, len(pending))
 		progress := false
 		for _, item := range pending {
+			if item.document.Extensions != "" && !projectExtensionCallsReady(components, callTargets) {
+				next = append(next, item)
+				continue
+			}
 			rendered, missing, err := projectSubstituteValue(item.value, values)
 			if err != nil {
 				return nil, usageError(fmt.Sprintf("project_compile_invalid_source: %s/%d: %s", item.document.Source, item.index, err))
@@ -1516,6 +1525,12 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 		if workflowName := projectExtensionWorkflowName(component.Ref.ID); extension.Workflow != workflowName {
 			return refusal("project_extension_unknown_workflow", extension.Workflow+" (known: "+workflowName+")")
 		}
+		if extension.Call != "" {
+			if err := projectApplyCallExtension(workflow, extension, components); err != nil {
+				return err
+			}
+			continue
+		}
 		step, exists := steps[extension.Step]
 		if !exists {
 			return refusal("project_extension_unknown_step", extension.Step+" (known: "+strings.Join(known, ", ")+")")
@@ -1543,7 +1558,7 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 	return err
 }
 
-func projectValidatePackageWorkflows(components []projectCompileComponent, base flow.Registry, raisedByInsertion bool, reported *[]string) error {
+func projectValidatePackageWorkflows(components []projectCompileComponent, base flow.Registry, raisedByInsertion bool, reported *[]string, nativeCallContext bool) error {
 	registry := make(flow.Registry, len(base)+len(components))
 	for ref, data := range base {
 		registry[ref] = data
@@ -1566,6 +1581,9 @@ func projectValidatePackageWorkflows(components []projectCompileComponent, base 
 			// insertion authored, and the rest are named here instead.
 			_, unclosed, err := flow.CompileCoreExtended(component.Bytes, "json", registry, resources, raisedByInsertion)
 			if err != nil {
+				if nativeCallContext {
+					return &prifly.Fault{Code: "project_compile_invalid_workflow", Message: "compiled workflow failed native validation", Cause: err}
+				}
 				return refusal("project_compile_invalid_workflow", err.Error())
 			}
 			if len(unclosed) != 0 {

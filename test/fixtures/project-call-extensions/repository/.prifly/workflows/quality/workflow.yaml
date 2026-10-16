@@ -1,0 +1,75 @@
+{
+  "authoring": "prifly-project-workflow/1",
+  "schema_version": "8",
+  "package": {
+    "id": "fixture:package/quality",
+    "version": "1.0.0",
+    "description": "Generic reusable native call extension fixture.",
+    "requires_core_protocol": "1",
+    "references": {
+      "assisted": "core:adapter/assisted-session@1.0.0",
+      "policy": "core:policy/local@3.0.0",
+      "result": "core:schema/step-result@1.0.0",
+      "process": "core:adapter/local-process@2.0.0"
+    }
+  },
+  "id": "fixture:workflow/consumer",
+  "version": "1.0.0",
+  "inputs": {},
+  "outputs": {},
+  "allowed_outcomes": [
+    "succeeded",
+    "partial",
+    "rejected"
+  ],
+  "resumable": {
+    "from_outcomes": [
+      "partial"
+    ]
+  },
+  "entry": "prepare",
+  "limits": {
+    "max_step_instances": 24,
+    "max_control_transitions": 120,
+    "max_child_depth": 8
+  },
+  "policy_ref": "{{policy}}",
+  "stages": {
+    "prepare": {
+      "kind": "step",
+      "step_ref": "{{step_prepare}}",
+      "on": {
+        "pass": "commit",
+        "fail": "rejected",
+        "needs_revision": "partial",
+        "no_work": "partial",
+        "blocked": "partial"
+      },
+      "on_error": "rejected"
+    },
+    "commit": {
+      "kind": "step",
+      "step_ref": "{{step_commit}}",
+      "on": {
+        "pass": "done",
+        "fail": "rejected",
+        "needs_revision": "partial",
+        "no_work": "partial",
+        "blocked": "partial"
+      },
+      "on_error": "rejected"
+    },
+    "done": {
+      "kind": "finish",
+      "outcome": "succeeded"
+    },
+    "partial": {
+      "kind": "finish",
+      "outcome": "partial"
+    },
+    "rejected": {
+      "kind": "finish",
+      "outcome": "rejected"
+    }
+  }
+}

@@ -523,7 +523,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return err
 		}
 		summary.RegistryRetirement = retirement
-		summary.ReviewDigest, err = projectReviewDigest(summary)
+		summary.ReviewDigest, err = projectCallExtensionReview(summary, compiled.CallExtensions, stageResources, resourceLimits)
 		if err != nil {
 			return err
 		}
@@ -667,7 +667,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			}
 			currentSummary.Continuation = &currentReview
 		}
-		currentDigest, err := projectReviewDigest(currentSummary)
+		if compiled.CallExtensions {
+			stageResources, resourceLimits, err = projectLaunchResources(root, compiled.Resources, requirements.plan)
+			if err != nil {
+				return err
+			}
+		}
+		currentDigest, err := projectCallExtensionReview(currentSummary, compiled.CallExtensions, stageResources, resourceLimits)
 		if err != nil {
 			return err
 		}

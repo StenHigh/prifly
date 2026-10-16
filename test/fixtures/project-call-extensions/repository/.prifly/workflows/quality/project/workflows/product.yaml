@@ -1,0 +1,102 @@
+{
+  "authoring": "prifly-workflow/1",
+  "schema_version": "8",
+  "id": "fixture:workflow/product",
+  "version": "1.0.0",
+  "inputs": {
+    "configuration": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "ui": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "ux": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    }
+  },
+  "outputs": {
+    "gate": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "succeeded"
+      ]
+    },
+    "ui_report": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "succeeded"
+      ]
+    },
+    "ux_report": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "succeeded"
+      ]
+    },
+    "environment": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "succeeded"
+      ]
+    },
+    "release": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "succeeded"
+      ]
+    }
+  },
+  "allowed_outcomes": [
+    "succeeded",
+    "partial",
+    "rejected"
+  ],
+  "entry": "assess",
+  "limits": {
+    "max_step_instances": 8,
+    "max_control_transitions": 32,
+    "max_child_depth": 4
+  },
+  "policy_ref": "{{policy}}",
+  "stages": {
+    "assess": {
+      "kind": "step",
+      "step_ref": "{{step_product-leaf}}",
+      "input_bindings": {
+        "configuration": "$inputs.configuration",
+        "ui": "$inputs.ui",
+        "ux": "$inputs.ux"
+      },
+      "on": {
+        "pass": "done",
+        "fail": "rejected",
+        "needs_revision": "partial",
+        "no_work": "partial",
+        "blocked": "partial"
+      },
+      "on_error": "rejected"
+    },
+    "done": {
+      "kind": "finish",
+      "outcome": "succeeded",
+      "output_bindings": {
+        "gate": "$stages.assess.gate",
+        "ui_report": "$stages.assess.ui_report",
+        "ux_report": "$stages.assess.ux_report",
+        "environment": "$stages.assess.environment",
+        "release": "$stages.assess.release"
+      }
+    },
+    "partial": {
+      "kind": "finish",
+      "outcome": "partial"
+    },
+    "rejected": {
+      "kind": "finish",
+      "outcome": "rejected"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "authoring": "prifly-step/1",
+  "id": "fixture:step/prepare",
+  "version": "1.0.0",
+  "kind": "worker",
+  "inputs": {},
+  "outputs": {
+    "request": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    },
+    "configuration": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    },
+    "ui": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    },
+    "ux": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    }
+  },
+  "executor": {
+    "adapter_ref": "{{assisted}}",
+    "operation": "session"
+  },
+  "instructions_ref": "{{context_task}}",
+  "effects": {
+    "class": "workspace_write",
+    "retry_class": "never"
+  },
+  "result_schema_ref": "{{result}}"
+}

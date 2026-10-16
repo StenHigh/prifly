@@ -1,0 +1,75 @@
+{
+  "authoring": "prifly-workflow/1",
+  "schema_version": "8",
+  "id": "fixture:workflow/product-consumer",
+  "version": "1.0.0",
+  "inputs": {
+    "gate": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "ui_report": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "ux_report": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "environment": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    },
+    "release": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    }
+  },
+  "outputs": {},
+  "allowed_outcomes": [
+    "succeeded",
+    "partial",
+    "rejected"
+  ],
+  "entry": "assess",
+  "limits": {
+    "max_step_instances": 8,
+    "max_control_transitions": 32,
+    "max_child_depth": 4
+  },
+  "policy_ref": "{{policy}}",
+  "stages": {
+    "assess": {
+      "kind": "step",
+      "step_ref": "{{step_product-reader}}",
+      "input_bindings": {
+        "gate": "$inputs.gate",
+        "ui_report": "$inputs.ui_report",
+        "ux_report": "$inputs.ux_report",
+        "environment": "$inputs.environment",
+        "release": "$inputs.release"
+      },
+      "on": {
+        "pass": "done",
+        "fail": "rejected",
+        "needs_revision": "partial",
+        "no_work": "partial",
+        "blocked": "partial"
+      },
+      "on_error": "rejected"
+    },
+    "done": {
+      "kind": "finish",
+      "outcome": "succeeded",
+      "output_bindings": {}
+    },
+    "partial": {
+      "kind": "finish",
+      "outcome": "partial"
+    },
+    "rejected": {
+      "kind": "finish",
+      "outcome": "rejected"
+    }
+  }
+}

@@ -1396,3 +1396,18 @@ prifly --project AUTHORITY claim release --id CLAIM --generation N --json
 `doctor --claim ID` — к ownership. Per-snapshot cap, физический disk-full и
 `unsupported_storage_version` — другие причины: повышение logical-page budget
 их не устраняет. `doctor --storage` и `doctor --claim ID` нельзя объединять.
+
+### Project native call extension
+
+| Код | Что проверить |
+|---|---|
+| `project_extension_unsupported_authoring` | Нужен `authoring: prifly-extension/2`; unmarked — только step. |
+| `project_compile_profile_required` | Call extension требует Project `/3`, без автоматической миграции. |
+| `project_extension_unknown_call` / `project_extension_call_wrong_kind` / `project_extension_call_ambiguous` | Exact local callee в workflows/ или project/workflows/ этой folder; tail ID должен быть единственным. Installed package сам по себе не объявляет цель. |
+| `project_extension_call_outcome_unmapped` | `on` должен маршрутизировать каждый allowed outcome callee. |
+| `project_extension_call_requires_package` | Standalone `project extend` не разрешает workflows; используйте `project compile`. |
+| `missing_binding` / `unknown_port` / `unavailable_output` | Required inputs, exact schema refs, producer availability и guaranteed exports по достигнутому outcome. |
+
+[Справочник step/call](authoring/extension-authoring-reference.yaml) описывает
+stage ID, несколько bindings и root scope. После правки call заново подготовьте
+launch; автоматически повышать limits или запускать отдельный child Run не нужно.

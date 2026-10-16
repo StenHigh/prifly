@@ -1,0 +1,49 @@
+{
+  "authoring": "prifly-extension/2",
+  "extensions": [
+    {
+      "id": "quality-check",
+      "workflow": "consumer",
+      "call": "review",
+      "between": {
+        "from": "prepare",
+        "to": "commit"
+      },
+      "input_bindings": {
+        "request": "$stages.prepare.request"
+      },
+      "on": {
+        "succeeded": "commit",
+        "partial": "partial",
+        "rejected": "rejected"
+      },
+      "on_error": "rejected"
+    },
+    {
+      "id": "read-exports",
+      "workflow": "consumer",
+      "call": "review-consumer",
+      "between": {
+        "from": "quality-check",
+        "to": "commit"
+      },
+      "input_bindings": {
+        "report": "$stages.quality-check.report",
+        "gate": "$stages.quality-check.gate"
+      },
+      "on": {
+        "succeeded": "commit",
+        "partial": "partial",
+        "rejected": "rejected"
+      }
+    }
+  ],
+  "resources": {
+    "quality": {
+      "limit": 1,
+      "stages": [
+        "quality-check"
+      ]
+    }
+  }
+}

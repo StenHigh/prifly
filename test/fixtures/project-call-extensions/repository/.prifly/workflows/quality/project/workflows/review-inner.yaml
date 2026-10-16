@@ -1,0 +1,71 @@
+{
+  "authoring": "prifly-workflow/1",
+  "schema_version": "8",
+  "id": "fixture:workflow/review-inner",
+  "version": "1.0.0",
+  "inputs": {
+    "request": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    }
+  },
+  "outputs": {
+    "report": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "succeeded"
+      ]
+    },
+    "gate": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "succeeded"
+      ]
+    }
+  },
+  "allowed_outcomes": [
+    "succeeded",
+    "partial",
+    "rejected"
+  ],
+  "entry": "assess",
+  "limits": {
+    "max_step_instances": 8,
+    "max_control_transitions": 32,
+    "max_child_depth": 4
+  },
+  "policy_ref": "{{policy}}",
+  "stages": {
+    "assess": {
+      "kind": "step",
+      "step_ref": "{{step_review-leaf}}",
+      "input_bindings": {
+        "request": "$inputs.request"
+      },
+      "on": {
+        "pass": "done",
+        "fail": "rejected",
+        "needs_revision": "partial",
+        "no_work": "partial",
+        "blocked": "partial"
+      },
+      "on_error": "rejected"
+    },
+    "done": {
+      "kind": "finish",
+      "outcome": "succeeded",
+      "output_bindings": {
+        "report": "$stages.assess.report",
+        "gate": "$stages.assess.gate"
+      }
+    },
+    "partial": {
+      "kind": "finish",
+      "outcome": "partial"
+    },
+    "rejected": {
+      "kind": "finish",
+      "outcome": "rejected"
+    }
+  }
+}

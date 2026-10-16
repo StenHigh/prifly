@@ -1,0 +1,36 @@
+{
+  "authoring": "prifly-step/1",
+  "id": "fixture:step/review-leaf",
+  "version": "1.0.0",
+  "kind": "worker",
+  "inputs": {
+    "request": {
+      "schema_ref": "{{schema_object}}",
+      "required": true
+    }
+  },
+  "outputs": {
+    "report": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    },
+    "gate": {
+      "schema_ref": "{{schema_object}}",
+      "required_for": [
+        "pass"
+      ]
+    }
+  },
+  "executor": {
+    "adapter_ref": "{{assisted}}",
+    "operation": "session"
+  },
+  "instructions_ref": "{{context_task}}",
+  "effects": {
+    "class": "workspace_write",
+    "retry_class": "never"
+  },
+  "result_schema_ref": "{{result}}"
+}

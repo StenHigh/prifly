@@ -1526,12 +1526,15 @@ func (c *cli) projectWorkflows(ctx context.Context, args []string) error {
 }
 
 type projectWorkflowExtension struct {
-	ID       string
-	Workflow string
-	From     string
-	To       string
-	Step     string
-	On       map[string]string
+	Call          string            `json:",omitempty"`
+	InputBindings map[string]string `json:",omitempty"`
+	OnError       string            `json:",omitempty"`
+	ID            string
+	Workflow      string
+	From          string
+	To            string
+	Step          string
+	On            map[string]string
 	// Absent stays absent in the b1 build key: an insertion that declares no
 	// impossible verdict seals exactly the bytes it sealed before the field
 	// existed, while declaring one is a different input and a different key.
@@ -1549,6 +1552,7 @@ type projectWorkflowExtension struct {
 const projectExtensionStageSource = "$stages."
 
 type projectWorkflowOptions struct {
+	Authoring  string `json:",omitempty"`
 	Extensions []projectWorkflowExtension
 	Settings   map[string]map[string]any
 	Exclude    []string
@@ -1704,6 +1708,9 @@ func (c *cli) projectExtend(_ context.Context, args []string) error {
 	}
 	slices.Sort(known)
 	for _, extension := range extensions {
+		if extension.Call != "" {
+			return refusal("project_extension_call_requires_package", "call resolution requires the declared folder inventory; use project compile")
+		}
 		if workflowName := projectExtensionWorkflowName(*workflowID); extension.Workflow != workflowName {
 			return refusal("project_extension_unknown_workflow", extension.Workflow+" (known: "+workflowName+")")
 		}
@@ -1762,12 +1769,18 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	for key := range root {
 		switch key {
-		case "extensions", "settings", "exclude", "profile", "answers", "execution_bindings", "references", "model_profiles", "resources":
+		case "authoring", "extensions", "settings", "exclude", "profile", "answers", "execution_bindings", "references", "model_profiles", "resources":
 		default:
 			return projectWorkflowOptions{}, refusal("project_extension_invalid", "unknown field "+key)
 		}
 	}
 	result := projectWorkflowOptions{Extensions: []projectWorkflowExtension{}, Settings: map[string]map[string]any{}, Exclude: []string{}}
+	if raw, present := root["authoring"]; present {
+		if raw != "prifly-extension/2" {
+			return result, refusal("project_extension_unsupported_authoring", "authoring must select prifly-extension/2")
+		}
+		result.Authoring = "prifly-extension/2"
+	}
 	if raw, exists := root["answers"]; exists {
 		answers, err := projectReadWorkflowAnswers(raw)
 		if err != nil {
@@ -1821,7 +1834,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		for index, item := range items {
 			feature, ok := item.(string)
 			if !ok || !projectValueName.MatchString(feature) || seen[feature] {
-				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: exclude/%d must be a unique valid name", index))
+				return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("exclude/%d must be a unique valid name", index))
 			}
 			seen[feature] = true
 			result.Exclude = append(result.Exclude, feature)
@@ -1829,7 +1842,10 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	raw, exists := root["extensions"]
 	if !exists {
-		return result, nil
+		if result.Authoring == "" {
+			return result, nil
+		}
+		raw = []any{}
 	}
 	items, ok := raw.([]any)
 	if !ok {
@@ -1840,47 +1856,72 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	for index, item := range items {
 		object, ok := item.(map[string]any)
 		if !ok {
-			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d must be an object", index))
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d must be an object", index))
 		}
 		for key := range object {
 			switch key {
-			case "id", "workflow", "between", "step", "on", "impossible_verdicts", "input_bindings":
+			case "id", "workflow", "between", "step", "call", "on", "on_error", "impossible_verdicts", "input_bindings":
 			default:
-				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d has unknown field %s", index, key))
+				return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d has unknown field %s", index, key))
 			}
 		}
 		text := func(name string) (string, bool) { value, ok := object[name].(string); return value, ok && value != "" }
 		extension := projectWorkflowExtension{}
 		var okID, okWorkflow, okStep bool
 		if extension.ID, okID = text("id"); !okID || seen[extension.ID] {
-			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d id must be unique and non-empty", index))
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d id must be unique and non-empty", index))
 		}
 		seen[extension.ID] = true
 		if extension.Workflow, okWorkflow = text("workflow"); !okWorkflow {
-			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d workflow must be non-empty", index))
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d workflow must be non-empty", index))
 		}
-		if extension.Step, okStep = text("step"); !okStep {
-			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d step must be non-empty", index))
+		_, hasStep := object["step"]
+		_, hasCall := object["call"]
+		if hasStep == hasCall {
+			return result, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d requires exactly one of step or call", index))
+		}
+		if hasCall {
+			if result.Authoring == "" {
+				return result, refusal("project_extension_unsupported_authoring", fmt.Sprintf("extensions/%d call requires authoring: prifly-extension/2", index))
+			}
+			var valid bool
+			if extension.Call, valid = text("call"); !valid || !projectValueName.MatchString(extension.Call) {
+				return result, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d call must name a local workflow", index))
+			}
+			if _, present := object["impossible_verdicts"]; present {
+				return result, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d impossible_verdicts is step-only", index))
+			}
+		} else {
+			if extension.Step, okStep = text("step"); !okStep {
+				return result, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d step must be non-empty", index))
+			}
+		}
+		if raw, present := object["on_error"]; present {
+			target, valid := raw.(string)
+			if !hasCall || !valid || target == "" {
+				return result, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d on_error requires a call and a nonempty root stage", index))
+			}
+			extension.OnError = target
 		}
 		between, ok := object["between"].(map[string]any)
 		if !ok || len(between) != 2 {
-			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d between requires from and to", index))
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d between requires from and to", index))
 		}
 		if extension.From, ok = between["from"].(string); !ok || extension.From == "" {
-			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d between.from must be non-empty", index))
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d between.from must be non-empty", index))
 		}
 		if extension.To, ok = between["to"].(string); !ok || extension.To == "" {
-			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d between.to must be non-empty", index))
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d between.to must be non-empty", index))
 		}
 		routes, ok := object["on"].(map[string]any)
 		if !ok || len(routes) == 0 {
-			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d on must be a non-empty object", index))
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d on must be a non-empty object", index))
 		}
 		extension.On = make(map[string]string, len(routes))
 		for verdict, target := range routes {
 			target, ok := target.(string)
 			if verdict == "" || !ok || target == "" {
-				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d on routes must be non-empty strings", index))
+				return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d on routes must be non-empty strings", index))
 			}
 			extension.On[verdict] = target
 		}
@@ -1892,12 +1933,12 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		declared, present := object["impossible_verdicts"]
 		verdicts, isList := declared.([]any)
 		if present && !isList {
-			return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d impossible_verdicts must be a list of StepResult verdicts", index))
+			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d impossible_verdicts must be a list of StepResult verdicts", index))
 		}
 		for _, verdict := range verdicts {
 			name, ok := verdict.(string)
 			if !ok || !slices.Contains(flow.StepVerdicts, name) {
-				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d impossible_verdicts must name StepResult verdicts", index))
+				return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d impossible_verdicts must name StepResult verdicts", index))
 			}
 			extension.ImpossibleVerdicts = append(extension.ImpossibleVerdicts, name)
 		}
@@ -1906,17 +1947,32 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		// binding like any authored one — that the producer ran on this path,
 		// that it has that output, that the schemas agree — so nothing here
 		// repeats it; this only reads the expression.
-		if raw, declared := object["input_bindings"]; declared {
+		if extension.Call != "" {
+			if raw, present := object["input_bindings"]; present {
+				bindings, valid := raw.(map[string]any)
+				if !valid || len(bindings) > 256 {
+					return result, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d input_bindings must be an object with at most 256 ports", index))
+				}
+				extension.InputBindings = make(map[string]string, len(bindings))
+				for port, rawSource := range bindings {
+					expression, valid := rawSource.(string)
+					if !valid || !projectCallBindingExpression(expression) || port == "" {
+						return result, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d input_bindings.%s requires $stages.STAGE.PORT", index, port))
+					}
+					extension.InputBindings[port] = expression
+				}
+			}
+		} else if raw, declared := object["input_bindings"]; declared {
 			bindings, ok := raw.(map[string]any)
 			if !ok || len(bindings) != 1 {
-				return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d input_bindings must declare exactly one input of the inserted step", index))
+				return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d input_bindings must declare exactly one input of the inserted step", index))
 			}
 			for port, rawSource := range bindings {
 				source, isText := rawSource.(string)
 				expression := strings.TrimPrefix(source, projectExtensionStageSource)
 				separator := strings.LastIndex(expression, ".")
 				if !isText || !strings.HasPrefix(source, projectExtensionStageSource) || separator <= 0 || separator == len(expression)-1 {
-					return projectWorkflowOptions{}, usageError(fmt.Sprintf("project_extension_invalid: extensions/%d input_bindings %s must read a stage output written as %sSTAGE.PORT", index, port, projectExtensionStageSource))
+					return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d input_bindings %s must read a stage output written as %sSTAGE.PORT", index, port, projectExtensionStageSource))
 				}
 				extension.Input, extension.InputStage, extension.InputPort = port, expression[:separator], expression[separator+1:]
 			}
@@ -1925,7 +1981,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	result.Extensions = extensions
 	if raw, exists := root["execution_bindings"]; exists {
-		bindings, err := projectReadExtensionBindings(raw, result.Extensions)
+		bindings, err := projectReadExtensionBindings(raw, result.Extensions, result.Authoring != "")
 		if err != nil {
 			return projectWorkflowOptions{}, err
 		}
@@ -1955,7 +2011,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 // Only an inserted step may be bound here -- a package's own program is the
 // package's -- and the form, the allowed executable and --allow-execution are
 // the ones a package binding uses; only the place of declaration is new.
-func projectReadExtensionBindings(raw any, extensions []projectWorkflowExtension) (map[string]any, error) {
+func projectReadExtensionBindings(raw any, extensions []projectWorkflowExtension, allowCallClosure bool) (map[string]any, error) {
 	block, ok := raw.(map[string]any)
 	if !ok || len(block) == 0 {
 		return nil, refusal("project_extension_invalid", "execution_bindings must be a non-empty object")
@@ -1974,7 +2030,7 @@ func projectReadExtensionBindings(raw any, extensions []projectWorkflowExtension
 		inserted[extension.Step] = true
 	}
 	for name, config := range steps {
-		if !inserted[name] {
+		if !allowCallClosure && !inserted[name] {
 			return nil, refusal("project_extension_invalid", "execution_bindings.steps."+name+" names a step no extension in this file inserts; a package's own program is bound in its workflow.yaml")
 		}
 		if _, ok := config.(map[string]any); !ok {
@@ -2061,6 +2117,10 @@ func projectExtensionWorkflowName(id string) string {
 }
 
 func applyProjectExtension(workflow map[string]any, extension projectWorkflowExtension, ref any) error {
+	stageID := extension.Step
+	if extension.Call != "" {
+		stageID = extension.ID
+	}
 	definition, ok := workflow["definition"].(map[string]any)
 	if !ok {
 		return refusal("project_extension_invalid_workflow", "definition must be an object")
@@ -2069,8 +2129,8 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 	if !ok {
 		return refusal("project_extension_invalid_workflow", "definition.stages must be an object")
 	}
-	if _, exists := stages[extension.Step]; exists {
-		return refusal("project_extension_stage_conflict", extension.Step)
+	if _, exists := stages[stageID]; exists {
+		return refusal("project_extension_stage_conflict", stageID)
 	}
 	rawFrom, exists := stages[extension.From]
 	if !exists {
@@ -2112,6 +2172,11 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 			return refusal("project_extension_unknown_stage", target)
 		}
 	}
+	if extension.OnError != "" {
+		if _, exists := stages[extension.OnError]; !exists {
+			return refusal("project_extension_unknown_stage", extension.OnError)
+		}
+	}
 	// Every other stage name an extension writes is checked against the graph
 	// before anything moves; the producer it binds to is one of them.
 	bindings := map[string]any{}
@@ -2121,11 +2186,21 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 		}
 		bindings[extension.Input] = map[string]any{"from": "stage_output", "stage_id": extension.InputStage, "port": extension.InputPort}
 	}
+	for port, expression := range extension.InputBindings {
+		parts := strings.Split(strings.TrimPrefix(expression, projectExtensionStageSource), ".")
+		if len(parts) != 2 {
+			return refusal("project_extension_invalid", "input_bindings."+port+" requires $stages.STAGE.PORT")
+		}
+		if _, exists := stages[parts[0]]; !exists {
+			return refusal("project_extension_unknown_stage", parts[0])
+		}
+		bindings[port] = map[string]any{"from": "stage_output", "stage_id": parts[0], "port": parts[1]}
+	}
 	selected := routes[0]
 	if selected.verdict == "" {
-		from[selected.group] = extension.Step
+		from[selected.group] = stageID
 	} else {
-		from[selected.group].(map[string]any)[selected.verdict] = extension.Step
+		from[selected.group].(map[string]any)[selected.verdict] = stageID
 	}
 	// The routes go in as the same map type an authored stage carries: stored
 	// as map[string]string, an inserted stage was invisible to the route search
@@ -2135,9 +2210,17 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 	for verdict, target := range extension.On {
 		on[verdict] = target
 	}
-	stages[extension.Step] = map[string]any{"kind": "step", "step_ref": ref, "input_bindings": bindings, "on": on}
+	if extension.Call != "" {
+		call := map[string]any{"kind": "call", "workflow_ref": ref, "input_bindings": bindings, "on": on}
+		if extension.OnError != "" {
+			call["on_error"] = extension.OnError
+		}
+		stages[stageID] = call
+		return nil
+	}
+	stages[stageID] = map[string]any{"kind": "step", "step_ref": ref, "input_bindings": bindings, "on": on}
 	if len(extension.ImpossibleVerdicts) != 0 {
-		stages[extension.Step].(map[string]any)["impossible_verdicts"] = extension.ImpossibleVerdicts
+		stages[stageID].(map[string]any)["impossible_verdicts"] = extension.ImpossibleVerdicts
 		// Only v4 and later admit the declaration, so an insertion that carries
 		// one raises the revision it is spliced into, exactly as authoring does.
 		// Raises, never sets: assigning v4 here lowered a graph authored at a
@@ -2777,7 +2860,19 @@ Never automatically launch or claim the next task when this Run finishes.
 
 `
 
+const projectRunnerCallExtensionInstructions = "\nNative calls, including project call extensions, enter a child WorkflowInvocation\n" +
+	"inside this same Run and claim. Follow run next and take only the descendant\n" +
+	"leaf session task; the caller stage is not a worker. Never launch nested\n" +
+	"project start or invent child outputs. Partial/rejected outcomes follow the\n" +
+	"authored routes; cancellation may leave the caller waiting/blocked_child until\n" +
+	"native settlement. It does not prove an external actor stopped. A changed\n" +
+	"accepted child requires a reviewed legal root replay point, not stale output reuse.\n"
+
 func projectRunnerSkill(host projectHost) string {
+	return strings.Replace(projectRunnerSkillBeforeCallExtensions(host), "## 2. Drive\n", "## 2. Drive\n"+projectRunnerCallExtensionInstructions, 1)
+}
+
+func projectRunnerSkillBeforeCallExtensions(host projectHost) string {
 	return strings.Replace(projectRunnerSkillBeforeQueue(host), "## 1. Start\n", projectRunnerQueueInstructions+"## 1. Start\n", 1)
 }
 
@@ -3045,7 +3140,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host), projectRunnerSkillBeforeLaunchAdvice(host), projectRunnerSkillBeforeQueue(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host), projectRunnerSkillBeforeLaunchAdvice(host), projectRunnerSkillBeforeQueue(host), projectRunnerSkillBeforeCallExtensions(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

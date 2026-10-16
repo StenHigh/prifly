@@ -69,6 +69,11 @@ Authority storage budget и owner recovery включены в main source sets
 `runtime-resources`, `cli-protocol`, `published-contracts` и
 `specification-governance`; storage-only migration не меняет saved Run contracts.
 
+Пока `add-project-extension-native-call` активен, его deltas уточняют marked
+Project step/call extensions для `workflow-and-context`, `cli-protocol` и
+`specification-governance`; source ownership остаётся прежним. Native Call и
+saved Run contracts не получают новой версии только из-за authoring вставки.
+
 ## Границы
 
 OpenSpec не меняет Go runtime, user-facing YAML, sealed JSON package или
