@@ -135,7 +135,9 @@ class EditorContractTest(unittest.TestCase):
             "project-profile-v2",
             "project-profile-v3",
             "project-workflow-folder-v1",
+            "extension",
             "extension-v1",
+            "extension-v2",
             "run-decision-v1",
             "workflow-v1",
             "step-v1",
@@ -147,7 +149,7 @@ class EditorContractTest(unittest.TestCase):
         self.assertEqual({item["document"] for item in manifest["schemas"]}, expected)
         for item in manifest["schemas"]:
             self.assertEqual(Path(item["path"]).name, item["path"])
-            if item["document"] in {"project-profile-v2", "project-profile-v3", "step-v1"}:
+            if item["document"] in {"project-profile-v2", "project-profile-v3", "step-v1", "extension-v1", "extension-v2"}:
                 self.assertEqual(item["patterns"], [])
             else:
                 self.assertTrue(item["patterns"])
@@ -155,6 +157,14 @@ class EditorContractTest(unittest.TestCase):
             self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
             self.assertEqual(schema["$id"], item["id"])
             self.assertTrue(schema["title"])
+        self.assertEqual(
+            [item["document"] for item in manifest["schemas"] if ".prifly/workflows/*/extend.yaml" in item["patterns"]],
+            ["extension"],
+        )
+        self.assertEqual(
+            (EXAMPLES / "authoring" / "extension-authoring-reference.yaml").read_text().splitlines()[0],
+            "# yaml-language-server: $schema=../../schemas/authoring/extension.schema.json",
+        )
         self.assertEqual(
             (EXAMPLES / "authoring" / "workflow-authoring-reference.yaml").read_text().splitlines()[0],
             "# yaml-language-server: $schema=../../schemas/authoring/workflow-v1.schema.json",

@@ -108,3 +108,16 @@ Linux/amd64, Go 1.27.2; development version `0.2.0-dev.5`.
   независимые consumer tests и canonical AI Factory packages в этом срезе не менялись.
 
 Push/tag/release и operational recovery исходных пользовательских Runs не выполнялись.
+
+## Подготовка выпуска: editor contract
+
+Release qualification на `963b9b579af0c13298d0dbb75cce0e687b4ca439`
+обнаружила пропущенное обновление `test/e2e/test_examples.py`: список editor
+schemas ожидал только прежнюю extension-v1 и требовал automatic patterns у всех
+extension entries. Production manifest уже корректно публиковал selector/v2.
+Падение воспроизведено локально (`/tmp/prifly-issue9-editor-red.log`).
+Ожидания приведены к design §7; проверены единственный automatic selector и
+modeline extension reference. Все 6 wrapper/editor tests PASS
+(`/tmp/prifly-issue9-editor-green.log`). Production/schema bytes не менялись.
+Для нового release SHA required verify/qualify выполняются заново; прежнее
+падение не заменяется успехом и тег на упавшем SHA не создаётся.
