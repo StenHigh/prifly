@@ -89,7 +89,7 @@ func TestRepeatControlPauseAtBodyBoundary(t *testing.T) {
 	t.Parallel()
 	for _, boundary := range []string{"body_finished", "continued"} {
 		t.Run(boundary, func(t *testing.T) {
-			e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2)
+			e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2, 2<<20)
 			runID := choiceStart(t, e, workflow, options)
 			repeatEnter(t, e, runID)
 			r, view, p, a := repeatFinishBody(t, e, runID)
@@ -286,25 +286,14 @@ func TestRepeatControlStorageBudgetGuardsEveryBodyCreation(t *testing.T) {
 	t.Parallel()
 	for _, boundary := range []string{"entry", "continue"} {
 		t.Run(boundary, func(t *testing.T) {
-			e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2)
+			e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2, 2<<20)
 			runID := choiceStart(t, e, workflow, options)
 			if boundary == "continue" {
 				repeatEnter(t, e, runID)
 				repeatFinishBody(t, e, runID)
 			}
-			usage, err := e.Store.StorageUsage(context.Background())
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := e.Store.Close(); err != nil {
-				t.Fatal(err)
-			}
-			// Exercise the real logical quota without filling the disk or
-			// injecting a synthetic body, accepted result or storage failure.
-			e.Store, err = local.OpenStore(filepath.Join(e.Root, e.Config.Configuration.StateRoot), local.StoreOptions{EventTypes: EventTypes, SoftLimitBytes: max(64<<10, usage.AllocatedBytes)})
-			if err != nil {
-				t.Fatal(err)
-			}
+			saturateStorageBudget(t, e)
+			var err error
 			r, before, p, a := callActivateReady(t, e, runID)
 			if boundary == "entry" {
 				err = e.enterRepeat(context.Background(), r, before, p, a)
@@ -344,7 +333,7 @@ func TestRepeatControlCrashAtDurableBoundaries(t *testing.T) {
 	t.Parallel()
 	for _, boundary := range []string{"entered", "body_finished", "continued"} {
 		t.Run(boundary, func(t *testing.T) {
-			e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2)
+			e, workflow, _, options := repeatFixture(t, "commit-pass", "succeeded", 2, 2<<20)
 			runID := choiceStart(t, e, workflow, options)
 			if err := os.WriteFile(filepath.Join(e.Root, "repeat-boundary-kind"), []byte(boundary), 0600); err != nil {
 				t.Fatal(err)

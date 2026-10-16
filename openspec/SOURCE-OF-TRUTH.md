@@ -65,6 +65,11 @@ binary: `npm install -g @fission-ai/openspec@1.11.0`. После установ�
 локальное повторное использование и exact-SHA release gates для source sets
 `quality-and-acceptance` и `release-distribution`; ownership не переносится.
 
+Пока `recover-authority-storage-budget` активен, его deltas уточняют durable
+Authority storage budget и owner recovery для `runtime-resources`,
+`cli-protocol`, `published-contracts` и `specification-governance`; source
+ownership остаётся прежним. Storage-only migration не меняет saved Run contracts.
+
 ## Границы
 
 OpenSpec не меняет Go runtime, user-facing YAML, sealed JSON package или

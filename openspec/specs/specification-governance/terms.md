@@ -1,6 +1,6 @@
 # Словарь Pri-Fly
 
-Редакция 1.34. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
+Редакция 1.35. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
 
 Используем привычный отраслевой термин, когда его смысл подходит. Собственные понятия Pri-Fly определяем явно; сходство названий не означает совместимости с Temporal, Argo, OpenTelemetry или другим продуктом. Английское название закрепляет понятие, русский текст объясняет его. Краткие имена существующего Go-кода перечислены как соответствия, а не как новые сущности.
 
@@ -948,6 +948,23 @@ project `.prifly/installation.json`, Package или authority. Source build и
 
 Единственный источник принятых допусков и состояния в заданной области. Не человек, не PID driver и не произвольная копия БД. В F1 это локальная управляющая область с SQLite и собственной identity; копирование её файлов не создаёт право параллельно продолжать исполнение.
 
+<a id="authority-storage-budget"></a>
+### Authority storage budget — Бюджет хранения authority
+
+Конечный soft ceiling allocated logical SQLite pages одной local Authority:
+`page_count × page_size`, включая committed WAL view. Durable owner control
+хранит effective limit и generation/provenance; все Run этой authority делят
+один ceiling. Default — 512 МиБ; bootstrap observation (generation 0) отличается
+от явного owner raise. Первый control contract `authority-storage-budget/1`
+позволяет только повышение в range 64 КиБ…64 ГиБ с reviewed intent, reason и
+command receipt. Storage version 10 сохраняет setting между процессами.
+
+Это не Run Policy budget, не ReadCut/aggregate scan allowance, не maximum
+snapshot, physical DB/WAL size или свободный диск. Setting не является Grant,
+execution consent или гарантией достаточности среды: обычный admission/Stop
+продолжает действовать, а `set` не выполняет `run drive`. Read-only status и
+prepare на legacy storage не мигрируют его; review явно показывает upgrade.
+
 <a id="principal"></a>
 ### Principal / Actor — Участник и автор команды
 
@@ -1809,6 +1826,11 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [QueueTaskBinding](#queue-task-binding) | `internal/runtime/task_queue.go` | `runtime.QueueTaskBinding.IntentID` | `intent_id` |
 | [QueueTaskBinding](#queue-task-binding) | `internal/runtime/model.go` | `runtime.Run.QueueTask` | `queue_task` |
 | [TaskInput](#task-input) | `internal/runtime/model.go` | `runtime.Run.QueueRequestBytes` | `queue_request_bytes` |
+| [Authority storage budget](#authority-storage-budget) | `internal/local/store_budget.go` | `local.AuthorityStorageBudget` | — |
+| [Authority storage budget](#authority-storage-budget) | `internal/local/store_budget.go` | `local.AuthorityStorageBudget.LimitBytes` | `limit_bytes` |
+| [Authority storage budget](#authority-storage-budget) | `internal/local/store_budget.go` | `local.AuthorityStorageBudget.Generation` | `generation` |
+| [Authority storage budget](#authority-storage-budget) | `internal/runtime/storage_budget.go` | `runtime.StorageBudgetStatus.Control` | `control` |
+| [Authority storage budget](#authority-storage-budget) | `internal/runtime/storage_budget.go` | `runtime.StorageBudgetReview.ReviewDigest` | `review_digest` |
 <!-- glossary-bindings:end -->
 
 Имена в колонках Go/JSON — совместимые текущие соответствия, не список обязательных переименований. Например, `runtime.Result` не нужно срочно заменять новым wire-полем `step_result`. При целевом переименовании меняются все затронутые ссылки и тесты; сохранённые контракты учитываются отдельно.

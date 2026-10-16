@@ -16,10 +16,14 @@ import (
 	"github.com/stenhigh/prifly/internal/local"
 )
 
-func contextRegistryRuntime(t *testing.T) *Engine {
+func contextRegistryRuntime(t *testing.T, budgets ...int64) *Engine {
 	t.Helper()
 	root := t.TempDir()
-	if err := InitProfile(root, flow.CoreProfile); err != nil {
+	var budget int64
+	if len(budgets) > 0 {
+		budget = budgets[0]
+	}
+	if err := initProfileWithStoreOptions(root, flow.CoreProfile, false, local.StoreOptions{EventTypes: EventTypes, SoftLimitBytes: budget}); err != nil {
 		t.Fatal(err)
 	}
 	e, err := Open(root, false)

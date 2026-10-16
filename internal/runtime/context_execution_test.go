@@ -15,9 +15,13 @@ import (
 
 // Reuse the real process-group/FD3 fixture. The old Run deliberately remains
 // in this authority to exercise opt-in without rewriting its pinned contracts.
-func contextDriverProject(t *testing.T, edit func(*ContextProfile)) (*Engine, StartOptions) {
+func contextDriverProject(t *testing.T, edit func(*ContextProfile), budgets ...int64) (*Engine, StartOptions) {
 	t.Helper()
-	prior, _ := driverProject(t, "commit-pass", 10000)
+	var budget int64
+	if len(budgets) > 0 {
+		budget = budgets[0]
+	}
+	prior, _ := driverProject(t, "commit-pass", 10000, driverShape{StorageBudgetBytes: budget})
 	definitions, _, err := Builtins()
 	if err != nil {
 		t.Fatal(err)

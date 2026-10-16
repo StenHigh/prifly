@@ -352,6 +352,9 @@ var readingCommands = map[string][]string{
 
 // mutates reports whether a command needs an authority opened for writing.
 func mutates(args []string) bool {
+	if len(args) >= 3 && args[0] == "storage" {
+		return args[1] == "budget" && args[2] == "set" && !slices.Contains(args[3:], "--prepare")
+	}
 	if len(args) < 2 {
 		return false
 	}
@@ -609,6 +612,8 @@ func (c *cli) run(ctx context.Context, args []string) error {
 		return c.step(ctx, args[1:])
 	case "project":
 		return c.projectCommand(ctx, args[1:])
+	case "storage":
+		return c.storage(ctx, args[1:])
 	}
 	readOnly := !mutates(args)
 	e, err := c.openWithMonitor(c.project, readOnly)
@@ -618,6 +623,13 @@ func (c *cli) run(ctx context.Context, args []string) error {
 	defer e.Close()
 	switch args[0] {
 	case "doctor":
+		if len(args) == 2 && args[1] == "--storage" {
+			view, err := e.StorageBudgetStatus(ctx)
+			if emitErr := c.emit(view); emitErr != nil {
+				return emitErr
+			}
+			return err
+		}
 		if len(args) == 3 && args[1] == "--claim" && args[2] != "" {
 			view, diagnosisErr := e.DiagnoseClaim(ctx, args[2])
 			if err := c.emit(view); err != nil {
@@ -626,7 +638,7 @@ func (c *cli) run(ctx context.Context, args []string) error {
 			return diagnosisErr
 		}
 		if len(args) != 1 {
-			return usageError("doctor [--claim ID]")
+			return usageError("doctor [--claim ID | --storage]")
 		}
 		result, err := e.Check(ctx)
 		if err != nil {
@@ -2720,7 +2732,7 @@ Global: --project DIR  --json  --format text|json|csv
    wait; 5 in particular is a refusal, not a handoff
    That code is greppable: examples/troubleshooting.md of the Pri-Fly repository indexes the ones
      teams actually hit by symptom, and names the field or flag that answers each
-  version | doctor [--claim ID] | inventory     Versions, integrity, claim ownership, definitions
+  version | doctor [--claim ID | --storage] | inventory     Versions, integrity, claim ownership, definitions
   ref FILE --id ID --version X.Y.Z [--raw-text]
                                    Canonical JSON/YAML; --raw-text hashes exact UTF-8 resource bytes
   schema [NAME] [--def DEFINITION]
@@ -2839,6 +2851,10 @@ Global: --project DIR  --json  --format text|json|csv
                                    Bounded delegation; issuing it is gated exactly like what it delegates
   monitor [--addr 127.0.0.1:7777] [--scan-root DIRS]   registered authorities; --scan-root also walks DIRS
                                    Local user Runs, disk usage and confirmed cleanup; DIRS is an OS path-list. Auto-starts on Run creation, without opening a browser.
+  storage budget show
+  storage budget set --bytes N --reason TEXT --prepare
+  storage budget set --bytes N --reason TEXT --expected-review-digest DIGEST --command ID
+                                   Raise the finite logical-page ceiling; review first, drive the existing Run separately
   capacity show | capacity set --capacity N --reason TEXT
                                    How many attempts run at once here; a workflow declares its own and the smaller governs
   command receipt --id COMMAND_ID   Inspect a lost response without re-running

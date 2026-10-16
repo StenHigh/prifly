@@ -6,13 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/stenhigh/prifly/internal/local"
 )
 
 func TestAcceptanceProducerSettlementKeepsStorageReserve(t *testing.T) {
 	t.Parallel()
-	e, options := acceptanceProject(t, []string{"step_output", "step_result"}, "", "pass", false)
+	e, options := acceptanceProject(t, []string{"step_output", "step_result"}, "", "pass", false, 2<<20)
 	ctx := context.Background()
 	started, err := e.Start(ctx, options)
 	if err != nil {
@@ -33,19 +31,7 @@ func TestAcceptanceProducerSettlementKeepsStorageReserve(t *testing.T) {
 		defer closeServer()
 		attempt := driverAdmit(t, e, runID)
 		attemptID, workspace = attempt.ID, attempt.Workspace
-		usage, err := e.Store.StorageUsage(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := e.Store.Close(); err != nil {
-			t.Fatal(err)
-		}
-		// Change only the real store's logical allocation limit after producer
-		// admission. Its process and settlement still use the native driver.
-		e.Store, err = local.OpenStore(filepath.Join(e.Root, e.Config.Configuration.StateRoot), local.StoreOptions{EventTypes: EventTypes, SoftLimitBytes: max(64<<10, usage.AllocatedBytes)})
-		if err != nil {
-			t.Fatal(err)
-		}
+		saturateStorageBudget(t, e)
 		r, view, err := e.load(ctx, runID)
 		if err != nil {
 			t.Fatal(err)
@@ -110,7 +96,7 @@ func TestAcceptancePassedRecoveryAfterStorageRefusal(t *testing.T) {
 	t.Parallel()
 	for _, continuation := range []string{"resume", "cancel"} {
 		t.Run(continuation, func(t *testing.T) {
-			e, options := acceptanceProject(t, []string{"step_output", "step_result"}, "", "pass", false)
+			e, options := acceptanceProject(t, []string{"step_output", "step_result"}, "", "pass", false, 2<<20)
 			ctx := context.Background()
 			started, err := e.Start(ctx, options)
 			if err != nil {
@@ -123,17 +109,7 @@ func TestAcceptancePassedRecoveryAfterStorageRefusal(t *testing.T) {
 			if _, _, err := e.Artifact(ref); !os.IsNotExist(err) {
 				t.Fatal("passed boundary consumed its producer result before acceptance", err)
 			}
-			usage, err := e.Store.StorageUsage(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := e.Store.Close(); err != nil {
-				t.Fatal(err)
-			}
-			e.Store, err = local.OpenStore(filepath.Join(e.Root, e.Config.Configuration.StateRoot), local.StoreOptions{EventTypes: EventTypes, SoftLimitBytes: max(64<<10, usage.AllocatedBytes)})
-			if err != nil {
-				t.Fatal(err)
-			}
+			saturateStorageBudget(t, e)
 			r, before, err := e.load(ctx, runID)
 			if err != nil {
 				t.Fatal(err)
@@ -159,12 +135,12 @@ func TestAcceptancePassedRecoveryAfterStorageRefusal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			raiseStorageBudget(t, e, 4<<20)
 			root := e.Root
 			if err := e.Close(); err != nil {
 				t.Fatal(err)
 			}
-			// Restore normal quota only by reopening the actual store. The Run,
-			// candidates, reports, and accepted metadata are left untouched.
+			// Reopening keeps the reviewed persisted ceiling.
 			e, err = Open(root, false)
 			if err != nil {
 				t.Fatal(err)

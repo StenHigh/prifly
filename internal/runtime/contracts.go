@@ -8,6 +8,18 @@ import (
 	"github.com/stenhigh/prifly/internal/flow"
 )
 
+//go:embed storage-budget-status.schema.json
+var storageBudgetStatusContracts []byte
+
+//go:embed storage-budget-review.schema.json
+var storageBudgetReviewContracts []byte
+
+//go:embed storage-budget-result.schema.json
+var storageBudgetResultContracts []byte
+
+//go:embed authority-storage-budget.schema.json
+var authorityStorageBudgetContracts []byte
+
 //go:embed public.schema.json
 var publicContracts []byte
 
@@ -162,7 +174,7 @@ var recoveryPublicContracts []byte
 // publicBundles is the ordered set PublicSchema searches. Listing and lookup
 // read the same set, so a listed name always resolves.
 func publicBundles() [][]byte {
-	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts, neutralStartPublicContracts, executionBindingPublicContracts, timedSessionPublicContracts, routedSessionPublicContracts, effectsSessionPublicContracts, materializedSessionPublicContracts, stageWorkPublicContracts, environmentSourcePublicContracts, programEnvironmentPublicContracts, modelProfilePublicContracts, profileTranslationPublicContracts, runFinishPublicContracts, recoveryPublicContracts, externalWritePublicContracts, continuationPublicContracts, nextHandoffPublicContracts, nextAwaitingHostPublicContracts, questionPublicContracts, resourcePublicContracts, executionBindingSourceContracts, programProgressContracts, executionBindingOutputContracts, liveOutputPublicContracts, taskQueuePublicContracts, ClaimOwnershipSchema}
+	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts, neutralStartPublicContracts, executionBindingPublicContracts, timedSessionPublicContracts, routedSessionPublicContracts, effectsSessionPublicContracts, materializedSessionPublicContracts, stageWorkPublicContracts, environmentSourcePublicContracts, programEnvironmentPublicContracts, modelProfilePublicContracts, profileTranslationPublicContracts, runFinishPublicContracts, recoveryPublicContracts, externalWritePublicContracts, continuationPublicContracts, nextHandoffPublicContracts, nextAwaitingHostPublicContracts, questionPublicContracts, resourcePublicContracts, executionBindingSourceContracts, programProgressContracts, executionBindingOutputContracts, liveOutputPublicContracts, taskQueuePublicContracts, ClaimOwnershipSchema, storageBudgetStatusContracts, storageBudgetReviewContracts, storageBudgetResultContracts, authorityStorageBudgetContracts}
 }
 
 // PublicSchemaNames lists every contract PublicSchema answers for.

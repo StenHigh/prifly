@@ -3,6 +3,7 @@ package local
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"math"
 )
 
@@ -26,7 +27,11 @@ func (s *Store) StorageUsage(ctx context.Context) (StorageUsage, error) {
 	return storageUsage(ctx, conn, s.softLimitBytes)
 }
 func storageUsage(ctx context.Context, conn *sql.Conn, limit int64) (StorageUsage, error) {
-	usage := StorageUsage{SoftLimitBytes: limit}
+	control, _, err := readStorageBudget(ctx, conn, limit)
+	if err != nil {
+		return StorageUsage{}, err
+	}
+	usage := StorageUsage{SoftLimitBytes: control.LimitBytes}
 	if err := conn.QueryRowContext(ctx, "PRAGMA page_count").Scan(&usage.PageCount); err != nil {
 		return usage, err
 	}
@@ -42,6 +47,6 @@ func storageUsage(ctx context.Context, conn *sql.Conn, limit int64) (StorageUsag
 	usage.AllocatedBytes = usage.PageCount * usage.PageSize
 	return usage, nil
 }
-func storageBudgetRejection() *Rejection {
-	return &Rejection{Code: "storage_budget_exhausted", Message: "optional/new work exceeds the SQLite logical-page budget; control and settlement keep priority"}
+func storageBudgetRejection(usage StorageUsage) *Rejection {
+	return &Rejection{Code: "storage_budget_exhausted", Message: fmt.Sprintf("optional/new work exceeds the SQLite logical-page budget: observed allocated_bytes=%d, limit_bytes=%d; control and settlement keep priority. Inspect storage budget show, then storage budget set --bytes N --reason TEXT --prepare; apply only the reviewed finite increase", usage.AllocatedBytes, usage.SoftLimitBytes)}
 }

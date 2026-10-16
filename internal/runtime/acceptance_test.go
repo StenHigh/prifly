@@ -14,9 +14,9 @@ import (
 	"github.com/stenhigh/prifly/internal/flow"
 )
 
-func acceptanceProject(t *testing.T, boundaries []string, failureBoundary, mode string, onError bool) (*Engine, StartOptions) {
+func acceptanceProject(t *testing.T, boundaries []string, failureBoundary, mode string, onError bool, budgets ...int64) (*Engine, StartOptions) {
 	t.Helper()
-	e, options := contextDriverProject(t, nil)
+	e, options := contextDriverProject(t, nil, budgets...)
 	definitions, _, err := Builtins()
 	if err != nil {
 		t.Fatal(err)

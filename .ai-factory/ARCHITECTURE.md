@@ -35,6 +35,7 @@
 | Файл | Назначение |
 |---|---|
 | `cmd/prifly/main.go` | Диспетчер команд и вывод |
+| `cmd/prifly/storage.go` | Read-only status/review и явное owner повышение Authority storage budget |
 | `cmd/prifly/project.go` | `project init/workflows/questionnaire/runners`, discovery профиля |
 | `cmd/prifly/project_queue.go` | Явные local queue команды, selection и передача в reviewed launch |
 | `cmd/prifly/project_start.go` | Запуск объявленного launch: анкета, seal, claim, первый handoff |

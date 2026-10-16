@@ -14,10 +14,14 @@ import (
 	"github.com/stenhigh/prifly/internal/local"
 )
 
-func artifactEngine(t testing.TB) *Engine {
+func artifactEngine(t testing.TB, budgets ...int64) *Engine {
 	t.Helper()
 	root := t.TempDir()
-	if err := Init(root); err != nil {
+	var budget int64
+	if len(budgets) > 0 {
+		budget = budgets[0]
+	}
+	if err := initProfileWithStoreOptions(root, flow.Profile, false, local.StoreOptions{EventTypes: EventTypes, SoftLimitBytes: budget}); err != nil {
 		t.Fatal(err)
 	}
 	e, err := Open(root, false)

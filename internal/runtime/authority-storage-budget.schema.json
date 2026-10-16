@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "AuthorityStorageBudget": {
+      "$ref": "#/$defs/local_AuthorityStorageBudget"
+    },
+    "local_AuthorityStorageBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "authority_id": {
+          "type": "string"
+        },
+        "bootstrap_storage_version": {
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "command_id": {
+          "type": "string"
+        },
+        "epoch": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "generation": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "limit_bytes": {
+          "maximum": 68719476736,
+          "minimum": 65536,
+          "type": "integer"
+        },
+        "observed_allocated_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "previous_limit_bytes": {
+          "maximum": 68719476736,
+          "minimum": 65536,
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "authority-storage-budget/1"
+        },
+        "source": {
+          "enum": [
+            "default",
+            "legacy_default",
+            "bootstrap",
+            "owner"
+          ]
+        }
+      },
+      "required": [
+        "actor",
+        "authority_id",
+        "bootstrap_storage_version",
+        "command_id",
+        "epoch",
+        "generation",
+        "limit_bytes",
+        "observed_allocated_bytes",
+        "previous_limit_bytes",
+        "reason",
+        "schema_version",
+        "source"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:prifly:authority-storage-budget:1",
+  "$ref": "#/$defs/AuthorityStorageBudget",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-prifly-contracts": [
+    "AuthorityStorageBudget"
+  ]
+}

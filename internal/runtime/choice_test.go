@@ -39,14 +39,18 @@ func choiceStages(workflow map[string]any) map[string]any {
 
 // The control-only variant has no executor. The process variant reuses the
 // real driver worker, preserving its original F1 Run and authored definition.
-func choiceFixture(t *testing.T, controlJSON, workerMode string) (*Engine, map[string]any, StartOptions) {
+func choiceFixture(t *testing.T, controlJSON, workerMode string, budgets ...int64) (*Engine, map[string]any, StartOptions) {
 	t.Helper()
 	var e *Engine
 	var options StartOptions
 	if workerMode == "" {
 		e, options = emptyRuntime(t)
 	} else {
-		e, _ = driverProject(t, workerMode, 10000)
+		var budget int64
+		if len(budgets) > 0 {
+			budget = budgets[0]
+		}
+		e, _ = driverProject(t, workerMode, 10000, driverShape{StorageBudgetBytes: budget})
 		options = StartOptions{WorkflowFile: "workflows/driver.json", BriefFile: "brief.json", Inputs: map[string]string{"source": "source.txt"}}
 	}
 	data, err := os.ReadFile(filepath.Join(e.Root, options.WorkflowFile))

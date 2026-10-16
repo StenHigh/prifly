@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	StorageVersion = 9
+	StorageVersion = 10
 	// MaxSlotWaiters bounds the admission queue. A queue without a bound is a
 	// second unbounded resource hiding behind a bounded one.
 	MaxSlotWaiters = 64
@@ -73,9 +73,11 @@ const (
 )
 
 type StoreOptions struct {
-	EventTypes     []string
-	BusyTimeout    time.Duration
-	ReadOnly       bool
+	EventTypes  []string
+	BusyTimeout time.Duration
+	ReadOnly    bool
+	// SoftLimitBytes bootstraps new/legacy storage. A different value on
+	// configured storage refuses; a zero option reads the persisted ceiling.
 	SoftLimitBytes int64
 }
 
@@ -91,10 +93,12 @@ type StoreInfo struct {
 }
 
 type Store struct {
-	db             *sql.DB
-	info           StoreInfo
-	eventTypes     map[string]bool
-	softLimitBytes int64
+	db                *sql.DB
+	info              StoreInfo
+	eventTypes        map[string]bool
+	softLimitBytes    int64
+	explicitSoftLimit bool
+	bootstrapVersion  int
 }
 
 type Snapshot struct {
@@ -107,10 +111,11 @@ type Snapshot struct {
 // AuthoritySnapshot is control-plane state that does not belong to a Run.
 // It exists so installation/project controls never need a synthetic Run.
 type AuthoritySnapshot struct {
-	Key     string          `json:"key"`
-	Version int64           `json:"version"`
-	Cut     int64           `json:"cut"`
-	Data    json.RawMessage `json:"data"`
+	Budget  *StorageBudgetObservation `json:"-"`
+	Key     string                    `json:"key"`
+	Version int64                     `json:"version"`
+	Cut     int64                     `json:"cut"`
+	Data    json.RawMessage           `json:"data"`
 }
 
 type AuthorityCommand struct {
@@ -143,7 +148,8 @@ type AuthorityChange struct {
 	// SetCapacity changes how many attempts this authority admits at once, in
 	// the same transaction that records the decision, so the recorded decision
 	// and the capacity it describes can never disagree.
-	SetCapacity *int64
+	SetCapacity      *int64
+	SetStorageBudget *int64
 }
 
 type AuthorityReceipt struct {
@@ -352,6 +358,7 @@ type ReadView struct {
 // available only for reads; importing a backup must not resume its dispatches.
 // SQLite options are verified against the actual linked library at open.
 func OpenStore(dir string, opts StoreOptions) (*Store, error) {
+	explicitSoftLimit := opts.SoftLimitBytes != 0
 	if opts.SoftLimitBytes == 0 {
 		opts.SoftLimitBytes = DefaultSoftLimitBytes
 	}
@@ -433,7 +440,7 @@ func OpenStore(dir string, opts StoreOptions) (*Store, error) {
 	}
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(8)
-	s := &Store{db: db, eventTypes: make(map[string]bool), softLimitBytes: opts.SoftLimitBytes}
+	s := &Store{db: db, eventTypes: make(map[string]bool), softLimitBytes: opts.SoftLimitBytes, explicitSoftLimit: explicitSoftLimit}
 	for _, typ := range opts.EventTypes {
 		if !validEventType(typ) {
 			_ = db.Close()
@@ -486,6 +493,7 @@ func (s *Store) open(dir string, readOnly bool) error {
 		}
 		version, appID = StorageVersion, applicationID
 	}
+	s.bootstrapVersion = version
 	if appID != applicationID || version < 1 || version > StorageVersion {
 		return ErrIncompatible
 	}
@@ -514,6 +522,15 @@ func (s *Store) open(dir string, readOnly bool) error {
 	// before it runs. Otherwise a v2 database is verified under v1 rules and its
 	// authority commands are excluded from the shared cut.
 	s.info.StorageVersion = version
+	if version >= 10 {
+		control, _, err := readStorageBudget(ctx, conn, s.softLimitBytes)
+		if err != nil {
+			return err
+		}
+		if s.explicitSoftLimit && control.LimitBytes != s.softLimitBytes {
+			return Reject("storage_budget_configuration_conflict", "SoftLimitBytes is bootstrap-only; inspect persisted storage budget and use the reviewed owner command")
+		}
+	}
 	// Opening an authority checks what it has not checked before. Everything
 	// at or below the recorded mark was verified by an earlier open, and the
 	// complete scan stays available through doctor.
@@ -573,7 +590,7 @@ func (s *Store) initialize(ctx context.Context, conn *sql.Conn, dir string) erro
 		return ErrIncompatible
 	}
 	const schema = `
-CREATE TABLE authority(singleton INTEGER PRIMARY KEY CHECK(singleton=1),id TEXT NOT NULL UNIQUE,epoch INTEGER NOT NULL CHECK(epoch>0),state_directory TEXT NOT NULL,cut INTEGER NOT NULL CHECK(cut>=0),slot_id TEXT NOT NULL DEFAULT '',slot_run TEXT NOT NULL DEFAULT '',slot_capacity INTEGER NOT NULL DEFAULT 1 CHECK(slot_capacity>=1),admission_seq INTEGER NOT NULL DEFAULT 0,verified_cut INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE authority(singleton INTEGER PRIMARY KEY CHECK(singleton=1),id TEXT NOT NULL UNIQUE,epoch INTEGER NOT NULL CHECK(epoch>0),state_directory TEXT NOT NULL,cut INTEGER NOT NULL CHECK(cut>=0),slot_id TEXT NOT NULL DEFAULT '',slot_run TEXT NOT NULL DEFAULT '',slot_capacity INTEGER NOT NULL DEFAULT 1 CHECK(slot_capacity>=1),admission_seq INTEGER NOT NULL DEFAULT 0,verified_cut INTEGER NOT NULL DEFAULT 0,storage_limit_bytes INTEGER NOT NULL DEFAULT 536870912,storage_budget_data BLOB,storage_budget_digest TEXT);
 CREATE TABLE slots(slot_id TEXT PRIMARY KEY,run_id TEXT NOT NULL);
 CREATE TABLE slot_resources(slot_id TEXT NOT NULL,resource TEXT NOT NULL,PRIMARY KEY(slot_id,resource));
 CREATE TABLE attempt_progress(attempt_id TEXT PRIMARY KEY,run_id TEXT NOT NULL,data BLOB NOT NULL);
@@ -590,11 +607,14 @@ CREATE INDEX events_state ON events(run_id,seq) WHERE state_after IS NOT NULL;
 CREATE TABLE authority_states(state_key TEXT PRIMARY KEY,version INTEGER NOT NULL CHECK(version>0),cut INTEGER NOT NULL UNIQUE,data BLOB NOT NULL,digest TEXT NOT NULL);
 CREATE TABLE authority_commands(actor TEXT NOT NULL,command_id TEXT NOT NULL,state_key TEXT NOT NULL,digest TEXT NOT NULL,cut INTEGER NOT NULL UNIQUE,receipt BLOB NOT NULL,receipt_digest TEXT NOT NULL,PRIMARY KEY(actor,command_id));
 PRAGMA application_id=1347569228;
-PRAGMA user_version=9;`
+PRAGMA user_version=10;`
 	if _, err := conn.ExecContext(ctx, schema); err != nil {
 		return err
 	}
 	if _, err := conn.ExecContext(ctx, "INSERT INTO authority(singleton,id,epoch,state_directory,cut) VALUES(1,?,1,?,0)", "authority-"+hex.EncodeToString(id[:]), dir); err != nil {
+		return err
+	}
+	if err := s.bootstrapStorageBudget(ctx, conn, StorageVersion); err != nil {
 		return err
 	}
 	_, err := conn.ExecContext(ctx, "COMMIT")
@@ -602,6 +622,9 @@ PRAGMA user_version=9;`
 }
 
 func (s *Store) migrate(ctx context.Context, conn *sql.Conn, version int) error {
+	if version == 9 {
+		return s.migrateStorageBudget(ctx, conn)
+	}
 	if version == 8 {
 		return s.migrateAttemptOutput(ctx, conn)
 	}
@@ -1124,8 +1147,8 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 		if err != nil {
 			return out, err
 		}
-		if usage.AllocatedBytes >= s.softLimitBytes {
-			rejection = storageBudgetRejection()
+		if usage.AllocatedBytes >= usage.SoftLimitBytes {
+			rejection = storageBudgetRejection(usage)
 			limited = false
 		} else if _, err := conn.ExecContext(ctx, "SAVEPOINT storage_budget"); err != nil {
 			return out, err
@@ -1216,13 +1239,13 @@ ON CONFLICT(run_id) DO UPDATE SET version=excluded.version,event_seq=excluded.ev
 		if err != nil {
 			return out, err
 		}
-		if usage.AllocatedBytes > s.softLimitBytes {
+		if usage.AllocatedBytes > usage.SoftLimitBytes {
 			if _, err := conn.ExecContext(ctx, "ROLLBACK TO storage_budget"); err != nil {
 				return out, err
 			}
 			out.Receipt.Version, out.Receipt.EventSeq = state.Version, state.EventSeq
 			out.Receipt.Result = json.RawMessage("null")
-			out.Receipt.Rejection = storageBudgetRejection()
+			out.Receipt.Rejection = storageBudgetRejection(usage)
 			if err := insertReceipt(ctx, conn, out.Receipt); err != nil {
 				return out, err
 			}
@@ -1395,8 +1418,8 @@ func (s *Store) CreateLinkedRun(ctx context.Context, cmd LinkedRunCommand, trans
 		if err != nil {
 			return out, err
 		}
-		if usage.AllocatedBytes >= s.softLimitBytes {
-			rejection = storageBudgetRejection()
+		if usage.AllocatedBytes >= usage.SoftLimitBytes {
+			rejection = storageBudgetRejection(usage)
 			limited = false
 		} else if _, err := conn.ExecContext(ctx, "SAVEPOINT storage_budget"); err != nil {
 			return out, err
@@ -1438,12 +1461,12 @@ func (s *Store) CreateLinkedRun(ctx context.Context, cmd LinkedRunCommand, trans
 		if err != nil {
 			return out, err
 		}
-		if usage.AllocatedBytes > s.softLimitBytes {
+		if usage.AllocatedBytes > usage.SoftLimitBytes {
 			if _, err := conn.ExecContext(ctx, "ROLLBACK TO storage_budget"); err != nil {
 				return out, err
 			}
 			out.Receipt.Result = json.RawMessage("null")
-			out.Receipt.Rejection = storageBudgetRejection()
+			out.Receipt.Rejection = storageBudgetRejection(usage)
 			if err := insertReceipt(ctx, conn, out.Receipt); err != nil {
 				return out, err
 			}
@@ -1498,6 +1521,13 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 	state, err := loadAuthoritySnapshot(ctx, conn, cmd.Key)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return out, err
+	}
+	if cmd.Key == StorageBudgetKey {
+		observation, err := s.storageBudgetObservation(ctx, conn)
+		if err != nil {
+			return out, err
+		}
+		state.Budget = &observation
 	}
 	out.Receipt = AuthorityReceipt{ID: cmd.ID, Actor: cmd.Actor, Key: cmd.Key, Digest: digest, Version: state.Version, Result: json.RawMessage("null")}
 	var rejection *Rejection
@@ -1559,6 +1589,17 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 	if rejection == nil && (len(change.Data) == 0 || len(change.Data) > MaxSnapshotBytes || !json.Valid(change.Data) || change.Result != nil && (len(change.Result) > MaxCommandBytes || !json.Valid(change.Result))) {
 		return out, errors.New("authority mutation requires bounded valid state and result")
 	}
+	if rejection == nil {
+		if budgetErr := validateStorageBudgetChange(state, cmd, change); budgetErr != nil && !errors.As(budgetErr, &rejection) {
+			return out, budgetErr
+		}
+	}
+	budgetChange := rejection == nil && change.SetStorageBudget != nil
+	if budgetChange {
+		if _, err := conn.ExecContext(ctx, "SAVEPOINT budget_setting"); err != nil {
+			return out, err
+		}
+	}
 	var cut int64
 	if err := conn.QueryRowContext(ctx, "SELECT cut FROM authority WHERE singleton=1").Scan(&cut); err != nil {
 		return out, err
@@ -1615,21 +1656,45 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 		if _, err := conn.ExecContext(ctx, `INSERT INTO authority_states(state_key,version,cut,data,digest) VALUES(?,?,?,?,?) ON CONFLICT(state_key) DO UPDATE SET version=excluded.version,cut=excluded.cut,data=excluded.data,digest=excluded.digest`, cmd.Key, out.Receipt.Version, cut, []byte(change.Data), digestBytes(change.Data)); err != nil {
 			return out, err
 		}
+		if change.SetStorageBudget != nil {
+			if _, err := conn.ExecContext(ctx, "UPDATE authority SET storage_limit_bytes=?,storage_budget_data=?,storage_budget_digest=? WHERE singleton=1", *change.SetStorageBudget, []byte(change.Data), digestBytes(change.Data)); err != nil {
+				return out, err
+			}
+		}
 		if change.SetCapacity != nil {
 			if _, err := conn.ExecContext(ctx, "UPDATE authority SET slot_capacity=? WHERE singleton=1", *change.SetCapacity); err != nil {
 				return out, err
 			}
 		}
 	}
-	encoded, err := json.Marshal(out.Receipt)
-	if err != nil {
-		return out, err
-	}
-	if _, err := conn.ExecContext(ctx, "INSERT INTO authority_commands(actor,command_id,state_key,digest,cut,receipt,receipt_digest) VALUES(?,?,?,?,?,?,?)", cmd.Actor, cmd.ID, cmd.Key, digest, cut, encoded, digestBytes(encoded)); err != nil {
+	if err := insertAuthorityReceipt(ctx, conn, out.Receipt); err != nil {
 		return out, err
 	}
 	if _, err := conn.ExecContext(ctx, "UPDATE authority SET cut=? WHERE singleton=1", cut); err != nil {
 		return out, err
+	}
+	if budgetChange {
+		usage, err := storageUsage(ctx, conn, *change.SetStorageBudget)
+		if err != nil {
+			return out, err
+		}
+		if usage.AllocatedBytes >= *change.SetStorageBudget {
+			if _, err := conn.ExecContext(ctx, "ROLLBACK TO budget_setting"); err != nil {
+				return out, err
+			}
+			out.Receipt.Version = state.Version
+			out.Receipt.Result = json.RawMessage("null")
+			out.Receipt.Rejection = &Rejection{Code: "storage_budget_target_exhausted", Message: "the control record and receipt leave no headroom in the reviewed target; prepare a larger finite target"}
+			if err := insertAuthorityReceipt(ctx, conn, out.Receipt); err != nil {
+				return out, err
+			}
+			if _, err := conn.ExecContext(ctx, "UPDATE authority SET cut=? WHERE singleton=1", cut); err != nil {
+				return out, err
+			}
+		}
+		if _, err := conn.ExecContext(ctx, "RELEASE budget_setting"); err != nil {
+			return out, err
+		}
 	}
 	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
 		return out, err
@@ -1659,6 +1724,9 @@ func insertReceipt(ctx context.Context, conn *sql.Conn, receipt Receipt) error {
 }
 
 func commandDigest(cmd Command) (string, error) {
+	if cmd.Control != nil && cmd.Control.Key == StorageBudgetKey && cmd.ControlMutation != nil {
+		return "", errors.New("budget setting requires its own atomic authority command")
+	}
 	if !validIdentity(cmd.ID) || !validIdentity(cmd.Actor) || !validIdentity(cmd.RunID) || len(cmd.Payload) > MaxCommandBytes || !json.Valid(cmd.Payload) {
 		return "", errors.New("invalid command envelope")
 	}
@@ -1957,4 +2025,13 @@ func patchedSQLite(version string) bool {
 		}
 	}
 	return slices.Compare(v[:], qualifiedSQLiteBuilds[0][:]) >= 0
+}
+
+func insertAuthorityReceipt(ctx context.Context, conn *sql.Conn, receipt AuthorityReceipt) error {
+	encoded, err := json.Marshal(receipt)
+	if err != nil {
+		return err
+	}
+	_, err = conn.ExecContext(ctx, "INSERT INTO authority_commands(actor,command_id,state_key,digest,cut,receipt,receipt_digest) VALUES(?,?,?,?,?,?,?)", receipt.Actor, receipt.ID, receipt.Key, receipt.Digest, receipt.Cut, encoded, digestBytes(encoded))
+	return err
 }

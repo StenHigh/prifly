@@ -374,6 +374,18 @@ var documentContracts = []struct {
 	flag, description string
 	build             func() ([]byte, error)
 }{
+	{"storage-budget-status", "generate StorageBudgetStatus", func() ([]byte, error) {
+		return storageBudgetSchema("StorageBudgetStatus", "storage-budget-status", reflect.TypeFor[prifly.StorageBudgetStatus]())
+	}},
+	{"storage-budget-review", "generate StorageBudgetReview", func() ([]byte, error) {
+		return storageBudgetSchema("StorageBudgetReview", "storage-budget-review", reflect.TypeFor[prifly.StorageBudgetReview]())
+	}},
+	{"storage-budget-result", "generate StorageBudgetResult", func() ([]byte, error) {
+		return storageBudgetSchema("StorageBudgetResult", "storage-budget-result", reflect.TypeFor[prifly.StorageBudgetResult]())
+	}},
+	{"authority-storage-budget", "generate AuthorityStorageBudget", func() ([]byte, error) {
+		return storageBudgetSchema("AuthorityStorageBudget", "authority-storage-budget", reflect.TypeFor[local.AuthorityStorageBudget]())
+	}},
 	{"claim-ownership", "generate claim ownership diagnostics", claimOwnershipSchema},
 	{"project-task-queue", "generate local task queue ledger", func() ([]byte, error) { return flow.ProtocolSchema("ProjectTaskQueue") }},
 	{"project-task-queue-read", "generate task queue read", func() ([]byte, error) { return flow.ProtocolSchema("ProjectTaskQueueRead") }},
@@ -1502,6 +1514,46 @@ func claimOwnershipSchema() ([]byte, error) {
 	root["$id"] = "urn:prifly:claim-ownership-diagnostics:1"
 	g.defs["ClaimOwnershipDiagnostics"] = map[string]any{"$ref": "#/$defs/runtime_ClaimOwnershipDiagnostics"}
 	root["x-prifly-contracts"] = []string{"ClaimOwnershipDiagnostics"}
+	root["$defs"] = g.defs
+	return json.MarshalIndent(root, "", "  ")
+}
+
+func storageBudgetSchema(contract, slug string, typ reflect.Type) ([]byte, error) {
+	g := generator{defs: map[string]any{}}
+	root := g.schema(typ)
+	versions := map[string]string{"runtime_StorageBudgetStatus": "storage-budget-status/1", "runtime_StorageBudgetReview": "storage-budget-review/1", "runtime_StorageBudgetResult": "storage-budget-result/1", "local_AuthorityStorageBudget": "authority-storage-budget/1"}
+	for name, version := range versions {
+		if raw, ok := g.defs[name]; ok {
+			definition := raw.(map[string]any)
+			properties := definition["properties"].(map[string]any)
+			properties["schema_version"] = map[string]any{"const": version}
+		}
+	}
+	if raw, ok := g.defs["local_AuthorityStorageBudget"]; ok {
+		properties := raw.(map[string]any)["properties"].(map[string]any)
+		for _, name := range []string{"limit_bytes", "previous_limit_bytes"} {
+			properties[name] = map[string]any{"type": "integer", "minimum": local.MinStorageBudgetBytes, "maximum": local.MaxStorageBudgetBytes}
+		}
+		properties["generation"] = map[string]any{"type": "integer", "minimum": 0, "maximum": 9007199254740991}
+		properties["source"] = enum("default", "legacy_default", "bootstrap", "owner")
+		properties["bootstrap_storage_version"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 10}
+	}
+	if raw, ok := g.defs["runtime_StorageBudgetStatus"]; ok {
+		raw.(map[string]any)["properties"].(map[string]any)["measurement"] = enum("known", "unknown")
+	}
+	if raw, ok := g.defs["runtime_StorageBudgetReview"]; ok {
+		properties := raw.(map[string]any)["properties"].(map[string]any)
+		properties["storage_to_version"] = map[string]any{"const": 10}
+		properties["target_bytes"] = map[string]any{"type": "integer", "minimum": local.MinStorageBudgetBytes, "maximum": local.MaxStorageBudgetBytes}
+		properties["review_digest"] = map[string]any{"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+	}
+	name := typ.PkgPath()
+	name = name[strings.LastIndex(name, "/")+1:] + "_" + typ.Name()
+	g.defs[contract] = map[string]any{"$ref": "#/$defs/" + name}
+	root["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+	root["$id"] = "urn:prifly:" + slug + ":1"
+	root["x-prifly-contracts"] = []string{contract}
+	root["$ref"] = "#/$defs/" + contract
 	root["$defs"] = g.defs
 	return json.MarshalIndent(root, "", "  ")
 }

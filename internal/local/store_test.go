@@ -258,7 +258,7 @@ func TestStoreMigratesV1ForAuthorityControls(t *testing.T) {
 	// Rewinding the marker is not enough: a genuine v1 database also lacks the
 	// structures later versions added, and leaving them makes the fixture test
 	// a migration that never happens in the field.
-	if _, err := s.db.Exec("DROP TABLE attempt_output; DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=1"); err != nil {
+	if _, err := s.db.Exec("DROP TABLE attempt_output; DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; DROP TABLE authority_commands; DROP TABLE authority_states; DROP TABLE slots; DROP TABLE slot_waiters; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN slot_capacity; ALTER TABLE authority DROP COLUMN admission_seq; ALTER TABLE authority DROP COLUMN verified_cut; ALTER TABLE authority DROP COLUMN storage_limit_bytes; ALTER TABLE authority DROP COLUMN storage_budget_data; ALTER TABLE authority DROP COLUMN storage_budget_digest; PRAGMA user_version=1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -411,7 +411,7 @@ func TestStoreReadOnlyQueriesHaveNoMaintenanceWithActiveWriter(t *testing.T) {
 			case sqlite3.SQLITE_SELECT, sqlite3.SQLITE_FUNCTION, sqlite3.SQLITE_TRANSACTION:
 				return sqlite3.SQLITE_OK
 			case sqlite3.SQLITE_PRAGMA:
-				if b == "" && (a == "page_count" || a == "page_size" || a == "freelist_count") {
+				if b == "" && (a == "page_count" || a == "page_size" || a == "freelist_count" || a == "user_version") {
 					return sqlite3.SQLITE_OK
 				}
 			}
@@ -1663,7 +1663,7 @@ func TestStoreReadsAnUnmigratedDatabaseReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE attempt_output; DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+	if _, err := db.Exec("DROP TABLE attempt_output; DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; ALTER TABLE authority DROP COLUMN storage_limit_bytes; ALTER TABLE authority DROP COLUMN storage_budget_data; ALTER TABLE authority DROP COLUMN storage_budget_digest; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -1712,7 +1712,7 @@ func TestStoreVerifiesIncrementallyFromItsRecordedCut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE attempt_output; DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; PRAGMA user_version=4"); err != nil {
+	if _, err := db.Exec("DROP TABLE attempt_output; DROP TABLE attempt_progress; DROP TABLE slot_resources; DROP TABLE pinned_bytes; ALTER TABLE runs DROP COLUMN snapshot_packed; ALTER TABLE events DROP COLUMN state_packed; ALTER TABLE authority DROP COLUMN verified_cut; ALTER TABLE authority DROP COLUMN storage_limit_bytes; ALTER TABLE authority DROP COLUMN storage_budget_data; ALTER TABLE authority DROP COLUMN storage_budget_digest; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {

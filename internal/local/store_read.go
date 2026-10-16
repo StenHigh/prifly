@@ -470,6 +470,11 @@ func (s *Store) verifyFrom(ctx context.Context, conn *sql.Conn, from int64) erro
 	if err := storageHeader(ctx, conn); err != nil {
 		return err
 	}
+	if s.info.StorageVersion >= 10 {
+		if _, _, err := readStorageBudget(ctx, conn, s.softLimitBytes); err != nil {
+			return err
+		}
+	}
 	if from == 0 {
 		// A page-level check reads the whole file, so it belongs to the first
 		// verification of a database and to doctor, not to every open.

@@ -358,6 +358,7 @@ config-каталоге. Срез добавлен в исходники; это
 | Публичные JSON contracts | [Published contracts](openspec/specs/published-contracts/spec.md) |
 | Примеры и справочники YAML | [examples/](examples/README.md) |
 | Виден отказ или странное поведение прогона | [Указатель по симптомам](examples/troubleshooting.md) |
+| Исчерпан storage budget существующего Run | [Read-only status и reviewed повышение](examples/authoring/storage-recovery-guide.md) |
 | Сообщить о проблеме безопасности | [Security policy](SECURITY.md) |
 
 ## Как развивать спецификацию

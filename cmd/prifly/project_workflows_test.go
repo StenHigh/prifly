@@ -89,7 +89,7 @@ func newWorkflowRepositoryFixture(t *testing.T, folders ...string) string {
 	return source
 }
 
-func newProjectFixture(t *testing.T) (repository, authority string) {
+func newProjectFixture(t *testing.T, budgets ...int64) (repository, authority string) {
 	t.Helper()
 	repository = filepath.Join(t.TempDir(), "repository")
 	if err := os.MkdirAll(repository, 0755); err != nil {
@@ -97,6 +97,11 @@ func newProjectFixture(t *testing.T) (repository, authority string) {
 	}
 	gitFixture(t, repository, "init", "-q", "-b", "main")
 	authority = filepath.Join(t.TempDir(), "authority")
+	if len(budgets) > 0 {
+		if err := prifly.InitProjectWithStorageBudget(authority, budgets[0]); err != nil {
+			t.Fatal(err)
+		}
+	}
 	var out, errout bytes.Buffer
 	if code := execute(context.Background(), []string{"project", "init", "--repository", repository, "--state-root", authority, "--host", "codex-cli", "--host", "codex-app", "--host", "claude-code", "--json"}, &out, &errout); code != 0 {
 		t.Fatalf("project init %d: %s", code, errout.String())

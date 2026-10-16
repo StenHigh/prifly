@@ -18,9 +18,9 @@ func repeatLiteral(value bool) map[string]any {
 	return map[string]any{"op": "eq", "left": map[string]any{"kind": "literal", "value": value}, "right": map[string]any{"kind": "literal", "value": true}}
 }
 
-func repeatFixture(t *testing.T, mode, outcome string, iterations int64) (*Engine, map[string]any, map[string]any, StartOptions) {
+func repeatFixture(t *testing.T, mode, outcome string, iterations int64, budgets ...int64) (*Engine, map[string]any, map[string]any, StartOptions) {
 	t.Helper()
-	e, root, body, options := callFixture(t, mode, outcome, false)
+	e, root, body, options := callFixture(t, mode, outcome, false, budgets...)
 	root["id"], root["title"] = "test:workflow/repeat-parent", "Repeat parent"
 	root["limits"] = map[string]any{"max_step_instances": 256, "max_control_transitions": 1024, "max_parallelism": 1, "max_child_depth": 4}
 	call := choiceStages(root)["work"].(map[string]any)

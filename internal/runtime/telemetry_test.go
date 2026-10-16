@@ -967,21 +967,9 @@ func TestTelemetryActualCommandRequestsRejectionsAndPersistenceFailure(t *testin
 
 func TestRuntimeAdmissionStorageBudgetRefusesBeforeSlotAndAllowsStop(t *testing.T) {
 	t.Parallel()
-	e, runID := driverProject(t, "pass", 5000)
+	e, runID := driverProject(t, "pass", 5000, driverShape{StorageBudgetBytes: 2 << 20})
 	ctx := context.Background()
-	usage, err := e.Store.StorageUsage(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := e.Store.Close(); err != nil {
-		t.Fatal(err)
-	}
-	// A small logical allocation limit exercises the real quota path. No host
-	// disk is filled and no success/failure is injected into runtime admission.
-	e.Store, err = local.OpenStore(filepath.Join(e.Root, e.Config.Configuration.StateRoot), local.StoreOptions{EventTypes: EventTypes, SoftLimitBytes: max(64<<10, usage.AllocatedBytes)})
-	if err != nil {
-		t.Fatal(err)
-	}
+	saturateStorageBudget(t, e)
 	r, before, err := e.load(ctx, runID)
 	if err != nil {
 		t.Fatal(err)

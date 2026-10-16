@@ -31,14 +31,21 @@ import (
 // driverShape bends the fixture's step and workflow before they are sealed,
 // for a test that needs one declaration the modes do not make.
 type driverShape struct {
-	Engine   func(*Engine)
-	Step     func(*flow.StepDefinition)
-	Workflow func(*flow.WorkflowRevision)
+	StorageBudgetBytes int64
+	Engine             func(*Engine)
+	Step               func(*flow.StepDefinition)
+	Workflow           func(*flow.WorkflowRevision)
 }
 
 func driverProject(t testing.TB, mode string, timeoutMS int64, shapes ...driverShape) (*Engine, string) {
 	t.Helper()
-	e := artifactEngine(t)
+	var budget int64
+	for _, shape := range shapes {
+		if shape.StorageBudgetBytes != 0 {
+			budget = shape.StorageBudgetBytes
+		}
+	}
+	e := artifactEngine(t, budget)
 	defs, _, err := Builtins()
 	if err != nil {
 		t.Fatal(err)

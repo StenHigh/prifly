@@ -31,9 +31,9 @@ func noQuestions(task prifly.SessionTask) *[]prifly.AnsweredQuestion {
 	return &[]prifly.AnsweredQuestion{}
 }
 
-func singleLaunchFixture(t *testing.T) (root, authority string) {
+func singleLaunchFixture(t *testing.T, budgets ...int64) (root, authority string) {
 	t.Helper()
-	root, authority = newProjectFixture(t)
+	root, authority = newProjectFixture(t, budgets...)
 	writeFixtureFile(t, root, ".prifly/project.yaml", `schema_version: prifly-project-profile/3
 `+projectHostsYAML+`packages:
   single: {source: .prifly/workflows/single}

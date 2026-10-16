@@ -571,11 +571,21 @@ func Init(root string) error { return InitProfile(root, flow.Profile) }
 // InitProjectProfile creates the Core authority required by a tracked Project
 // profile. Project packages pin sealed context resources, so this is deliberately
 // distinct from the historical generic Core initialization contract.
-func InitProjectProfile(root string) error { return initProfile(root, flow.CoreProfile, true) }
+func InitProjectProfile(root string) error { return InitProjectWithStorageBudget(root, 0) }
+
+// InitProjectWithStorageBudget bootstraps a fresh authority with a finite ceiling.
+// Existing authority files always refuse initialization; this is never a reopen override.
+func InitProjectWithStorageBudget(root string, bytes int64) error {
+	return initProfileWithStoreOptions(root, flow.CoreProfile, true, local.StoreOptions{EventTypes: EventTypes, SoftLimitBytes: bytes})
+}
 
 func InitProfile(root, profile string) error { return initProfile(root, profile, false) }
 
 func initProfile(root, profile string, projectContext bool) error {
+	return initProfileWithStoreOptions(root, profile, projectContext, local.StoreOptions{EventTypes: EventTypes})
+}
+
+func initProfileWithStoreOptions(root, profile string, projectContext bool, options local.StoreOptions) error {
 	if profile != flow.Profile && profile != flow.CoreProfile {
 		return fault("unsupported_profile", "unknown semantics profile")
 	}
@@ -610,7 +620,7 @@ func initProfile(root, profile string, projectContext bool) error {
 			return err
 		}
 	}
-	store, err := local.OpenStore(filepath.Join(root, ".prifly/state"), local.StoreOptions{EventTypes: EventTypes})
+	store, err := local.OpenStore(filepath.Join(root, ".prifly/state"), options)
 	if err != nil {
 		return err
 	}

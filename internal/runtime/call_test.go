@@ -63,9 +63,9 @@ func callStage(ref flow.Ref, inputs map[string]any, outcome, next string) map[st
 
 // Reuse the native process fixture. Child/parent deliberately share work/done
 // IDs; the worker is the real test executable under the local process runner.
-func callFixture(t *testing.T, mode, outcome string, twice bool) (*Engine, map[string]any, map[string]any, StartOptions) {
+func callFixture(t *testing.T, mode, outcome string, twice bool, budgets ...int64) (*Engine, map[string]any, map[string]any, StartOptions) {
 	t.Helper()
-	e, workflow, options := choiceFixture(t, `{"flag":true}`, mode)
+	e, workflow, options := choiceFixture(t, `{"flag":true}`, mode, budgets...)
 	child := callClone(t, workflow)
 	child["id"], child["title"] = "test:workflow/call-child", "Call child"
 	child["allowed_outcomes"] = []string{outcome}

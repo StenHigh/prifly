@@ -29,6 +29,7 @@
 | `telemetry.catalog` | `telemetry` у шага; читает `prifly telemetry` | step |
 | `telemetry.records` | то же объявление; записи читает `telemetry` | step |
 | `telemetry.aggregate` | то же объявление; сводку считает `telemetry` | step |
+| `storage_budget_management` | CLI `storage budget show`, reviewed `set`, storage 10; YAML quota field отсутствует | [Восстановление storage](authoring/storage-recovery-guide.md) |
 | `on_error` | `on_error` у стадии | workflow |
 | `json_projection` | `pointer` и `projected_schema_ref` в binding | workflow |
 | `input_configuration` | `configuration` у входного порта | step |

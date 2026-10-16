@@ -122,7 +122,7 @@ func insertSamples(ctx context.Context, conn *sql.Conn, softLimitBytes, cut int6
 	if err != nil {
 		return 0, err
 	}
-	if usage.AllocatedBytes >= softLimitBytes {
+	if usage.AllocatedBytes >= usage.SoftLimitBytes {
 		return 0, ErrSampleLimit
 	}
 	insert, err := conn.PrepareContext(ctx, "INSERT INTO samples(id,run_id,cut,data,digest) VALUES(?,?,?,?,?)")
@@ -139,7 +139,7 @@ func insertSamples(ctx context.Context, conn *sql.Conn, softLimitBytes, cut int6
 	if err != nil {
 		return 0, err
 	}
-	if usage.AllocatedBytes > softLimitBytes {
+	if usage.AllocatedBytes > usage.SoftLimitBytes {
 		return 0, ErrSampleLimit
 	}
 	return len(newSamples), nil

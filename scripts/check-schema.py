@@ -33,6 +33,10 @@ def main():
 
 def check(args, generator):
     for profile, options, paths in (
+        ("storage-budget-status", ["--storage-budget-status"], ("internal/runtime/storage-budget-status.schema.json", "schemas/core/storage-budget-status.schema.json")),
+        ("storage-budget-review", ["--storage-budget-review"], ("internal/runtime/storage-budget-review.schema.json", "schemas/core/storage-budget-review.schema.json")),
+        ("storage-budget-result", ["--storage-budget-result"], ("internal/runtime/storage-budget-result.schema.json", "schemas/core/storage-budget-result.schema.json")),
+        ("authority-storage-budget", ["--authority-storage-budget"], ("internal/runtime/authority-storage-budget.schema.json", "schemas/core/authority-storage-budget.schema.json")),
         ("claim-ownership", ["--claim-ownership"], ("internal/runtime/claim-ownership.schema.json", "schemas/core/claim-ownership.schema.json")),
         ("foundation", [], ("internal/runtime/public.schema.json", "schemas/foundation/public.schema.json")),
         ("core", ["--core"], ("internal/runtime/core-public.schema.json", "schemas/core/public.schema.json")),

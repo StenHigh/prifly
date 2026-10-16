@@ -35,7 +35,7 @@ type ProfileCapabilities struct {
 }
 
 func Capabilities() CapabilityManifest {
-	base := []string{"step", "finish", "local_process", "state_hook", "event_hook", "telemetry.catalog", "telemetry.records", "telemetry.aggregate"}
+	base := []string{"step", "finish", "local_process", "state_hook", "event_hook", "telemetry.catalog", "telemetry.records", "telemetry.aggregate", "storage_budget_management"}
 	core := append(append([]string{}, base...), "on_error", "json_projection", "input_configuration", "choice", "call", "repeat", "partial", "local_workflow_aliases", "context_resources", "full_context", "source_import", "context_request", "automatic_checks", "assisted_session", "quality_waivers", "parallel", "map", "wait", "schedule", "live_guards", "reported_cost", "artifact_publication", "artifact_publication_checks", "artifact_close", "publication_subscription_once", "publication_subscription_each", "publication_subscription_new_only", "publication_subscription_terminal_failure", "publication_subscription_blob", "action_intent_proposal", "action_admission", "action_grant_admission", "action_delivery_prepared", "run_fork", "workspace_modes", "workspace_tree_artifacts", "decision_catalog")
 	manifest := CapabilityManifest{
 		SchemaVersion: "capabilities/2", CoreBuild: Version, ProtocolVersions: []string{"1"}, StorageVersion: local.StorageVersion, EventVersion: local.EventVersion,

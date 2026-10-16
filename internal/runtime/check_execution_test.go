@@ -22,9 +22,9 @@ import (
 // The component fixture creates a NEW context-state Run with real compiler,
 // configuration/resource snapshots and a complete lock. It does not rewrite
 // an older Run or enable the still separately guarded Start/acceptance gate.
-func checkExecutionFixture(t *testing.T, mode string, timeoutMS int64) (*Engine, string) {
+func checkExecutionFixture(t *testing.T, mode string, timeoutMS int64, budgets ...int64) (*Engine, string) {
 	t.Helper()
-	e := contextRegistryRuntime(t)
+	e := contextRegistryRuntime(t, budgets...)
 	definitions, _, err := Builtins()
 	if err != nil {
 		t.Fatal(err)
@@ -344,7 +344,7 @@ func TestCheckExecutionRejectsSelfConsistentForeignRendering(t *testing.T) {
 	t.Parallel()
 	for _, changed := range []string{"request", "digest", "envelope"} {
 		t.Run(changed, func(t *testing.T) {
-			e, runID := checkExecutionFixture(t, "pass", 10000)
+			e, runID := checkExecutionFixture(t, "pass", 10000, 2<<20)
 			prepared := prepareCheckExecution(t, e, runID)
 			r, before, err := e.load(context.Background(), runID)
 			if err != nil {
@@ -506,7 +506,7 @@ func TestCheckExecutionQuotaProtectsAdmissionButNotSettlement(t *testing.T) {
 	t.Parallel()
 	for _, boundary := range []string{"admission", "settlement"} {
 		t.Run(boundary, func(t *testing.T) {
-			e, runID := checkExecutionFixture(t, "pass", 10000)
+			e, runID := checkExecutionFixture(t, "pass", 10000, 2<<20)
 			prepared := prepareCheckExecution(t, e, runID)
 			var check *CheckExecution
 			if boundary == "settlement" {
@@ -516,17 +516,7 @@ func TestCheckExecutionQuotaProtectsAdmissionButNotSettlement(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			usage, err := e.Store.StorageUsage(context.Background())
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := e.Store.Close(); err != nil {
-				t.Fatal(err)
-			}
-			e.Store, err = local.OpenStore(filepath.Join(e.Root, e.Config.Configuration.StateRoot), local.StoreOptions{EventTypes: EventTypes, SoftLimitBytes: max(64<<10, usage.AllocatedBytes)})
-			if err != nil {
-				t.Fatal(err)
-			}
+			saturateStorageBudget(t, e)
 			if boundary == "admission" {
 				_, err = e.admitCheck(context.Background(), before, view, newID("command"), prepared)
 				if driverFailureCode(err, "") != "storage_budget_exhausted" {

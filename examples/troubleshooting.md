@@ -1383,3 +1383,16 @@ prifly --project AUTHORITY claim release --id CLAIM --generation N --json
 Отказ cleanup может оставить `releasing`: повторный штатный release продолжит
 очистку, а новая admission уже запрещена. Для operational recovery используйте
 точно проверенный исправленный binary; локальные fixtures не являются выпуском.
+
+### Run остановился с `storage_budget_exhausted`
+
+Откройте [`storage budget show` и reviewed recovery](authoring/storage-recovery-guide.md).
+Отказ сохраняет observed `allocated_bytes` / `limit_bytes` и exit 5. Owner может
+явно повысить конечный ceiling через read-only `set --prepare`, затем применить
+тот же target/reason с `--expected-review-digest` и `--command`. После этого
+отдельный `run drive RUN_ID` продолжает прежний Run; set ничего не dispatch-ит.
+
+`authority_scan_budget_exhausted` относится к bounded aggregate read, а
+`doctor --claim ID` — к ownership. Per-snapshot cap, физический disk-full и
+`unsupported_storage_version` — другие причины: повышение logical-page budget
+их не устраняет. `doctor --storage` и `doctor --claim ID` нельзя объединять.
