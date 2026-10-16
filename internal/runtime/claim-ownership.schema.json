@@ -1,0 +1,154 @@
+{
+  "$defs": {
+    "ClaimOwnershipDiagnostics": {
+      "$ref": "#/$defs/runtime_ClaimOwnershipDiagnostics"
+    },
+    "local_StorageUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "allocated_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "free_pages": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "page_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "page_size": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "soft_limit_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "allocated_bytes",
+        "free_pages",
+        "page_count",
+        "page_size",
+        "soft_limit_bytes"
+      ],
+      "type": "object"
+    },
+    "runtime_ClaimOwnershipDiagnostics": {
+      "additionalProperties": false,
+      "properties": {
+        "assessment": {
+          "type": "string"
+        },
+        "authority_id": {
+          "type": "string"
+        },
+        "claim_id": {
+          "type": "string"
+        },
+        "generation": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "holder_run_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "scan": {
+          "$ref": "#/$defs/runtime_ClaimOwnershipScan"
+        },
+        "schema_version": {
+          "const": "claim-ownership-diagnostics/1"
+        },
+        "status": {
+          "type": "string"
+        },
+        "storage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/local_StorageUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "assessment",
+        "authority_id",
+        "claim_id",
+        "generation",
+        "holder_run_id",
+        "reason",
+        "run_id",
+        "scan",
+        "schema_version",
+        "status",
+        "storage"
+      ],
+      "type": "object"
+    },
+    "runtime_ClaimOwnershipScan": {
+      "additionalProperties": false,
+      "properties": {
+        "bounded_read_byte_limit": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "bounded_read_record_limit": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "records": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "restored_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bounded_read_byte_limit",
+        "bounded_read_record_limit",
+        "complete",
+        "cut",
+        "records",
+        "restored_bytes"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:prifly:claim-ownership-diagnostics:1",
+  "$ref": "#/$defs/runtime_ClaimOwnershipDiagnostics",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-prifly-contracts": [
+    "ClaimOwnershipDiagnostics"
+  ]
+}

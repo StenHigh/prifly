@@ -173,12 +173,31 @@ func scanValue(data []byte, i int) (int, error) {
 // missing is an integrity failure: the document cannot be reproduced, and a
 // partially restored state is not evidence of anything.
 func unpackPinnedBytes(ctx context.Context, conn *sql.Conn, data json.RawMessage) (json.RawMessage, error) {
+	return unpackPinnedBytesBounded(ctx, conn, data, 0)
+}
+
+func unpackPinnedBytesBounded(ctx context.Context, conn *sql.Conn, data json.RawMessage, limit int) (json.RawMessage, error) {
+	if limit > 0 && len(data) > limit {
+		return nil, ErrIntegrity
+	}
 	marker := []byte(`{"$pinned":"`)
 	if !bytes.Contains(data, marker) {
 		return data, nil
 	}
-	restored := make([]byte, 0, len(data)*2)
+	capacity := len(data) * 2
+	if limit > 0 && capacity > limit {
+		capacity = limit
+	}
+	restored := make([]byte, 0, capacity)
 	for i := 0; i < len(data); {
+		if limit > 0 && len(restored) >= limit {
+			return nil, ErrIntegrity
+		}
+		if i&65535 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if !bytes.HasPrefix(data[i:], marker) {
 			restored = append(restored, data[i])
 			i++
@@ -191,18 +210,26 @@ func unpackPinnedBytes(ctx context.Context, conn *sql.Conn, data json.RawMessage
 		}
 		digest := string(rest[:end])
 		var content []byte
-		err := conn.QueryRowContext(ctx, "SELECT bytes FROM pinned_bytes WHERE digest=?", digest).Scan(&content)
+		query, args := "SELECT bytes FROM pinned_bytes WHERE digest=?", []any{digest}
+		if limit > 0 {
+			query = "SELECT CASE WHEN length(bytes)<=? THEN bytes ELSE NULL END FROM pinned_bytes WHERE digest=?"
+			args = []any{limit - len(restored), digest}
+		}
+		err := conn.QueryRowContext(ctx, query, args...).Scan(&content)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: pinned bytes %s are missing", ErrIntegrity, digest)
 		}
 		if err != nil {
 			return nil, err
 		}
-		if digestBytes(content) != digest {
+		if len(content) == 0 || digestBytes(content) != digest {
 			return nil, ErrIntegrity
 		}
 		restored = append(restored, content...)
 		i += len(marker) + end + 2
+	}
+	if limit > 0 && len(restored) > limit {
+		return nil, ErrIntegrity
 	}
 	return restored, nil
 }

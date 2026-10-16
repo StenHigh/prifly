@@ -1339,3 +1339,47 @@ digest пакета тот же, запечатанный документ то�
 отвечает `disclosed: false` и ничего не показывает — так и задумано: раскрыть
 вывод решает автор программы, и решение видно в `--prepare`
 (`execution[].live_output`).
+
+### Ownership scan большого authority и оставшийся claim после неудачного start
+
+`authority_scan_budget_exhausted` означает предел ограниченного чтения: более
+1000 записей либо 64 МиБ **восстановленных** снимков. Это не размер DB/WAL и не
+`storage_budget_exhausted`. Проверки unbound claim читают все снимки потоком в
+одной read transaction; они не увеличивают этот предел для остальных читателей.
+Ошибка чтения, неизвестный контракт или незавершённый holder запрещают reuse и
+release. `claim_ownership_conflict` означает изменение authority после проверки;
+нужно заново проверить состояние и подготовить операцию с новым command ID.
+
+```sh
+prifly --project AUTHORITY doctor --claim CLAIM --json
+prifly --project AUTHORITY claim list --json
+```
+
+`claim-ownership-diagnostics/1` показывает claim, generation, status и RunID
+(пустой у unbound claim), `assessment`, `reason`, `scan.cut`, `scan.complete`,
+число проверенных записей и restored bytes. При остановке сканирования это
+наблюдённый префикс, не полный размер authority; exit ненулевой. `blocked`
+называет holder в `holder_run_id`, `unknown` не доказывает отсутствие владельца. Диагностика не
+выводит снимки, payload, context или secrets. При изменении ledger во время диагностики `reason: claims_changed`
+сохраняет `unknown` и возвращает conflict. Старый `doctor` сохраняет форму.
+
+`storage.allocated_bytes` и `storage.soft_limit_bytes` — отдельно прочитанные
+логические страницы SQLite и их лимит. Они не описывают физический WAL или
+свободное место; этот change не устраняет #7 и не удаляет историю.
+
+После ошибки Project start читайте исходный код отказа и сообщение cleanup в
+одном Problem/1. `released claim … generation …` подтверждает освобождение;
+`remaining claim … observed status …` сообщает фактическую запись, а `unknown`
+требует reconciliation. Если Run уже создан, сохраняются его claim и package.
+Существующий либо переданный claim автоматически не освобождается. Не повторяйте
+start вслепую и не удаляйте worktree вручную. После проверки владельцем допустим
+штатный release **наблюдённого** поколения:
+
+```sh
+prifly --project AUTHORITY claim release --id CLAIM --generation N --json
+```
+
+Проверка владения и durable release fence повторно защищают эту операцию.
+Отказ cleanup может оставить `releasing`: повторный штатный release продолжит
+очистку, а новая admission уже запрещена. Для operational recovery используйте
+точно проверенный исправленный binary; локальные fixtures не являются выпуском.

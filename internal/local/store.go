@@ -114,6 +114,8 @@ type AuthoritySnapshot struct {
 }
 
 type AuthorityCommand struct {
+	// ExpectedCut is a runtime proof guard, excluded from command identity.
+	ExpectedCut     *int64
 	ID              string
 	Actor           string
 	Key             string
@@ -169,6 +171,8 @@ type AuthorityApplyResult struct {
 // Guarded is internal: runtime validates the owning Attempt or exact control
 // epoch in the transform; a caller must never select this mode through the wire.
 type Command struct {
+	// ExpectedCut fences a complete population read before this transaction.
+	ExpectedCut     *int64
 	ID              string
 	Actor           string
 	RunID           string
@@ -1016,6 +1020,12 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 	}
 	var change Change
 	if rejection == nil {
+		rejection, err = s.checkExpectedCut(ctx, conn, cmd.ExpectedCut)
+		if err != nil {
+			return out, err
+		}
+	}
+	if rejection == nil {
 		if transform == nil {
 			return out, errors.New("command transform is required")
 		}
@@ -1531,6 +1541,12 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 		}
 	}
 	var change AuthorityChange
+	if rejection == nil {
+		rejection, err = s.checkExpectedCut(ctx, conn, cmd.ExpectedCut)
+		if err != nil {
+			return out, err
+		}
+	}
 	if rejection == nil {
 		if transform == nil {
 			return out, errors.New("authority transform is required")

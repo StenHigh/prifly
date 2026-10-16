@@ -98,6 +98,13 @@ func execute(ctx context.Context, args []string, out, errout io.Writer) int {
 	return exit
 }
 func makeProblem(err error) (prifly.Problem, int) {
+	var cleanup *projectCleanupError
+	if errors.As(err, &cleanup) {
+		p, exit := makeProblem(cleanup.Cause)
+		p.Message += "; " + cleanup.Detail
+		p.SafeNextActions = cleanup.Actions
+		return p, exit
+	}
 	var input usageError
 	if errors.As(err, &input) {
 		return prifly.ProblemFor(&flow.Problem{Code: "invalid_usage", Message: string(input)})
@@ -611,8 +618,15 @@ func (c *cli) run(ctx context.Context, args []string) error {
 	defer e.Close()
 	switch args[0] {
 	case "doctor":
+		if len(args) == 3 && args[1] == "--claim" && args[2] != "" {
+			view, diagnosisErr := e.DiagnoseClaim(ctx, args[2])
+			if err := c.emit(view); err != nil {
+				return err
+			}
+			return diagnosisErr
+		}
 		if len(args) != 1 {
-			return usageError("doctor takes no arguments")
+			return usageError("doctor [--claim ID]")
 		}
 		result, err := e.Check(ctx)
 		if err != nil {
@@ -2706,7 +2720,7 @@ Global: --project DIR  --json  --format text|json|csv
    wait; 5 in particular is a refusal, not a handoff
    That code is greppable: examples/troubleshooting.md of the Pri-Fly repository indexes the ones
      teams actually hit by symptom, and names the field or flag that answers each
-  version | doctor | inventory     Versions, integrity, exact local definitions
+  version | doctor [--claim ID] | inventory     Versions, integrity, claim ownership, definitions
   ref FILE --id ID --version X.Y.Z [--raw-text]
                                    Canonical JSON/YAML; --raw-text hashes exact UTF-8 resource bytes
   schema [NAME] [--def DEFINITION]

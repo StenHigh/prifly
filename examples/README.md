@@ -517,3 +517,7 @@ python3 -B scripts/verify-choice-upgrade.py \
 ```
 
 Старый бинарник создаёт завершённый и paused Call со state2, настоящим worker и JSON projection. Проверяются прежние invocation trees, полные event prefixes, owner receipts, artifact/provenance bytes и telemetry на сохранённом cut; paused Call продолжается новой сборкой. До первого repeat event старый reader отказывает выбранному state3 Run, но читает соседний state2 Call. На границе `stage.repeat_entered`, ещё до первого RepeatDecision, проверяется отказ всей authority без изменения state/cut. Для наблюдения этой границы собственный cooperative worker ограниченно ждёт release-файл в своём workspace; тест не меняет SQLite и не создаёт поддельных events. После release две итерации выполняются ровно один раз. Это не разрешение на concurrent mixed-version writers или безопасный downgrade.
+
+Диагностика большого authority и `doctor --claim ID`: см.
+[ownership scan и failed-start cleanup](troubleshooting.md#ownership-scan-большого-authority-и-оставшийся-claim-после-неудачного-start).
+Это CLI-диагностика; нового YAML-поля или capability движка здесь нет.

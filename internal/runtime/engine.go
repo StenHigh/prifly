@@ -130,6 +130,10 @@ func (e *Engine) applyControlledWithSourcePin(ctx context.Context, control *loca
 }
 
 func (e *Engine) applyWithAuthorityGuards(ctx context.Context, control *local.ControlPin, pins []local.ControlPin, source *local.RunPin, controlMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error), authorityGuards []local.AuthorityGuard, actor, id, runID, eventType string, payload any, expected *int64, mode local.CommandMode, fn mutation) (local.ApplyResult, error) {
+	return e.applyWithReadCut(ctx, nil, control, pins, source, controlMutation, authorityGuards, actor, id, runID, eventType, payload, expected, mode, fn)
+}
+
+func (e *Engine) applyWithReadCut(ctx context.Context, expectedCut *int64, control *local.ControlPin, pins []local.ControlPin, source *local.RunPin, controlMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error), authorityGuards []local.AuthorityGuard, actor, id, runID, eventType string, payload any, expected *int64, mode local.CommandMode, fn mutation) (local.ApplyResult, error) {
 	if e.ReadOnly {
 		return local.ApplyResult{}, local.ErrReadOnly
 	}
@@ -142,7 +146,7 @@ func (e *Engine) applyWithAuthorityGuards(ctx context.Context, control *local.Co
 	}
 	started := time.Now()
 	var observed Observation
-	command := local.Command{ID: id, Actor: actor, RunID: runID, Payload: commandBytes, ExpectedVersion: expected, Mode: mode, Control: control, Pins: pins, SourceRun: source, AuthorityGuards: authorityGuards, Samples: e.commandTelemetry(id, runID, started)}
+	command := local.Command{ID: id, Actor: actor, RunID: runID, Payload: commandBytes, ExpectedVersion: expected, Mode: mode, Control: control, Pins: pins, SourceRun: source, ExpectedCut: expectedCut, AuthorityGuards: authorityGuards, Samples: e.commandTelemetry(id, runID, started)}
 	if controlMutation != nil {
 		command.ControlMutation = func(snapshot local.AuthoritySnapshot) (json.RawMessage, error) {
 			return controlMutation(snapshot, observed)

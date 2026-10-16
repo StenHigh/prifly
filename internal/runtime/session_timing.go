@@ -289,6 +289,7 @@ func (e *Engine) resumeTimedSession(ctx context.Context, loaded Run, view local.
 		pins = append(pins, *packagePin)
 	}
 	var claimMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error)
+	var ownershipCut *int64
 	if attempt.Session.ClaimID != "" {
 		binding, err := e.prepareClaimRunBinding(ctx, loaded.ID, attempt.Session.ClaimID, attempt.Session.ClaimGeneration)
 		if err != nil {
@@ -298,11 +299,12 @@ func (e *Engine) resumeTimedSession(ctx context.Context, loaded Run, view local.
 			pins = append(pins, *pin)
 		}
 		pin, claimMutation = &binding.Pin, binding.mutate
+		ownershipCut = binding.ReadCut
 	}
 	// Like ordinary admission, another drive rechecks changing capacity. Reusing
 	// a rejected receipt would pin yesterday's busy slot forever.
 	id := newID("command")
-	_, err = e.applyControlledWithControlMutation(ctx, pin, pins, claimMutation, e.owner, id, loaded.ID, "attempt.observed", map[string]any{"attempt_id": attempt.ID, "session_transition": "resumed"}, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, obs Observation) (local.Change, error) {
+	_, err = e.applyWithReadCut(ctx, ownershipCut, pin, pins, nil, claimMutation, nil, e.owner, id, loaded.ID, "attempt.observed", map[string]any{"attempt_id": attempt.ID, "session_transition": "resumed"}, &view.Snapshot.Version, local.CommandCAS, func(r *Run, _ local.Snapshot, obs Observation) (local.Change, error) {
 		if blocked != nil {
 			return local.Change{}, blocked
 		}

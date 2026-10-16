@@ -17,6 +17,7 @@ import (
 type claimRunBinding struct {
 	Claim       WorktreeClaim
 	Pin         local.ControlPin
+	ReadCut     *int64
 	runID       string
 	actor       string
 	authorityID string
@@ -88,15 +89,18 @@ func (e *Engine) prepareClaimRunBinding(ctx context.Context, runID, claimID stri
 	if err := claimAdmissibleForRun(*selected, runID, e.owner, e.clock.now()); err != nil {
 		return nil, err
 	}
+	var proofCut *int64
 	if selected.RunID == "" {
-		if err := e.checkLegacyClaimHolders(ctx, selected.ID, false); err != nil {
+		scan, err := e.scanClaimHolders(ctx, selected.ID, false)
+		if err != nil {
 			return nil, err
 		}
+		proofCut = &scan.Cut
 	}
 	if err := e.checkClaimDirectory(*selected); err != nil {
 		return nil, err
 	}
-	return &claimRunBinding{Claim: *selected, Pin: local.ControlPin{Key: AuthorityClaimsKey, Version: version}, runID: runID, actor: e.owner, authorityID: e.Installation.ID}, nil
+	return &claimRunBinding{Claim: *selected, Pin: local.ControlPin{Key: AuthorityClaimsKey, Version: version}, ReadCut: proofCut, runID: runID, actor: e.owner, authorityID: e.Installation.ID}, nil
 }
 
 func (e *Engine) checkClaimDirectory(claim WorktreeClaim) error {
@@ -228,26 +232,21 @@ func (binding *claimRunBinding) mutate(snapshot local.AuthoritySnapshot, observe
 	return nil, fault("claim_missing", "the selected claim no longer exists")
 }
 
-// Only unbound legacy claims need this bounded scan. Every new admission also
-// changes/pins the claims record, so a competing modern admission invalidates
-// the scan's prepared pin rather than silently creating another holder.
-func (e *Engine) checkLegacyClaimHolders(ctx context.Context, claimID string, releasing bool) error {
-	snapshots, _, err := e.Store.ReadAll(ctx, maxPinScanRuns)
-	if err != nil {
-		return err
-	}
-	for _, snapshot := range snapshots {
-		var run Run
-		if err := decodeState(snapshot.Data, &run); err != nil || !supportedRun(run) {
+// Unbound claims require a full ownership proof, including legacy holders that
+// predate the coupled claims ledger. The cut is checked at the committing fence.
+func (e *Engine) scanClaimHolders(ctx context.Context, claimID string, releasing bool) (local.SnapshotScan, error) {
+	return e.Store.ScanSnapshots(ctx, func(snapshot local.Snapshot) error {
+		run, err := e.decodeSnapshot(snapshot)
+		if err != nil || run.ID != snapshot.RunID {
 			return fault("claim_owner_unproven", "a saved Run cannot be checked for legacy workspace ownership")
 		}
 		for _, attempt := range run.Attempts {
 			if attempt != nil && attempt.Session != nil && attempt.Session.ClaimID == claimID && (!releasing || !claimRunFinished(run)) {
-				return fault("claim_owner_unproven", "an unbound legacy claim was already handed to a Run; resolve ownership before reuse")
+				return &claimHolderError{RunID: run.ID}
 			}
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func claimRunFinished(run Run) bool {
@@ -266,7 +265,7 @@ func runFinishedItsWork(run Run) bool {
 // releaseSettledClaim frees a repository still held by a Run that is over. That
 // holder was never the operator's mistake, so the two commands the refusal used
 // to demand before every launch happen here instead, on exactly the predicate
-// claimReleaseAllowed already uses: bound to a Run that is terminal with nothing
+// prepareClaimRelease already uses: bound to a Run that is terminal with nothing
 // outstanding. Exclusivity is not traded for convenience -- an unfinished Run
 // still refuses, and a claim no Run is bound to is left alone because nothing
 // proves its owner stopped. The claiming transaction re-checks the conflict
@@ -295,16 +294,20 @@ func (e *Engine) releaseSettledClaim(ctx context.Context, commonDir string) erro
 	return nil
 }
 
-func (e *Engine) claimReleaseAllowed(ctx context.Context, claim WorktreeClaim) error {
+func (e *Engine) prepareClaimRelease(ctx context.Context, claim WorktreeClaim) (*int64, error) {
 	if claim.RunID == "" {
-		return e.checkLegacyClaimHolders(ctx, claim.ID, true)
+		scan, err := e.scanClaimHolders(ctx, claim.ID, true)
+		if err != nil {
+			return nil, err
+		}
+		return &scan.Cut, nil
 	}
 	run, _, err := e.load(ctx, claim.RunID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !claimRunFinished(run) {
-		return fault("claim_run_active", "the bound Run is unfinished or uncertain; finish it with run drive or end it with run cancel, then release its workspace; the lease is not read here")
+		return nil, fault("claim_run_active", "the bound Run is unfinished or uncertain; finish it with run drive or end it with run cancel, then release its workspace; the lease is not read here")
 	}
-	return nil
+	return nil, nil
 }

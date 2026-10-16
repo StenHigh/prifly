@@ -374,6 +374,7 @@ var documentContracts = []struct {
 	flag, description string
 	build             func() ([]byte, error)
 }{
+	{"claim-ownership", "generate claim ownership diagnostics", claimOwnershipSchema},
 	{"project-task-queue", "generate local task queue ledger", func() ([]byte, error) { return flow.ProtocolSchema("ProjectTaskQueue") }},
 	{"project-task-queue-read", "generate task queue read", func() ([]byte, error) { return flow.ProtocolSchema("ProjectTaskQueueRead") }},
 	{"project-queue-task", "generate one queue task read", func() ([]byte, error) { return flow.ProtocolSchema("ProjectQueueTaskRead") }},
@@ -1491,4 +1492,16 @@ func choiceSchema() map[string]any {
 	}
 	g.defs["runtime_ChoiceDecision"].(map[string]any)["oneOf"] = variants
 	return map[string]any{"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "urn:prifly:choice-decision:1", "title": "Pri-Fly choice decision", "description": "Core decision event payload with ordered branch trace and exact input references. Route/activation ownership and atomic commit are enforced by the runtime.", "x-prifly-contracts": []string{"ChoiceDecision"}, "$ref": "#/$defs/ChoiceDecision", "$defs": g.defs}
+}
+
+func claimOwnershipSchema() ([]byte, error) {
+	g := generator{defs: map[string]any{}}
+	root := g.schema(reflect.TypeFor[prifly.ClaimOwnershipDiagnostics]())
+	g.defs["runtime_ClaimOwnershipDiagnostics"].(map[string]any)["properties"].(map[string]any)["schema_version"] = map[string]any{"const": "claim-ownership-diagnostics/1"}
+	root["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+	root["$id"] = "urn:prifly:claim-ownership-diagnostics:1"
+	g.defs["ClaimOwnershipDiagnostics"] = map[string]any{"$ref": "#/$defs/runtime_ClaimOwnershipDiagnostics"}
+	root["x-prifly-contracts"] = []string{"ClaimOwnershipDiagnostics"}
+	root["$defs"] = g.defs
+	return json.MarshalIndent(root, "", "  ")
 }

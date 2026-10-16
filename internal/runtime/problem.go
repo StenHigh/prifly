@@ -155,6 +155,10 @@ func refusalDetail(err error) string {
 // ProblemFor does not expose raw parser input, executable argv, environment,
 // worker stderr or arbitrary nested errors. A retry never authorizes a new effect.
 func ProblemFor(err error) (Problem, int) {
+	var scan *local.ScanLimitError
+	if errors.As(err, &scan) {
+		err = wrapFault("authority_scan_budget_exhausted", scan.Error(), err)
+	}
 	p := Problem{"1", "invalid_input", "The command could not be applied. Check its arguments and selected files.", false, newID("correlation"), []Violation{}, []string{"doctor", "run.status"}}
 	exit := 2
 	// A caller with no error has nothing to describe. Reading the code out of a
@@ -313,8 +317,10 @@ func ProblemFor(err error) (Problem, int) {
 		"execution_environment_unavailable": {"project.local.set", "run.status"},
 		// A Run that cannot be reopened still has an answer that names what it
 		// can do, and reading the Run says why it ended.
-		"not_a_broken_run":     {"run.next", "run.status"},
-		"stage_not_reopenable": {"run.next", "run.status"},
+		"authority_scan_budget_exhausted": {"doctor", "claim.list"},
+		"claim_ownership_conflict":        {"claim.list", "doctor"},
+		"not_a_broken_run":                {"run.next", "run.status"},
+		"stage_not_reopenable":            {"run.next", "run.status"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
 	} else if strings.HasPrefix(p.Code, "project_") || p.Code == "unsafe_path" {

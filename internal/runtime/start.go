@@ -1269,7 +1269,11 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		startPayload = map[string]any{"start": startPayload, "queue_task": options.QueueTask}
 		queueGuards = []local.AuthorityGuard{e.queueAdmissionGuard(*options.QueueTask, runID)}
 	}
-	return e.applyWithAuthorityGuards(ctx, pin, pins, sourcePin, controlMutation, queueGuards, e.owner, options.CommandID, runID, "run.created", startPayload, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	var ownershipCut *int64
+	if claimBinding != nil {
+		ownershipCut = claimBinding.ReadCut
+	}
+	return e.applyWithReadCut(ctx, ownershipCut, pin, pins, sourcePin, controlMutation, queueGuards, e.owner, options.CommandID, runID, "run.created", startPayload, &zero, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if blocked != nil {
 			return local.Change{}, blocked
 		}

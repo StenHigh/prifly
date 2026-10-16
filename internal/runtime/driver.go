@@ -672,13 +672,15 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		pins = append(pins, *packagePin)
 	}
 	var claimMutation func(local.AuthoritySnapshot, Observation) (json.RawMessage, error)
+	var ownershipCut *int64
 	if claimBinding != nil {
 		if pin != nil {
 			pins = append(pins, *pin)
 		}
 		pin, claimMutation = &claimBinding.Pin, claimBinding.mutate
+		ownershipCut = claimBinding.ReadCut
 	}
-	_, err = e.applyControlledWithControlMutation(ctx, pin, pins, claimMutation, e.owner, commandID, r.ID, "attempt.admitted", map[string]any{"attempt_id": attemptID, "envelope_digest": rawDigest(envelopeBytes), "reservation_id": reservationID}, &v.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	_, err = e.applyWithReadCut(ctx, ownershipCut, pin, pins, nil, claimMutation, nil, e.owner, commandID, r.ID, "attempt.admitted", map[string]any{"attempt_id": attemptID, "envelope_digest": rawDigest(envelopeBytes), "reservation_id": reservationID}, &v.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if blocked != nil {
 			return local.Change{}, blocked
 		}

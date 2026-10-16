@@ -33,6 +33,7 @@ def main():
 
 def check(args, generator):
     for profile, options, paths in (
+        ("claim-ownership", ["--claim-ownership"], ("internal/runtime/claim-ownership.schema.json", "schemas/core/claim-ownership.schema.json")),
         ("foundation", [], ("internal/runtime/public.schema.json", "schemas/foundation/public.schema.json")),
         ("core", ["--core"], ("internal/runtime/core-public.schema.json", "schemas/core/public.schema.json")),
         ("choice", ["--choice"], ("internal/runtime/choice-decision.schema.json", "schemas/core/choice-decision.schema.json")),

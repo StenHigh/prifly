@@ -217,8 +217,12 @@ ORDER BY e.run_id LIMIT ?`, []any{cut, cut, limit + 1}
 			return nil, 0, ErrIntegrity
 		}
 		bytes += len(st.Data)
-		if len(result) == limit || bytes > 64<<20 {
-			return nil, 0, errors.New("authority population exceeds the bounded F1 scan (1000 records or 64 MiB)")
+		if len(result) == limit || int64(bytes) > MaxScanBytes {
+			reason := "bytes"
+			if len(result) == limit {
+				reason = "count"
+			}
+			return nil, 0, &ScanLimitError{Reason: reason, Records: int64(len(result) + 1), RestoredBytes: int64(bytes), RecordLimit: int64(limit), ByteLimit: MaxScanBytes}
 		}
 		result = append(result, st)
 	}

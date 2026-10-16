@@ -299,15 +299,25 @@ func (e *Engine) ClaimWorktrees(ctx context.Context, commandID string, requests 
 // an interrupted preparation leaves an owned record to clean up rather than an
 // unattributable directory.
 func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (WorktreeClaim, error) {
+	claim, _, err := e.ClaimWorktreeWithOutcome(ctx, request)
+	if err != nil {
+		return WorktreeClaim{}, err
+	}
+	return claim, nil
+}
+
+// ClaimWorktreeWithOutcome reports creation from the atomic receipt, rather
+// than a pre-command list that can race an idempotent concurrent caller.
+func (e *Engine) ClaimWorktreeWithOutcome(ctx context.Context, request ClaimRequest) (WorktreeClaim, bool, error) {
 	if e.ReadOnly {
-		return WorktreeClaim{}, local.ErrReadOnly
+		return WorktreeClaim{}, false, local.ErrReadOnly
 	}
 	if request.CommandID == "" || request.Repository == "" || request.OwnerID == "" {
-		return WorktreeClaim{}, errors.New("explicit command, repository and owner required")
+		return WorktreeClaim{}, false, errors.New("explicit command, repository and owner required")
 	}
 	identity, err := e.repositoryIdentity(ctx, request.Repository)
 	if err != nil {
-		return WorktreeClaim{}, err
+		return WorktreeClaim{}, false, err
 	}
 	base := request.BaseRef
 	if base == "" {
@@ -315,38 +325,38 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 	}
 	commit, err := e.resolveCommit(ctx, identity.Toplevel, base)
 	if err != nil {
-		return WorktreeClaim{}, err
+		return WorktreeClaim{}, false, err
 	}
 	mode := request.WorkspaceMode
 	if mode == "" {
 		mode = "worktree"
 	}
 	if mode != "worktree" && mode != "checkout" {
-		return WorktreeClaim{}, errors.New("workspace mode must be worktree or checkout")
+		return WorktreeClaim{}, false, errors.New("workspace mode must be worktree or checkout")
 	}
 	var checkoutDevice, checkoutInode uint64
 	if mode == "checkout" {
 		checkoutDevice, checkoutInode, err = e.checkCleanCheckout(ctx, identity)
 		if err != nil {
-			return WorktreeClaim{}, err
+			return WorktreeClaim{}, false, err
 		}
 	}
 	control, _, err := e.ensureControl(ctx)
 	if err != nil {
-		return WorktreeClaim{}, err
+		return WorktreeClaim{}, false, err
 	}
 	if !control.allows(e.owner, "project", e.Config.ID, ControlOperationAdmit) {
-		return WorktreeClaim{}, local.Reject("object_access_denied", "the session principal cannot claim work resources for this project")
+		return WorktreeClaim{}, false, local.Reject("object_access_denied", "the session principal cannot claim work resources for this project")
 	}
 	if stop := control.blockingStop(e.Installation.ID, e.Config.ID); stop != nil {
-		return WorktreeClaim{}, local.Reject("control_stop_active", "an active "+stop.Scope+" stop forbids new claims")
+		return WorktreeClaim{}, false, local.Reject("control_stop_active", "an active "+stop.Scope+" stop forbids new claims")
 	}
 	if err := e.releaseSettledClaim(ctx, identity.CommonDir); err != nil {
-		return WorktreeClaim{}, err
+		return WorktreeClaim{}, false, err
 	}
 	claimID := derivedID("claim", e.Installation.ID, request.CommandID)
 	if !claimIDPattern.MatchString(claimID) {
-		return WorktreeClaim{}, local.ErrIntegrity
+		return WorktreeClaim{}, false, local.ErrIntegrity
 	}
 	path := ClaimRoot + "/" + strings.TrimPrefix(claimID, "claim:")
 	branch := "prifly/" + strings.TrimPrefix(claimID, "claim:")
@@ -357,7 +367,7 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 		Process: ClaimProcess{PID: os.Getpid(), Session: e.clock.session, Started: e.clock.start.UTC().Format(time.RFC3339Nano)}}
 	payload, err := canonical(map[string]any{"operation": "worktree.claim", "command_id": request.CommandID, "repository": identity, "base_commit": commit, "owner_id": request.OwnerID, "workspace_mode": mode})
 	if err != nil {
-		return WorktreeClaim{}, err
+		return WorktreeClaim{}, false, err
 	}
 	result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: request.CommandID, Actor: e.owner, Key: AuthorityClaimsKey, Payload: payload}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		record, err := e.decodeClaims(s)
@@ -401,22 +411,32 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 		return local.AuthorityChange{Data: data, Result: json.RawMessage(`{"status":"preparing"}`)}, nil
 	})
 	if err != nil {
-		return WorktreeClaim{}, err
+		// The receipt could not establish a new creation. Report the candidate
+		// identity for inspection, but never grant this caller rollback rights.
+		return claim, false, err
 	}
 	if result.Receipt.Rejection != nil {
-		return WorktreeClaim{}, result.Receipt.Rejection
+		return WorktreeClaim{}, false, result.Receipt.Rejection
 	}
 	if result.Duplicate {
-		return e.claim(ctx, claimID)
+		existing, err := e.claim(ctx, claimID)
+		if err != nil {
+			return claim, false, err
+		}
+		return existing, false, err
 	}
 	device, inode := checkoutDevice, checkoutInode
 	if mode == "worktree" {
 		device, inode, err = e.createWorktree(ctx, claim)
 		if err != nil {
-			return WorktreeClaim{}, err
+			return claim, true, err
 		}
 	}
-	return e.activateClaim(ctx, claimID, device, inode)
+	activated, err := e.activateClaim(ctx, claimID, device, inode)
+	if err != nil {
+		return claim, true, err
+	}
+	return activated, true, nil
 }
 
 func (e *Engine) decodeClaims(s local.AuthoritySnapshot) (ClaimRecord, error) {
@@ -511,6 +531,16 @@ func (e *Engine) activateClaim(ctx context.Context, id string, device, inode uin
 // ReleaseWorktree fences admissions before touching files. Interrupted cleanup
 // retains a releasing claim, so another Run cannot enter a half-removed tree.
 func (e *Engine) ReleaseWorktree(ctx context.Context, request ClaimReleaseRequest) (WorktreeClaim, error) {
+	return e.releaseWorktree(ctx, request, false)
+}
+
+// RollbackWorktreeClaim is the failed-start path: even a finished Run's claim
+// is preserved. The ledger version and scan cut fence a concurrent admission.
+func (e *Engine) RollbackWorktreeClaim(ctx context.Context, request ClaimReleaseRequest) (WorktreeClaim, error) {
+	return e.releaseWorktree(ctx, request, true)
+}
+
+func (e *Engine) releaseWorktree(ctx context.Context, request ClaimReleaseRequest, unboundOnly bool) (WorktreeClaim, error) {
 	if e.ReadOnly {
 		return WorktreeClaim{}, local.ErrReadOnly
 	}
@@ -545,15 +575,32 @@ func (e *Engine) ReleaseWorktree(ctx context.Context, request ClaimReleaseReques
 	if !claim.active() {
 		return WorktreeClaim{}, local.Reject("claim_state_conflict", "claim is already released")
 	}
-	if err := e.claimReleaseAllowed(ctx, claim); err != nil {
-		return WorktreeClaim{}, err
+	var proofCut *int64
+	if unboundOnly {
+		if claim.RunID != "" {
+			return WorktreeClaim{}, fault("claim_run_conflict", "an admitted Run holds this claim; failed-start rollback preserves it")
+		}
+		scan, scanErr := e.scanClaimHolders(ctx, claim.ID, false)
+		if scanErr != nil {
+			return WorktreeClaim{}, scanErr
+		}
+		proofCut = &scan.Cut
+	} else {
+		proofCut, err = e.prepareClaimRelease(ctx, claim)
+		if err != nil {
+			return WorktreeClaim{}, err
+		}
 	}
-	payload, err := canonical(map[string]any{"operation": "worktree.release", "command_id": request.CommandID, "claim_id": claim.ID, "generation": claim.Generation})
+	payloadValue := map[string]any{"operation": "worktree.release", "command_id": request.CommandID, "claim_id": claim.ID, "generation": claim.Generation}
+	if unboundOnly {
+		payloadValue["unbound_only"] = true
+	}
+	payload, err := canonical(payloadValue)
 	if err != nil {
 		return WorktreeClaim{}, err
 	}
 	if claim.Status != "releasing" {
-		result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: derivedID("command", request.CommandID, "release-fence"), Actor: e.owner, Key: AuthorityClaimsKey, Payload: payload, ExpectedVersion: &version}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
+		result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: derivedID("command", request.CommandID, "release-fence"), Actor: e.owner, Key: AuthorityClaimsKey, Payload: payload, ExpectedVersion: &version, ExpectedCut: proofCut}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 			current, err := e.decodeClaims(s)
 			if err != nil {
 				return local.AuthorityChange{}, err

@@ -687,6 +687,10 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	var claim *prifly.WorktreeClaim
 	createdClaim := false
+	importedPackage := false
+	cleanupStart := func(err error) error {
+		return projectStartCleanup(ctx, engine, *command, claim, createdClaim, importedPackage, compiled.Package.ID, compiled.Package.Version, err)
+	}
 	// A continuation or recovery takes the source Run's tree over as it was
 	// left, uncommitted files included; the Run creation binds it. Only a
 	// continuation told to start at another commit, or one whose source tree
@@ -716,48 +720,32 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	} else if recovering && needsWorkspace {
 		return refusal("recover_workspace_missing", "the source Run held no tree, and the target workflow needs one to run the failed stage again")
 	} else if needsWorkspace {
-		before, err := engine.Claims(ctx)
-		if err != nil {
-			return err
-		}
 		claimRequest := prifly.ClaimRequest{CommandID: *command + ":workspace", Repository: root, OwnerID: "project-launch:" + *command, WorkspaceMode: *workspace}
 		if continuation {
 			claimRequest.BaseRef = continuationReview.WorkspaceCommit
 		}
-		selected, err := engine.ClaimWorktree(ctx, claimRequest)
+		selected, created, err := engine.ClaimWorktreeWithOutcome(ctx, claimRequest)
+		claim, createdClaim = &selected, created
 		if err != nil {
+			if selected.ID != "" {
+				return cleanupStart(err)
+			}
 			return err
 		}
-		claim, createdClaim = &selected, true
-		for _, previous := range before.Claims {
-			if previous.ID == selected.ID {
-				createdClaim = false
-			}
-		}
 		if continuation && continuationReview.WorkspaceCommit != "" && selected.BaseCommit != continuationReview.WorkspaceCommit {
-			if createdClaim {
-				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: selected.ID, Generation: selected.Generation})
-			}
-			return refusal("project_continue_stale_head", "claimed workspace HEAD differs from the reviewed commit")
+			return cleanupStart(refusal("project_continue_stale_head", "claimed workspace HEAD differs from the reviewed commit"))
 		}
 	}
-	importedPackage := false
 	// A launch without a reviewed summary decides what gives way here, with
 	// the engine it installs through.
 	if !neutral {
 		if retirement, err = projectRegistryRetirement(ctx, engine, compiled); err != nil {
-			if createdClaim {
-				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
-			}
-			return err
+			return cleanupStart(err)
 		}
 	}
 	if err := projectPackageAvailable(ctx, engine, compiled.Package, *command, retirement); err != nil {
 		if !errors.Is(err, local.ErrNotFound) {
-			if createdClaim {
-				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
-			}
-			return err
+			return cleanupStart(err)
 		}
 		// An import the authority records and rejects returns no error, so the
 		// launch used to walk on and refuse further down with "package not
@@ -768,10 +756,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			err = recordedRejection(imported.Receipt.Rejection, imported.Receipt.ID)
 		}
 		if err != nil {
-			if createdClaim {
-				_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
-			}
-			return err
+			return cleanupStart(err)
 		}
 		// The engine holds the imported package already; closing and reopening
 		// the authority only to see it re-verified the store for nothing.
@@ -782,10 +767,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		// The three refusals above roll the claim back and this one did not, so
 		// a start that failed here left the repository claimed by a launch that
 		// never became a Run, and the next start was refused by it.
-		if createdClaim {
-			_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
-		}
-		return err
+		return cleanupStart(err)
 	}
 	startOptions := prifly.StartOptions{CommandID: *command, ProjectTitle: profile.Title, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
 	startOptions.WorkspaceClaim = claim
@@ -812,6 +794,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		startOptions.DecisionCatalog, startOptions.DecisionSheet = &preflight.Catalog, &preflight.Sheet
 	}
 	started, err := engine.Start(ctx, startOptions)
+	if err == nil && started.Receipt.Rejection != nil {
+		err = recordedRejection(started.Receipt.Rejection, started.Receipt.ID)
+	}
 	if err != nil {
 		// Under profile /2 a component keeps its authoring version, so two
 		// package releases collide under one identity and the refusal reads as
@@ -821,13 +806,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if errors.As(err, &drift) && drift.Code == "definition_drift" && !neutral {
 			err = &prifly.Fault{Code: drift.Code, Message: drift.Message + ". This project is on " + profile.SchemaVersion + ", where a component keeps its authoring version, so every package release meets the previous one under the same identity; " + projectVariantProfileVersion + " names each build by its own key and cannot collide", Cause: drift}
 		}
-		if importedPackage {
-			_, _ = engine.SetPackageStatus(ctx, prifly.PackageLifecycleRequest{CommandID: *command + ":rollback-package", ID: compiled.Package.ID, Version: compiled.Package.Version, Status: prifly.PackageRemoved, Reason: "project start did not create a Run"})
-		}
-		if createdClaim {
-			_, _ = engine.ReleaseWorktree(ctx, prifly.ClaimReleaseRequest{CommandID: *command + ":rollback", ClaimID: claim.ID, Generation: claim.Generation})
-		}
-		return err
+		return cleanupStart(err)
 	}
 	if queueBinding != nil {
 		finalized, err := engine.QueueFinalize(ctx, *queueBinding, nil)
