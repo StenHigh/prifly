@@ -105,7 +105,7 @@ extensions:
     # Sealing refuses an insertion that stays silent about one of them.
     impossible_verdicts: [fail, needs_revision, no_work]
 
-# Native Call (development capability project_call_extensions, unsupported by
+# Native Call (project_call_extensions, Pri-Fly 0.13.78+; unsupported by
 # v0.13.77): select authoring: prifly-extension/2 at document root and Project
 # profile /3. Unmarked v1 bytes keep their old step-only meaning. Explicit editor
 # selection also works with extension-v1.schema.json or extension-v2.schema.json.
