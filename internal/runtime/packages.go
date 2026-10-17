@@ -648,6 +648,11 @@ func (e *Engine) packageEntries() []Definition {
 	return entries
 }
 
+// RefreshProjectPackages pins trusted packages for the upcoming Start after
+// Project CLI ensured its exact package is present. A concurrent importer may
+// have supplied it since Open; call before Start computes its closure.
+func (e *Engine) RefreshProjectPackages() error { return e.loadPackages() }
+
 func (e *Engine) loadPackages() error {
 	record, _, err := e.readPackages(context.Background())
 	if err != nil {

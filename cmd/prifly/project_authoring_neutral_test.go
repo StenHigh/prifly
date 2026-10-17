@@ -51,7 +51,7 @@ func TestNeutralAuthoringReferencesMatchServedSchemas(t *testing.T) {
 	for _, example := range []struct{ name, schema string }{
 		{"check", "check-v1"},
 		{"execution-bindings", "project-workflow-folder-v1"},
-		{"project-profile", "project-profile-v3"},
+		{"project-profile", "project-profile-v4"},
 		// The step reference is where an author reads how to say "no work
 		// deadline". Nothing checked that the editor a package author installs
 		// accepts the file we publish to teach it.

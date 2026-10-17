@@ -230,6 +230,13 @@ Git и явный выбор worktree/checkout — для assisted repository wr
 worker использует Attempt scratch, не claimed repository. `/2` сохраняет
 прежние Git/host/brief требования, compilation и exact refs.
 
+Profile `/4` наследует `/3` и допускает общий tracked `worktree_naming`:
+template и явные bindings констант либо JSON Pointer объявленных launch inputs.
+Переход явный, без автоматического изменения `/2`/`/3`. Именование применяется
+к новому disposable worktree; checkout, запуск без Workspace и handover старого
+claim не получают дополнительных naming inputs. Читаемое имя не является task
+identity; tracker metadata Core не угадывает.
+
 <a id="project-workflow-folder"></a>
 ### Project workflow folder — Папка сценария проекта
 
@@ -380,7 +387,7 @@ Workspace и не создаёт Run. `preflight` и `runtime` перечисл�
 legacy `/2`); версию самого ответа для этого не используют. Анкета не является
 DecisionSheet: до Start её условия и ответы пересчитываются.
 
-**Launch summary** (`project-launch-summary/3`, исторически `/2` и `/1`) —
+**Launch summary** (`project-launch-summary/5` для named worktree, `/4` для queue, `/3` для обычного запуска; исторически `/2` и `/1`) —
 отдельное представление той же границы: `project questionnaire --prepare`
 с аргументами будущего start возвращает exact package, входы, требования,
 программы и объявленные SessionLimits, ничего не исполняя и не импортируя. Его
@@ -389,6 +396,12 @@ DecisionSheet: до Start её условия и ответы пересчиты
 совпадения, не Approval, не permission и не доказательство, что ответ дал
 отдельный человек. Legacy profile `/2` такого обзора не имеет: `--prepare` и
 `--expected-launch-digest` требуют явного перехода профиля на `/3`.
+
+Именование в summary `/5` закрепляет policy, bindings и разрешённую основу в
+review digest. `worktree_name_preview` — незарезервированный кандидат вне digest;
+конкурентный start может получить следующий suffix. Handover показывает recorded
+claim/path/branch без повторного вычисления naming. Это уточнение уже существующего
+Launch summary, не новая permission или approval.
 
 <a id="decision-sheet"></a>
 ### DecisionSheet — Лист предзапусковых решений
@@ -836,9 +849,18 @@ device/inode identity этого claim; неизвестный либо подм
 блокирует удаление. Cleanup `checkout` снимает только claim и никогда не
 меняет Git topology, branch, HEAD или файлы. `checkout` допускается лишь из
 чистого repository и сохраняет ту же physical exclusivity. Устаревшая
-generation не удаляет ресурс более позднего владельца. Один claim на
-репозиторий — граница этой поставки. Очередь execution slots не передаёт
+generation не удаляет ресурс более позднего владельца. Независимые worktree
+claims одного repository не конфликтуют; checkout исключает все его claims.
+Очередь execution slots не передаёт
 владение claim; распределённые и remote claims этим не реализуются.
+
+Named claim сохраняет `claim:<64 hex>` и фактические path/branch отдельно от
+читаемой основы. Authority record `/4` хранит optional allocation metadata
+`naming` (policy, base, ordinal, preparation phase); старые hash claims остаются
+без неё. Reservation durable до Git effects, значения проверены как components;
+первое свободное имя — base, затем -02…-9999. Receipt повтора не расходует suffix,
+handover меняет generation, сохраняя path/branch. Release проверяет directory
+identity и creation evidence ref; неизвестные effects не дают права удалять объект.
 
 <a id="assisted-session"></a>
 ### AssistedSession / SessionHandoff — Ассистируемое исполнение и передача работы хосту
@@ -1612,6 +1634,8 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim` | — |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Mode` | `mode` |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.RunID` | `run_id` |
+| [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Naming` | `naming` |
+| [WorktreeClaim](#worktree-claim) | `internal/runtime/worktree_names.go` | `runtime.WorktreeNameAllocation` | — |
 | [Generation](#generation) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Generation` | `generation` |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.RepositoryIdentity` | — |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Repository` | `repository` |

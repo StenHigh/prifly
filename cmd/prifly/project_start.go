@@ -122,7 +122,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if err != nil {
 		return err
 	}
-	neutral := profile.SchemaVersion == projectVariantProfileVersion
+	neutral := projectNeutralProfile(profile.SchemaVersion)
 	if (continuation || recovering) && !neutral {
 		return refusal("project_continue_requires_profile_3", "continuation and recovery require Project profile /3")
 	}
@@ -157,6 +157,17 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		reader, err := prifly.Open(c.project, true)
 		if err != nil {
 			return err
+		}
+		if !prepare {
+			previous, lookupErr := reader.NamedProjectLaunchResult(ctx, *command, queueCommandDigest)
+			if lookupErr != nil {
+				reader.Close()
+				return lookupErr
+			}
+			if len(previous) != 0 {
+				reader.Close()
+				return c.emit(previous)
+			}
 		}
 		if !prepare {
 			previous, lookupErr := reader.QueueLaunchCommand(ctx, *command, queueCommandDigest, *expectedLaunch)
@@ -482,6 +493,37 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return closeErr
 		}
 	}
+	var naming *projectwire.WorktreeNamingReview
+	var handedNaming *prifly.WorktreeClaim
+	var plannedHandover *prifly.ContinuationClaim
+	if recovering && recoveryPlan != nil {
+		plannedHandover = recoveryPlan.Claim
+	}
+	if continuation && continuationReview.WorkspaceCommit == "" {
+		plannedHandover = continuationReview.Source.Claim
+	}
+	if needsWorkspace && *workspace == "worktree" {
+		reader, err := prifly.Open(c.project, true)
+		if err != nil {
+			return err
+		}
+		if plannedHandover != nil {
+			record, readErr := reader.Claims(ctx)
+			err = readErr
+			for _, held := range record.Claims {
+				if held.ID == plannedHandover.ID && held.Naming != nil {
+					heldCopy := held
+					handedNaming = &heldCopy
+				}
+			}
+		} else {
+			naming, err = projectResolveWorktreeNaming(profile.WorktreeNaming, reader, requirements.plan, inputValues, refs)
+		}
+		reader.Close()
+		if err != nil {
+			return err
+		}
+	}
 	var summary projectLaunchSummary
 	var retirement *prifly.RegistryRetirement
 	if neutral {
@@ -489,6 +531,10 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if queueSelection != nil {
 			summary.SchemaVersion = "project-launch-summary/4"
 			summary.QueueTask = queueSelection
+		}
+		summary.WorktreeNaming, summary.WorktreeClaim = naming, handedNaming
+		if naming != nil || handedNaming != nil {
+			summary.SchemaVersion = "project-launch-summary/5"
 		}
 		summary.Continuation = continuationReview
 		summary.AllowDuplicateContinuation = *allowDuplicateContinuation
@@ -523,6 +569,18 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return err
 		}
 		summary.RegistryRetirement = retirement
+		if naming != nil {
+			nameReader, openErr := prifly.Open(c.project, true)
+			if openErr != nil {
+				return openErr
+			}
+			namePreview, previewErr := nameReader.PreviewWorktreeName(ctx, root, prifly.WorktreeNamingRequest{Base: naming.Base, Policy: naming.Policy})
+			nameReader.Close()
+			if previewErr != nil {
+				return previewErr
+			}
+			summary.WorktreeNamePreview = &namePreview
+		}
 		summary.ReviewDigest, err = projectCallExtensionReview(summary, compiled.CallExtensions, stageResources, resourceLimits)
 		if err != nil {
 			return err
@@ -596,6 +654,20 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return err
 	}
 	defer func() { _ = engine.Close() }()
+	if naming != nil || handedNaming != nil {
+		commandLock, err := engine.LockNamedProjectLaunch(*command)
+		if err != nil {
+			return err
+		}
+		defer commandLock.Close()
+		previous, err := engine.NamedProjectLaunchResult(ctx, *command, queueCommandDigest)
+		if err != nil {
+			return err
+		}
+		if len(previous) != 0 {
+			return c.emit(previous)
+		}
+	}
 	var queueBinding *prifly.QueueTaskBinding
 	if queueSelection != nil {
 		summaryBytes, err := json.Marshal(summary)
@@ -673,6 +745,19 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				return err
 			}
 		}
+		if needsWorkspace && *workspace == "worktree" && plannedHandover == nil {
+			currentProfile, readErr := readProjectProfile(root)
+			if readErr != nil {
+				return readErr
+			}
+			currentSummary.WorktreeNaming, err = projectResolveWorktreeNaming(currentProfile.WorktreeNaming, engine, requirements.plan, inputValues, refs)
+			if err != nil {
+				return err
+			}
+			if currentSummary.WorktreeNaming != nil {
+				currentSummary.SchemaVersion = "project-launch-summary/5"
+			}
+		}
 		currentDigest, err := projectCallExtensionReview(currentSummary, compiled.CallExtensions, stageResources, resourceLimits)
 		if err != nil {
 			return err
@@ -727,6 +812,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return refusal("recover_workspace_missing", "the source Run held no tree, and the target workflow needs one to run the failed stage again")
 	} else if needsWorkspace {
 		claimRequest := prifly.ClaimRequest{CommandID: *command + ":workspace", Repository: root, OwnerID: "project-launch:" + *command, WorkspaceMode: *workspace}
+		if naming != nil {
+			claimRequest.Naming = &prifly.WorktreeNamingRequest{Base: naming.Base, Policy: naming.Policy}
+		}
 		if continuation {
 			claimRequest.BaseRef = continuationReview.WorkspaceCommit
 		}
@@ -767,6 +855,11 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		// The engine holds the imported package already; closing and reopening
 		// the authority only to see it re-verified the store for nothing.
 		importedPackage = true
+	}
+	if claim != nil && claim.Naming != nil && !importedPackage {
+		if err := engine.RefreshProjectPackages(); err != nil {
+			return cleanupStart(err)
+		}
 	}
 	workflowPath, err = projectInstalledWorkflowPath(ctx, engine, compiled.Package, workflowPath)
 	if err != nil {
@@ -836,7 +929,14 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	// the programs it runs and was approved with --allow-execution, and
 	// leaving it ready sent a host to run drive for a step nothing blocked.
 	{
-		if err := engine.Drive(ctx, started.Receipt.RunID); err != nil {
+		driveErr := engine.Drive(ctx, started.Receipt.RunID)
+		for attempt := 1; attempt < 8 && claim != nil && claim.Naming != nil && projectNamedObservationConflict(driveErr); attempt++ {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			driveErr = engine.Drive(ctx, started.Receipt.RunID)
+		}
+		if err := driveErr; err != nil {
 			// The Run exists; what stopped the first drive is the cause, and a
 			// reader needs its code -- driver_already_active, storage_busy --
 			// not a generic one that names only the Run.
@@ -902,8 +1002,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if retirement != nil {
 		result.RetiredEditions = retirement.Retire
 	}
+	if claim != nil && claim.Naming != nil {
+		result.SchemaVersion = "project-start/5"
+	}
 	if queueBinding != nil {
-		result.SchemaVersion = "project-start/4"
+		if claim == nil || claim.Naming == nil {
+			result.SchemaVersion = "project-start/4"
+		}
 		result.QueueTask = queueBinding
 		resultBytes, err := json.Marshal(result)
 		if err != nil {
@@ -915,6 +1020,15 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 		if finalized.Receipt.Rejection != nil {
 			return finalized.Receipt.Rejection
+		}
+	}
+	if claim != nil && claim.Naming != nil {
+		response, err := json.Marshal(result)
+		if err != nil {
+			return err
+		}
+		if err := engine.RecordNamedProjectLaunchResult(ctx, *command, queueCommandDigest, response); err != nil {
+			return err
 		}
 	}
 	return c.emit(result)

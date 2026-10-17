@@ -19,6 +19,12 @@ import (
 )
 
 const projectVariantProfileVersion = "prifly-project-profile/3"
+const projectNamingProfileVersion = "prifly-project-profile/4"
+
+func projectNeutralProfile(version string) bool {
+	return version == projectVariantProfileVersion || version == projectNamingProfileVersion
+}
+
 const projectBuildFile = "build-provenance.json"
 const projectBuildVersion = "prifly-build-provenance/1"
 
@@ -102,7 +108,7 @@ func writeProjectComponent(output string, component projectCompileComponent) err
 // Render once: both public entry points seal the very bytes used for the build
 // identity. A second compilation could read changed skills or extend settings.
 func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, selectedProfile string, source projectPackageSource, registry flow.Registry, packages prifly.PackageRecord, values map[string]any, options projectWorkflowOptions) (projectCompileResult, error) {
-	variant := profileVersion == projectVariantProfileVersion
+	variant := projectNeutralProfile(profileVersion)
 	if !variant {
 		if options.Authoring != "" {
 			return projectCompileResult{}, refusal("project_compile_profile_required", "prifly-extension/2 requires Project profile /3")

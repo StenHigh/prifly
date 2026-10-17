@@ -1008,6 +1008,7 @@ type projectProfileInit struct {
 }
 
 type projectProfile struct {
+	WorktreeNaming  *projectWorktreeNaming
 	SchemaVersion   string
 	Title           string
 	HostSkillsRoots map[string]string
@@ -2270,12 +2271,16 @@ func readProjectProfile(root string) (projectProfile, error) {
 		return projectProfile{}, refusal("project_profile_invalid", "profile must be an object")
 	}
 	schema, _ := object["schema_version"].(string)
-	if schema != "prifly-project-profile/2" && schema != projectVariantProfileVersion {
-		return projectProfile{}, refusal("project_profile_invalid", "schema_version must be prifly-project-profile/2 or prifly-project-profile/3")
+	if schema != "prifly-project-profile/2" && !projectNeutralProfile(schema) {
+		return projectProfile{}, refusal("project_profile_invalid", "schema_version must be prifly-project-profile/2, /3 or /4")
 	}
 	for key := range object {
 		switch key {
 		case "schema_version", "title", "hosts", "packages", "launches":
+		case "worktree_naming":
+			if schema != projectNamingProfileVersion {
+				return projectProfile{}, refusal("project_profile_invalid", "worktree_naming requires explicit prifly-project-profile/4")
+			}
 		default:
 			return projectProfile{}, refusal("project_profile_invalid", "unknown field "+key)
 		}
@@ -2296,6 +2301,12 @@ func readProjectProfile(root string) (projectProfile, error) {
 		}
 		profile.Title = strings.TrimSpace(title)
 	}
+	if raw, present := object["worktree_naming"]; present {
+		profile.WorktreeNaming, err = projectParseWorktreeNaming(raw)
+		if err != nil {
+			return projectProfile{}, err
+		}
+	}
 	rawHosts, exists := object["hosts"]
 	if !exists && schema == "prifly-project-profile/2" {
 		return projectProfile{}, refusal("project_profile_invalid", "hosts is required by prifly-project-profile/2")
@@ -2311,7 +2322,7 @@ func readProjectProfile(root string) (projectProfile, error) {
 		return projectProfile{}, refusal("project_profile_invalid", "hosts must declare every supported host")
 	}
 	for _, host := range projectHosts {
-		if _, exists := hosts[host.ID]; !exists && schema == projectVariantProfileVersion {
+		if _, exists := hosts[host.ID]; !exists && projectNeutralProfile(schema) {
 			continue
 		}
 		root, ok := hosts[host.ID].(string)
@@ -2869,6 +2880,20 @@ const projectRunnerCallExtensionInstructions = "\nNative calls, including projec
 	"accepted child requires a reviewed legal root replay point, not stale output reuse.\n"
 
 func projectRunnerSkill(host projectHost) string {
+	return strings.Replace(projectRunnerSkillBeforeWorktreeNaming(host), "## 1. Start\n", "## 1. Start\n"+projectRunnerWorktreeNamingInstructions, 1)
+}
+
+const projectRunnerWorktreeNamingInstructions = "\nProject profile /4 may declare worktree_naming with explicit constant or JSON input bindings.\n" +
+	"Collect only the declared launch inputs; never infer naming data from task prose or queue metadata.\n" +
+	"A project-launch-summary/5 may also carry queue_task. Show worktree_naming and\n" +
+	"worktree_name_preview: reserved=false means the candidate is not reserved. Review the\n" +
+	"first-free policy; start may choose its next free suffix. A changed policy or input\n" +
+	"needs a new review digest. For a handover show the recorded worktree_claim instead.\n" +
+	"Use the actual workspace_path and repository_workspace returned by the authority;\n" +
+	"never move or rename its directory or branch. Reuse a stable command ID for a retry.\n\n"
+
+// Preserve the exact runner distributed before worktree naming.
+func projectRunnerSkillBeforeWorktreeNaming(host projectHost) string {
 	return strings.Replace(projectRunnerSkillBeforeCallExtensions(host), "## 2. Drive\n", "## 2. Drive\n"+projectRunnerCallExtensionInstructions, 1)
 }
 
@@ -3140,7 +3165,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host), projectRunnerSkillBeforeLaunchAdvice(host), projectRunnerSkillBeforeQueue(host), projectRunnerSkillBeforeCallExtensions(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host), projectRunnerSkillBeforeLaunchAdvice(host), projectRunnerSkillBeforeQueue(host), projectRunnerSkillBeforeCallExtensions(host), projectRunnerSkillBeforeWorktreeNaming(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {

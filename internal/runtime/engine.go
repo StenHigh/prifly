@@ -147,6 +147,7 @@ func (e *Engine) applyWithReadCut(ctx context.Context, expectedCut *int64, contr
 	started := time.Now()
 	var observed Observation
 	command := local.Command{ID: id, Actor: actor, RunID: runID, Payload: commandBytes, ExpectedVersion: expected, Mode: mode, Control: control, Pins: pins, SourceRun: source, ExpectedCut: expectedCut, AuthorityGuards: authorityGuards, Samples: e.commandTelemetry(id, runID, started)}
+	command.RetryAdmissionObservation = eventType == "run.created" && ctx.Value(namedAdmissionObservationKey{}) == true
 	if controlMutation != nil {
 		command.ControlMutation = func(snapshot local.AuthoritySnapshot) (json.RawMessage, error) {
 			return controlMutation(snapshot, observed)

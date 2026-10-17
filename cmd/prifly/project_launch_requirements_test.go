@@ -77,7 +77,7 @@ stages:
 
 func TestCLIProjectConfigurableInputLaunch(t *testing.T) {
 	t.Parallel()
-	for _, version := range []string{"2", "3"} {
+	for _, version := range []string{"2", "3", "4"} {
 		t.Run("profile-"+version, func(t *testing.T) {
 			var root, authority string
 			if version == "2" {

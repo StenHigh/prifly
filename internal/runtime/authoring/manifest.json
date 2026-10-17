@@ -4,6 +4,7 @@
     {"document": "project-profile", "id": "urn:prifly:yaml-authoring:project-profile", "path": "project-profile.schema.json", "patterns": [".prifly/project.yaml"]},
     {"document": "project-profile-v2", "id": "urn:prifly:yaml-authoring:project-profile:2", "path": "project-profile-v2.schema.json", "patterns": []},
     {"document": "project-profile-v3", "id": "urn:prifly:yaml-authoring:project-profile:3", "path": "project-profile-v3.schema.json", "patterns": []},
+    {"document": "project-profile-v4", "id": "urn:prifly:yaml-authoring:project-profile:4", "path": "project-profile-v4.schema.json", "patterns": []},
     {"document": "project-workflow-folder-v1", "id": "urn:prifly:yaml-authoring:project-workflow-folder:1", "path": "project-workflow-folder-v1.schema.json", "patterns": [".prifly/workflows/*/workflow.yaml"]},
     {"document": "extension", "id": "urn:prifly:yaml-authoring:extension", "path": "extension.schema.json", "patterns": [".prifly/workflows/*/extend.yaml"]},
     {"document": "extension-v1", "id": "urn:prifly:yaml-authoring:extension:1", "path": "extension-v1.schema.json", "patterns": []},

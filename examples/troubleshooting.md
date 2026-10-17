@@ -1411,3 +1411,28 @@ prifly --project AUTHORITY claim release --id CLAIM --generation N --json
 [Справочник step/call](authoring/extension-authoring-reference.yaml) описывает
 stage ID, несколько bindings и root scope. После правки call заново подготовьте
 launch; автоматически повышать limits или запускать отдельный child Run не нужно.
+
+
+## Именование worktree: template/value отказ или незавершённая подготовка
+
+`project_worktree_template_invalid` называет grammar/unknown fields или несоответствие
+placeholders и bindings. `project_worktree_binding_invalid` означает неизвестный/non-JSON
+input либо неверный JSON Pointer. `project_worktree_value_missing` отличает absent input
+или pointer от `null`: null/non-string/unsafe value дают `project_worktree_value_invalid`.
+Объявляйте данные явно и передавайте существующими `--input PORT=FILE`/`--input-ref`;
+Core не извлекает номер из brief/queue/tracker и не выполняет slugification.
+Настройка требует shared profile `/4` и `project-profile-v4` editor schema.
+
+`claim_name_exhausted` означает занятость всех 9999 candidates, включая оставшиеся
+ветки, каталоги, symlinks и Git directory/file ref conflicts. Prepare показывает
+незарезервированный кандидат, финальное имя сообщает start `/5`; обычная смена
+занятости не требует нового review, смена template/values требует.
+
+`claim_preparation_incomplete` называет recorded claim ID/generation/path. Проверьте
+`claim list` и `doctor --claim ID`; повтор команды не создаёт ещё одно дерево.
+Штатный `claim release --id ID --generation N` очищает доказанно принадлежащие ему
+ресурсы. Подменённая directory identity либо foreign branch creation evidence
+отказывают `claim_identity_conflict`; неизвестная собственность не даёт права
+удалять объект. Сначала выясните происхождение и завершите effects, не редактируйте
+authority и не переименовывайте worktree для обхода. Named authority contract `/4`
+требует нового reader; возврат к старому binary не является downgrade миграцией.

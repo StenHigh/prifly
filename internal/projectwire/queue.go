@@ -17,6 +17,9 @@ type DecisionState struct {
 }
 
 type LaunchSummary struct {
+	WorktreeNaming      *WorktreeNamingReview         `json:"worktree_naming,omitempty"`
+	WorktreeNamePreview *prifly.WorktreeNamePreview   `json:"worktree_name_preview,omitempty"`
+	WorktreeClaim       *prifly.WorktreeClaim         `json:"worktree_claim,omitempty"`
 	QueueTask           *prifly.QueueTaskSelection    `json:"queue_task,omitempty"`
 	SchemaVersion       string                        `json:"schema_version"`
 	Repository          string                        `json:"repository"`
@@ -62,6 +65,17 @@ type LaunchSummary struct {
 	// digest is computed: it reads a quantity other Runs move, and folding it in
 	// would make the digest go stale on its own.
 	Admission *AdmissionPreview `json:"admission,omitempty"`
+}
+
+type WorktreeNamingReview struct {
+	Template      string                     `json:"template"`
+	Bindings      map[string]json.RawMessage `json:"bindings"`
+	Values        map[string]string          `json:"values"`
+	Base          string                     `json:"base"`
+	Root          string                     `json:"root"`
+	BranchPrefix  string                     `json:"branch_prefix"`
+	Policy        string                     `json:"policy"`
+	MaxCandidates int                        `json:"max_candidates"`
 }
 
 type AdmissionPreview struct {

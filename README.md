@@ -238,6 +238,13 @@ schema_version: prifly-project-profile/3
 Остальные поля оставьте прежними. Если в файле подключена editor schema v2,
 переключите её на [`project-profile-v3.schema.json`](schemas/authoring/project-profile-v3.schema.json).
 `init`, `start` и обновление workflow не переводят существующий `/2` автоматически.
+
+Для читаемых имён disposable worktree явно выберите профиль `/4` и
+[`project-profile-v4.schema.json`](schemas/authoring/project-profile-v4.schema.json).
+Общий `worktree_naming` связывает шаблон с константами и declared JSON inputs;
+[полный пример](examples/workflows/named-worktree/README.md) показывает prepare,
+передачу данных задачи и suffix при коллизиях. Claim ID и имена существующих
+рабочих копий сохраняются. Без блока действует прежний hash naming.
 В `/2` прежняя версия с другими bytes по-прежнему отвергается как конфликт.
 
 В `/3` compiler сохраняет авторские версии в YAML, но выпускает для package и

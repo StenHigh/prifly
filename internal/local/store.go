@@ -52,8 +52,11 @@ const (
 )
 
 var (
-	ErrCommandConflict = errors.New("command ID already has a different request")
-	ErrIncompatible    = errors.New("unsupported storage or event version")
+	// ErrAdmissionSnapshotStale leaves no receipt: an internal named-start
+	// caller must repeat its complete read/validation before trying again.
+	ErrAdmissionSnapshotStale = errors.New("admission observation changed before commit")
+	ErrCommandConflict        = errors.New("command ID already has a different request")
+	ErrIncompatible           = errors.New("unsupported storage or event version")
 	// errQueueFull is internal: it is turned into a recorded rejection rather
 	// than returned to a caller, so a full queue is a decision, not a failure.
 	errQueueFull        = errors.New("admission queue is full")
@@ -177,6 +180,9 @@ type AuthorityApplyResult struct {
 // Guarded is internal: runtime validates the owning Attempt or exact control
 // epoch in the transform; a caller must never select this mode through the wire.
 type Command struct {
+	// Internal admission retries revalidate stale observations before any
+	// reducer/effect. False retains the ordinary durable refusal semantics.
+	RetryAdmissionObservation bool
 	// ExpectedCut fences a complete population read before this transaction.
 	ExpectedCut     *int64
 	ID              string
@@ -1047,6 +1053,9 @@ func (s *Store) Apply(ctx context.Context, cmd Command, transform func(Snapshot)
 		if err != nil {
 			return out, err
 		}
+	}
+	if cmd.RetryAdmissionObservation && rejection != nil && (rejection.Code == "control_conflict" || rejection.Code == "authority_state_conflict" || rejection.Code == "claim_ownership_conflict") {
+		return out, ErrAdmissionSnapshotStale
 	}
 	if rejection == nil {
 		if transform == nil {

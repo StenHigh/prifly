@@ -248,6 +248,7 @@ func projectValidateCallExtensionBindings(components []projectCompileComponent, 
 // Review binds effective local limits as well as the declared contract sealed
 // into the package. Changing local.yaml cannot reuse consent to another limit.
 func projectCallExtensionReview(summary projectLaunchSummary, enabled bool, stages map[string][]string, limits map[string]int64) (string, error) {
+	summary.WorktreeNamePreview = nil
 	if !enabled {
 		return projectReviewDigest(summary)
 	}

@@ -1,0 +1,8 @@
+id: example:schema/task
+version: 1.0.0
+type: object
+additionalProperties: false
+required: [source, id]
+properties:
+  source: {type: string}
+  id: {type: string}

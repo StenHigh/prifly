@@ -93,6 +93,9 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if field.PkgPath != "" {
 						continue
 					}
+					if worktreeNamingField(t, field.Name) {
+						continue
+					}
 					// Skip before recursion: removing the property afterwards would
 					// still add new unreachable definitions to the immutable F1 bundle.
 					if !g.core && field.Name == "EffectiveConfiguration" && (t == reflect.TypeFor[prifly.Run]() || t == reflect.TypeFor[prifly.Preview]()) {
@@ -374,6 +377,7 @@ var documentContracts = []struct {
 	flag, description string
 	build             func() ([]byte, error)
 }{
+	{"worktree-naming", "generate opt-in Project worktree naming contracts", worktreeNamingSchema},
 	{"storage-budget-status", "generate StorageBudgetStatus", func() ([]byte, error) {
 		return storageBudgetSchema("StorageBudgetStatus", "storage-budget-status", reflect.TypeFor[prifly.StorageBudgetStatus]())
 	}},

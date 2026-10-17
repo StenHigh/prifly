@@ -538,7 +538,7 @@ func projectHostContextSourcePath(skillsRoot, source string) (string, error) {
 }
 
 func projectCompileSkillsRoot(root string, profile projectProfile, host string) (string, error) {
-	if host == "" && profile.SchemaVersion == projectVariantProfileVersion {
+	if host == "" && projectNeutralProfile(profile.SchemaVersion) {
 		return "", nil
 	}
 	if host == "" {

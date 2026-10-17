@@ -1,0 +1,4 @@
+id: example:context/work
+version: 1.0.0
+media_type: text/markdown; charset=utf-8
+text: Read the task input. Work only in repository_workspace. Report pass when done, or no_work to leave a partial Run for continuation. Never move or rename the claimed tree or branch.

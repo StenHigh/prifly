@@ -218,7 +218,7 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersion, profile.ReadVersion = CoreQueueStateVersion, CoreQueueReadVersion
 	profile.StateVersions = append(profile.StateVersions, CoreQueueStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreQueueReadVersion)
-	profile.Capabilities = append(profile.Capabilities, "project_task_queue")
+	profile.Capabilities = append(profile.Capabilities, "project_task_queue", "project_worktree_naming")
 
 	return manifest
 }

@@ -80,3 +80,10 @@ Run contracts не получают новой версии только из-з
 OpenSpec не меняет Go runtime, user-facing YAML, sealed JSON package или
 сохранённые Runs. Historical release evidence и manifests сохранены в Git и
 archive changes; текущая документация не переписывает эту историю.
+
+
+Project worktree naming включён в main source sets `workflow-and-context`,
+`runtime-resources`, `cli-protocol`, `published-contracts` и
+`specification-governance`; ownership остаётся прежним. История реализации
+сохранена в archived `2026-10-17-configure-project-worktree-names`. Naming
+остаётся metadata authority, без новой версии saved Run лишь ради имени.

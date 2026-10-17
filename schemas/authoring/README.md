@@ -45,7 +45,11 @@ prifly project compile --repository . --package NAME --output ../NAME.package
 ```
 
 Для привязки строго к одной версии используйте `project-profile-v2.schema.json`
-или `project-profile-v3.schema.json` в modeline. Единственный автоматический
+или `project-profile-v3.schema.json` в modeline. Для opt-in `worktree_naming`
+используйте `project-profile-v4.schema.json`: `/4` наследует `/3`, добавляя
+общий шаблон имени нового worktree с явными input bindings. Старые schema bytes
+и автоматический pattern не меняются; version-specific modeline выбирается явно.
+[Полный пример](../../examples/workflows/named-worktree/README.md). Единственный автоматический
 pattern у общей schema: редактор не должен одновременно требовать оба marker.
 Переход `/2` → `/3` выполняется явной правкой `schema_version` в shared
 `project.yaml`, с обновлением version-specific modeline при его наличии.

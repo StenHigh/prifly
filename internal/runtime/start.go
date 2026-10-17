@@ -666,8 +666,27 @@ func (e *Engine) pinDefinitions(defs []PinnedDefinition) error {
 	return nil
 }
 
+type namedAdmissionObservationKey struct{}
+
 func (e *Engine) Start(ctx context.Context, options StartOptions) (local.ApplyResult, error) {
-	result, err := e.start(ctx, options)
+	named := options.WorkspaceClaim != nil && options.WorkspaceClaim.Naming != nil
+	if named {
+		ctx = context.WithValue(ctx, namedAdmissionObservationKey{}, true)
+	}
+	var result local.ApplyResult
+	var err error
+	for attempt := 0; attempt < 8; attempt++ {
+		result, err = e.start(ctx, options)
+		if !named || !errors.Is(err, local.ErrAdmissionSnapshotStale) {
+			break
+		}
+		if ctx.Err() != nil {
+			return result, ctx.Err()
+		}
+	}
+	if errors.Is(err, local.ErrAdmissionSnapshotStale) {
+		return result, fault("claim_ownership_conflict", "named admission observations kept changing; no Run was admitted")
+	}
 	if err == nil && result.Receipt.Rejection == nil && result.Receipt.RunID != "" && e.AfterRunCreated != nil {
 		e.AfterRunCreated()
 	}

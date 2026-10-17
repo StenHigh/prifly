@@ -27,7 +27,7 @@ type projectPackageExecution struct {
 }
 
 func (c *cli) projectAuthority(root string, profile projectProfile) error {
-	if profile.SchemaVersion != projectVariantProfileVersion || c.projectExplicit || c.project != "." && c.project != "" {
+	if !projectNeutralProfile(profile.SchemaVersion) || c.projectExplicit || c.project != "." && c.project != "" {
 		return nil
 	}
 	authority, _, err := projectLocalExecution(root)

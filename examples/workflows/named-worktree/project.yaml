@@ -1,0 +1,20 @@
+# Copy to <repository>/.prifly/project.yaml after project init.
+# yaml-language-server: $schema=../../../schemas/authoring/project-profile-v4.schema.json
+schema_version: prifly-project-profile/4
+title: SMS Place
+hosts: {codex-cli: .codex/skills}
+worktree_naming:
+  template: "{project_name}-{task_source}-{task_id}"
+  bindings:
+    project_name: {value: smsplace}
+    task_source: {input: task, pointer: /source}
+    task_id: {input: task, pointer: /id}
+packages:
+  named: {source: .prifly/workflows/named}
+launches:
+  named:
+    title: Work on an explicitly identified task
+    description: Execute in a named disposable worktree, preserving claim identity.
+    kind: workflow
+    workflow: .prifly/workflows/named/workflow.yaml
+    workspace: worktree

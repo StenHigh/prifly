@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../schemas/authoring/project-profile-v3.schema.json
+# yaml-language-server: $schema=../../schemas/authoring/project-profile-v4.schema.json
 # Optional local queue is authority state, never an extra YAML key here.
 # Requires queue-bound core-state/44, core-read/44 and Project profile /3;
 # questionnaire --prepare: project-launch-summary/4; start: project-start/4.
@@ -31,8 +31,22 @@
 # /3 keeps authored IDs/versions; compile/start report author_package alongside
 # the exact compiled build. Program machine paths belong in ignored local.yaml,
 # never here. execution_bindings belongs in a package's root workflow.yaml.
-schema_version: prifly-project-profile/3
+schema_version: prifly-project-profile/4
 title: Example project # Optional human-facing name, sealed into new Runs.
+# Optional shared naming for NEW worktree claims only (profile /4).
+# Example workflow must declare a JSON input task with source/id string fields.
+# Full executable fixture and --input / --input-ref commands:
+# ../workflows/named-worktree/README.md
+# prepare summary /5: policy is reviewed; worktree_name_preview reserved=false.
+# start /5 records actual suffix; repeat command ID returns the same result.
+# Handover keeps the recorded name; checkout/no Workspace ignore input bindings.
+worktree_naming:
+  template: "{project_name}-{task_source}-{task_id}"
+  bindings:
+    project_name: {value: example}
+    task_source: {input: task, pointer: /source}
+    task_id: {input: task, pointer: /id}
+
 hosts:
   codex-cli: .codex/skills # The `prifly-run` skill installed for Codex CLI.
   codex-app: .agents/skills # The `prifly-run` skill installed for Codex Desktop.

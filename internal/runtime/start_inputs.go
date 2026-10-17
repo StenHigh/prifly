@@ -25,6 +25,25 @@ type resolvedStartInput struct {
 	Data []byte
 }
 
+// StartInputValues resolves the same effective inputs as Start, without
+// publishing artifacts. Project metadata must read defaults and ArtifactRefs
+// with the same meaning as the eventual Run.
+func (e *Engine) StartInputValues(plan *flow.Plan, values map[string]json.RawMessage, refs map[string]ArtifactRef) (map[string]json.RawMessage, error) {
+	effective, err := e.effectiveConfigurationWithValues(plan, nil, refs, values, true)
+	if err != nil {
+		return nil, err
+	}
+	inputs, err := e.resolveStartInputs(plan, effective, StartOptions{SchemaVersion: "2", InputValues: values, InputRefs: refs})
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]json.RawMessage{}
+	for name, input := range inputs {
+		result[name] = input.Data
+	}
+	return result, nil
+}
+
 func (e *Engine) resolveStartInputs(plan *flow.Plan, effective *EffectiveConfiguration, options StartOptions) (map[string]resolvedStartInput, error) {
 	for port := range options.Inputs {
 		if _, ok := plan.Workflow.Inputs[port]; !ok {

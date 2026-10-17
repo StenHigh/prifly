@@ -104,6 +104,11 @@ func (e *Engine) prepareClaimRunBinding(ctx context.Context, runID, claimID stri
 }
 
 func (e *Engine) checkClaimDirectory(claim WorktreeClaim) error {
+	if claim.Naming != nil {
+		if err := e.checkClaimRoot(); err != nil {
+			return err
+		}
+	}
 	path, err := e.claimWorkspacePath(claim)
 	if err != nil {
 		return err

@@ -84,9 +84,10 @@ type RepositoryIdentity struct {
 }
 
 type WorktreeClaim struct {
-	ID         string             `json:"id"`
-	Repository RepositoryIdentity `json:"repository"`
-	Path       string             `json:"path"`
+	Naming     *WorktreeNameAllocation `json:"naming,omitempty"`
+	ID         string                  `json:"id"`
+	Repository RepositoryIdentity      `json:"repository"`
+	Path       string                  `json:"path"`
 	// Mode distinguishes a disposable authority-owned worktree from the
 	// repository checkout selected explicitly by the developer. A missing mode
 	// in a historical record is always the old worktree behavior.
@@ -125,6 +126,7 @@ func (c WorktreeClaim) active() bool {
 }
 
 type ClaimRequest struct {
+	Naming        *WorktreeNamingRequest
 	CommandID     string
 	Repository    string
 	BaseRef       string
@@ -170,6 +172,9 @@ func (e *Engine) ClaimWorktrees(ctx context.Context, commandID string, requests 
 	prepared := []WorktreeClaim{}
 	seen := map[string]bool{}
 	for index, request := range requests {
+		if request.Naming != nil {
+			return nil, fault("unsupported_capability", "atomic claim sets do not accept project naming requests")
+		}
 		if request.Repository == "" || request.OwnerID == "" {
 			return nil, errors.New("every claimed resource names its repository and owner")
 		}
@@ -309,6 +314,9 @@ func (e *Engine) ClaimWorktree(ctx context.Context, request ClaimRequest) (Workt
 // ClaimWorktreeWithOutcome reports creation from the atomic receipt, rather
 // than a pre-command list that can race an idempotent concurrent caller.
 func (e *Engine) ClaimWorktreeWithOutcome(ctx context.Context, request ClaimRequest) (WorktreeClaim, bool, error) {
+	if request.Naming != nil {
+		return e.claimNamedWorktree(ctx, request)
+	}
 	if e.ReadOnly {
 		return WorktreeClaim{}, false, local.ErrReadOnly
 	}
@@ -451,10 +459,10 @@ func decodeClaimRecord(s local.AuthoritySnapshot, authorityID string) (ClaimReco
 	if err := decode(s.Data, &record); err != nil {
 		return ClaimRecord{}, err
 	}
-	if (record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != authorityClaimsModeVersion && record.SchemaVersion != authorityClaimsLegacyVersion) || record.AuthorityID != authorityID {
-		return ClaimRecord{}, errors.New("unsupported or foreign claim record")
+	if (record.SchemaVersion != NamedAuthorityClaimsVersion && record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != authorityClaimsModeVersion && record.SchemaVersion != authorityClaimsLegacyVersion) || record.AuthorityID != authorityID {
+		return ClaimRecord{}, fault("unsupported_claim_contract", "unsupported or foreign claim record")
 	}
-	if record.SchemaVersion != AuthorityClaimsVersion {
+	if record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != NamedAuthorityClaimsVersion {
 		var wire struct {
 			Claims []map[string]json.RawMessage `json:"claims"`
 		}
@@ -467,7 +475,26 @@ func decodeClaimRecord(s local.AuthoritySnapshot, authorityID string) (ClaimReco
 			}
 		}
 	}
-	record.SchemaVersion = AuthorityClaimsVersion
+	for _, claim := range record.Claims {
+		if claim.Naming == nil {
+			continue
+		}
+		if record.SchemaVersion != NamedAuthorityClaimsVersion {
+			return ClaimRecord{}, fault("unsupported_claim_contract", "naming metadata requires authority-claims/4")
+		}
+		path, branch := worktreeCandidate(claim.Naming.Base, claim.Naming.Ordinal)
+		if ValidateWorktreeName(claim.Naming.Base) != nil || claim.Naming.Policy != WorktreeNamingPolicy || claim.Naming.Ordinal < 1 || claim.Naming.Ordinal > MaxWorktreeNames || claim.Path != path || claim.Branch != branch || claim.Mode != "worktree" {
+			return ClaimRecord{}, local.ErrIntegrity
+		}
+		switch claim.Naming.Phase {
+		case "reserved", "directory", "creating_branch", "branch", "tree":
+		default:
+			return ClaimRecord{}, local.ErrIntegrity
+		}
+	}
+	if record.SchemaVersion != NamedAuthorityClaimsVersion {
+		record.SchemaVersion = AuthorityClaimsVersion
+	}
 	return record, nil
 }
 
@@ -547,6 +574,11 @@ func (e *Engine) releaseWorktree(ctx context.Context, request ClaimReleaseReques
 	if request.CommandID == "" || request.ClaimID == "" || request.Generation < 1 {
 		return WorktreeClaim{}, errors.New("explicit command, claim and generation required")
 	}
+	effectLock, err := e.claimEffectLock(request.ClaimID)
+	if err != nil {
+		return WorktreeClaim{}, err
+	}
+	defer effectLock.Close()
 	// Admission materializes workspace inputs before its binding transaction.
 	// Share the authority driver's lock so release cannot delete that directory
 	// between its identity check and commit; the fence still survives a crash.
@@ -772,6 +804,9 @@ func (e *Engine) checkCleanCheckout(ctx context.Context, repository RepositoryId
 // already clean; a replaced one is refused, because removing it would delete
 // something this claim never created.
 func (e *Engine) removeWorktree(ctx context.Context, claim WorktreeClaim) error {
+	if claim.Naming != nil {
+		return e.removeNamedWorktree(ctx, claim)
+	}
 	if claimMode(claim) == "checkout" {
 		return nil
 	}
@@ -946,5 +981,9 @@ func ClaimView(record ClaimRecord) map[string]any {
 	claims := make([]WorktreeClaim, len(record.Claims))
 	copy(claims, record.Claims)
 	sort.Slice(claims, func(i, j int) bool { return claims[i].ID < claims[j].ID })
-	return map[string]any{"schema_version": "foundation-claims/2", "claims": claims}
+	version := "foundation-claims/2"
+	if record.SchemaVersion == NamedAuthorityClaimsVersion {
+		version = "foundation-claims/3"
+	}
+	return map[string]any{"schema_version": version, "claims": claims}
 }
