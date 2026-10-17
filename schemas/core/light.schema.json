@@ -1,0 +1,1687 @@
+{
+  "$defs": {
+    "LightBoard": {
+      "$ref": "#/$defs/runtime_LightBoardPage"
+    },
+    "LightProjection": {
+      "$ref": "#/$defs/runtime_LightProjection"
+    },
+    "LightReport": {
+      "$ref": "#/$defs/runtime_LightReportView"
+    },
+    "LightReviews": {
+      "$ref": "#/$defs/runtime_LightReviewsPage"
+    },
+    "LightTask": {
+      "$ref": "#/$defs/runtime_LightTaskPage"
+    },
+    "flow_Ref": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "digest",
+        "id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "runtime_ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "digest",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "runtime_LightBoardCard": {
+      "additionalProperties": false,
+      "properties": {
+        "active_branches": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_MonitorStage"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authority_id": {
+          "type": "string"
+        },
+        "branch_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "candidate_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completion_scope": {
+          "type": "string"
+        },
+        "current_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "current_runs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightRun"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "history_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "lane": {
+          "type": "string"
+        },
+        "last_observed": {
+          "type": "string"
+        },
+        "ordinal": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/runtime_LightPhase"
+        },
+        "priority": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "project_title": {
+          "type": "string"
+        },
+        "queue_state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasons": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_MonitorReason"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "reviews": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightReviewChip"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "round": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "task_revision": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "title_origin": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "active_branches",
+        "authority_id",
+        "branch_count",
+        "candidate_digest",
+        "completion_scope",
+        "current_count",
+        "current_runs",
+        "history_count",
+        "key",
+        "kind",
+        "lane",
+        "last_observed",
+        "ordinal",
+        "outcome",
+        "phase",
+        "priority",
+        "project_id",
+        "project_title",
+        "queue_state",
+        "reasons",
+        "review_count",
+        "reviews",
+        "round",
+        "source",
+        "status",
+        "task_id",
+        "task_revision",
+        "title",
+        "title_origin",
+        "truncated"
+      ],
+      "type": "object"
+    },
+    "runtime_LightBoardPage": {
+      "additionalProperties": false,
+      "properties": {
+        "cards": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightBoardCard"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "counters": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "full_monitor_url": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "string"
+        },
+        "mapping_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page": {
+          "$ref": "#/$defs/runtime_LightPage"
+        },
+        "schema_version": {
+          "const": "prifly-light-board/1"
+        },
+        "sources": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightSourceInfo"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "cards",
+        "counters",
+        "full_monitor_url",
+        "generation",
+        "mapping_digest",
+        "page",
+        "schema_version",
+        "sources"
+      ],
+      "type": "object"
+    },
+    "runtime_LightCard": {
+      "additionalProperties": false,
+      "properties": {
+        "active_branches": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_MonitorStage"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authority_id": {
+          "type": "string"
+        },
+        "branch_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "candidate_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completion_scope": {
+          "type": "string"
+        },
+        "current_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "current_runs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightRun"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "history_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "lane": {
+          "type": "string"
+        },
+        "last_observed": {
+          "type": "string"
+        },
+        "ordinal": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/runtime_LightPhase"
+        },
+        "priority": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "project_title": {
+          "type": "string"
+        },
+        "queue_state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasons": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_MonitorReason"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "reviews": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightReviewChip"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "round": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "task_revision": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "title_origin": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "active_branches",
+        "authority_id",
+        "branch_count",
+        "candidate_digest",
+        "completion_scope",
+        "current_count",
+        "current_runs",
+        "history_count",
+        "key",
+        "kind",
+        "lane",
+        "last_observed",
+        "ordinal",
+        "outcome",
+        "phase",
+        "priority",
+        "project_id",
+        "project_title",
+        "queue_state",
+        "reasons",
+        "review_count",
+        "reviews",
+        "round",
+        "status",
+        "task_id",
+        "task_revision",
+        "title",
+        "title_origin",
+        "truncated"
+      ],
+      "type": "object"
+    },
+    "runtime_LightCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "all": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightCondition"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "any": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightCondition"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "equals": {},
+        "in": {
+          "anyOf": [
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input": {
+          "type": "string"
+        },
+        "pointer": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "runtime_LightPage": {
+      "additionalProperties": false,
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "limit": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "complete",
+        "limit",
+        "next_cursor",
+        "total"
+      ],
+      "type": "object"
+    },
+    "runtime_LightPhase": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "mapped": {
+          "type": "boolean"
+        },
+        "mapping_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "mapped",
+        "mapping_ref"
+      ],
+      "type": "object"
+    },
+    "runtime_LightPhaseMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "enum": [
+            "plan",
+            "implementation",
+            "review",
+            "work"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "stage"
+      ],
+      "type": "object"
+    },
+    "runtime_LightProjection": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "prifly-light-projection/1"
+        },
+        "workflows": {
+          "items": {
+            "$ref": "#/$defs/runtime_LightWorkflowMapping"
+          },
+          "maxItems": 64,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "workflows"
+      ],
+      "type": "object"
+    },
+    "runtime_LightReportView": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "#/$defs/runtime_ArtifactRef"
+        },
+        "review_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "prifly-light-report/1"
+        },
+        "source": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "total_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "ref",
+        "review_id",
+        "run_id",
+        "schema_version",
+        "source",
+        "text",
+        "total_bytes",
+        "truncated"
+      ],
+      "type": "object"
+    },
+    "runtime_LightReview": {
+      "additionalProperties": false,
+      "properties": {
+        "applicability": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "blocking_owner_only": {
+          "type": "boolean"
+        },
+        "candidate_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidate_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "check_status": {
+          "type": "string"
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "finding_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "findings": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "freshness": {
+          "type": "string"
+        },
+        "gate_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gate_schema": {
+          "$ref": "#/$defs/flow_Ref"
+        },
+        "gate_scope": {
+          "type": "string"
+        },
+        "gate_status": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "iteration_id": {
+          "type": "string"
+        },
+        "lens": {
+          "type": "string"
+        },
+        "mapping_digest": {
+          "type": "string"
+        },
+        "producer_verdict": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "report_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "report_schema": {
+          "$ref": "#/$defs/flow_Ref"
+        },
+        "request_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "round": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "stage_activation_id": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "passed",
+            "defect",
+            "unavailable",
+            "waiting",
+            "disabled",
+            "not_applicable",
+            "unknown",
+            "warnings"
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "workflow_invocation_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "applicability",
+        "attempt_id",
+        "blocking",
+        "blocking_owner_only",
+        "candidate_digest",
+        "candidate_ref",
+        "check_status",
+        "cut",
+        "finding_count",
+        "findings",
+        "freshness",
+        "gate_ref",
+        "gate_schema",
+        "gate_scope",
+        "gate_status",
+        "id",
+        "iteration_id",
+        "lens",
+        "mapping_digest",
+        "producer_verdict",
+        "reason",
+        "report_ref",
+        "report_schema",
+        "request_digest",
+        "request_ref",
+        "round",
+        "run_id",
+        "stage_activation_id",
+        "state",
+        "truncated",
+        "workflow_invocation_id"
+      ],
+      "type": "object"
+    },
+    "runtime_LightReviewChip": {
+      "additionalProperties": false,
+      "properties": {
+        "check_status": {
+          "type": "string"
+        },
+        "freshness": {
+          "type": "string"
+        },
+        "gate_scope": {
+          "type": "string"
+        },
+        "gate_status": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lens": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "passed",
+            "defect",
+            "unavailable",
+            "waiting",
+            "disabled",
+            "not_applicable",
+            "unknown",
+            "warnings"
+          ]
+        }
+      },
+      "required": [
+        "check_status",
+        "freshness",
+        "gate_scope",
+        "gate_status",
+        "id",
+        "lens",
+        "reason",
+        "run_id",
+        "state"
+      ],
+      "type": "object"
+    },
+    "runtime_LightReviewMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_output": {
+          "type": "string"
+        },
+        "candidate_pointer": {
+          "maxLength": 2048,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+          "type": "string"
+        },
+        "candidate_port": {
+          "type": "string"
+        },
+        "candidate_stage": {
+          "type": "string"
+        },
+        "checks_pointer": {
+          "maxLength": 2048,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+          "type": "string"
+        },
+        "disabled_state": {
+          "enum": [
+            "disabled",
+            "not_applicable"
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_LightCondition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "findings_pointer": {
+          "maxLength": 2048,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+          "type": "string"
+        },
+        "gate_alternatives": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gate_ancestor": {
+          "maximum": 8,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gate_blocking_pointer": {
+          "maxLength": 2048,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+          "type": "string"
+        },
+        "gate_owner_pointer": {
+          "maxLength": 2048,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+          "type": "string"
+        },
+        "gate_port": {
+          "type": "string"
+        },
+        "gate_report_inputs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gate_schema": {
+          "$ref": "#/$defs/flow_Ref"
+        },
+        "gate_scope": {
+          "enum": [
+            "lens",
+            "aggregate"
+          ]
+        },
+        "gate_stage": {
+          "type": "string"
+        },
+        "gate_status_pointer": {
+          "maxLength": 2048,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+          "type": "string"
+        },
+        "lens": {
+          "type": "string"
+        },
+        "repair_ancestor": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "repair_stages": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "report_port": {
+          "type": "string"
+        },
+        "report_schema": {
+          "$ref": "#/$defs/flow_Ref"
+        },
+        "report_stage": {
+          "type": "string"
+        },
+        "request_pointer": {
+          "maxLength": 2048,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+          "type": "string"
+        },
+        "request_port": {
+          "type": "string"
+        },
+        "round_pointer": {
+          "maxLength": 2048,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_output",
+        "candidate_pointer",
+        "candidate_port",
+        "candidate_stage",
+        "checks_pointer",
+        "disabled_state",
+        "enabled",
+        "findings_pointer",
+        "gate_alternatives",
+        "gate_ancestor",
+        "gate_blocking_pointer",
+        "gate_owner_pointer",
+        "gate_port",
+        "gate_report_inputs",
+        "gate_schema",
+        "gate_scope",
+        "gate_stage",
+        "gate_status_pointer",
+        "lens",
+        "repair_ancestor",
+        "repair_stages",
+        "report_port",
+        "report_schema",
+        "report_stage",
+        "request_pointer",
+        "request_port",
+        "round_pointer"
+      ],
+      "type": "object"
+    },
+    "runtime_LightReviewsPage": {
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "$ref": "#/$defs/runtime_LightPage"
+        },
+        "reviews": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightReview"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "prifly-light-reviews/1"
+        },
+        "source": {
+          "$ref": "#/$defs/runtime_LightSourceInfo"
+        }
+      },
+      "required": [
+        "page",
+        "reviews",
+        "schema_version",
+        "source"
+      ],
+      "type": "object"
+    },
+    "runtime_LightRun": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runtime_MonitorBoard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "branch_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "event_sequence": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "last_observed": {
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent_run_id": {
+          "type": "string"
+        },
+        "phases": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightPhase"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_count": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "reviews": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightReview"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "run_version": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "status": {
+          "type": "string"
+        },
+        "task_revision": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "workflow_ref": {
+          "$ref": "#/$defs/flow_Ref"
+        }
+      },
+      "required": [
+        "board",
+        "branch_count",
+        "event_sequence",
+        "last_observed",
+        "outcome",
+        "parent_run_id",
+        "phases",
+        "reason_count",
+        "reviews",
+        "run_id",
+        "run_version",
+        "status",
+        "task_revision",
+        "truncated",
+        "workflow_ref"
+      ],
+      "type": "object"
+    },
+    "runtime_LightSourceInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "authority_id": {
+          "type": "string"
+        },
+        "coverage": {
+          "enum": [
+            "complete",
+            "indexing",
+            "unsupported"
+          ]
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "freshness": {
+          "enum": [
+            "fresh",
+            "updating",
+            "stale",
+            "unavailable"
+          ]
+        },
+        "last_success_at": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "authority_id",
+        "coverage",
+        "cut",
+        "error",
+        "freshness",
+        "last_success_at",
+        "observed_at",
+        "project_id",
+        "source"
+      ],
+      "type": "object"
+    },
+    "runtime_LightTaskPage": {
+      "additionalProperties": false,
+      "properties": {
+        "card": {
+          "$ref": "#/$defs/runtime_LightCard"
+        },
+        "full_monitor_url": {
+          "type": "string"
+        },
+        "page": {
+          "$ref": "#/$defs/runtime_LightPage"
+        },
+        "runs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_LightRun"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "prifly-light-task/1"
+        },
+        "source": {
+          "$ref": "#/$defs/runtime_LightSourceInfo"
+        }
+      },
+      "required": [
+        "card",
+        "full_monitor_url",
+        "page",
+        "runs",
+        "schema_version",
+        "source"
+      ],
+      "type": "object"
+    },
+    "runtime_LightWorkflowMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "phases": {
+          "items": {
+            "$ref": "#/$defs/runtime_LightPhaseMapping"
+          },
+          "maxItems": 128,
+          "type": "array"
+        },
+        "reviews": {
+          "items": {
+            "$ref": "#/$defs/runtime_LightReviewMapping"
+          },
+          "maxItems": 16,
+          "type": "array"
+        },
+        "workflow_ref": {
+          "$ref": "#/$defs/flow_Ref"
+        }
+      },
+      "required": [
+        "phases",
+        "reviews",
+        "workflow_ref"
+      ],
+      "type": "object"
+    },
+    "runtime_MonitorAttempt": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string"
+        },
+        "host_state": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "runtime_MonitorBoard": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "cut": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "next_action": {
+          "type": "string"
+        },
+        "reasons": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_MonitorReason"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "stages": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_MonitorStage"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "category",
+        "cut",
+        "next_action",
+        "reasons",
+        "schema_version",
+        "stages"
+      ],
+      "type": "object"
+    },
+    "runtime_MonitorReason": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "stage_activation_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "code",
+        "text"
+      ],
+      "type": "object"
+    },
+    "runtime_MonitorStage": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/runtime_MonitorAttempt"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "branches": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "stage_activation_id": {
+          "type": "string"
+        },
+        "stage_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "workflow_invocation_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempts",
+        "branches",
+        "stage_id",
+        "status",
+        "workflow_invocation_id"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:prifly:light:1",
+  "$ref": "#/$defs/LightBoard",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-prifly-contracts": [
+    "LightBoard",
+    "LightTask",
+    "LightReviews",
+    "LightReport",
+    "LightProjection"
+  ]
+}

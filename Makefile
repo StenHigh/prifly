@@ -35,6 +35,7 @@ test-rest:
 shard-check:
 	python3 scripts/test-shard.py --go "$(GO)" --package $(RUNTIME_PACKAGE) --shards $(SHARDS) --check
 scripts-check:
+	python3 -B scripts/test_light_projection.py
 	python3 -B scripts/test_release_ci_contract.py
 	python3 -B scripts/test_ensure_release_checks.py
 	python3 -B scripts/test_ensure_ci_check.py

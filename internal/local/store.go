@@ -76,9 +76,10 @@ const (
 )
 
 type StoreOptions struct {
-	EventTypes  []string
-	BusyTimeout time.Duration
-	ReadOnly    bool
+	ReadVerification *ReadVerification
+	EventTypes       []string
+	BusyTimeout      time.Duration
+	ReadOnly         bool
 	// SoftLimitBytes bootstraps new/legacy storage. A different value on
 	// configured storage refuses; a zero option reads the persisted ceiling.
 	SoftLimitBytes int64
@@ -96,12 +97,14 @@ type StoreInfo struct {
 }
 
 type Store struct {
-	db                *sql.DB
-	info              StoreInfo
-	eventTypes        map[string]bool
-	softLimitBytes    int64
-	explicitSoftLimit bool
-	bootstrapVersion  int
+	readVerification          *ReadVerification
+	requestedReadVerification *ReadVerification
+	db                        *sql.DB
+	info                      StoreInfo
+	eventTypes                map[string]bool
+	softLimitBytes            int64
+	explicitSoftLimit         bool
+	bootstrapVersion          int
 }
 
 type Snapshot struct {
@@ -446,7 +449,7 @@ func OpenStore(dir string, opts StoreOptions) (*Store, error) {
 	}
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(8)
-	s := &Store{db: db, eventTypes: make(map[string]bool), softLimitBytes: opts.SoftLimitBytes, explicitSoftLimit: explicitSoftLimit}
+	s := &Store{db: db, eventTypes: make(map[string]bool), softLimitBytes: opts.SoftLimitBytes, explicitSoftLimit: explicitSoftLimit, requestedReadVerification: opts.ReadVerification}
 	for _, typ := range opts.EventTypes {
 		if !validEventType(typ) {
 			_ = db.Close()
@@ -546,8 +549,22 @@ func (s *Store) open(dir string, readOnly bool) error {
 			return err
 		}
 	}
+	currentCut, err := readCut(ctx, conn, -1)
+	if err != nil {
+		return err
+	}
+	if readOnly && s.requestedReadVerification != nil {
+		file, statErr := os.Stat(filepath.Join(dir, "state.sqlite3"))
+		if statErr != nil {
+			return statErr
+		}
+		verified = max(verified, s.requestedReadVerification.through(dir, s.info, file, currentCut))
+	}
 	if err := s.verifyFrom(ctx, conn, verified); err != nil {
 		return err
+	}
+	if readOnly {
+		s.readVerification = s.verifiedPrefix(dir, currentCut)
 	}
 	if version >= 5 && !readOnly {
 		if _, err := conn.ExecContext(ctx, "UPDATE authority SET verified_cut=cut WHERE singleton=1"); err != nil {

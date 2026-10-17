@@ -99,6 +99,28 @@ func TestTaskQueueLostIndexStillNamesTheAdmittedRun(t *testing.T) {
 	if len(stored.Tasks[selection.TaskID].Associations) != 0 {
 		t.Fatal("fixture did not exercise the lost-index crash window")
 	}
+	light, lightErr := e.Light(ctx, NewLightCache(), nil)
+	if lightErr != nil {
+		t.Fatal(lightErr)
+	}
+	found := false
+	for _, card := range light.Cards {
+		if card.TaskID != nil && *card.TaskID == selection.TaskID {
+			found = true
+			if card.HistoryCount != 1 || card.CurrentRuns[0].ID != admitted.Receipt.RunID {
+				t.Fatalf("Light lost canonical admission: %+v", card)
+			}
+			for _, reason := range card.Reasons {
+				if reason.Code == "launch_intent" {
+					t.Fatal("admitted Run shown as unresolved dispatch")
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("Light hid task after index lag")
+	}
+
 	visible, err := e.QueueTask(ctx, selection.TaskID)
 	if err != nil {
 		t.Fatal(err)

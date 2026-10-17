@@ -38,3 +38,43 @@ observations. Он создаёт общий /3 профиль с JSON/blob inpu
 не запускает модели и не входит в release e2e. Native Codex/Claude диалог
 проверяется в реальном host и фиксируется отдельно от Go assertions и setup.
 Подробности — [fixture guide](fixtures/project-launch-advice/README.md).
+
+## Pri-Fly Light
+
+Точечные Go проверки: `go test ./internal/local ./internal/runtime ./cmd/prifly -run '^TestLight'`.
+Native queue continuation также покрывает `TestCLIProjectQueuePartialCancelContinueKeepsTaskAndRunHistory`.
+`python3 -B scripts/test_light_projection.py` проверяет pinned consumer bytes и exact-ref resolver.
+
+Воспроизводимый local browser/performance replay (Playwright/Chromium должны уже быть установлены):
+
+```sh
+make build
+mkdir -p .cache/light-replay/authorities
+PRIFLY_LIGHT_PERF_FIXTURE_DIR="$PWD/.cache/light-replay/authorities" \
+  .tools/go/bin/go test ./internal/runtime -run '^TestLightExportPerformanceFixtures$|^TestLightNativeTypedReviewRun$|^TestLightExportLongHistoryFixture$' -count=1
+PRIFLY_LIGHT_FIXTURE_DIR="$PWD/.cache/light-replay/authorities" \
+  .tools/go/bin/go test ./cmd/prifly -run '^TestCLIProjectQueuePartialCancelContinueKeepsTaskAndRunHistory$' -count=1
+python3 test/e2e/verify-light.py --binary bin/prifly --target .cache/light-replay \
+  --playwright-module /path/to/node_modules/playwright --chromium /path/to/chrome
+```
+
+Fixture queue bootstrap проходит штатный native validator/authority transaction;
+обычный queue CLI проверяется отдельно. Стенд содержит 1000 Runs и 1001 задач,
+реальную continuation chain и принятые через session protocol typed report/gate.
+Результат: screenshots, browser requests/metrics и runtime decode/read counters в
+целевом каталоге. Это local engineering evidence, не released/production gate.
+
+Для phase replay shipped aif-feature используйте неизменённый каталог package из
+consumer SHA `3499115956903abd264fbde2be2f432d07bc2c43` (см. manifest fixtures):
+
+```sh
+PRIFLY_LIGHT_FEATURE_SOURCE=/path/to/immutable/aif-feature \
+PRIFLY_LIGHT_PERF_FIXTURE_DIR="$PWD/.cache/light-replay/authorities" \
+  .tools/go/bin/go test ./cmd/prifly -run '^TestLightShippedFeaturePhaseFixture$' -count=1
+```
+
+Он компилирует копию package в `/3`, записывает настоящий Run без Drive/LLM и
+сопоставляет sealed refs через compiler provenance. Browser runner автоматически
+добавляет эту authority и exact mapping, если они экспортированы. Для повторной
+генерации очистите только ранее экспортированные fixture-каталоги: resolver
+намеренно не перезаписывает существующий mapping.

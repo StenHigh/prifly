@@ -1,0 +1,30 @@
+id: aif-evidence:schema/candidate
+version: 1.0.0
+$schema: https://json-schema.org/draft/2020-12/schema
+type: object
+required:
+- algorithm
+- base_commit
+- head_commit
+- index_digest
+- files_digest
+- digest
+additionalProperties: false
+properties:
+  algorithm:
+    const: git-candidate/1
+  base_commit:
+    type: string
+    pattern: ^[0-9a-f]{40}$
+  head_commit:
+    type: string
+    pattern: ^[0-9a-f]{40}$
+  index_digest:
+    type: string
+    pattern: ^sha256:[0-9a-f]{64}$
+  files_digest:
+    type: string
+    pattern: ^sha256:[0-9a-f]{64}$
+  digest:
+    type: string
+    pattern: ^sha256:[0-9a-f]{64}$

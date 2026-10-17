@@ -1,0 +1,58 @@
+id: aif-evidence:schema/request
+version: 1.0.0
+$schema: https://json-schema.org/draft/2020-12/schema
+type: object
+required:
+- base_commit
+- round
+- checks
+- optional_policy
+- require_separate_session
+additionalProperties: false
+properties:
+  base_commit:
+    type: string
+    pattern: ^[0-9a-f]{40}$
+  round:
+    type: integer
+    minimum: 1
+    maximum: 10000
+  checks:
+    type: array
+    minItems: 1
+    maxItems: 80
+    items:
+      type: object
+      required:
+      - id
+      - description
+      - method
+      - required
+      - enabled
+      - applicable
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]{0,79}$
+        description:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        method:
+          enum:
+          - code
+          - command
+          - browser
+        required:
+          type: boolean
+        enabled:
+          type: boolean
+        applicable:
+          type: boolean
+  optional_policy:
+    enum:
+    - ignore
+    - stop
+  require_separate_session:
+    type: boolean

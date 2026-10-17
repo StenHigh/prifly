@@ -1,0 +1,59 @@
+id: aif-feature:schema/uiux-bundle
+version: 1.0.0
+$schema: https://json-schema.org/draft/2020-12/schema
+type: object
+additionalProperties: false
+required:
+- schema_version
+- manifest_digest
+- status
+- reason
+- reports
+properties:
+  schema_version:
+    const: '1'
+  manifest_digest:
+    type: string
+    pattern: ^sha256:[0-9a-f]{64}$
+  status:
+    enum:
+    - ready
+    - unavailable
+  reason:
+    type: string
+    maxLength: 4000
+  reports:
+    type: array
+    maxItems: 2
+    items:
+      type: object
+      additionalProperties: false
+      required:
+      - branch
+      - ref
+      - raw_base64
+      properties:
+        branch:
+          enum:
+          - ui
+          - ux
+        ref:
+          type: object
+          additionalProperties: false
+          required:
+          - artifact_id
+          - revision
+          - digest
+          properties:
+            artifact_id:
+              type: string
+              pattern: ^artifact:.+$
+            revision:
+              type: integer
+              minimum: 1
+            digest:
+              type: string
+              pattern: ^sha256:[0-9a-f]{64}$
+        raw_base64:
+          type: string
+          maxLength: 5592408

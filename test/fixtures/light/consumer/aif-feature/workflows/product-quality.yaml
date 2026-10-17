@@ -1,0 +1,197 @@
+authoring: prifly-workflow/1
+schema_version: '6'
+id: aif-feature:workflow/product-quality
+version: 1.0.0
+title: Owned environment, sequential UI/UX review and cleanup
+refs:
+  step_capture: '{{step_capture}}'
+  step_environment: '{{step_environment}}'
+  step_ui: '{{step_ui}}'
+  step_ux: '{{step_ux}}'
+  step_evaluate: '{{step_evaluate}}'
+  step_release: '{{step_release}}'
+  step_finalize: '{{step_finalize}}'
+  schema_configuration: '{{schema_configuration}}'
+  schema_request: '{{schema_request}}'
+  schema_report: '{{schema_report}}'
+  schema_candidate: '{{schema_candidate}}'
+  schema_gate: '{{schema_gate}}'
+  schema_environment: '{{schema_environment}}'
+  schema_release: '{{schema_release}}'
+  policy: '{{policy}}'
+inputs:
+  configuration: schema_configuration
+  ui: schema_request
+  ux: schema_request
+outputs:
+  gate:
+    schema_ref: schema_gate
+    required_for:
+    - succeeded
+    - partial
+  ui_report:
+    schema_ref: schema_report
+    required_for:
+    - succeeded
+    - partial
+  ux_report:
+    schema_ref: schema_report
+    required_for:
+    - succeeded
+    - partial
+  environment:
+    schema_ref: schema_environment
+    required_for:
+    - succeeded
+    - partial
+  release:
+    schema_ref: schema_release
+    required_for:
+    - succeeded
+    - partial
+entry: capture
+policy_ref: policy
+limits:
+  max_step_instances: 7
+  max_control_transitions: 25
+  max_parallelism: 1
+  max_child_depth: 1
+stages:
+  capture:
+    kind: step
+    step_ref: step_capture
+    input_bindings:
+      configuration: $inputs.configuration
+    'on':
+      pass: environment
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  environment:
+    kind: step
+    step_ref: step_environment
+    input_bindings:
+      configuration: $inputs.configuration
+      candidate: $stages.capture.candidate
+    'on':
+      pass: ui
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  ui:
+    kind: step
+    step_ref: step_ui
+    input_bindings:
+      configuration: $inputs.configuration
+      request: $inputs.ui
+      candidate: $stages.capture.candidate
+      environment: $stages.environment.environment
+    'on':
+      pass: ux
+      needs_revision: ux
+      fail: abandoned
+      no_work: abandoned
+      blocked: ux
+  ux:
+    kind: step
+    step_ref: step_ux
+    input_bindings:
+      configuration: $inputs.configuration
+      request: $inputs.ux
+      candidate: $stages.capture.candidate
+      environment: $stages.environment.environment
+    'on':
+      pass: evaluate
+      needs_revision: evaluate
+      fail: abandoned
+      no_work: abandoned
+      blocked: evaluate
+  evaluate:
+    kind: step
+    step_ref: step_evaluate
+    input_bindings:
+      configuration: $inputs.configuration
+      ui: $inputs.ui
+      ux: $inputs.ux
+      candidate: $stages.capture.candidate
+      environment: $stages.environment.environment
+      ui_report: $stages.ui.report
+      ux_report: $stages.ux.report
+    'on':
+      pass: release
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  release:
+    kind: step
+    step_ref: step_release
+    input_bindings:
+      configuration: $inputs.configuration
+      environment: $stages.environment.environment
+    'on':
+      pass: finalize
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  finalize:
+    kind: step
+    step_ref: step_finalize
+    input_bindings:
+      configuration: $inputs.configuration
+      environment: $stages.environment.environment
+      release: $stages.release.release
+      gate: $stages.evaluate.gate
+      candidate: $stages.capture.candidate
+    'on':
+      pass: decide
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  decide:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: unavailable
+      predicate:
+        op: eq
+        left: $stages.finalize.gate#/status
+        right: blocked
+      next: standing
+    - id: blocking
+      predicate:
+        op: eq
+        left: $stages.finalize.gate#/blocking
+        right: true
+      next: standing
+    default: done
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      gate: $stages.finalize.gate
+      ui_report: $stages.ui.report
+      ux_report: $stages.ux.report
+      environment: $stages.environment.environment
+      release: $stages.release.release
+  standing:
+    kind: finish
+    outcome: partial
+    output_bindings:
+      gate: $stages.finalize.gate
+      ui_report: $stages.ui.report
+      ux_report: $stages.ux.report
+      environment: $stages.environment.environment
+      release: $stages.release.release
+  abandoned:
+    kind: finish
+    outcome: rejected

@@ -1,0 +1,164 @@
+python3 -B scripts/ensure-ci-check.py --go "/srv/projects/prifly/core/.tools/go/bin/go" --context "linux-amd64-cgo-local-openspec-light"
+ci-check: execute execute-only: unsupported symlink input
+/home/dev/.local/lib/go1.27.2/bin/go test -timeout 20m ./...
+?   	github.com/stenhigh/prifly/assets	[no test files]
+ok  	github.com/stenhigh/prifly/cmd/prifly	244.774s
+?   	github.com/stenhigh/prifly/cmd/release-build	[no test files]
+?   	github.com/stenhigh/prifly/cmd/schema-gen	[no test files]
+ok  	github.com/stenhigh/prifly/internal/flow	(cached)
+ok  	github.com/stenhigh/prifly/internal/local	10.829s
+?   	github.com/stenhigh/prifly/internal/projectwire	[no test files]
+?   	github.com/stenhigh/prifly/internal/purity	[no test files]
+ok  	github.com/stenhigh/prifly/internal/release	0.432s
+ok  	github.com/stenhigh/prifly/internal/runtime	235.056s
+ok  	github.com/stenhigh/prifly/internal/testguard	1.941s
+?   	github.com/stenhigh/prifly/test/fixtures/storage9-writer	[no test files]
+/home/dev/.local/lib/go1.27.2/bin/go vet ./...
+vet: linux read
+vet: darwin read
+fmt-check: 427 files read, all gofmt-clean
+refusal-check: 218 files read, no refusal code inside error text
+staticcheck: 12 packages read for linux, no findings
+staticcheck: 12 packages read for darwin, no findings
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 0 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.
+Use '-show verbose' for more details.
+vuln-check: 12 packages read
+python3 scripts/check-schema.py --go "/home/dev/.local/lib/go1.27.2/bin/go"
+light public schemas match: 36611 bytes, sha256:5c9cbc1dc5c31ad76b13379809d08b21261c3c2abb493386a3c6bc548f641ced
+storage-budget-status public schemas match: 4849 bytes, sha256:c2ffc505728e1ff883964ba6661a7f38aac5b6de03c8b66248ffa4f2c7b83447
+storage-budget-review public schemas match: 5868 bytes, sha256:19ea3d8471b5ed5cfd93f037f0d55f92d10dd9dceeb00d136e7189bae72f1ecd
+storage-budget-result public schemas match: 2679 bytes, sha256:9cea357b8af45ad55bdbc9d16a83175b62cc4c2559d45567095269597bb13477
+authority-storage-budget public schemas match: 2078 bytes, sha256:ffba5241d937d59d042261dfb762fde4318175578eac2ddce35c89d8fc09de1c
+claim-ownership public schemas match: 3790 bytes, sha256:08e7e6b3969fef646f7b5bbf948cb0b928e58cddf814e9b7b17ebd4cabddf233
+foundation public schemas match: 86736 bytes, sha256:4fda82e5908602a8df274a23981884682c38fb08bc465d8cc9a1dd27af3d9c42
+core public schemas match: 58786 bytes, sha256:573e440951b857afc6b22e4b77a4c0db08a1a252bd9e8007b5bde300cff06441
+choice public schemas match: 10018 bytes, sha256:7fcacd3aa4719606b3f7ec0d1395b20feabdd393f22f013e48178a13f38f9cd8
+invocations public schemas match: 67107 bytes, sha256:ff73ea6801148b60e077b20093b904b465ca298c3b233c106375ae2194654864
+repeats public schemas match: 75541 bytes, sha256:50102a1139609120e763cb614ee86ea67843c0d5d1550f7193b3bae4055f0c06
+contexts public schemas match: 126383 bytes, sha256:2597335349737522dbe334675e5f75b565e4ec15f0f95ef70d3c5ee6c8f6c9bf
+sessions public schemas match: 131183 bytes, sha256:73ffa6205c10d7160248ea5b28403158471b96c613bf9669cbd6841a55f7327d
+waivers public schemas match: 133336 bytes, sha256:2aaa49705b3148ebb6ce7934a081b0a24bef9506c5a507040185899dbd384e4d
+parallel public schemas match: 138732 bytes, sha256:128493256563d131413f77c9151d06a6f8ea8e33bed91109172542743f24e72a
+map public schemas match: 139148 bytes, sha256:c4a598da566622cf5aef4fa14026aea845a766281006df4efac8f9ea3a84323b
+wait public schemas match: 144774 bytes, sha256:6b57a09ecfb9d0ec63a73aa34e5cf89e738b9a47e5e777b0e3e85a1629dc0880
+guard public schemas match: 150325 bytes, sha256:04ced2a210857d5b14d165b748a9962fe812a679448743462ea2a66c1a5e3c72
+reported-cost public schemas match: 154289 bytes, sha256:7e336e01e3b853c2730410555bb2abbdbaaef0e357c7e84a966c88cdc9656123
+artifact-publication public schemas match: 170106 bytes, sha256:449e89084d0508734354c2e448313d192358851008794d0efd7de3cbf5097f54
+artifact-closure public schemas match: 174767 bytes, sha256:91e5c7270f1965ace3216c7023eb936327fe37ebb8468ab785268011830ce328
+publication-subscription public schemas match: 194045 bytes, sha256:26fe5d0e08da4891a27d8dd8b1dd6b5430ce31a6488345dfe2b5730a3d9db004
+publication-checks public schemas match: 196205 bytes, sha256:0db6d82658ad8d36dd8c2421ea74764e2d79a3bc71671d4e692b1b0f9538f242
+publication-new-only public schemas match: 197048 bytes, sha256:a78cb1dae91c3e9e211ac65eab8bcbd8a4c6c1ee84075e9208d230a1bf34a072
+publication-failure public schemas match: 197053 bytes, sha256:03ce74a2344c516eb4823d032044f2b55a26eec39da906b3f1c1e426696b3ac8
+action-intent public schemas match: 202849 bytes, sha256:6b500a94e85a7ce6b25179e0e3d58cb76f18b3eec15f2984a6aa02f97606cec8
+action-admission public schemas match: 206184 bytes, sha256:f03df20cefd4332b118181ebcfd4d7bc5c42a6e7ea07bc0e38e8a7048466cd11
+action-grant-admission public schemas match: 206257 bytes, sha256:98397b7fef044d0952d2e8341e6f7d1267e5655ea225f3614a6b7c402e68101a
+action-delivery public schemas match: 208010 bytes, sha256:11b29d278d84a39f32480107377568b4594e46c733cffdb17f55ebefd9366680
+fork public schemas match: 209433 bytes, sha256:2dda3b30263b127634ab0d2209aafebd33a207571c8354337639d3d811b01f23
+workspace public schemas match: 209753 bytes, sha256:cd105d0557c0472123b1b4f3045a5abedf0f6046a2954ea3c1af931a1157536d
+workspace-tree public schemas match: 214163 bytes, sha256:1f2e62416123eed5d460324eb1438268ae04d7c1590faccce76b23c569357fa4
+decision-state public schemas match: 222653 bytes, sha256:47c3178a42c9debe79913b2082e0be71e3a81a6048346aca4ea8d1fc34ad3539
+neutral-start public schemas match: 222605 bytes, sha256:9ea567a5b0253d886401159625392120bfefbdf23744547641300b33727b03fd
+timed-session public schemas match: 233074 bytes, sha256:84a15ff2eba7713f4f3c0ea76654bf65204f0574a8b57c5de3298e7b5c3fc1f8
+routed-session public schemas match: 231522 bytes, sha256:5b213dfec3d65e2b9629f06a1c6fb2b644b372a320e25b81d9e65cd5fb2f9596
+effects-session public schemas match: 232157 bytes, sha256:f77df691778bd7939201fc72bd6fc50a76cb707e5a479a97e800699db5681c6f
+materialized-session public schemas match: 233424 bytes, sha256:0231a0b74b2e990a969833580f1968535c7bffda8e57bd056c516bef07385dd8
+stage-work public schemas match: 233792 bytes, sha256:895fbf72200fa885077d1054feb9a67cc2f36df914a0783580ba2b8f400e8321
+environment-source public schemas match: 235112 bytes, sha256:159bb4313a65108b215c0e502c0dc8bf821a7480ef1d34b4af21ecf4452d450d
+program-environment public schemas match: 236460 bytes, sha256:8f4dca282890c668ff841f9544dc882d5b86d2423b75b4e57562d35cbb643861
+model-profile public schemas match: 238949 bytes, sha256:3c5546db3b23ae22e25f9d32a48502da07d318007b9912540c2d5cb61bf95843
+profile-translation public schemas match: 240626 bytes, sha256:e0d295d386e03f1857aba7bfb702747cd663ff898ba5b93a2ec5dac34bc99f9b
+project-title public schemas match: 240299 bytes, sha256:46c44342170f2d97ea3cd595626d29fd23c578d5b37be46becfe94436908cee1
+run-finish public schemas match: 242693 bytes, sha256:21f9aea2aaf86644e9b407a17870b40c7e636184b76faf0792e68bb23730205b
+external-write public schemas match: 247762 bytes, sha256:5957203c6d8a45cc00b98fa79ddd66dfc31cdec8f088d8cb60f1547b8a70195a
+continuation public schemas match: 249095 bytes, sha256:9a5b2a2b63378901acd0563060180e9a327ea7b3432655b5360b6367f707e140
+questions public schemas match: 261747 bytes, sha256:1aef3773d91a29812abe3a965aa66b1579a2e8531ec665bf80853110258e3d76
+resources public schemas match: 262516 bytes, sha256:44072e0beae92f86381ad9909e0a292c7c4a26340e9f74f8859052b074766b8f
+live-output public schemas match: 263015 bytes, sha256:0907b710864350f689f469125dae0f21a1f9c4761ee2041f3d7edaa8e920a399
+worktree-naming public schemas match: 1412499 bytes, sha256:e56f818d1d0283e94ae62c17f82cf5f78628d0a1b2061036f2901f50a01d4db1
+task-queue public schemas match: 295213 bytes, sha256:24f84eb95b79f1da37e35f77aaa5f83b92ce0ca6d7f1958cf221dba0a85f4553
+project-task-queue public schemas match: 5547 bytes, sha256:dc57a08d65b583c3c09c3792ecf4bdceae673dc651a418f4dc8ee9184c1bd71c
+project-task-queue-read public schemas match: 1761 bytes, sha256:d4461a657ed619739b02e1c2a950770b40ccde64d8e40ac9152c08913d01bdc1
+project-queue-task public schemas match: 5526 bytes, sha256:ad59672513349be77ec8f7b029e2d46c7ee7f779e24d4ef625eb53fa16f0d202
+next-handoff public schemas match: 253303 bytes, sha256:c7ef7449ae3add211d2dba29b6421757289fbf523e39ee2edec04ed8c174f155
+next-awaiting-host public schemas match: 256063 bytes, sha256:07be1795ca75600242dfa24fe854bb236ad365973d5925dd27e9d1a8ee386716
+recovery public schemas match: 245810 bytes, sha256:e8ebb2a1bfeb52d41f70d04823fe9e2682236ced92a6b1f4f4eef1a17c78ec64
+run-start-v2 public schemas match: 1807 bytes, sha256:b3cdbc5f9c0282b8d123361d63a30c31788f203f00293a5b11bda733af6a003c
+package-manifest-v2 public schemas match: 2293 bytes, sha256:0f279eb712231dffa71fcacbf5872c65429ba5e04760754518b108732a9341a4
+execution-bindings public schemas match: 1935 bytes, sha256:012c0f96c4b738b661202f27fd74c0e211f80b1c58e3112e893a6348f38891b3
+execution-bindings-v2 public schemas match: 2445 bytes, sha256:4d1dfa3b3a152285d1c7676c2e1db94925c9fa00cac4798682ff6865d9c04139
+execution-bindings-v3 public schemas match: 2829 bytes, sha256:1a078f277d05a6e6978493f8aa4f7964a72e5b1040b91e03ee747e228c35f958
+program-progress public schemas match: 2891 bytes, sha256:700b8c953ee2450659a36f9e741903ac708fba340cf5d7929340a0c4a70ea747
+run-decisions public schemas match: 9002 bytes, sha256:a6984020863cd091100ac1f60cdbcfab886e54dd318595ecd49439ecff1c9b68
+step-definition-v3 public schemas match: 8276 bytes, sha256:e366531efaa0a1216a63daf543095b9d3fff7705ff301d5e174ac3f195880079
+step-definition-v4 public schemas match: 8356 bytes, sha256:cf9e8077429e161d5548b5e3709c0a422326392fd01573246b2e7e10d66bde85
+step-definition-v5 public schemas match: 9483 bytes, sha256:b5a512217864890020d483b72e5a8abcea597194687732da5b2c4dc9db0d94a8
+step-definition-v6 public schemas match: 9853 bytes, sha256:9759c5a010382c0362eaca77849206d19240042af5c3c1d17602996cb26c6707
+step-definition-v7 public schemas match: 9857 bytes, sha256:947e7e1bc8a13a48e17c71e8e332945e664ef5758e4570b50874c3f1250e3f87
+step-definition-v8 public schemas match: 9911 bytes, sha256:c22c3f81d7d42d2bd985d0156af6a7bafe475af6e771dcc11200653f226670cb
+step-definition-v10 public schemas match: 10156 bytes, sha256:23c67bc963f7b7d49e6f30d381f7a4bb1767fdb63188507d1c3505174e62030e
+step-definition-v12 public schemas match: 9514 bytes, sha256:4326bb1f037abb639cd5f51726c94b127f1ff4a729814f8d2f84f04dc0d612f6
+workflow-revision-v3 public schemas match: 16947 bytes, sha256:c20e9ee4c4900d22ed558fc4f8433f78249b83b3f33df40c15adcb11bc83ce52
+workflow-revision-v4 public schemas match: 17091 bytes, sha256:2295aa3dba14b023960d6304e2102bc60efb7329be11d4ca295a35dadae4c5ec
+workflow-revision-v5 public schemas match: 17154 bytes, sha256:f07e0663e557d02a0a468a670c81aedcf0f94835bbeb27e2d037d6c00b9e8c4f
+workflow-revision-v6 public schemas match: 17204 bytes, sha256:ad82a351f4b047b6c122745283e81ebfdf39750608a4b6449a3270e94bb2a562
+workflow-revision-v7 public schemas match: 18699 bytes, sha256:106a8e1b776fc7c972612f66f9eb6ab649e2ce181788e1be5b3002122a6be6a7
+workflow-revision-v8 public schemas match: 18991 bytes, sha256:99fa3a516a798aa524681bfb0a0a3f855534a552f63ee1ded7d8e53e13e6d5ef
+publication-source public schemas match: 1357 bytes, sha256:66826e7b518bdeea994a63358f1a9198ea79bb50db70e1e7576b8b13341ffe5c
+publication-source-v2 public schemas match: 1537 bytes, sha256:5c5e83f208e1b97338097d988bf9c728c1ddb9c9cc0f198f44aebf2d9a98ad4d
+publication-source-v3 public schemas match: 1366 bytes, sha256:ba483e5da360f324f2ca87c22192bf0bc53e427bd7621366b7aabcb6ca6ba822
+publication-source-v4 public schemas match: 1546 bytes, sha256:5e07af871f983508cc33c9594703d19088dcbce7a642cf0ad155cf31b24415e9
+publication-source-v5 public schemas match: 1415 bytes, sha256:85c5c38d5c99f766f771a4246f12a0d613423614fe8f681794deca23697a5f7c
+publication-source-v6 public schemas match: 1586 bytes, sha256:830fd2a6dbefcdeffdbf6a7287139d15c332131f92db38700fac63a828268663
+publication-source-v7 public schemas match: 1780 bytes, sha256:864c4192242883181569ade57a9583f7e58e5eb44fe00850fcfb9b12ec8174ab
+publication-source-v8 public schemas match: 1960 bytes, sha256:0bc629837d550a7238ede0c264f30f177c1cbc0301fe9e788caeb3ff6707d68a
+python3 -B test/e2e/verify-release-ci.py
+release CI contract is present
+python3 -B scripts/test_light_projection.py
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.004s
+
+OK
+python3 -B scripts/test_release_ci_contract.py
+......
+----------------------------------------------------------------------
+Ran 6 tests in 0.018s
+
+OK
+python3 -B scripts/test_ensure_release_checks.py
+..................
+----------------------------------------------------------------------
+Ran 18 tests in 0.014s
+
+OK
+python3 -B scripts/test_ensure_ci_check.py
+ci-check: inputs changed during check; no reusable evidence
+........ci-check: staged bytes differ from tested working bytes
+......
+----------------------------------------------------------------------
+Ran 14 tests in 4.133s
+
+OK
+python3 -B scripts/test_test_changed.py
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.001s
+
+OK
+python3 -B scripts/test_tag_release.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.009s
+
+OK
+python3 scripts/test-shard.py --go "/home/dev/.local/lib/go1.27.2/bin/go" --package ./internal/runtime --shards 3 --check
+test-shard: 740 tests of ./internal/runtime in 3 shards (263, 257, 220), each exactly once
+all modules verified
+ci-check: executed; no reusable evidence (execute-only: unsupported symlink input)

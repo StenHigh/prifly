@@ -1,0 +1,130 @@
+[
+  {
+    "url": "http://127.0.0.1:39105/light/",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/light.css",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/monitor-theme.js",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/light.js",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 304
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 304
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 304
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?q=%D0%97%D0%B0%D0%B4%D0%B0%D1%87%D0%B0+0999",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?q=%D0%97%D0%B0%D0%B4%D0%B0%D1%87%D0%B0+0999",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/task?source=811444948237dddbe35b8e50d2e29bc2536d65b185864e47166b227dbf3c8cb9&key=task%3Aqueue-task%3Alight-0999",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?q=%D0%97%D0%B0%D0%B4%D0%B0%D1%87%D0%B0+0999",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/monitor-theme.js",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/light.css",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/light.js",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/task?source=bf16579ada94abda5e27fbdc23a70b466d5485a4c391533128a89cfa01379f24&key=run%3Arun%3A2feffca5d08b6de58d89de7c00faedad96e45f3dbe3fa44bd3ec9fe7d8eeea2a",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/reviews?source=bf16579ada94abda5e27fbdc23a70b466d5485a4c391533128a89cfa01379f24&run=run%3A2feffca5d08b6de58d89de7c00faedad96e45f3dbe3fa44bd3ec9fe7d8eeea2a",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/task?source=bf16579ada94abda5e27fbdc23a70b466d5485a4c391533128a89cfa01379f24&key=run%3Arun%3A2feffca5d08b6de58d89de7c00faedad96e45f3dbe3fa44bd3ec9fe7d8eeea2a",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/report?source=bf16579ada94abda5e27fbdc23a70b466d5485a4c391533128a89cfa01379f24&run=run%3A2feffca5d08b6de58d89de7c00faedad96e45f3dbe3fa44bd3ec9fe7d8eeea2a&review=invocation%3A0d8c0057a019ece879cbcd02ab106d24%2FSecurity%2Fattempt%3A1a636789167a45f161c5e9983e5c0042&kind=gate",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/task?source=bf16579ada94abda5e27fbdc23a70b466d5485a4c391533128a89cfa01379f24&key=run%3Arun%3A2feffca5d08b6de58d89de7c00faedad96e45f3dbe3fa44bd3ec9fe7d8eeea2a",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/task?source=bf16579ada94abda5e27fbdc23a70b466d5485a4c391533128a89cfa01379f24&key=run%3Arun%3A2feffca5d08b6de58d89de7c00faedad96e45f3dbe3fa44bd3ec9fe7d8eeea2a",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 304
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?q=nothing-matches-this",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?q=%D0%97%D0%B0%D0%B4%D0%B0%D1%87%D0%B0+0001",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 200
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 304
+  },
+  {
+    "url": "http://127.0.0.1:39105/light/api/light/board?",
+    "status": 304
+  }
+]

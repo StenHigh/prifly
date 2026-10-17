@@ -282,6 +282,33 @@ package используйте полный compiled ref из результат
 Точные границы реализованного, roadmap и контрактов — не в README, а в
 OpenSpec.
 
+## Pri-Fly Light
+
+В этой сборке добавлен отдельный read-only обзор native задач и результатов
+ревью (контракты `Light /1`; до публикации релиза — unreleased). Полный monitor
+сохраняет прежний default. Light запускается отдельным listener:
+
+```sh
+prifly monitor --ui light --addr 127.0.0.1:7782 \
+  --full-monitor-url http://127.0.0.1:7777/
+# При proxy prefix добавьте --base-path /light/
+# Для typed phase/review: --light-projection /path/to/light-projection.json
+```
+
+На первом экране — очередь до Run, работа, ожидания и результаты. Continue
+остаётся в одной native task; самостоятельные Runs помечены fallback.
+Успех Run не завершает задачу и не обещает merge/deploy. Без optional mapping
+видны actual stages/причины и «нет данных» для неизвестного review. Источники
+ревью, candidate/round и gate доступны в подробностях.
+
+По умолчанию используются зарегистрированные authorities без обхода файловой
+системы. Light имеет собственные read-only API/assets, не подключает maintenance
+и не запускает работу. Loopback/Host guards сохраняются. Для удалённого просмотра
+нужен прежний authenticated proxy, переписывающий upstream Host; домены не
+заданы в Core. `--full-monitor-url` за proxy задаётся явно. Откат — отключить
+только Light listener/route. [Настройка, поля mapping и ограничения](examples/authoring/light-guide.md).
+Production rollout и released qualification E6 ещё требуют отдельной приёмки.
+
 ## Локальный монитор прогонов
 
 При создании первого Run CLI запускает фоновый монитор на

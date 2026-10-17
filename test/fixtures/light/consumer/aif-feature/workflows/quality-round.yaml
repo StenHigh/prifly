@@ -1,0 +1,714 @@
+authoring: prifly-workflow/1
+schema_version: '6'
+id: aif-feature:workflow/quality-round
+version: 1.2.3
+title: Bounded feature quality-round
+refs:
+  policy: '{{policy}}'
+  schema_candidate: '{{schema_candidate}}'
+  schema_evidence: '{{schema_evidence}}'
+  schema_gate: '{{schema_feature-gate}}'
+  schema_implementation: '{{schema_implementation}}'
+  schema_result: '{{schema_result}}'
+  schema_round: '{{schema_round}}'
+  schema_round-limit: '{{schema_round-limit}}'
+  schema_surface: '{{schema_surface}}'
+  schema_task: '{{schema_task}}'
+  schema_warmup-handoff: '{{schema_warmup-handoff}}'
+  step_aggregate-backend: '{{step_aggregate-backend}}'
+  step_aggregate-frontend: '{{step_aggregate-frontend}}'
+  step_begin: '{{step_begin}}'
+  step_capture-candidate: '{{step_capture-candidate}}'
+  step_checks: '{{step_checks}}'
+  step_repair: '{{step_repair}}'
+  step_review: '{{step_review}}'
+  step_security: '{{step_security}}'
+  workflow_product-quality: '{{workflow_product-quality}}'
+  schema_review_mode: '{{schema_review-mode}}'
+  step_collect_reviews: '{{step_collect-reviews}}'
+  step_aggregate_parallel: '{{step_aggregate-parallel}}'
+  workflow_parallel_reviews: '{{workflow_parallel-reviews}}'
+  schema_browser_adapter: '{{schema_browser-adapter}}'
+  workflow_product_parallel: '{{workflow_product-parallel}}'
+  step_aggregate_uiux: '{{step_aggregate-uiux}}'
+inputs:
+  task: schema_task
+  handoff: schema_warmup-handoff
+  implementation: schema_implementation
+  result: schema_result
+  round: schema_round
+  limit: schema_round-limit
+  surface: schema_surface
+  review_mode: schema_review_mode
+  browser_adapter: schema_browser_adapter
+outputs:
+  implementation:
+    schema_ref: schema_implementation
+    required_for:
+    - succeeded
+    - partial
+    - rejected
+  result:
+    schema_ref: schema_result
+    required_for:
+    - succeeded
+    - partial
+    - rejected
+  round:
+    schema_ref: schema_round
+    required_for:
+    - succeeded
+    - partial
+    - rejected
+  gate:
+    schema_ref: schema_gate
+    required_for:
+    - succeeded
+    - partial
+    - rejected
+  evidence:
+    schema_ref: schema_evidence
+    required_for:
+    - succeeded
+    - partial
+    - rejected
+  candidate:
+    schema_ref: schema_candidate
+    required_for:
+    - succeeded
+    - partial
+    - rejected
+limits:
+  max_step_instances: 15
+  max_control_transitions: 138
+  max_parallelism: 2
+  max_child_depth: 5
+policy_ref: policy
+entry: begin
+stages:
+  begin:
+    kind: step
+    step_ref: step_begin
+    input_bindings:
+      task: $inputs.task
+      implementation: $inputs.implementation
+      round: $inputs.round
+      review_mode: $inputs.review_mode
+      browser_adapter: $inputs.browser_adapter
+      limit: $inputs.limit
+    'on':
+      pass: capture
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  capture:
+    kind: step
+    step_ref: step_capture-candidate
+    input_bindings:
+      implementation: $inputs.implementation
+    'on':
+      pass: checks
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  checks:
+    kind: step
+    step_ref: step_checks
+    input_bindings:
+      task: $inputs.task
+      handoff: $inputs.handoff
+      request: $stages.begin.checks_request
+      candidate: $stages.capture.candidate
+    'on':
+      pass: review-mode
+      needs_revision: review-mode
+      blocked: review-mode
+      fail: abandoned
+      no_work: abandoned
+  security:
+    kind: step
+    step_ref: step_security
+    input_bindings:
+      task: $inputs.task
+      handoff: $inputs.handoff
+      request: $stages.begin.security_request
+      candidate: $stages.capture.candidate
+    'on':
+      pass: review
+      needs_revision: review
+      blocked: review
+      fail: abandoned
+      no_work: abandoned
+  review:
+    kind: step
+    step_ref: step_review
+    input_bindings:
+      task: $inputs.task
+      handoff: $inputs.handoff
+      request: $stages.begin.review_request
+      candidate: $stages.capture.candidate
+    'on':
+      pass: surface
+      needs_revision: surface
+      blocked: surface
+      fail: abandoned
+      no_work: abandoned
+  surface:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: frontend
+      predicate:
+        op: eq
+        left: $inputs.surface
+        right: frontend
+      next: product-mode
+    default: aggregate-backend
+  product:
+    kind: call
+    workflow_ref: workflow_product-quality
+    input_bindings:
+      configuration: $stages.begin.configuration
+      ui: $stages.begin.ui
+      ux: $stages.begin.ux
+    'on':
+      succeeded: aggregate-frontend
+      partial: aggregate-frontend
+      rejected: abandoned
+  aggregate-backend:
+    kind: step
+    step_ref: step_aggregate-backend
+    input_bindings:
+      task: $inputs.task
+      implementation: $inputs.implementation
+      candidate: $stages.capture.candidate
+      round: $stages.begin.round
+      checks_request: $stages.begin.checks_request
+      checks_report: $stages.checks.report
+      security_request: $stages.begin.security_request
+      security_report: $stages.security.report
+      review_request: $stages.begin.review_request
+      review_report: $stages.review.report
+    'on':
+      pass: decide-backend
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  decide-backend:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: unavailable
+      predicate:
+        op: eq
+        left: $stages.aggregate-backend.gate#/status
+        right: blocked
+      next: standing-backend
+    - id: owner
+      predicate:
+        op: eq
+        left: $stages.aggregate-backend.gate#/blocking_owner_only
+        right: true
+      next: standing-backend
+    - id: clean
+      predicate:
+        op: eq
+        left: $stages.aggregate-backend.gate#/blocking
+        right: false
+      next: passed-backend
+    - id: limit
+      predicate:
+        op: eq
+        left: $stages.begin.round
+        right: $inputs.limit
+      next: standing-backend
+    default: repair-backend
+  repair-backend:
+    kind: step
+    step_ref: step_repair
+    input_bindings:
+      task: $inputs.task
+      handoff: $inputs.handoff
+      implementation: $inputs.implementation
+      result: $inputs.result
+      gate: $stages.aggregate-backend.gate
+    'on':
+      pass: repair-ready-backend
+      needs_revision: unresolved-backend
+      blocked: unresolved-backend
+      fail: unresolved-backend
+      no_work: unresolved-backend
+  passed-backend:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      implementation: $inputs.implementation
+      result: $inputs.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-backend.gate
+      evidence: $stages.aggregate-backend.evidence
+      candidate: $stages.capture.candidate
+  standing-backend:
+    kind: finish
+    outcome: rejected
+    output_bindings:
+      implementation: $inputs.implementation
+      result: $inputs.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-backend.gate
+      evidence: $stages.aggregate-backend.evidence
+      candidate: $stages.capture.candidate
+  fixed-backend:
+    kind: finish
+    outcome: partial
+    output_bindings:
+      implementation: $stages.repair-backend.implementation
+      result: $stages.repair-backend.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-backend.gate
+      evidence: $stages.aggregate-backend.evidence
+      candidate: $stages.capture.candidate
+  unresolved-backend:
+    kind: finish
+    outcome: rejected
+    output_bindings:
+      implementation: $stages.repair-backend.implementation
+      result: $stages.repair-backend.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-backend.gate
+      evidence: $stages.aggregate-backend.evidence
+      candidate: $stages.capture.candidate
+  aggregate-frontend:
+    kind: step
+    step_ref: step_aggregate-frontend
+    input_bindings:
+      task: $inputs.task
+      implementation: $inputs.implementation
+      candidate: $stages.capture.candidate
+      round: $stages.begin.round
+      checks_request: $stages.begin.checks_request
+      checks_report: $stages.checks.report
+      security_request: $stages.begin.security_request
+      security_report: $stages.security.report
+      review_request: $stages.begin.review_request
+      review_report: $stages.review.report
+      product_gate: $stages.product.gate
+      ui_report: $stages.product.ui_report
+      ux_report: $stages.product.ux_report
+      environment: $stages.product.environment
+      release: $stages.product.release
+    'on':
+      pass: decide-frontend
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  decide-frontend:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: unavailable
+      predicate:
+        op: eq
+        left: $stages.aggregate-frontend.gate#/status
+        right: blocked
+      next: standing-frontend
+    - id: owner
+      predicate:
+        op: eq
+        left: $stages.aggregate-frontend.gate#/blocking_owner_only
+        right: true
+      next: standing-frontend
+    - id: clean
+      predicate:
+        op: eq
+        left: $stages.aggregate-frontend.gate#/blocking
+        right: false
+      next: passed-frontend
+    - id: limit
+      predicate:
+        op: eq
+        left: $stages.begin.round
+        right: $inputs.limit
+      next: standing-frontend
+    default: repair-frontend
+  repair-frontend:
+    kind: step
+    step_ref: step_repair
+    input_bindings:
+      task: $inputs.task
+      handoff: $inputs.handoff
+      implementation: $inputs.implementation
+      result: $inputs.result
+      gate: $stages.aggregate-frontend.gate
+    'on':
+      pass: repair-ready-frontend
+      needs_revision: unresolved-frontend
+      blocked: unresolved-frontend
+      fail: unresolved-frontend
+      no_work: unresolved-frontend
+  passed-frontend:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      implementation: $inputs.implementation
+      result: $inputs.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-frontend.gate
+      evidence: $stages.aggregate-frontend.evidence
+      candidate: $stages.capture.candidate
+  standing-frontend:
+    kind: finish
+    outcome: rejected
+    output_bindings:
+      implementation: $inputs.implementation
+      result: $inputs.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-frontend.gate
+      evidence: $stages.aggregate-frontend.evidence
+      candidate: $stages.capture.candidate
+  fixed-frontend:
+    kind: finish
+    outcome: partial
+    output_bindings:
+      implementation: $stages.repair-frontend.implementation
+      result: $stages.repair-frontend.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-frontend.gate
+      evidence: $stages.aggregate-frontend.evidence
+      candidate: $stages.capture.candidate
+  unresolved-frontend:
+    kind: finish
+    outcome: rejected
+    output_bindings:
+      implementation: $stages.repair-frontend.implementation
+      result: $stages.repair-frontend.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-frontend.gate
+      evidence: $stages.aggregate-frontend.evidence
+      candidate: $stages.capture.candidate
+  abandoned:
+    kind: finish
+    outcome: no_work
+    output_bindings: {}
+  repair-ready-backend:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: implemented
+      predicate:
+        op: eq
+        left: $stages.repair-backend.result#/outcome
+        right: implemented
+      next: fixed-backend
+    default: unresolved-backend
+  repair-ready-frontend:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: implemented
+      predicate:
+        op: eq
+        left: $stages.repair-frontend.result#/outcome
+        right: implemented
+      next: fixed-frontend
+    default: unresolved-frontend
+  review-mode:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: parallel
+      predicate:
+        op: eq
+        left: $inputs.review_mode
+        right: parallel-backend
+      next: parallel-reviews
+    default: security
+  parallel-reviews:
+    kind: call
+    workflow_ref: workflow_parallel_reviews
+    input_bindings:
+      task: $inputs.task
+      handoff: $inputs.handoff
+      candidate: $stages.capture.candidate
+      security_request: $stages.begin.security_request
+      review_request: $stages.begin.review_request
+    'on':
+      succeeded: collect-reviews
+      partial: collect-reviews
+    on_error: abandoned
+  collect-reviews:
+    kind: step
+    step_ref: step_collect_reviews
+    input_bindings:
+      manifest: $stages.parallel-reviews.manifest
+    'on':
+      pass: aggregate-parallel
+      needs_revision: aggregate-parallel
+      blocked: aggregate-parallel
+      fail: abandoned
+      no_work: abandoned
+  aggregate-parallel:
+    kind: step
+    step_ref: step_aggregate_parallel
+    input_bindings:
+      task: $inputs.task
+      implementation: $inputs.implementation
+      candidate: $stages.capture.candidate
+      round: $stages.begin.round
+      checks_request: $stages.begin.checks_request
+      checks_report: $stages.checks.report
+      security_request: $stages.begin.security_request
+      review_request: $stages.begin.review_request
+      manifest: $stages.parallel-reviews.manifest
+      bundle: $stages.collect-reviews.bundle
+    'on':
+      pass: decide-parallel
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  decide-parallel:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: unavailable
+      predicate:
+        op: eq
+        left: $stages.aggregate-parallel.gate#/status
+        right: blocked
+      next: standing-parallel
+    - id: owner
+      predicate:
+        op: eq
+        left: $stages.aggregate-parallel.gate#/blocking_owner_only
+        right: true
+      next: standing-parallel
+    - id: clean
+      predicate:
+        op: eq
+        left: $stages.aggregate-parallel.gate#/blocking
+        right: false
+      next: passed-parallel
+    - id: limit
+      predicate:
+        op: eq
+        left: $stages.begin.round
+        right: $inputs.limit
+      next: standing-parallel
+    default: repair-parallel
+  passed-parallel:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      implementation: $inputs.implementation
+      result: $inputs.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-parallel.gate
+      evidence: $stages.aggregate-parallel.evidence
+      candidate: $stages.capture.candidate
+  standing-parallel:
+    kind: finish
+    outcome: rejected
+    output_bindings:
+      implementation: $inputs.implementation
+      result: $inputs.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-parallel.gate
+      evidence: $stages.aggregate-parallel.evidence
+      candidate: $stages.capture.candidate
+  fixed-parallel:
+    kind: finish
+    outcome: partial
+    output_bindings:
+      implementation: $stages.repair-parallel.implementation
+      result: $stages.repair-parallel.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-parallel.gate
+      evidence: $stages.aggregate-parallel.evidence
+      candidate: $stages.capture.candidate
+  unresolved-parallel:
+    kind: finish
+    outcome: rejected
+    output_bindings:
+      implementation: $stages.repair-parallel.implementation
+      result: $stages.repair-parallel.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-parallel.gate
+      evidence: $stages.aggregate-parallel.evidence
+      candidate: $stages.capture.candidate
+  repair-parallel:
+    kind: step
+    step_ref: step_repair
+    input_bindings:
+      task: $inputs.task
+      handoff: $inputs.handoff
+      implementation: $inputs.implementation
+      result: $inputs.result
+      gate: $stages.aggregate-parallel.gate
+    'on':
+      pass: repair-ready-parallel
+      needs_revision: unresolved-parallel
+      blocked: unresolved-parallel
+      fail: unresolved-parallel
+      no_work: unresolved-parallel
+  repair-ready-parallel:
+    branches:
+    - id: implemented
+      next: fixed-parallel
+      predicate:
+        left: $stages.repair-parallel.result#/outcome
+        op: eq
+        right: implemented
+    default: unresolved-parallel
+    kind: choice
+    selection: first_match
+  product-mode:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: parallel-ui-ux
+      predicate:
+        op: eq
+        left: $inputs.review_mode
+        right: parallel-ui-ux
+      next: product-parallel
+    default: product
+  product-parallel:
+    kind: call
+    workflow_ref: workflow_product_parallel
+    input_bindings:
+      configuration: $stages.begin.configuration
+      candidate: $stages.capture.candidate
+      ui: $stages.begin.ui
+      ux: $stages.begin.ux
+      browser_adapter: $inputs.browser_adapter
+    'on':
+      succeeded: aggregate-uiux
+      partial: aggregate-uiux
+      rejected: abandoned
+  aggregate-uiux:
+    kind: step
+    step_ref: step_aggregate_uiux
+    input_bindings:
+      task: $inputs.task
+      implementation: $inputs.implementation
+      candidate: $stages.capture.candidate
+      round: $stages.begin.round
+      checks_request: $stages.begin.checks_request
+      checks_report: $stages.checks.report
+      security_request: $stages.begin.security_request
+      security_report: $stages.security.report
+      review_request: $stages.begin.review_request
+      review_report: $stages.review.report
+      product_evidence: $stages.product-parallel.evidence
+    'on':
+      pass: decide-uiux
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  decide-uiux:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: unavailable
+      predicate:
+        op: eq
+        left: $stages.aggregate-uiux.gate#/status
+        right: blocked
+      next: standing-uiux
+    - id: owner
+      predicate:
+        op: eq
+        left: $stages.aggregate-uiux.gate#/blocking_owner_only
+        right: true
+      next: standing-uiux
+    - id: clean
+      predicate:
+        op: eq
+        left: $stages.aggregate-uiux.gate#/blocking
+        right: false
+      next: passed-uiux
+    - id: limit
+      predicate:
+        op: eq
+        left: $stages.begin.round
+        right: $inputs.limit
+      next: standing-uiux
+    default: repair-uiux
+  repair-uiux:
+    kind: step
+    step_ref: step_repair
+    input_bindings:
+      task: $inputs.task
+      handoff: $inputs.handoff
+      implementation: $inputs.implementation
+      result: $inputs.result
+      gate: $stages.aggregate-uiux.gate
+    'on':
+      pass: repair-ready-uiux
+      needs_revision: unresolved-uiux
+      blocked: unresolved-uiux
+      fail: unresolved-uiux
+      no_work: unresolved-uiux
+  passed-uiux:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      implementation: $inputs.implementation
+      result: $inputs.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-uiux.gate
+      evidence: $stages.aggregate-uiux.evidence
+      candidate: $stages.capture.candidate
+  standing-uiux:
+    kind: finish
+    outcome: rejected
+    output_bindings:
+      implementation: $inputs.implementation
+      result: $inputs.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-uiux.gate
+      evidence: $stages.aggregate-uiux.evidence
+      candidate: $stages.capture.candidate
+  fixed-uiux:
+    kind: finish
+    outcome: partial
+    output_bindings:
+      implementation: $stages.repair-uiux.implementation
+      result: $stages.repair-uiux.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-uiux.gate
+      evidence: $stages.aggregate-uiux.evidence
+      candidate: $stages.capture.candidate
+  unresolved-uiux:
+    kind: finish
+    outcome: rejected
+    output_bindings:
+      implementation: $stages.repair-uiux.implementation
+      result: $stages.repair-uiux.result
+      round: $stages.begin.round
+      gate: $stages.aggregate-uiux.gate
+      evidence: $stages.aggregate-uiux.evidence
+      candidate: $stages.capture.candidate
+  repair-ready-uiux:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: implemented
+      predicate:
+        op: eq
+        left: $stages.repair-uiux.result#/outcome
+        right: implemented
+      next: fixed-uiux
+    default: unresolved-uiux

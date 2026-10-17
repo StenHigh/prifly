@@ -1,0 +1,238 @@
+id: aif-product:schema/configuration
+version: 1.0.0
+$schema: https://json-schema.org/draft/2020-12/schema
+type: object
+required:
+- surface
+- scope_reason
+- ui
+- ux
+- environment
+- scenarios
+additionalProperties: false
+properties:
+  surface:
+    enum:
+    - frontend
+    - backend
+  scope_reason:
+    type: string
+    minLength: 1
+    maxLength: 4000
+  ui:
+    type: object
+    required:
+    - base_commit
+    - round
+    - checks
+    - optional_policy
+    - require_separate_session
+    additionalProperties: false
+    properties:
+      base_commit:
+        type: string
+        pattern: ^[0-9a-f]{40}$
+      round:
+        type: integer
+        minimum: 1
+        maximum: 10000
+      checks:
+        type: array
+        minItems: 1
+        maxItems: 80
+        items:
+          type: object
+          required:
+          - id
+          - description
+          - method
+          - required
+          - enabled
+          - applicable
+          additionalProperties: false
+          properties:
+            id:
+              type: string
+              pattern: ^[a-z][a-z0-9_-]{0,79}$
+            description:
+              type: string
+              minLength: 1
+              maxLength: 4000
+            method:
+              const: browser
+            required:
+              type: boolean
+            enabled:
+              type: boolean
+            applicable:
+              type: boolean
+      optional_policy:
+        enum:
+        - ignore
+        - stop
+      require_separate_session:
+        type: boolean
+  ux:
+    type: object
+    required:
+    - base_commit
+    - round
+    - checks
+    - optional_policy
+    - require_separate_session
+    additionalProperties: false
+    properties:
+      base_commit:
+        type: string
+        pattern: ^[0-9a-f]{40}$
+      round:
+        type: integer
+        minimum: 1
+        maximum: 10000
+      checks:
+        type: array
+        minItems: 1
+        maxItems: 80
+        items:
+          type: object
+          required:
+          - id
+          - description
+          - method
+          - required
+          - enabled
+          - applicable
+          additionalProperties: false
+          properties:
+            id:
+              type: string
+              pattern: ^[a-z][a-z0-9_-]{0,79}$
+            description:
+              type: string
+              minLength: 1
+              maxLength: 4000
+            method:
+              const: browser
+            required:
+              type: boolean
+            enabled:
+              type: boolean
+            applicable:
+              type: boolean
+      optional_policy:
+        enum:
+        - ignore
+        - stop
+      require_separate_session:
+        type: boolean
+  environment:
+    type: object
+    required:
+    - owner
+    - profile
+    - setup
+    - cleanup
+    - browser_adapter
+    - test_identity
+    - allowed_operations
+    - shared_resource
+    additionalProperties: false
+    properties:
+      owner:
+        type: string
+        minLength: 1
+        maxLength: 4000
+      profile:
+        type: string
+        minLength: 1
+        maxLength: 4000
+      setup:
+        type: string
+        minLength: 1
+        maxLength: 4000
+      cleanup:
+        type: string
+        minLength: 1
+        maxLength: 4000
+      browser_adapter:
+        type: string
+        minLength: 1
+        maxLength: 4000
+      test_identity:
+        type: string
+        minLength: 1
+        maxLength: 4000
+      allowed_operations:
+        type: array
+        minItems: 1
+        maxItems: 12
+        uniqueItems: true
+        items:
+          enum:
+          - navigate
+          - input
+          - submit_test
+      shared_resource:
+        type:
+        - string
+        - 'null'
+        pattern: ^[a-z][a-z0-9_-]{0,63}$
+  scenarios:
+    type: array
+    maxItems: 160
+    items:
+      type: object
+      required:
+      - id
+      - lens
+      - check_id
+      - path
+      - viewport
+      - actions
+      - expectations
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]{0,79}$
+        lens:
+          enum:
+          - ui
+          - ux
+        check_id:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]{0,79}$
+        path:
+          type: string
+          pattern: ^/[^\s]*$
+          maxLength: 1024
+        viewport:
+          type: object
+          required:
+          - width
+          - height
+          additionalProperties: false
+          properties:
+            width:
+              type: integer
+              minimum: 240
+              maximum: 4096
+            height:
+              type: integer
+              minimum: 240
+              maximum: 4096
+        actions:
+          type: array
+          maxItems: 40
+          items:
+            type: string
+            minLength: 1
+            maxLength: 4000
+        expectations:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items:
+            type: string
+            minLength: 1
+            maxLength: 4000

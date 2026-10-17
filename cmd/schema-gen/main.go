@@ -377,6 +377,7 @@ var documentContracts = []struct {
 	flag, description string
 	build             func() ([]byte, error)
 }{
+	{"light", "generate read-only Light contracts", lightSchema},
 	{"worktree-naming", "generate opt-in Project worktree naming contracts", worktreeNamingSchema},
 	{"storage-budget-status", "generate StorageBudgetStatus", func() ([]byte, error) {
 		return storageBudgetSchema("StorageBudgetStatus", "storage-budget-status", reflect.TypeFor[prifly.StorageBudgetStatus]())

@@ -1,0 +1,94 @@
+{
+  "repository": "StenHigh/prifly-aif-workflows",
+  "source_sha": "3499115956903abd264fbde2be2f432d07bc2c43",
+  "files": {
+    "aif-review-evidence/schemas/request.yaml": {
+      "git_blob": "541f565297c59cb9eed53b4630c8c2c32162de1c",
+      "sha256": "f6b6d0be4333291bca0f9a9e2f7c6295dbf9ec0f72e12b0fa39427e7aa9cec36"
+    },
+    "aif-review-evidence/schemas/report.yaml": {
+      "git_blob": "3c8636db6c37c9db4cbe8bd65f89446b9dc17fd8",
+      "sha256": "d852feb79b6205d4fb0fe162819833c1682c088485c7167a64b39b7bad043d74"
+    },
+    "aif-review-evidence/schemas/gate.yaml": {
+      "git_blob": "b3d00709e3387afc4b17f6ea825d754b392fdb17",
+      "sha256": "9aeb5bc09fdfc5328119cea6ff294a040b9734af91733cdfabe5f4afe5170055"
+    },
+    "aif-review-evidence/schemas/candidate.yaml": {
+      "git_blob": "672c24e337bea2ee9a0d4df558d58f160f5f98eb",
+      "sha256": "c812384692da6013da2e92e469377228797a5117f4067b57958a993bf341b2ba"
+    },
+    "aif-ui-ux/schemas/configuration.yaml": {
+      "git_blob": "184472df0f7dc6fb350cb8c040851132992f44f0",
+      "sha256": "0d34c9b0d701e3e07aaad0c692c65ae79915cfe4f8f4caea07b13f9a26099208"
+    },
+    "aif-ui-ux/schemas/report.yaml": {
+      "git_blob": "3c8636db6c37c9db4cbe8bd65f89446b9dc17fd8",
+      "sha256": "d852feb79b6205d4fb0fe162819833c1682c088485c7167a64b39b7bad043d74"
+    },
+    "aif-ui-ux/schemas/gate.yaml": {
+      "git_blob": "b3d00709e3387afc4b17f6ea825d754b392fdb17",
+      "sha256": "9aeb5bc09fdfc5328119cea6ff294a040b9734af91733cdfabe5f4afe5170055"
+    },
+    "aif-feature/schemas/report-bundle.yaml": {
+      "git_blob": "9b31dfd2221ef58f0b968d04cb64edd5cfc56378",
+      "sha256": "18d73acdd87204676ea27e9dbe6c846392601b6bbc3345bc059dbe87346682dc"
+    },
+    "aif-feature/schemas/uiux-bundle.yaml": {
+      "git_blob": "355aa98f07fb5699b0cd69177453cd57d5735b85",
+      "sha256": "00f2de826f9c07855f90c28bb6bc9e1e5998647b7ab50ca2e125f662a670a1af"
+    },
+    "aif-feature/schemas/feature-gate.yaml": {
+      "git_blob": "b2df74be9df0f4f979f51d2a32e92d7238c707d9",
+      "sha256": "267af4d3d19d0be712fa8952bbbc862a5622d0bba327f9a4ba2ae0f58457471c"
+    },
+    "aif-feature/workflows/quality-round.yaml": {
+      "git_blob": "3db72118285b7d8b4aef0f85af07c4e0309d1646",
+      "sha256": "eba9f27bacfdb19a147b3ad4ee69f046eb7da777cb99b3a1c8fecdca97d1d6fe"
+    },
+    "aif-review-evidence/workflows/quality.yaml": {
+      "git_blob": "d24698351c86b5b4056371dcf69ea4a65699caff",
+      "sha256": "e9d39c5b31e7ebee6588daf2eff294060cca4970ca1b744b466a9605ce093250"
+    },
+    "aif-ui-ux/workflows/quality.yaml": {
+      "git_blob": "3a1c3170c0995eff328c0caaeca0b96acaa4eb44",
+      "sha256": "5d6ffc340f4ef7c93fa7b62094d11278fc1b01498c3cec12cd366763e2e3af45"
+    },
+    "aif-feature/workflows/parallel-review.yaml": {
+      "git_blob": "a6c2e9f632a0b358824920d06aed018a8bed855f",
+      "sha256": "d62f1a4a34b43d7bb127ffbec69174bf3d3782c318a3f3ba61d47d620a1f1203"
+    },
+    "aif-feature/workflows/parallel-reviews.yaml": {
+      "git_blob": "d1edaa4c983e22436bee02bb8ab0718dfa5e2164",
+      "sha256": "76ccfd6e70b59e11cfec54e1045b0eb071a867671595d4ac291ac3269dfcc3e4"
+    },
+    "aif-feature/workflows/parallel-security.yaml": {
+      "git_blob": "02ca1c1707f40e0f43826af0e796e9c7c935b82a",
+      "sha256": "f7820224c85e360e7fb35421d7ac064b7a61016dd0873f929fde0738d9b40833"
+    },
+    "aif-feature/workflows/parallel-ui.yaml": {
+      "git_blob": "86cbcd5e2d3c65aa85af56e95ddb527d02bfa4ae",
+      "sha256": "ec960a21d3279571ff9a57c0fc632abbc910fc47227921bf2e7407d7cccf1cdf"
+    },
+    "aif-feature/workflows/parallel-uiux.yaml": {
+      "git_blob": "2363715dea8c7aa0362577bf847b4aace9e9ed1b",
+      "sha256": "d09d9c30231fb992f91ef60760e2e6e01aacb7b749a59c586e5fbe446e4e5fee"
+    },
+    "aif-feature/workflows/parallel-ux.yaml": {
+      "git_blob": "e8660c9a76d199f215573a3f4ba9b6b454c79ee1",
+      "sha256": "86fb605b1179e8ea02551a7a31343200b8e481ae138f0a1e8dc578650fa8f775"
+    },
+    "aif-feature/workflows/product-parallel.yaml": {
+      "git_blob": "236c04ced9d1d32805b1302215bb9099ae53e383",
+      "sha256": "4760c264e6684daf8e82f222f5fca103133b11d0d0d7b3efa7e11e1e0c7990ae"
+    },
+    "aif-feature/workflows/product-quality.yaml": {
+      "git_blob": "07a043aa2f170fc9442639d15305dc4b23a1264c",
+      "sha256": "f7a21e581fa2e0a49b2422bd9ef1e85ab216280cf93acff07609bf1a32ee6cf9"
+    },
+    "aif-feature/workflows/product-review.yaml": {
+      "git_blob": "cc1278079d1c078083c2f6633c80da0ec56e47dc",
+      "sha256": "7be8018e433a86de149da72cc6535cce04d2552ba2817b4bba3b711ff2d3c07c"
+    }
+  }
+}

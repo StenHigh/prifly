@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"net"
@@ -47,11 +48,34 @@ func (c *cli) monitor(ctx context.Context, root string, args []string) error {
 	f := flags("monitor")
 	scanRoot := f.String("scan-root", "", "also walk these directories for authorities, separated by the OS path-list separator; by default only registered authorities are shown")
 	addr := f.String("addr", "127.0.0.1:7777", "loopback address to listen on")
+	ui := f.String("ui", "full", "full monitor or read-only Light task board")
+	fullURL := f.String("full-monitor-url", "http://127.0.0.1:7777/", "Light: absolute full-monitor URL")
+	basePath := f.String("base-path", "/", "Light: URL path prefix")
+	mapping := f.String("light-projection", "", "Light: versioned local projection mapping JSON")
 	if err := parse(f, args); err != nil {
 		return err
 	}
 	if !loopbackOnly(*addr) {
 		return usageError("monitor listens on a loopback address only: what it serves is not for another machine")
+	}
+	if *ui != "full" && *ui != "light" {
+		return usageError("ui must be full or light")
+	}
+	if *ui == "light" {
+		options, err := parseLightOptions(*fullURL, *basePath, *mapping)
+		if err != nil {
+			return err
+		}
+		return c.light(ctx, root, *addr, *scanRoot, options)
+	}
+	lightOnly := false
+	f.Visit(func(flag *flag.Flag) {
+		if flag.Name == "full-monitor-url" || flag.Name == "base-path" || flag.Name == "light-projection" {
+			lightOnly = true
+		}
+	})
+	if lightOnly {
+		return usageError("Light options require --ui light")
 	}
 	registry, err := monitorDirectory()
 	if err != nil {

@@ -1,0 +1,15 @@
+{
+  "admission_only_decodes": 0,
+  "cards": 2001,
+  "cold_decodes": 1000,
+  "cold_index_ms": 1761.578,
+  "one_changed_decodes": 1,
+  "queue_only_decodes": 0,
+  "queue_only_queue_decodes": 1,
+  "run_id": "run:bce85d970239594335394145de3ca81178f6d5f16f9c8eb66d31494d80a3763f",
+  "runs": 1000,
+  "tasks": 1001,
+  "unchanged_artifact_reads": 0,
+  "unchanged_decodes": 0,
+  "warm_index_ms": 19.262
+}

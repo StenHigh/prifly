@@ -1,0 +1,132 @@
+authoring: prifly-workflow/1
+schema_version: '6'
+id: aif-feature:workflow/product-parallel
+version: 1.0.0
+title: product-parallel
+refs:
+  policy: '{{policy}}'
+  schema_candidate: '{{schema_candidate}}'
+  schema_configuration: '{{schema_configuration}}'
+  schema_environment: '{{schema_environment}}'
+  schema_browser-adapter: '{{schema_browser-adapter}}'
+  schema_request: '{{schema_request}}'
+  schema_browser-session: '{{schema_browser-session}}'
+  schema_evidence: '{{schema_uiux-evidence}}'
+  schema_gate: '{{schema_gate}}'
+  step_environment: '{{step_frontend-environment}}'
+  workflow_review: '{{workflow_product-review}}'
+  step_release: '{{step_frontend-release}}'
+  step_finalize: '{{step_finalize-uiux}}'
+inputs:
+  configuration: schema_configuration
+  candidate: schema_candidate
+  ui: schema_request
+  ux: schema_request
+  browser_adapter: schema_browser-adapter
+outputs:
+  gate:
+    schema_ref: schema_gate
+    required_for:
+    - succeeded
+    - partial
+  evidence:
+    schema_ref: schema_evidence
+    required_for:
+    - succeeded
+    - partial
+entry: environment
+policy_ref: policy
+limits:
+  max_step_instances: 8
+  max_control_transitions: 100
+  max_parallelism: 2
+  max_child_depth: 4
+stages:
+  environment:
+    kind: step
+    step_ref: step_environment
+    input_bindings:
+      configuration: $inputs.configuration
+      candidate: $inputs.candidate
+      ui: $inputs.ui
+      ux: $inputs.ux
+      browser_adapter: $inputs.browser_adapter
+    'on':
+      pass: reviews
+      blocked: reviews
+      needs_revision: reviews
+      fail: abandoned
+      no_work: abandoned
+  reviews:
+    kind: call
+    workflow_ref: workflow_review
+    input_bindings:
+      configuration: $inputs.configuration
+      candidate: $inputs.candidate
+      ui: $inputs.ui
+      ux: $inputs.ux
+      browser_adapter: $inputs.browser_adapter
+      environment: $stages.environment.environment
+      ui_session: $stages.environment.ui_session
+      ux_session: $stages.environment.ux_session
+    'on':
+      succeeded: release
+      rejected: abandoned
+  release:
+    kind: step
+    step_ref: step_release
+    input_bindings:
+      configuration: $inputs.configuration
+      environment: $stages.environment.environment
+      browser_adapter: $inputs.browser_adapter
+    'on':
+      pass: finalize
+      blocked: finalize
+      needs_revision: finalize
+      fail: abandoned
+      no_work: abandoned
+  finalize:
+    kind: step
+    step_ref: step_finalize
+    input_bindings:
+      assessment: $stages.reviews.assessment
+      release: $stages.release.release
+    'on':
+      pass: decide
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  decide:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: blocked
+      predicate:
+        op: eq
+        left: $stages.finalize.gate#/status
+        right: blocked
+      next: standing
+    - id: blocking
+      predicate:
+        op: eq
+        left: $stages.finalize.gate#/blocking
+        right: true
+      next: standing
+    default: done
+  abandoned:
+    kind: finish
+    outcome: rejected
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      gate: $stages.finalize.gate
+      evidence: $stages.finalize.evidence
+  standing:
+    kind: finish
+    outcome: partial
+    output_bindings:
+      gate: $stages.finalize.gate
+      evidence: $stages.finalize.evidence

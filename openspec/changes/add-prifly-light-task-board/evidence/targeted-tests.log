@@ -1,0 +1,3 @@
+ok  	github.com/stenhigh/prifly/internal/runtime	3.600s
+ok  	github.com/stenhigh/prifly/cmd/prifly	1.674s
+ok  	github.com/stenhigh/prifly/internal/local	1.750s

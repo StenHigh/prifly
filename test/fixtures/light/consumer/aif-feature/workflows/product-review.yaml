@@ -1,0 +1,132 @@
+authoring: prifly-workflow/1
+schema_version: '6'
+id: aif-feature:workflow/product-review
+version: 1.0.0
+title: product-review
+refs:
+  policy: '{{policy}}'
+  schema_candidate: '{{schema_candidate}}'
+  schema_configuration: '{{schema_configuration}}'
+  schema_environment: '{{schema_environment}}'
+  schema_browser-adapter: '{{schema_browser-adapter}}'
+  schema_request: '{{schema_request}}'
+  schema_browser-session: '{{schema_browser-session}}'
+  schema_assessment: '{{schema_uiux-evidence}}'
+  workflow_pair: '{{workflow_parallel-uiux}}'
+  step_collect: '{{step_collect-uiux}}'
+  step_evaluate: '{{step_evaluate-uiux}}'
+  step_diagnostic: '{{step_diagnostic-uiux}}'
+inputs:
+  configuration: schema_configuration
+  candidate: schema_candidate
+  environment: schema_environment
+  ui: schema_request
+  ux: schema_request
+  ui_session: schema_browser-session
+  ux_session: schema_browser-session
+  browser_adapter: schema_browser-adapter
+outputs:
+  assessment:
+    schema_ref: schema_assessment
+    required_for:
+    - succeeded
+entry: environment-ready
+policy_ref: policy
+limits:
+  max_step_instances: 5
+  max_control_transitions: 100
+  max_parallelism: 2
+  max_child_depth: 3
+stages:
+  environment-ready:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: ready
+      predicate:
+        op: eq
+        left: $inputs.environment#/status
+        right: ready
+      next: readers
+    default: diagnostic
+  readers:
+    kind: call
+    workflow_ref: workflow_pair
+    input_bindings:
+      configuration: $inputs.configuration
+      candidate: $inputs.candidate
+      environment: $inputs.environment
+      ui: $inputs.ui
+      ux: $inputs.ux
+      ui_session: $inputs.ui_session
+      ux_session: $inputs.ux_session
+      browser_adapter: $inputs.browser_adapter
+    'on':
+      succeeded: collect
+      partial: diagnostic
+    on_error: diagnostic
+  collect:
+    kind: step
+    step_ref: step_collect
+    input_bindings:
+      manifest: $stages.readers.manifest
+    'on':
+      pass: evaluate
+      blocked: evaluate
+      needs_revision: evaluate
+      fail: diagnostic
+      no_work: diagnostic
+  evaluate:
+    kind: step
+    step_ref: step_evaluate
+    input_bindings:
+      configuration: $inputs.configuration
+      candidate: $inputs.candidate
+      environment: $inputs.environment
+      ui: $inputs.ui
+      ux: $inputs.ux
+      ui_session: $inputs.ui_session
+      ux_session: $inputs.ux_session
+      browser_adapter: $inputs.browser_adapter
+      manifest: $stages.readers.manifest
+      bundle: $stages.collect.bundle
+    'on':
+      pass: done
+      needs_revision: diagnostic
+      fail: diagnostic
+      no_work: diagnostic
+    impossible_verdicts:
+    - blocked
+    on_error: diagnostic
+  diagnostic:
+    kind: step
+    step_ref: step_diagnostic
+    input_bindings:
+      configuration: $inputs.configuration
+      candidate: $inputs.candidate
+      environment: $inputs.environment
+      ui: $inputs.ui
+      ux: $inputs.ux
+      ui_session: $inputs.ui_session
+      ux_session: $inputs.ux_session
+      browser_adapter: $inputs.browser_adapter
+    'on':
+      pass: unavailable
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      assessment: $stages.evaluate.assessment
+  unavailable:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      assessment: $stages.diagnostic.assessment
+  abandoned:
+    kind: finish
+    outcome: rejected

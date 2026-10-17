@@ -1,0 +1,53 @@
+authoring: prifly-workflow/1
+schema_version: '6'
+id: aif-feature:workflow/parallel-security
+version: 1.2.3
+title: Independent security reader
+refs:
+  policy: '{{policy}}'
+  step_reader: '{{step_security}}'
+  schema_task: '{{schema_task}}'
+  schema_warmup-handoff: '{{schema_warmup-handoff}}'
+  schema_request: '{{schema_request}}'
+  schema_candidate: '{{schema_candidate}}'
+  schema_report: '{{schema_report}}'
+inputs:
+  task: schema_task
+  handoff: schema_warmup-handoff
+  request: schema_request
+  candidate: schema_candidate
+outputs:
+  report:
+    schema_ref: schema_report
+    required_for:
+    - succeeded
+policy_ref: policy
+entry: reader
+limits:
+  max_step_instances: 1
+  max_control_transitions: 8
+  max_parallelism: 1
+  max_child_depth: 1
+stages:
+  reader:
+    kind: step
+    step_ref: step_reader
+    input_bindings:
+      task: $inputs.task
+      handoff: $inputs.handoff
+      request: $inputs.request
+      candidate: $inputs.candidate
+    'on':
+      pass: done
+      needs_revision: done
+      blocked: done
+      fail: abandoned
+      no_work: abandoned
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      report: $stages.reader.report
+  abandoned:
+    kind: finish
+    outcome: rejected

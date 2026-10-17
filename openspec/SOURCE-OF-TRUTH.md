@@ -25,6 +25,7 @@
 | Runtime, ресурсы и хранение | `openspec/specs/runtime-resources/spec.md` | Перенесено | `runtime-resources` |
 | Управление, безопасность и интерфейс | `openspec/specs/control-security-ux/spec.md` | Перенесено | `control-security-ux` |
 | Локальная очередь задач проекта | `openspec/specs/project-task-queue/spec.md` | Перенесено; реализация и приёмка v0.13.77 в archived `2026-10-16-add-project-task-queue` | `project-task-queue` |
+| Pri-Fly Light | active `openspec/changes/add-prifly-light-task-board/specs/prifly-light/spec.md`, `design.md`, `read-contract.md` | E6: реализация; released/production gates отдельно; после archive+sync источник `openspec/specs/prifly-light/spec.md` | `prifly-light` |
 | Локальный монитор Run | `openspec/specs/local-run-monitor/spec.md` | Новая capability; source set установлен в `add-local-run-monitor` | `local-run-monitor` |
 | Канонический AI Factory workflow | `openspec/specs/aif-classic-workflow/spec.md` | Новая capability; source set установлен в `harden-aif-classic-gate-routing` | `aif-classic-workflow` |
 | CLI и публичный протокол | `openspec/specs/cli-protocol/spec.md` | Перенесено | `cli-protocol` |

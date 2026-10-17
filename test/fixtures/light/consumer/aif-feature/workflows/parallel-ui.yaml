@@ -1,0 +1,59 @@
+authoring: prifly-workflow/1
+schema_version: '6'
+id: aif-feature:workflow/parallel-ui
+version: 1.0.0
+title: Isolated UI reader
+refs:
+  policy: '{{policy}}'
+  step_reader: '{{step_parallel-ui}}'
+  schema_report: '{{schema_report}}'
+  schema_candidate: '{{schema_candidate}}'
+  schema_configuration: '{{schema_configuration}}'
+  schema_environment: '{{schema_environment}}'
+  schema_browser-adapter: '{{schema_browser-adapter}}'
+  schema_request: '{{schema_request}}'
+  schema_browser-session: '{{schema_browser-session}}'
+inputs:
+  configuration: schema_configuration
+  candidate: schema_candidate
+  environment: schema_environment
+  browser_adapter: schema_browser-adapter
+  request: schema_request
+  browser_session: schema_browser-session
+outputs:
+  report:
+    schema_ref: schema_report
+    required_for:
+    - succeeded
+policy_ref: policy
+entry: reader
+limits:
+  max_step_instances: 1
+  max_control_transitions: 8
+  max_parallelism: 1
+  max_child_depth: 1
+stages:
+  reader:
+    kind: step
+    step_ref: step_reader
+    input_bindings:
+      configuration: $inputs.configuration
+      candidate: $inputs.candidate
+      environment: $inputs.environment
+      browser_adapter: $inputs.browser_adapter
+      request: $inputs.request
+      browser_session: $inputs.browser_session
+    'on':
+      pass: done
+      needs_revision: done
+      blocked: done
+      fail: abandoned
+      no_work: abandoned
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      report: $stages.reader.report
+  abandoned:
+    kind: finish
+    outcome: rejected

@@ -1,0 +1,14 @@
+{
+  "command": "make ci-check-once CHECK_CONTEXT=linux-amd64-cgo-local-openspec-light",
+  "exit_code": 0,
+  "execution_context": "linux-amd64-cgo-local-openspec-light",
+  "reuse": false,
+  "reuse_disabled_reason": "unsupported symlink input",
+  "checked_source_snapshot_sha256": "87a5ea9ac67e2c2c23f950549b176fee7f2fca2b701c512873bcf7104a04c66c",
+  "snapshot_algorithm": "scripts/ensure-ci-check.py:source_snapshot",
+  "log_sha256": "8a714c7a1d212892f93ca41bfc3ea696bf373e39821b0854fa863943d2020bd8",
+  "recorded_at": "2026-10-17T14:52:39.094664+00:00",
+  "post_gate_changes": "Only this evidence record/log, engineering.md and tasks.md completion checkbox; implementation bytes unchanged.",
+  "original_log_sha256": "10a2aebec37135c63faacfe669af141001619b8386dd8e856d9ca7fbb1d3b799",
+  "log_normalization": "Trailing whitespace removed from copied log before commit; original local log unchanged."
+}

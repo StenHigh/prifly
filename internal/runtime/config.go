@@ -668,7 +668,11 @@ func authorityNotFound(path string) error {
 
 func Open(root string, readOnly bool) (*Engine, error) { return openEngine(root, readOnly, false) }
 
-func openEngine(root string, readOnly, maintenance bool) (_ *Engine, openErr error) {
+func openEngine(root string, readOnly, maintenance bool) (*Engine, error) {
+	return openEngineVerified(root, readOnly, maintenance, nil)
+}
+
+func openEngineVerified(root string, readOnly, maintenance bool, verification *local.ReadVerification) (_ *Engine, openErr error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -789,7 +793,7 @@ func openEngine(root string, readOnly, maintenance bool) (_ *Engine, openErr err
 			lock.Close()
 		}
 	}()
-	store, err := local.OpenStore(filepath.Join(root, config.Configuration.StateRoot), local.StoreOptions{EventTypes: EventTypes, ReadOnly: readOnly})
+	store, err := local.OpenStore(filepath.Join(root, config.Configuration.StateRoot), local.StoreOptions{EventTypes: EventTypes, ReadOnly: readOnly, ReadVerification: verification})
 	if err != nil {
 		return nil, err
 	}

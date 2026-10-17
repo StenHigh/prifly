@@ -1,0 +1,88 @@
+authoring: prifly-workflow/1
+schema_version: '6'
+id: aif-feature:workflow/parallel-uiux
+version: 1.0.0
+title: All-join independent UI and UX
+refs:
+  policy: '{{policy}}'
+  schema_manifest: '{{aggregate_manifest}}'
+  configuration: '{{schema_configuration}}'
+  candidate: '{{schema_candidate}}'
+  environment: '{{schema_environment}}'
+  ui: '{{schema_request}}'
+  ux: '{{schema_request}}'
+  ui_session: '{{schema_browser-session}}'
+  ux_session: '{{schema_browser-session}}'
+  browser_adapter: '{{schema_browser-adapter}}'
+  workflow_ui: '{{workflow_parallel-ui}}'
+  workflow_ux: '{{workflow_parallel-ux}}'
+  schema_candidate: '{{schema_candidate}}'
+  schema_configuration: '{{schema_configuration}}'
+  schema_environment: '{{schema_environment}}'
+  schema_browser-adapter: '{{schema_browser-adapter}}'
+  schema_request: '{{schema_request}}'
+  schema_browser-session: '{{schema_browser-session}}'
+inputs:
+  configuration: schema_configuration
+  candidate: schema_candidate
+  environment: schema_environment
+  ui: schema_request
+  ux: schema_request
+  ui_session: schema_browser-session
+  ux_session: schema_browser-session
+  browser_adapter: schema_browser-adapter
+outputs:
+  manifest:
+    schema_ref: schema_manifest
+    required_for:
+    - succeeded
+    - partial
+policy_ref: policy
+entry: readers
+limits:
+  max_step_instances: 2
+  max_control_transitions: 24
+  max_parallelism: 2
+  max_child_depth: 2
+stages:
+  readers:
+    kind: parallel
+    max_parallelism: 2
+    branches:
+    - id: ui
+      workflow_ref: workflow_ui
+      input_bindings:
+        configuration: $inputs.configuration
+        candidate: $inputs.candidate
+        environment: $inputs.environment
+        request: $inputs.ui
+        browser_session: $inputs.ui_session
+        browser_adapter: $inputs.browser_adapter
+    - id: ux
+      workflow_ref: workflow_ux
+      input_bindings:
+        configuration: $inputs.configuration
+        candidate: $inputs.candidate
+        environment: $inputs.environment
+        request: $inputs.ux
+        browser_session: $inputs.ux_session
+        browser_adapter: $inputs.browser_adapter
+    join:
+      mode: all
+      accept_outcomes:
+      - succeeded
+      selection: all
+      remainder: wait
+    'on':
+      satisfied: done
+      unsatisfied: standing
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      manifest: $stages.readers.results
+  standing:
+    kind: finish
+    outcome: partial
+    output_bindings:
+      manifest: $stages.readers.results

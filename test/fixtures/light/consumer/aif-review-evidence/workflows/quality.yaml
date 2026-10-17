@@ -1,0 +1,105 @@
+authoring: prifly-workflow/1
+schema_version: '6'
+id: aif-evidence:workflow/quality
+version: 1.0.0
+title: Capture, review and evaluate one current candidate
+refs:
+  step_capture: '{{step_capture}}'
+  step_review: '{{step_review}}'
+  step_evaluate: '{{step_evaluate}}'
+  policy: '{{policy}}'
+  schema_request: '{{schema_request}}'
+  schema_candidate: '{{schema_candidate}}'
+  schema_report: '{{schema_report}}'
+  schema_gate: '{{schema_gate}}'
+inputs:
+  request: schema_request
+outputs:
+  gate:
+    schema_ref: schema_gate
+    required_for:
+    - succeeded
+    - partial
+  report:
+    schema_ref: schema_report
+    required_for:
+    - succeeded
+    - partial
+entry: capture
+policy_ref: policy
+limits:
+  max_step_instances: 3
+  max_control_transitions: 12
+  max_parallelism: 1
+  max_child_depth: 1
+stages:
+  capture:
+    kind: step
+    step_ref: step_capture
+    input_bindings:
+      request: $inputs.request
+    'on':
+      pass: review
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  review:
+    kind: step
+    step_ref: step_review
+    input_bindings:
+      request: $inputs.request
+      candidate: $stages.capture.candidate
+    'on':
+      pass: evaluate
+      needs_revision: evaluate
+      blocked: evaluate
+      fail: abandoned
+      no_work: abandoned
+  evaluate:
+    kind: step
+    step_ref: step_evaluate
+    input_bindings:
+      request: $inputs.request
+      candidate: $stages.capture.candidate
+      report: $stages.review.report
+    'on':
+      pass: decide
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
+    impossible_verdicts:
+    - blocked
+  decide:
+    kind: choice
+    selection: first_match
+    branches:
+    - id: unavailable
+      predicate:
+        op: eq
+        left: $stages.evaluate.gate#/status
+        right: blocked
+      next: standing
+    - id: blocking
+      predicate:
+        op: eq
+        left: $stages.evaluate.gate#/blocking
+        right: true
+      next: standing
+    default: done
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      gate: $stages.evaluate.gate
+      report: $stages.review.report
+  standing:
+    kind: finish
+    outcome: partial
+    output_bindings:
+      gate: $stages.evaluate.gate
+      report: $stages.review.report
+  abandoned:
+    kind: finish
+    outcome: rejected

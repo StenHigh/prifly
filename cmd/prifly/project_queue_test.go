@@ -303,4 +303,18 @@ func TestCLIProjectQueuePartialCancelContinueKeepsTaskAndRunHistory(t *testing.T
 	if len(task.Task.Associations) != 3 {
 		t.Fatalf("association history: %+v", task.Task.Associations)
 	}
+	reader, readErr := prifly.Open(f.authority, true)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	light, readErr := reader.Light(context.Background(), prifly.NewLightCache(), nil)
+	_ = reader.Close()
+	if readErr != nil || len(light.Cards) != 1 || light.Cards[0].HistoryCount != 3 || light.Cards[0].CurrentCount != 1 || light.Cards[0].CurrentRuns[0].ID != second.RunID {
+		t.Fatalf("Light continuation grouping: %+v %v", light, readErr)
+	}
+	if target := os.Getenv("PRIFLY_LIGHT_FIXTURE_DIR"); target != "" {
+		if err := monitorCopyAuthority(filepath.Join(target, "queue-continuations"), f.authority); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

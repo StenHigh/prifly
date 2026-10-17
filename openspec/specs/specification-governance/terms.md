@@ -1,6 +1,6 @@
 # Словарь Pri-Fly
 
-Редакция 1.36. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
+Редакция 1.37. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
 
 Используем привычный отраслевой термин, когда его смысл подходит. Собственные понятия Pri-Fly определяем явно; сходство названий не означает совместимости с Temporal, Argo, OpenTelemetry или другим продуктом. Английское название закрепляет понятие, русский текст объясняет его. Краткие имена существующего Go-кода перечислены как соответствия, а не как новые сущности.
 
@@ -157,6 +157,24 @@ Jira или иной provider частью ядра Pri-Fly. Право проч
 права изменить её: публикация комментария, статуса или merge request —
 отдельный внешний ActionIntent с явным решением владельца. Это не общий plugin
 framework и не текущая реализованная capability.
+
+<a id="prifly-light"></a>
+### Pri-Fly Light — Компактный обзор задач и ревью
+
+Opt-in read-only интерфейс native QueueTask, самостоятельных Runs и записанных
+consumer review evidence. UI phases/lanes и chips — представления фактов, не
+новые runtime states, verdicts или outcomes. Приёмка имеет candidate/round и
+source provenance; `StepResult pass` не означает passed gate. Локальное task
+complete и успех Run не утверждают merge/deploy. Go read DTO: `runtime.LightCard`.
+
+<a id="light-projection-mapping"></a>
+### Light projection mapping — Объявление отображения Light
+
+Versioned observer configuration `prifly-light-projection/1`, закрепляющая exact
+WorkflowRevision/schema refs, stage/port selectors и typed evidence fields.
+Go: `runtime.LightProjection`. Она не меняет sealed Run, workflow authoring,
+политику gate либо producer и не является существующим ProjectionManifest
+проекции данных. Отсутствующий mapping сохраняет generic read и unknown review.
 
 <a id="project-task-queue"></a>
 ### Project task queue — Локальная очередь задач проекта
@@ -1862,6 +1880,9 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [Authority storage budget](#authority-storage-budget) | `internal/local/store_budget.go` | `local.AuthorityStorageBudget.Generation` | `generation` |
 | [Authority storage budget](#authority-storage-budget) | `internal/runtime/storage_budget.go` | `runtime.StorageBudgetStatus.Control` | `control` |
 | [Authority storage budget](#authority-storage-budget) | `internal/runtime/storage_budget.go` | `runtime.StorageBudgetReview.ReviewDigest` | `review_digest` |
+| [Pri-Fly Light](#prifly-light) | `internal/runtime/light_types.go` | `runtime.LightCard` | — |
+| [Light projection mapping](#light-projection-mapping) | `internal/runtime/light_mapping.go` | `runtime.LightProjection` | — |
+| [Light projection mapping](#light-projection-mapping) | `internal/runtime/light_mapping.go` | `runtime.LightProjection.SchemaVersion` | `schema_version` |
 <!-- glossary-bindings:end -->
 
 Имена в колонках Go/JSON — совместимые текущие соответствия, не список обязательных переименований. Например, `runtime.Result` не нужно срочно заменять новым wire-полем `step_result`. При целевом переименовании меняются все затронутые ссылки и тесты; сохранённые контракты учитываются отдельно.

@@ -1,0 +1,20 @@
+{
+  "initial_requests": 5,
+  "page_bytes": 25834,
+  "asset_gzip_bytes": 10950,
+  "warm_p95_ms": 98.3315390000007,
+  "shipped_feature_mapped": true,
+  "poll_responses": 2,
+  "hidden_poll_responses": 1,
+  "browser": "Chromium 148.0.7778.96",
+  "observations": [
+    "separate Light/full DOM and first screen",
+    "native queue without Run",
+    "typed usable report + blocked gate, raw provenance",
+    "search beyond 200, pagination totals",
+    "direct task deep link and exact full source/Run link",
+    "mobile dark theme and keyboard",
+    "empty/error/source-loss and stale query handling",
+    "conditional bounded polling, no heavy Light APIs"
+  ]
+}

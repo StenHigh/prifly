@@ -2850,6 +2850,7 @@ Global: --project DIR  --json  --format text|json|csv
   grant revoke --id GRANT --reason TEXT | grant list
                                    Bounded delegation; issuing it is gated exactly like what it delegates
   monitor [--addr 127.0.0.1:7777] [--scan-root DIRS]   registered authorities; --scan-root also walks DIRS
+    --ui light --full-monitor-url URL [--base-path /light/] [--light-projection FILE]  read-only task board
                                    Local user Runs, disk usage and confirmed cleanup; DIRS is an OS path-list. Auto-starts on Run creation, without opening a browser.
   storage budget show
   storage budget set --bytes N --reason TEXT --prepare

@@ -1,0 +1,71 @@
+authoring: prifly-workflow/1
+schema_version: '6'
+id: aif-feature:workflow/parallel-reviews
+version: 1.2.3
+title: All-join independent backend readers
+refs:
+  policy: '{{policy}}'
+  schema_manifest: '{{aggregate_manifest}}'
+  schema_task: '{{schema_task}}'
+  schema_warmup-handoff: '{{schema_warmup-handoff}}'
+  schema_request: '{{schema_request}}'
+  schema_candidate: '{{schema_candidate}}'
+  workflow_security: '{{workflow_parallel-security}}'
+  workflow_review: '{{workflow_parallel-review}}'
+inputs:
+  task: schema_task
+  handoff: schema_warmup-handoff
+  candidate: schema_candidate
+  security_request: schema_request
+  review_request: schema_request
+outputs:
+  manifest:
+    schema_ref: schema_manifest
+    required_for:
+    - succeeded
+    - partial
+policy_ref: policy
+entry: readers
+limits:
+  max_step_instances: 2
+  max_control_transitions: 24
+  max_parallelism: 2
+  max_child_depth: 2
+stages:
+  readers:
+    kind: parallel
+    max_parallelism: 2
+    branches:
+    - id: security
+      workflow_ref: workflow_security
+      input_bindings:
+        task: $inputs.task
+        handoff: $inputs.handoff
+        candidate: $inputs.candidate
+        request: $inputs.security_request
+    - id: review
+      workflow_ref: workflow_review
+      input_bindings:
+        task: $inputs.task
+        handoff: $inputs.handoff
+        candidate: $inputs.candidate
+        request: $inputs.review_request
+    join:
+      mode: all
+      accept_outcomes:
+      - succeeded
+      selection: all
+      remainder: wait
+    'on':
+      satisfied: done
+      unsatisfied: standing
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings:
+      manifest: $stages.readers.results
+  standing:
+    kind: finish
+    outcome: partial
+    output_bindings:
+      manifest: $stages.readers.results
