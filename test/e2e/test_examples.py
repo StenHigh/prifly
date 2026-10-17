@@ -134,6 +134,7 @@ class EditorContractTest(unittest.TestCase):
             "project-profile",
             "project-profile-v2",
             "project-profile-v3",
+            "project-profile-v4",
             "project-workflow-folder-v1",
             "extension",
             "extension-v1",
@@ -149,7 +150,7 @@ class EditorContractTest(unittest.TestCase):
         self.assertEqual({item["document"] for item in manifest["schemas"]}, expected)
         for item in manifest["schemas"]:
             self.assertEqual(Path(item["path"]).name, item["path"])
-            if item["document"] in {"project-profile-v2", "project-profile-v3", "step-v1", "extension-v1", "extension-v2"}:
+            if item["document"] in {"project-profile-v2", "project-profile-v3", "project-profile-v4", "step-v1", "extension-v1", "extension-v2"}:
                 self.assertEqual(item["patterns"], [])
             else:
                 self.assertTrue(item["patterns"])
@@ -175,7 +176,7 @@ class EditorContractTest(unittest.TestCase):
         )
         self.assertEqual(
             (EXAMPLES / "authoring" / "project-profile-authoring-reference.yaml").read_text().splitlines()[0],
-            "# yaml-language-server: $schema=../../schemas/authoring/project-profile-v3.schema.json",
+            "# yaml-language-server: $schema=../../schemas/authoring/project-profile-v4.schema.json",
         )
         self.assertEqual(
             (EXAMPLES / "authoring" / "check-authoring-reference.yaml").read_text().splitlines()[0],
