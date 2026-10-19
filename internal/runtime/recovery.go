@@ -197,6 +197,10 @@ func (e *Engine) PlanRecovery(ctx context.Context, request RecoveryRequest, targ
 		return digestRecoveryPlan(result)
 	}
 	result.FrontierAttemptID = attempt.ID
+	if recoveryResolutionSequence(source, attempt, events) != 0 {
+		result.FrontierReason = "the owner resolved the effects, not a successful result; the writer and following stages run again"
+		return digestRecoveryPlan(result)
+	}
 	frontier := point.Activation
 	candidate, err := recoveryCandidateRef(events, attempt.ID)
 	if err != nil {
@@ -326,14 +330,15 @@ func recoveryFrontier(source Run, journals ...[]local.Event) (*Activation, *Atte
 	if source.Status != "failed" || source.Outcome != nil || source.Settled == nil {
 		return nil, nil, local.Reject("recover_source_ineligible", "recovery requires a technically failed Run without an outcome")
 	}
-	if source.CancelRequested || source.restricted() || recoverySourceUnsettled(source) {
-		return nil, nil, local.Reject("recover_source_unsettled", "source Run holds a stop, active work or unresolved obligation")
-	}
 	var events []local.Event
 	if len(journals) != 0 {
 		events = journals[0]
 	}
-	frontier, err := recoveryFailureRoot(source, events)
+	reviewedCancellation := recoveryCancellationResolved(source, events)
+	if recoverySourceUnsettled(source) || (source.CancelRequested || source.restricted()) && !reviewedCancellation {
+		return nil, nil, local.Reject("recover_source_unsettled", "source Run holds a stop, active work or unresolved obligation; inspect and resolve its effects before reviewed recovery")
+	}
+	frontier, err := recoveryFailureRoot(source, events, reviewedCancellation)
 	if err != nil {
 		return nil, nil, err
 	}

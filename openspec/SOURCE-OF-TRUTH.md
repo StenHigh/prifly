@@ -88,3 +88,8 @@ Project worktree naming включён в main source sets `workflow-and-context
 `specification-governance`; ownership остаётся прежним. История реализации
 сохранена в archived `2026-10-17-configure-project-worktree-names`. Naming
 остаётся metadata authority, без новой версии saved Run лишь ради имени.
+
+Пока `fix-reviewed-cancelled-writer-recovery` активен, его deltas уточняют
+reviewed recovery после отмены writer и owner resolution для `domain-execution`,
+`runtime-resources`, `cli-protocol` и `published-contracts`. Ownership остаётся
+в main source sets; existing schemas и historical evidence не меняются.

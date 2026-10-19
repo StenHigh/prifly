@@ -59,6 +59,22 @@ Choose the current source Run, whose claim is transferred; never reset its tree.
 `resume_prefix_empty` means the reviewed prefix is truly empty: preserve dirty work
 before reviewing a new start. Missing ancestry is `recover_evidence_unavailable`.
 
+After a writer was cancelled, unknown effects still require owner inspection
+and `run resolve --attempt ATTEMPT --outcome applied|not_applied --reason TEXT`,
+then `run drive`. Resolution attests effects, not successful work. Since 0.13.81
+(`fix-reviewed-cancelled-writer-recovery`), a settled failed source can use same-launch `project continue --prepare` or `project recover
+--prepare`. Review execute frontier, accepted prefix, original inputs/decisions
+and claim, then start with the top-level review digest. Source cancellation
+facts remain; the writer, its root call/repeat and following quality run again.
+Prepare never edits workspace bytes. Native Attempt preparation still refuses
+`workspace_tree_output_exists` for an occupied producer capture path: ask the
+owner to preserve the partial bytes separately and explicitly clear that path.
+If takeover already created a failed Run, use that current claim holder as the
+next source. Existing consumer inputs must match their sealed manifest or
+`workspace_tree_input_drift` remains. Never reset a tree, clear cancellation
+flags, accept a partial plan as success, or switch workflows/hosts as a bypass.
+Stable 0.13.80 predates this fix; check the installed binary before promising it.
+
 When `run next` answers `awaiting_host`, an Attempt is already issued and waits
 for you: run the command in its `next_command` (`session task --run RUN_ID
 --all`) and take that Attempt. `idle` means nobody waits on anybody. The

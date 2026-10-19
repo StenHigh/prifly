@@ -90,7 +90,7 @@
 | `model_profile_declared` | `model_profile` у шага — контракт 9 | step |
 | `model_profile_translation` | `model_profiles` в профиле проекта | project-profile |
 | `project_title` | `title` в профиле проекта | project-profile |
-| `failed_stage_recovery` | `prifly run reopen`; `project recover --prepare` для root call/repeat и preparation до Attempt — development change `fix-nested-preparation-recovery`; earlier root `--from-stage` | continuation-guide |
+| `failed_stage_recovery` | `prifly run reopen`; `project recover --prepare` для root call/repeat и preparation до Attempt — development change `fix-nested-preparation-recovery`; earlier root `--from-stage`; reviewed cancel → resolve → execute — **0.13.81**, `fix-reviewed-cancelled-writer-recovery` | continuation-guide |
 | `run_finish_named` | поведение чтения: `finish` в `run explain` | — |
 | `blocked_verdict` | `required_for: [..., blocked]` — контракт 10 у ассистируемого шага, **контракт 12** у программного; маршрут при **ревизии 6**, `result_schema_ref` → `core:schema/step-result@2.0.0` | step, workflow, blocked-guide |
 | `declared_external_write` | `effects.class: external_write` и блок `external_write` у ассистируемого шага (`prifly-step/2`) — контракт 11; программа объявляет то же по `program_external_write` | step |
@@ -98,7 +98,7 @@
 | `next_handoff` | поведение чтения: `arrived_from`, `checkpoint`, `repeats`, `continuations` в `run next` | blocked-guide |
 | `workflow_continuation` | `checkpoint` в корне и у шаговой стадии, `continuation` в корне — **ревизия 7**; `prifly project continue` | workflow, continuation-guide |
 | `project_worktree_naming` | `worktree_naming.template/bindings` — **Project profile /4**; summary/start `/5`, authority claims `/4`, claim view `/3`; [полный пример](workflows/named-worktree/README.md) | project-profile |
-| `workflow_resume` | `resumable` в корне — **ревизия 8**; `prifly project continue` тем же launch возобновляет Run с точки остановки; повторный перенос и inherited `--from-stage` — в continuation-guide, статус исправляющего релиза указан там | workflow, continuation-guide |
+| `workflow_resume` | `resumable` в корне — **ревизия 8**; `prifly project continue` тем же launch возобновляет Run с точки остановки; повторный перенос и inherited `--from-stage` — в continuation-guide, статус исправляющего релиза и маршрут writer cancel/resolve указаны там | workflow, continuation-guide |
 | `next_awaiting_host` | поведение чтения, `core-next/42`: `run next` отвечает `awaiting_host` и `next_command`, когда выданное задание ждёт хоста (раньше — `idle`); `step_effects` и `effects` называют объявленный эффект шагов; текстовый `run status` печатает строки `effect` | troubleshooting |
 | `program_external_write` | `effects.class: external_write` и блок `external_write` у программы (`prifly-step/1`, `operation: process`) — **контракт 14**. `retry_class` решает судьбу прерванной программы: `idempotent` — `project continue` запускает шаг снова; `deduplicated`, `reconcile_required`, `never` — Run `uncertain` (`external_write_unreconciled`) до `run resolve`; `pure` отказывается | step, continuation-guide, troubleshooting |
 

@@ -235,6 +235,47 @@ policy только ради обхода отказа.
 упавшая стадия, и `frontier_reason` называет почему. Созданный Run сразу
 ведётся, как после `project start`; тот же `--command-id` отвечает тем же Run.
 
+## Отмена writer и inspected resolution
+
+Начиная с **0.13.81** (change `fix-reviewed-cancelled-writer-recovery`, issue #13)
+поддержан reviewed recovery после отмены writer и явной owner resolution.
+Stable **0.13.80** этого маршрута ещё не поддерживает. Используются прежние
+`recovery-plan/1` и `recovery/2`, без нового YAML поля. Для обычного
+возобновления отменённого Run остаётся `resumable: {from_cancelled: true}`
+в **WorkflowRevision 8**; failed после resolution идёт по правилам recovery.
+
+1. Остановите actor и проверьте его файлы/внешние эффекты. Пока они неизвестны,
+   `recover_source_unsettled` сохраняется; повторять writer вслепую нельзя.
+2. Выполните `prifly run resolve RUN --attempt ATTEMPT --outcome applied|not_applied
+   --reason TEXT`, затем `prifly run drive RUN`. Resolution подтверждает эффекты,
+   а не готовность плана или успешность реализации. У root writer source остаётся
+   `failed`, `outcome: null`, с прежним `cancel_requested` и историей отмены.
+   Если global cancel завершил ancestor call/repeat как `cancelled`, действует
+   обычный declared `resumable.from_cancelled`; статус source не переписывается.
+3. Подготовьте тем же launch `project continue --prepare` либо `project recover
+   --prepare`. Проверьте `recovery.frontier_action: execute`, root frontier,
+   переносимый prefix и claim; start требует **верхний** `review_digest` через
+   `--expected-launch-digest`. Original inputs/base и decisions сохраняются.
+   Вложенный call/repeat и весь последующий quality исполняются заново.
+
+Prepare не меняет Run, claim или bytes и не выполняет материализацию.
+Отдельный native конфликт проверяется перед выдачей Attempt: producer с
+занятым exact capture path, например partial `PLAN.md`, получает
+`workspace_tree_output_exists` с путём и требованием переместить/убрать файл.
+Core не удаляет и не принимает эти bytes как успешный output. Сохраните их
+отдельно и **явно освободите capture path**. Если start уже передал claim
+новому failed Run, следующий prepare делайте от **этого** текущего владельца
+claim. Если освободить путь до первого start, writer сразу сможет получить
+Attempt. Consumer после `not_applied` использует engine-materialized input,
+если его bytes совпадают с sealed manifest; расхождение сохраняет
+`workspace_tree_input_drift` и требует отдельного решения владельца.
+
+Новый Run повторяет writer и затронутые quality checks. Прежний PASS после
+frontier не переносится на новый candidate. Независимые failures, active work,
+неразрешённые effects и active non-cancel Stops сохраняют отказ; изменение
+accepted prefix сохраняет `recover_prefix_changed`. Не очищайте cancel flag
+в authority и не подменяйте recovery другим workflow или host.
+
 ## Прерванная внешняя запись
 
 Шаг, объявивший `effects.class: external_write`, может прерваться, успев
@@ -304,7 +345,9 @@ receipt по `command-id` и созданный дочерний Run; `project_c
 | `continuation_source_changed` | исходный Run или его дерево изменились после prepare | повторить `--prepare` |
 | `project_continue_active_child` | у исходного Run уже есть незавершённое продолжение | проверить его; `--allow-duplicate-continuation` для независимой работы |
 | `invalid_checkpoint` | компиляция: порт или схема checkpoint не сходятся | см. раздел про checkpoint |
-| `recover_source_unsettled` | исходный Run `uncertain`: шаг с внешней записью прервался, или исполнение не завершилось наблюдаемо | `run resolve`, затем повторить |
+| `recover_source_unsettled` | неизвестные effects, active work или active Stop без доказанной cancellation/resolution | остановить actor, осмотреть effects и выполнить `run resolve`; прочие Stops разрешить отдельно |
+| `workspace_tree_output_exists` | producer capture path занят unsealed bytes | сохранить partial отдельно, явно освободить путь; prepare от текущего владельца claim |
+| `workspace_tree_input_drift` | native input отличается от sealed manifest | сохранить owner bytes и явно разрешить конфликт; resolution не меняет manifest |
 | `recover_frontier_unsupported` | нет одной доказанной текущей failure chain; отсутствуют caller/decision/pre-admission facts или есть независимые причины | сохранить evidence; `--from-stage` не обходит отказ |
 | `recover_workspace_released` | дерево упавшего Run освобождено | восстановить нечем |
 | `resume_undeclared` | workflow не объявил `resumable` для этого исхода или отмены | объявить в ревизии 8 или продолжить другим workflow |

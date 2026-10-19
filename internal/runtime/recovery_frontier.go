@@ -9,7 +9,7 @@ import (
 
 // Recovery follows the recorded cause to its root caller. Reopen deliberately
 // keeps its narrower brokenStage policy: these are different operations.
-func recoveryFailureRoot(source Run, events []local.Event) (*Activation, error) {
+func recoveryFailureRoot(source Run, events []local.Event, reviewedCancellation bool) (*Activation, error) {
 	unsupported := func() (*Activation, error) {
 		return nil, local.Reject("recover_frontier_unsupported", "source Run has no single proven root failure chain")
 	}
@@ -85,7 +85,7 @@ func recoveryFailureRoot(source Run, events []local.Event) (*Activation, error) 
 		seen[a.ID] = true
 		if isInvocationState(source.SchemaVersion) {
 			inv := source.Invocations[a.InvocationID]
-			if inv == nil || inv.Status != "failed" || inv.Outcome != nil || inv.Settled == nil || inv.CancelRequested || len(inv.Ready) != 0 {
+			if inv == nil || inv.Status != "failed" || inv.Outcome != nil || inv.Settled == nil || inv.CancelRequested && !reviewedCancellation || len(inv.Ready) != 0 {
 				return unsupported()
 			}
 		}
@@ -190,7 +190,7 @@ func recoveryFailedAttempt(source Run, a *Activation, events []local.Event) (*At
 		return nil, nil
 	}
 	attempt := source.Attempts[step.AttemptIDs[len(step.AttemptIDs)-1]]
-	if attempt == nil || attempt.StepID != step.ID || attempt.ActivationID != a.ID || attempt.Settled == nil || attempt.ProcessOutcome != nil && attempt.ProcessOutcome.Uncertain {
+	if attempt == nil || attempt.StepID != step.ID || attempt.ActivationID != a.ID || attempt.Settled == nil || attempt.ProcessOutcome != nil && attempt.ProcessOutcome.Uncertain && recoveryResolutionSequence(source, attempt, events) == 0 {
 		return nil, local.Reject("recover_source_unsettled", "failed Attempt is missing settlement or has an uncertain process")
 	}
 	return attempt, nil
