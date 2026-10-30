@@ -1,4 +1,12 @@
-schema_version: prifly-project-profile/3
+schema_version: prifly-project-profile/4
+title: Pri-Fly
+worktree_naming:
+  template: "{project_name}-{workflow}"
+  bindings:
+    project_name:
+      value: prifly
+    workflow:
+      value: aif-classic
 packages:
   aif-classic:
     source: .prifly/workflows/aif-classic

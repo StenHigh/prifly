@@ -1,8 +1,8 @@
 # Предложение для aif-classic
 
-Плановый preview, не поддержанный новый формат. Source material — установленный
-package 1.40.0 в Pri-Fly `1ced124`; upstream origin закреплён в [design.md](../design.md).
-До реализации нужно отдельно сверить локальные отличия и canonical repository.
+Кандидат подготовлен на `aif-classic` 1.47.0 из release repository `v1.53.0`.
+Полный проверенный diff — [handoff](../handoff/aif-classic-readability.patch).
+Технические результаты — [acceptance.md](../acceptance.md). Владелец принял кандидат по review без UX-замеров; см. evidence/owner-review.json.
 
 ## Структура выбранного участка
 
@@ -30,20 +30,20 @@ aif-classic/
 ```yaml
 authoring: prifly-step/2
 id: aif:step/verify
-version: 1.11.0
+version: 1.16.0
 title: Run read-only aif-verify over the implementation
 kind: worker
 inputs:
   implementation:
-    schema_ref: "{{schema_implementation}}"
+    schema_ref: '{{schema_implementation}}'
   plan:
-    schema_ref: "{{workspace_tree_manifest}}"
+    schema_ref: '{{workspace_tree_manifest}}'
 outputs:
   gate:
-    schema_ref: "{{schema_gate-result}}"
-    required_for: [pass, needs_revision]
+    schema_ref: '{{schema_gate-result}}'
+    required_for: [pass, needs_revision, blocked]
 executor:
-  adapter_ref: "{{assisted_adapter}}"
+  adapter_ref: '{{assisted_adapter}}'
   operation: session
 instructions_ref: "{{context_aif-verify-bridge}}"
 context_refs: ["{{context_aif-verify}}"]
@@ -52,7 +52,7 @@ effects:
   retry_class: pure
 session_limits:
   active_timeout_ms: null
-result_schema_ref: "{{step_result_schema}}"
+result_schema_ref: "{{step_result_schema_v2}}"
 # Read-only materialisation: the engine lays the plan out where the pinned
 # skill's own discovery looks and takes it back after the step. No
 # `output_port`, so nothing is captured and a write to it is refused.
@@ -70,16 +70,16 @@ workspace_trees:
 
 ```yaml
 id: aif:context/aif-verify-bridge
-version: 1.13.0
+version: 1.16.0
 media_type: text/markdown; charset=utf-8
 source: .prifly/workflows/aif-classic/instructions/aif-verify-bridge.md
 ```
 
-Новый Markdown получит все decoded bytes старого `text: |`. Проверенный
-плановый baseline: 6738 UTF-8 bytes, завершающий LF,
-SHA-256 `7d83e1a152147adfd06ffbded9e09bddab668f25db17286e63d68f37b56e04f1`.
+Новый Markdown содержит все decoded bytes старого `text: |`. Проверенный
+baseline: 9938 UTF-8 bytes, завершающий LF,
+SHA-256 `8772b0ef8121540cceb00cd912ba005ef434ed7fe467fde6e88913262a1fd24c`.
 Это digest содержимого, не digest всего context resource или package.
-При изменении baseline длина и digest фиксируются заново.
+Identity bridge 1.16.0 сохранена. Полные bytes сравниваются также после compilation.
 
 Начало Markdown показано только для review. Это фрагмент, не весь будущий файл:
 

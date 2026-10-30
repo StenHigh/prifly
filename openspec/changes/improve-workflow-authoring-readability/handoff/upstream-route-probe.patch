@@ -1,0 +1,97 @@
+--- /dev/null
++++ b/tests/probes/readability_compare.py
+@@ -0,0 +1,94 @@
++"""Readability experiment: reuse the released native probe, no model calls."""
++import argparse, hashlib, json, shutil, subprocess, sys, tempfile
++from pathlib import Path
++sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
++import verify, compatibility
++import run_check as probe
++
++CASES=('owner-only','exhausted','disabled','clean','repaired','fail','no_work','blocked')
++
++def input_value(task,port):
++    return json.loads((Path(task['workspace'])/task['context']['inputs'][port]['path']).read_text())
++
++def submit(binary,authority,run_id,task,verdict,values):
++    template=verify.run(binary,'--project',authority,'session','submit','--template','--run',run_id,'--attempt',task['attempt_id'])
++    template['result']['outputs']={name:slot for name,slot in template['result']['outputs'].items() if name in values}
++    for port,value in values.items():
++        raw=json.dumps(value).encode()
++        path=Path(task['workspace'])/task['context']['outputs'][port]['path']
++        path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
++        template['result']['outputs'][port]['digest']='sha256:'+hashlib.sha256(raw).hexdigest()
++    template['result'].update(verdict=verdict,summary='Synthetic readability probe')
++    template['answered_questions']=[]
++    if task.get('model_profile'):
++        template['model_profile']={'outcome':'unavailable','reason':'Deterministic script; no model used.'}
++    report=Path(task['workspace'])/'submission.json';report.write_text(json.dumps(template))
++    verify.run(binary,'--project',authority,'session','submit','--file',report)
++
++def check(binary,source,case):
++    with tempfile.TemporaryDirectory(prefix='readable-route-') as temporary:
++        root=Path(temporary);old=verify.ROOT;verify.ROOT=source
++        repository,authority,taskfile=probe.prepare(binary,root,None)
++        verify.ROOT=old
++        folder=repository/'.prifly/workflows/aif-classic'
++        extend='profile: fast\nexclude: [improve'+(', verify' if case=='disabled' else '')+']\nextensions: []\n'
++        if case=='exhausted':extend+='settings:\n  verify-batch: {verify_round_limit: 1}\n'
++        (folder/'extend.yaml').write_text(extend)
++        verify.git('-C',repository,'add','-A');verify.git('-C',repository,'commit','--allow-empty','-q','-m','Configure route probe')
++        runs=[];seen=[];checks=[];current=None;verify_count=0;refusal=None
++        try:
++            started=compatibility.start_launch(binary,authority,repository,taskfile,'codex-cli',None)
++            run_id=started['run']['run']['id'];runs.append(run_id)
++            for turn in range(40):
++                done=subprocess.run([str(binary),'--json','--project',str(authority),'run','drive',run_id],capture_output=True,text=True)
++                if done.returncode:
++                    refusal=json.loads((done.stderr or done.stdout).strip().splitlines()[-1])['code'];break
++                tasks=verify.run(binary,'--project',authority,'session','task','--run',run_id,'--all')['tasks']
++                if not tasks:break
++                for task in tasks:
++                    bridge=task['skill_refs'][0]['id'].rsplit('/',1)[-1]
++                    seen.append(bridge)
++                    if bridge in ('aif-verify-bridge','aif-security-bridge','aif-review-bridge','aif-review-challenge-bridge'):
++                        checks.append(input_value(task,'implementation')==current)
++                        assert checks[-1],(case,bridge,'stale implementation')
++                    if bridge in ('aif-review-bridge','aif-review-challenge-bridge'):break
++                    _,verdict,values=probe.answer(task,'pass')
++                    if bridge=='aif-implement-bridge':current=values['implementation']
++                    if bridge=='aif-verify-bridge':
++                        verify_count+=1
++                        if case in ('fail','no_work'):verdict=case;values={}
++                        elif case=='blocked':verdict='blocked';values={'gate':probe.GATE_BLOCKED}
++                        elif case in ('owner-only','exhausted','repaired') and verify_count==1:
++                            verdict='needs_revision';values={'gate':{**probe.GATE_PASSED,'status':'failed','blocking':True,'blocking_owner_only':case=='owner-only','findings':['Synthetic blocker'],'suggested_next':'continue' if case=='owner-only' else '/aif-fix'}}
++                    if bridge=='aif-fix-bridge':
++                        assert input_value(task,'implementation')==current
++                        tree=Path(task['repository_workspace']);(tree/'hello.txt').write_text('hello repaired\n')
++                        probe.git_out(tree,'add','hello.txt');probe.git_out(tree,'-c','user.name=probe','-c','user.email=probe@example.invalid','commit','-q','-m','Repair greeting')
++                        current={**current,'head_commit':probe.git_out(tree,'rev-parse','HEAD')}
++                        verdict='pass';values={'implementation':current}
++                    assert verdict is not None,(case,bridge)
++                    submit(binary,authority,run_id,task,verdict,values)
++                else:continue
++                break
++            else:raise AssertionError('too many turns')
++            state=verify.run(binary,'--project',authority,'run','status',run_id)['run']
++            result={'case':case,'bridges':seen,'status':state['status'],'outcome':state.get('outcome'),'refusal':refusal,'implementation_bindings_checked':len(checks),'all_implementation_bindings_current':all(checks),'verify_count':verify_count,'fix_count':seen.count('aif-fix-bridge'),'diagnostic_codes':sorted({d.get('code') for d in state.get('diagnostics',[])})}
++            if case in ('owner-only','blocked','exhausted'):
++                assert (state['status'],state.get('outcome'))==('completed','partial'),result
++            if case=='owner-only':assert result['fix_count']==0,result
++            if case=='exhausted':assert result['fix_count']==1 and verify_count==1,result
++            if case=='disabled':assert verify_count==0 and result['fix_count']==0,result
++            if case=='repaired':assert result['fix_count']==1 and verify_count==2,result
++            if case in ('clean','disabled','repaired'):assert seen[-1] in ('aif-review-bridge','aif-review-challenge-bridge'),result
++            return result
++        finally:
++            probe.clean(binary,authority,runs);verify.forget_authority(authority)
++
++if __name__=='__main__':
++    p=argparse.ArgumentParser();p.add_argument('--binary',required=True,type=Path);p.add_argument('--baseline',required=True,type=Path);p.add_argument('--candidate',required=True,type=Path);p.add_argument('--output',required=True,type=Path);a=p.parse_args()
++    results=[]
++    for case in CASES:
++        pair=[check(a.binary.resolve(),source.resolve(),case) for source in (a.baseline,a.candidate)]
++        assert pair[0]==pair[1],pair
++        results.append(pair[0]);print(case,json.dumps(pair[0]),flush=True)
++        a.output.write_text(json.dumps({'pairs_equal':True,'cases':results},indent=2)+'\n')

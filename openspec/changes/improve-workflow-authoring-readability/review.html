@@ -2,10 +2,10 @@
 <html lang="ru" data-theme="paper" data-mode="auto" data-style="80">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-COhqkbaPOF+O1MeXzrrqyxS5JHiLZTzpFZpBTV1Hy4A=' 'sha256-lPqFPx9oza8AmRj6iqQLqEVdDcwxhxzQ3yQnVhy8ZDM='; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'self'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-HDbmsoQcFi5y3dmE9+gg0fA0/xLqGiensWSy0gbSHM8=' 'sha256-lPqFPx9oza8AmRj6iqQLqEVdDcwxhxzQ3yQnVhy8ZDM='; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'self'; form-action 'none'; base-uri 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="Answer me with HTML 0.5.10">
-<title>Читаемое авторство — сначала aif-classic</title>
+<title>Читаемое авторство aif-classic — принято по review</title>
 <style>
 html[data-theme="blueprint"], html[data-theme="blueprint"][data-mode="light"] {
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -877,6 +877,95 @@ table.am-mark { background: none; }
 @media print { .am-remark-pop { display: none !important; } }
 
 
+/* Change markers (only on pages that have one). Only the Changes view (.am-view-changes) draws change styling: colors, strike-through, faded items
+   and badges. Before and After look like a plain diagram, and the items that do not exist in the view are hidden.
+   The colors are the theme's --ok, --err and --warn, so every theme and mode works. A view hides items with visibility, so nothing moves. */
+.am-view-before [data-delta="added"], .am-view-after [data-delta="removed"] { visibility: hidden; }
+.am-view-before .am-delta-badge, .am-view-after .am-delta-badge { visibility: hidden; }
+/* A list label's badge is inline and would indent the label like a nesting level, so there it takes no space; the other badges are positioned and move nothing. */
+.am-view-before .am-tree-label > .am-delta-badge, .am-view-after .am-tree-label > .am-delta-badge { display: none; }
+
+.am-delta-badge--added { --badge: var(--ok, #1f9d4d); }
+.am-delta-badge--removed { --badge: var(--err, #c62828); }
+.am-delta-badge--changed { --badge: var(--warn, #a8620a); }
+
+/* flow */
+.am-view-changes .am-node[data-delta="added"] .am-node-shape { stroke: var(--ok, #1f9d4d); }
+.am-view-changes .am-node[data-delta="removed"] .am-node-shape { stroke: var(--err, #c62828); }
+.am-view-changes .am-node[data-delta="changed"] .am-node-shape { stroke: var(--warn, #a8620a); }
+.am-view-changes .am-node[data-delta="added"] > text { fill: var(--ok, #1f9d4d); }
+.am-view-changes .am-node[data-delta="removed"] > text { fill: var(--err, #c62828); }
+.am-view-changes [data-delta="added"] > .am-edge { stroke: var(--ok, #1f9d4d); }
+.am-view-changes [data-delta="removed"] > .am-edge { stroke: var(--err, #c62828); }
+.am-view-changes .am-arrow--added { fill: var(--ok, #1f9d4d); }
+.am-view-changes .am-arrow--removed { fill: var(--err, #c62828); }
+.am-view-changes [data-delta="added"] > .am-edge-label text { fill: var(--ok, #1f9d4d); }
+.am-view-changes [data-delta="removed"] > .am-edge-label text { fill: var(--err, #c62828); }
+.am-view-changes .am-cluster[data-delta="added"] { stroke: var(--ok, #1f9d4d); }
+.am-view-changes .am-cluster[data-delta="removed"] { stroke: var(--err, #c62828); }
+.am-view-changes .am-cluster-label[data-delta="added"] { fill: var(--ok, #1f9d4d); }
+.am-view-changes .am-cluster-label[data-delta="removed"] { fill: var(--err, #c62828); }
+.am-view-changes g[data-delta="removed"]:not(.am-delta-badge), .am-view-changes .am-cluster[data-delta="removed"], .am-view-changes .am-cluster-label[data-delta="removed"] { opacity: 0.55; }
+.am-view-changes .am-node[data-delta="removed"] > text, .am-view-changes g[data-delta="removed"] > .am-edge-label text, .am-view-changes .am-cluster-label[data-delta="removed"] { text-decoration: line-through; }
+.am-diagram .am-delta-badge circle { fill: var(--badge); stroke: var(--paper, #ffffff); stroke-width: 1.5; }
+.am-diagram .am-delta-badge text { fill: var(--paper, #ffffff); font: 700 var(--am-fs-d-badge) var(--font-sans, sans-serif); text-decoration: none; }
+
+/* er: entities and relationships use the flow rules above (an entity is an .am-node, a relationship path and its end marks are .am-edge). A marked field row adds a tinted band,
+   colored text and its sign at the start of the row; Before and After show a plain schema, so the bands and signs hide there and the rows keep their place. */
+.am-view-before .am-er-band, .am-view-after .am-er-band, .am-view-before .am-er-sign, .am-view-after .am-er-sign { visibility: hidden; }
+.am-er-sign { font-weight: 700; }
+.am-view-changes .am-er-band[data-delta="added"] { fill: var(--ok-bg); }
+.am-view-changes .am-er-band[data-delta="removed"] { fill: var(--err-bg); }
+.am-view-changes .am-er-band[data-delta="changed"] { fill: var(--warn-bg); }
+.am-view-changes .am-er-sign[data-delta="added"], .am-view-changes .am-er-field[data-delta="added"], .am-view-changes .am-er-key[data-delta="added"] { fill: var(--ok); }
+.am-view-changes .am-er-sign[data-delta="removed"], .am-view-changes .am-er-field[data-delta="removed"], .am-view-changes .am-er-key[data-delta="removed"] { fill: var(--err); }
+.am-view-changes .am-er-sign[data-delta="changed"], .am-view-changes .am-er-field[data-delta="changed"], .am-view-changes .am-er-key[data-delta="changed"] { fill: var(--warn); }
+.am-view-changes .am-er-field[data-delta="removed"] { text-decoration: line-through; }
+.am-view-changes .am-node .am-er-sign[data-delta] { text-decoration: none; }
+
+/* tree */
+.am-tree .am-delta-badge {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: var(--am-ln-treeBadge); height: var(--am-ln-treeBadge); flex: none;
+  border-radius: 50%; background: var(--badge); color: var(--paper); font: 700 var(--am-fs-label)/1 var(--font-mono, monospace); text-decoration: none;
+}
+.am-tree-box[data-delta] { position: relative; }
+.am-tree-box > .am-delta-badge { position: absolute; top: -8px; inset-inline-end: -8px; }
+.am-tree-label > .am-delta-badge { margin-inline-end: 6px; vertical-align: 1px; }
+.am-view-changes .am-tree-box[data-delta="added"] { border-color: var(--ok); }
+.am-view-changes .am-tree-box[data-delta="removed"] { border-color: var(--err); opacity: 0.55; text-decoration: line-through; }
+.am-view-changes .am-tree-box[data-delta="changed"] { border-color: var(--warn); }
+.am-view-changes .am-tree-list li[data-delta="added"] > .am-tree-label { color: var(--ok); }
+.am-view-changes .am-tree-list li[data-delta="removed"] > .am-tree-label { color: var(--err); text-decoration: line-through; }
+.am-view-changes .am-tree-list li[data-delta="changed"] > .am-tree-label { color: var(--warn); }
+.am-view-changes .am-tree-list li[data-delta="removed"] > .am-tree-label, .am-view-changes .am-tree-list li[data-delta="removed"] > .am-tree-sub { opacity: 0.55; }
+
+/* Connector lines in a view that hides siblings. A hidden node keeps its stretch of the line, so the line stays whole between the nodes that remain and
+   stops at the last one; the markup (data-line-before / data-line-after, see src/components/tree.js) names the stretches that differ from the usual look. */
+.am-view-before .am-tree-list li::after, .am-view-after .am-tree-list li::after,
+.am-view-before .am-tree-col::before, .am-view-after .am-tree-col::before { visibility: visible; }
+.am-view-before .am-tree-list li[data-line-before="full"]::after, .am-view-after .am-tree-list li[data-line-after="full"]::after { bottom: 0; height: auto; }
+.am-view-before .am-tree-list li[data-line-before="short"]::after, .am-view-after .am-tree-list li[data-line-after="short"]::after { bottom: auto; height: 0.95em; }
+.am-view-before .am-tree-list li[data-line-before="none"]::after, .am-view-after .am-tree-list li[data-line-after="none"]::after,
+.am-view-before .am-tree-col[data-line-before="none"]::before, .am-view-after .am-tree-col[data-line-after="none"]::before,
+.am-view-before .am-tree-root[data-line-before="none"]::after, .am-view-after .am-tree-root[data-line-after="none"]::after { display: none; }
+.am-view-before .am-tree-col[data-line-before="full"]::before, .am-view-after .am-tree-col[data-line-after="full"]::before { inset-inline: 0; }
+.am-view-before .am-tree-col[data-line-before="start"]::before, .am-view-after .am-tree-col[data-line-after="start"]::before { inset-inline: 50% 0; }
+.am-view-before .am-tree-col[data-line-before="end"]::before, .am-view-after .am-tree-col[data-line-after="end"]::before { inset-inline: 0 50%; }
+
+/* the count row and the switch */
+.am-delta-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 10px; text-align: start; font: var(--am-fs-small)/1.3 var(--font-mono, monospace); }
+.am-delta-count--added { color: var(--ok); }
+.am-delta-count--removed { color: var(--err); }
+.am-delta-count--changed { color: var(--warn); }
+.am-delta-switch { display: inline-flex; margin-inline-start: auto; border: var(--bw, 1px) solid var(--line-2); border-radius: var(--radius); overflow: hidden; }
+.am-delta-switch[hidden] { display: none; }
+.am-delta-switch button { font: inherit; padding: 3px 10px; color: var(--ink-2); background: var(--paper); border: 0; border-inline-start: 1px solid var(--line-2); cursor: pointer; }
+.am-delta-switch button:first-child { border-inline-start: 0; }
+.am-delta-switch button[aria-pressed="true"] { color: var(--ink); background: var(--accent-bg); font-weight: 600; }
+.am-delta-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media print { .am-delta-switch { display: none !important; } }
+
+
 html[data-theme="blueprint"] .am-frame { border: 1px solid var(--line); padding: 30px; }
 html[data-theme="blueprint"] .am-frame::before {
   content: ""; position: absolute; inset: 18px; border: 1px solid var(--line); pointer-events: none;
@@ -913,188 +1002,279 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 <button class="am-btn" type="button" data-am="copy" data-done="Copied ✓">Copy source</button>
 </div>
 <main class="am-doc">
-<header class="am-head"><p class="am-colophon">Generated by <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">Answer me with HTML</a> 0.5.10 · 2026-10-30 14:34 · <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">★ Star on GitHub</a></p><h1>Читаемое авторство — сначала aif-classic</h1><p class="am-sub">Упрощённый OpenSpec change · 30 октября 2026 года</p><div class="am-intro am-md"><div class="am-md"><p>Основная работа сосредоточена на aif-classic: понятный YAML, отдельные Markdown-инструкции и навигация. CSV остаётся короткой контрольной пробой во временной копии.</p>
+<header class="am-head"><p class="am-colophon">Generated by <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">Answer me with HTML</a> 0.5.10 · 2026-10-30 20:52 · <a href="https://github.com/QingYunA/answer-me-with-html" target="_blank" rel="noopener">★ Star on GitHub</a></p><h1>Читаемое авторство aif-classic — принято по review</h1><p class="am-sub">aif-classic 1.47.0 · repository v1.53.0 · 30 октября 2026 года</p><div class="am-intro am-md"><div class="am-md"><p>Кандидат читаемого aif-classic реализован. Обе гонки параллельного запуска исправлены; полные локальные ворота прошли заново. Вы приняли все три части по review ответом «Принимай». Ручные замеры не проводились.</p>
 </div></div></header>
 <div class="am-doc-layout am-doc-layout--rail-end">
-<nav class="am-toc" aria-label="Contents" data-side="end" data-flow="in"><details class="am-outline"><summary aria-label="Contents"><span class="am-ticks" aria-hidden="true"><i class="am-tick" data-id="A" data-title="A · Что осталось в плане"></i><i class="am-tick" data-id="B" data-title="B · Основное изменение: aif-classic"></i><i class="am-tick" data-id="C" data-title="C · CSV: только контроль одного перехода"></i><i class="am-tick" data-id="D" data-title="D · Приёмка и результат"></i></span></summary><ol class="am-outline-list"><li><a href="#panel-A">A · Что осталось в плане</a></li><li><a href="#panel-B">B · Основное изменение: aif-classic</a></li><li><a href="#panel-C">C · CSV: только контроль одного перехода</a></li><li><a href="#panel-D">D · Приёмка и результат</a></li></ol></details></nav>
+<nav class="am-toc" aria-label="Contents" data-side="end" data-flow="in"><details class="am-outline"><summary aria-label="Contents"><span class="am-ticks" aria-hidden="true"><i class="am-tick" data-id="A" data-title="A · Что уже подготовлено"></i><i class="am-tick" data-id="B" data-title="B · Где стало проще искать"></i><i class="am-tick" data-id="C" data-title="C · Что проверено"></i><i class="am-tick" data-id="D" data-title="D · Что происходит после verify"></i><i class="am-tick" data-id="E" data-title="E · Принятие и границы результата"></i><i class="am-tick" data-id="F" data-title="F · Где находятся материалы"></i></span></summary><ol class="am-outline-list"><li><a href="#panel-A">A · Что уже подготовлено</a></li><li><a href="#panel-B">B · Где стало проще искать</a></li><li><a href="#panel-C">C · Что проверено</a></li><li><a href="#panel-D">D · Что происходит после verify</a></li><li><a href="#panel-E">E · Принятие и границы результата</a></li><li><a href="#panel-F">F · Где находятся материалы</a></li></ol></details></nav>
 <div class="am-doc-body">
 <section class="am-panel" id="panel-A">
-<header class="am-panel-head"><span class="am-panel-id">A</span><h2>Что осталось в плане</h2></header>
+<header class="am-panel-head"><span class="am-panel-id">A</span><h2>Что уже подготовлено</h2></header>
 <div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
 <thead>
 <tr>
-<th>Часть</th>
-<th>Объём</th>
+<th>Изменение</th>
+<th>Конкретный результат</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>aif-classic</td>
-<td>Оформление root и verify, один Markdown bridge, README-навигация</td>
+<td>Блочный YAML</td>
+<td>64 mappings раскрыты в root, verify, verify-once и verify-batch</td>
 </tr>
 <tr>
-<td>Проверка поведения</td>
-<td>Прежние bytes инструкций, bindings, отказы и пределы повторов</td>
+<td>Markdown bridge</td>
+<td>Все 9938 bytes инструкций вынесены в один файл через существующий context.source</td>
 </tr>
 <tr>
-<td>Проверка читаемости</td>
-<td>Четыре задания только на aif-classic</td>
+<td>README</td>
+<td>Добавлены карта маршрута, правила остановки и ссылки на исходники</td>
 </tr>
 <tr>
-<td>CSV</td>
-<td>Один переход до/после, compile и прежний sample output</td>
+<td>Pri-Fly test</td>
+<td>Нейтральная проверка файлового context; readability не меняет production compiler или runtime</td>
 </tr>
 </tbody></table></div>
-<p>План сокращён с 16 до 11 задач. CSV не требует изменений tracked YAML, steps, README, worker или schema. Новые CSV-тесты и отдельный UX-пилот исключены.</p>
-<p><a href="proposal.md">Предложение</a> · <a href="design.md">Design</a> · <a href="tasks.md">11 задач</a>.</p>
-<p>Runtime, compiler contract и схемы сохраняются. <code>skip_specs: true</code> остаётся: новый формат или поведение не вводятся.</p>
+<p>Кандидат находится в отдельной копии. Установленный package обновлён до последнего upstream baseline, но readability patch туда не установлен.</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-B">
-<header class="am-panel-head"><span class="am-panel-id">B</span><h2>Основное изменение: aif-classic</h2></header>
-<div class="am-panel-body"><div class="am-tree"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="aif-classic/" data-step="0">aif-classic/</div></div><ul class="am-tree-list"><li data-key="workflow.yaml" data-step="1"><span class="am-tree-label">workflow.yaml</span><span class="am-tree-sub">прежний root graph, блочная запись</span></li><li data-key="steps/verify.yaml" data-step="2"><span class="am-tree-label">steps/verify.yaml</span><span class="am-tree-sub">явные ports, executor и effects</span></li><li data-key="workflows/" data-step="3"><span class="am-tree-label">workflows/</span><ul><li data-key="verify-once.yaml" data-step="4"><span class="am-tree-label">verify-once.yaml</span><span class="am-tree-sub">решение владельца и fix</span></li><li data-key="verify-batch.yaml" data-step="5"><span class="am-tree-label">verify-batch.yaml</span><span class="am-tree-sub">bypass и bounded repeat</span></li></ul></li><li data-key="contexts/aif-verify-bridge.yaml" data-step="6"><span class="am-tree-label">contexts/aif-verify-bridge.yaml</span><span class="am-tree-sub">metadata и source</span></li><li data-key="instructions/" data-step="7"><span class="am-tree-label">instructions/</span><ul><li data-key="aif-verify-bridge.md" data-step="8"><span class="am-tree-label">aif-verify-bridge.md</span><span class="am-tree-sub">прежние bytes text</span></li></ul></li><li data-key="README.md" data-step="9"><span class="am-tree-label">README.md</span><span class="am-tree-sub">карта маршрута и указатель файлов</span></li></ul></div>
-<div class="am-md"><p>Показан выбранный участок. Остальные YAML-файлы остаются на своих местах. Длинные инструкции читаются как Markdown через существующий <code>context.source</code>.</p>
-<p>При переносе сохраняются все 6738 bytes текущего bridge, включая завершающий LF. При изменении baseline размер и SHA-256 фиксируются заново.</p>
-<p>Отдельные проверки сохраняют порядок <code>first_match</code>, решение владельца, выключенный verify, передачу исправленной implementation и исчерпание лимита.</p>
-<p><a href="previews/aif-classic.md">Конкретный YAML step, context и ветки verify</a>.</p>
+<header class="am-panel-head"><span class="am-panel-id">B</span><h2>Где стало проще искать</h2></header>
+<div class="am-panel-body"><div class="am-tree am-view-changes"><div class="am-tree-root am-tree-root--solo"><div class="am-tree-box am-tree-box--root" data-key="aif-classic/" data-step="0">aif-classic/</div></div><ul class="am-tree-list"><li data-key="README.md" data-step="1" data-delta="changed"><span class="am-tree-label"><span class="am-delta-badge am-delta-badge--changed" role="img" aria-label="changed">~</span>README.md</span><span class="am-tree-sub">карта и поиск исходников</span></li><li data-key="workflow.yaml" data-step="2" data-delta="changed"><span class="am-tree-label"><span class="am-delta-badge am-delta-badge--changed" role="img" aria-label="changed">~</span>workflow.yaml</span><span class="am-tree-sub">root graph</span></li><li data-key="steps/" data-step="3"><span class="am-tree-label">steps/</span><ul><li data-key="verify.yaml" data-step="4" data-delta="changed"><span class="am-tree-label"><span class="am-delta-badge am-delta-badge--changed" role="img" aria-label="changed">~</span>verify.yaml</span><span class="am-tree-sub">контракт и executor</span></li></ul></li><li data-key="workflows/" data-step="5"><span class="am-tree-label">workflows/</span><ul><li data-key="verify-once.yaml" data-step="6" data-delta="changed"><span class="am-tree-label"><span class="am-delta-badge am-delta-badge--changed" role="img" aria-label="changed">~</span>verify-once.yaml</span><span class="am-tree-sub">owner-only, fix и terminal routes</span></li><li data-key="verify-batch.yaml" data-step="7" data-delta="changed"><span class="am-tree-label"><span class="am-delta-badge am-delta-badge--changed" role="img" aria-label="changed">~</span>verify-batch.yaml</span><span class="am-tree-sub">выключатель и bounded repeat</span></li></ul></li><li data-key="contexts/" data-step="8"><span class="am-tree-label">contexts/</span><ul><li data-key="aif-verify-bridge.yaml" data-step="9" data-delta="changed"><span class="am-tree-label"><span class="am-delta-badge am-delta-badge--changed" role="img" aria-label="changed">~</span>aif-verify-bridge.yaml</span><span class="am-tree-sub">metadata и source</span></li></ul></li><li data-key="instructions/" data-step="10"><span class="am-tree-label">instructions/</span><ul><li data-key="aif-verify-bridge.md" data-step="11" data-delta="added" data-line-before="none"><span class="am-tree-label"><span class="am-delta-badge am-delta-badge--added" role="img" aria-label="added">+</span>aif-verify-bridge.md</span><span class="am-tree-sub">прежний полный текст</span></li></ul></li></ul><div class="am-delta-bar"><span class="am-delta-count am-delta-count--added">+1 added</span> <span class="am-delta-count am-delta-count--changed">~6 changed</span><span class="am-delta-switch" role="group" aria-label="View" hidden><button type="button" data-view="before" aria-pressed="false">Before</button><button type="button" data-view="changes" aria-pressed="true">Changes</button><button type="button" data-view="after" aria-pressed="false">After</button></span></div></div>
+<div class="am-md"><p>Короткие sequences остаются короткими. IDs, versions, profiles и правила исполнения сохранены.</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-C">
-<header class="am-panel-head"><span class="am-panel-id">C</span><h2>CSV: только контроль одного перехода</h2></header>
-<div class="am-panel-body"><div class="am-md"><p>Берём уже существующий csv-report. Во временной копии раскрываем только input_bindings и on у stages.parse.</p>
-</div>
-<figure class="am-codeblock"><figcaption class="am-code-head"><span class="am-code-title">До · существующий фрагмент</span><span class="am-code-lang">yaml</span><button class="am-code-copy" type="button" data-am="copy-code" data-done="Copied ✓">Copy</button></figcaption><pre class="am-code"><code data-lang="yaml"><span class="am-ln">input_bindings: {csv: $inputs.csv}</span><span class="am-ln">on: {pass: validate, fail: rejected, needs_revision: rejected, no_work: rejected}</span></code></pre></figure>
-<figure class="am-codeblock"><figcaption class="am-code-head"><span class="am-code-title">После · предлагаемое оформление</span><span class="am-code-lang">yaml</span><button class="am-code-copy" type="button" data-am="copy-code" data-done="Copied ✓">Copy</button></figcaption><pre class="am-code"><code data-lang="yaml"><span class="am-ln">input_bindings:</span><span class="am-ln">  csv: $inputs.csv</span><span class="am-ln">on:</span><span class="am-ln">  pass: validate</span><span class="am-ln">  fail: rejected</span><span class="am-ln">  needs_revision: rejected</span><span class="am-ln">  no_work: rejected</span></code></pre></figure>
-<div class="am-md"><p>Читатель показывает следующий шаг и остановку при отказе. Записываем короткое наблюдение. Для CSV не требуется таблица времени или доказательство ускорения.</p>
-<p>Проверяем равенство YAML-значений, compile обеих форм и прежний sample output: Rows: 3, Total: 24. Исходные файлы CSV-примера сохраняются.</p>
-<p><a href="previews/csv-report.md">Полный контрольный фрагмент и ожидаемый отчёт</a>.</p>
+<header class="am-panel-head"><span class="am-panel-id">C</span><h2>Что проверено</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>Проверка</th>
+<th>Результат</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>YAML parsed values</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>четыре graphs равны</span></td>
+</tr>
+<tr>
+<td>Инструкции bridge</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>точные bytes, SHA-256 и завершающий LF</span></td>
+</tr>
+<tr>
+<td>Парные сборки</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>12 пар: два hosts, два settings, три profiles</span></td>
+</tr>
+<tr>
+<td>Sealed definitions</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>identities и bytes равны без нормализации</span></td>
+</tr>
+<tr>
+<td>Upstream compile gate</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>обе формы, восемь packages</span></td>
+</tr>
+<tr>
+<td>Upstream compatibility</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>обе формы, пять launches</span></td>
+</tr>
+<tr>
+<td>Native verify routes</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>восемь случаев совпали</span></td>
+</tr>
+<tr>
+<td>CSV sample</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>прежний succeeded и точные bytes отчёта</span></td>
+</tr>
+<tr>
+<td>Полные локальные ворота</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>заново прошли после package и Git registry fixes</span></td>
+</tr>
+<tr>
+<td>Текущий собранный CLI</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>повторены 12 пар сборок и восемь пар маршрутов</span></td>
+</tr>
+<tr>
+<td>Кандидат после возврата к основной задаче</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>все семь hashes совпали с handoff</span></td>
+</tr>
+</tbody></table></div>
+<p>Проверки не вызывают платные модели. Native probes используют реальные Runs и детерминированные ответы.</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-D">
-<header class="am-panel-head"><span class="am-panel-id">D</span><h2>Приёмка и результат</h2></header>
-<div class="am-panel-body"><figure class="am-diagram am-flow"><svg viewBox="0 0 348 422" width="348" height="422" role="img" aria-label="Flowchart: Baseline aif-classic, Candidate aif-classic, Проверка поведения, Reader pilot, Handoff, Контрольная CSV-проба" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M94.2,49 L94.2,60.5 Q94.2,72 94.2,87.8 L94.2,103.5" marker-end="url(#am1-arrow)"/></g><g data-step="0"><path class="am-edge" d="M94.2,138.5 L94.2,158.8 Q94.2,179 121.7,195 L149.2,211" marker-end="url(#am1-arrow)"/></g><g data-step="0"><path class="am-edge" d="M179.3,246 L179.3,257.5 Q179.3,269 179.3,280.5 L179.3,292" marker-end="url(#am1-arrow)"/></g><g data-step="0"><path class="am-edge" d="M179.3,327 L179.3,338.5 Q179.3,350 179.3,361.5 L179.3,373" marker-end="url(#am1-arrow)"/></g><g data-step="1"><path class="am-edge" d="M264.4,147 L264.4,163 Q264.4,179 236.9,195 L209.4,211" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="195.9" y="170" width="137" height="18" rx="3"/><text x="264.4" y="179" text-anchor="middle" dominant-baseline="central">один переход и sample</text></g></g></g><g><g class="am-node am-node--rect" data-key="Baseline aif-classic" data-step="0"><rect class="am-node-shape" x="17.6" y="14" width="153.1" height="35" rx="3"/><text x="94.2" y="31.5" text-anchor="middle" dominant-baseline="central" class="am-node-text">Baseline aif-classic</text></g><g class="am-node am-node--rect" data-key="Candidate aif-classic" data-step="0"><rect class="am-node-shape" x="14" y="103.5" width="160.3" height="35" rx="3"/><text x="94.2" y="121" text-anchor="middle" dominant-baseline="central" class="am-node-text">Candidate aif-classic</text></g><g class="am-node am-node--rect" data-key="Проверка поведения" data-step="0"><rect class="am-node-shape" x="101.4" y="211" width="155.7" height="35" rx="3"/><text x="179.3" y="228.5" text-anchor="middle" dominant-baseline="central" class="am-node-text">Проверка поведения</text></g><g class="am-node am-node--rect" data-key="Reader pilot" data-step="0"><rect class="am-node-shape" x="128.7" y="292" width="101.1" height="35" rx="3"/><text x="179.3" y="309.5" text-anchor="middle" dominant-baseline="central" class="am-node-text">Reader pilot</text></g><g class="am-node am-node--rect" data-key="Handoff" data-step="0"><rect class="am-node-shape" x="142.1" y="373" width="74.3" height="35" rx="3"/><text x="179.3" y="390.5" text-anchor="middle" dominant-baseline="central" class="am-node-text">Handoff</text></g><g class="am-node am-node--rect" data-key="Контрольная CSV-проба" data-step="1"><rect class="am-node-shape" x="210.3" y="95" width="108.1" height="52" rx="3"/><text x="264.4" y="112.5" text-anchor="middle" dominant-baseline="central" class="am-node-text">Контрольная</text><text x="264.4" y="129.5" text-anchor="middle" dominant-baseline="central" class="am-node-text">CSV-проба</text></g></g></svg></figure>
-<div class="am-md"><p>Четыре задания относятся только к aif-classic:</p>
-<ol>
-<li>Найдите первый шаг и исполнителя verify.</li>
-<li>Найдите и измените bridge-инструкции в disposable копии.</li>
-<li>Проследите implementation после fix до следующей проверки.</li>
-<li>Объясните решение владельца, предел повторов и остановку.</li>
-</ol>
-<p>Приёмка требует сохранения поведения, 4/4 правильных ответов и улучшения времени без роста ошибок или подсказок. Несопоставимый замер не получает PASS.</p>
-<p><a href="readability-protocol.md">Протокол измерений aif-classic</a>.</p>
-<p>Итог работы — проверенный diff aif-classic для repository workflows. Версия package, release и установка новой edition выполняются там отдельно.</p>
-<p>Плановые артефакты готовы к review. Все 11 задач реализации открыты. Исполняемые workflows пока не изменены.</p>
-<p>Основной риск сохраняется: Markdown добавляет переход между файлами. Его полезность проверит reader pilot aif-classic.</p>
+<header class="am-panel-head"><span class="am-panel-id">D</span><h2>Что происходит после verify</h2></header>
+<div class="am-panel-body"><figure class="am-codeblock"><figcaption class="am-code-head"><span class="am-code-title"></span><span class="am-code-lang">text</span><button class="am-code-copy" type="button" data-am="copy-code" data-done="Copied ✓">Copy</button></figcaption><pre class="am-code"><code data-lang="text"><span class="am-ln">verify выключен → прежняя implementation → security → review</span><span class="am-ln">verify чистый   → прежняя implementation → security → review</span><span class="am-ln">verify blocking → fix → новая implementation → verify → security → review</span><span class="am-ln">verify owner-only / blocked → partial</span><span class="am-ln">verify limit exhausted     → partial</span></code></pre></figure>
+<div class="am-md"><p>После fix повторный verify, security и review-challenge прочитали исправленный head.
+Owner-only проверяется первым: автоматический fix для него не вызывается.
+Предел графа — 8; default — 3; выбранный предел для проверки exhausted — 1.</p>
+<p>Старый дефект сохранён: fail/no_work из verify приводит к unhandled_child_outcome в root.
+Он воспроизведён на обеих формах и описан отдельно. Readability patch не выбирает новый terminal outcome.</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-E">
+<header class="am-panel-head"><span class="am-panel-id">E</span><h2>Принятие и границы результата</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>Выполнены 11 из 11 согласованных задач. Владелец выбрал приёмку по review вместо обязательного reader pilot.
+Исходные измерительные критерии и точный ответ сохранены в <a href="evidence/owner-review.json">evidence</a>.</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>Часть</th>
+<th>Решение</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Блочный YAML</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>принято</span></td>
+</tr>
+<tr>
+<td>Markdown-инструкции</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>принято</span></td>
+</tr>
+<tr>
+<td>README-карта</td>
+<td><span class="am-status am-status--ok"><span class="am-status-icon" aria-hidden="true">✓</span>принято</span></td>
+</tr>
+<tr>
+<td>Ручные baseline/candidate задания</td>
+<td><span class="am-status am-status--warn"><span class="am-status-icon" aria-hidden="true">!</span>не проводились; обязательность отменена владельцем</span></td>
+</tr>
+<tr>
+<td>Время, ошибки и подсказки</td>
+<td><span class="am-status am-status--warn"><span class="am-status-icon" aria-hidden="true">!</span>не измерены</span></td>
+</tr>
+<tr>
+<td>Измеренное ускорение</td>
+<td><span class="am-status am-status--warn"><span class="am-status-icon" aria-hidden="true">!</span>не заявляется</span></td>
+</tr>
+<tr>
+<td>Upstream поставка и установка</td>
+<td><span class="am-status am-status--warn"><span class="am-status-icon" aria-hidden="true">!</span>отдельный следующий этап</span></td>
+</tr>
+</tbody></table></div>
+<p>Автоматические проверки доказывают сохранение поведения. Решение владельца принимает локальную полезность.
+Эти два факта не объявляют измеренное улучшение скорости или закрытие roadmap gates.
+Установленный package и существующие Runs кандидатом не переписаны.</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-F">
+<header class="am-panel-head"><span class="am-panel-id">F</span><h2>Где находятся материалы</h2></header>
+<div class="am-panel-body"><div class="am-md"><ul>
+<li><a href="owner-review.html">Принятые файлы до/после</a>.</li>
+<li><a href="acceptance.md">Техническая приёмка и результаты</a>.</li>
+<li><a href="previews/aif-classic.md">Актуальный preview aif-classic</a>.</li>
+<li><a href="handoff/aif-classic-readability.patch">Точный product patch</a>.</li>
+<li><a href="handoff/README.md">Команды воспроизведения</a>.</li>
+<li><a href="handoff/existing-verify-outcome-gap.md">Прежний пробел fail/no_work</a>.</li>
+<li><a href="evidence/current-runtime.json">Проверка кандидата текущим CLI</a>.</li>
+<li><a href="evidence/worktree-gate-failure.json">Прежний блокер локальных ворот</a>.</li>
+<li><a href="../fix-concurrent-named-worktree-start/review.html">Завершённое исправление concurrency</a>.</li>
+<li><a href="tasks.md">План и оставшиеся задачи</a>.</li>
+</ul>
+<p>Patch подготовлен для repository workflows. Он не выполняет version bump, release или установку.</p>
 </div></div>
 </section>
 </div>
 </div>
 </main>
-<div class="am-lightbox" hidden aria-modal="true" role="dialog" aria-label="Diagram viewer" data-expand="Expand diagram">
-<div class="am-lightbox-backdrop"></div>
-<div class="am-lightbox-header">
-<div class="am-lightbox-title">
-<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-<span class="am-lightbox-title-text"></span>
-</div>
-<div class="am-lightbox-actions">
-<button class="am-lightbox-close" data-action="close" title="Close" aria-label="Close">✕</button>
-</div>
-</div>
-<div class="am-lightbox-stage">
-<div class="am-lightbox-canvas am-diagram"></div>
-</div>
-</div>
 <textarea id="am-source" hidden readonly aria-hidden="true">---
-title: Читаемое авторство — сначала aif-classic
-subtitle: Упрощённый OpenSpec change · 30 октября 2026 года
+title: Читаемое авторство aif-classic — принято по review
+subtitle: aif-classic 1.47.0 · repository v1.53.0 · 30 октября 2026 года
 lang: ru
 template: doc
 theme: paper
 ---
-Основная работа сосредоточена на aif-classic: понятный YAML, отдельные Markdown-инструкции и навигация. CSV остаётся короткой контрольной пробой во временной копии.
+Кандидат читаемого aif-classic реализован. Обе гонки параллельного запуска исправлены; полные локальные ворота прошли заново. Вы приняли все три части по review ответом «Принимай». Ручные замеры не проводились.
 
-## A Что осталось в плане
-| Часть | Объём |
+## A Что уже подготовлено
+| Изменение | Конкретный результат |
 |---|---|
-| aif-classic | Оформление root и verify, один Markdown bridge, README-навигация |
-| Проверка поведения | Прежние bytes инструкций, bindings, отказы и пределы повторов |
-| Проверка читаемости | Четыре задания только на aif-classic |
-| CSV | Один переход до/после, compile и прежний sample output |
+| Блочный YAML | 64 mappings раскрыты в root, verify, verify-once и verify-batch |
+| Markdown bridge | Все 9938 bytes инструкций вынесены в один файл через существующий context.source |
+| README | Добавлены карта маршрута, правила остановки и ссылки на исходники |
+| Pri-Fly test | Нейтральная проверка файлового context; readability не меняет production compiler или runtime |
 
-План сокращён с 16 до 11 задач. CSV не требует изменений tracked YAML, steps, README, worker или schema. Новые CSV-тесты и отдельный UX-пилот исключены.
+Кандидат находится в отдельной копии. Установленный package обновлён до последнего upstream baseline, но readability patch туда не установлен.
 
-[Предложение](proposal.md) · [Design](design.md) · [11 задач](tasks.md).
-
-Runtime, compiler contract и схемы сохраняются. `skip_specs: true` остаётся: новый формат или поведение не вводятся.
-
-## B Основное изменение: aif-classic
+## B Где стало проще искать
 ```tree
 aif-classic/
-  workflow.yaml | прежний root graph, блочная запись
-  steps/verify.yaml | явные ports, executor и effects
+  ~ README.md | карта и поиск исходников
+  ~ workflow.yaml | root graph
+  steps/
+    ~ verify.yaml | контракт и executor
   workflows/
-    verify-once.yaml | решение владельца и fix
-    verify-batch.yaml | bypass и bounded repeat
-  contexts/aif-verify-bridge.yaml | metadata и source
+    ~ verify-once.yaml | owner-only, fix и terminal routes
+    ~ verify-batch.yaml | выключатель и bounded repeat
+  contexts/
+    ~ aif-verify-bridge.yaml | metadata и source
   instructions/
-    aif-verify-bridge.md | прежние bytes text
-  README.md | карта маршрута и указатель файлов
+    + aif-verify-bridge.md | прежний полный текст
 ```
 
-Показан выбранный участок. Остальные YAML-файлы остаются на своих местах. Длинные инструкции читаются как Markdown через существующий `context.source`.
+Короткие sequences остаются короткими. IDs, versions, profiles и правила исполнения сохранены.
 
-При переносе сохраняются все 6738 bytes текущего bridge, включая завершающий LF. При изменении baseline размер и SHA-256 фиксируются заново.
+## C Что проверено
+| Проверка | Результат |
+|---|---|
+| YAML parsed values | ok четыре graphs равны |
+| Инструкции bridge | ok точные bytes, SHA-256 и завершающий LF |
+| Парные сборки | ok 12 пар: два hosts, два settings, три profiles |
+| Sealed definitions | ok identities и bytes равны без нормализации |
+| Upstream compile gate | ok обе формы, восемь packages |
+| Upstream compatibility | ok обе формы, пять launches |
+| Native verify routes | ok восемь случаев совпали |
+| CSV sample | ok прежний succeeded и точные bytes отчёта |
+| Полные локальные ворота | ok заново прошли после package и Git registry fixes |
+| Текущий собранный CLI | ok повторены 12 пар сборок и восемь пар маршрутов |
+| Кандидат после возврата к основной задаче | ok все семь hashes совпали с handoff |
 
-Отдельные проверки сохраняют порядок `first_match`, решение владельца, выключенный verify, передачу исправленной implementation и исчерпание лимита.
+Проверки не вызывают платные модели. Native probes используют реальные Runs и детерминированные ответы.
 
-[Конкретный YAML step, context и ветки verify](previews/aif-classic.md).
-
-## C CSV: только контроль одного перехода
-Берём уже существующий csv-report. Во временной копии раскрываем только input_bindings и on у stages.parse.
-
-```yaml title=&quot;До · существующий фрагмент&quot;
-input_bindings: {csv: $inputs.csv}
-on: {pass: validate, fail: rejected, needs_revision: rejected, no_work: rejected}
+## D Что происходит после verify
+```text
+verify выключен → прежняя implementation → security → review
+verify чистый   → прежняя implementation → security → review
+verify blocking → fix → новая implementation → verify → security → review
+verify owner-only / blocked → partial
+verify limit exhausted     → partial
 ```
 
-```yaml title=&quot;После · предлагаемое оформление&quot;
-input_bindings:
-  csv: $inputs.csv
-on:
-  pass: validate
-  fail: rejected
-  needs_revision: rejected
-  no_work: rejected
-```
+После fix повторный verify, security и review-challenge прочитали исправленный head.
+Owner-only проверяется первым: автоматический fix для него не вызывается.
+Предел графа — 8; default — 3; выбранный предел для проверки exhausted — 1.
 
-Читатель показывает следующий шаг и остановку при отказе. Записываем короткое наблюдение. Для CSV не требуется таблица времени или доказательство ускорения.
+Старый дефект сохранён: fail/no_work из verify приводит к unhandled_child_outcome в root.
+Он воспроизведён на обеих формах и описан отдельно. Readability patch не выбирает новый terminal outcome.
 
-Проверяем равенство YAML-значений, compile обеих форм и прежний sample output: Rows: 3, Total: 24. Исходные файлы CSV-примера сохраняются.
+## E Принятие и границы результата
+Выполнены 11 из 11 согласованных задач. Владелец выбрал приёмку по review вместо обязательного reader pilot.
+Исходные измерительные критерии и точный ответ сохранены в [evidence](evidence/owner-review.json).
 
-[Полный контрольный фрагмент и ожидаемый отчёт](previews/csv-report.md).
+| Часть | Решение |
+|---|---|
+| Блочный YAML | ok принято |
+| Markdown-инструкции | ok принято |
+| README-карта | ok принято |
+| Ручные baseline/candidate задания | warn не проводились; обязательность отменена владельцем |
+| Время, ошибки и подсказки | warn не измерены |
+| Измеренное ускорение | warn не заявляется |
+| Upstream поставка и установка | warn отдельный следующий этап |
 
-## D Приёмка и результат
-```flow
-Baseline aif-classic -&gt; Candidate aif-classic -&gt; Проверка поведения -&gt; Reader pilot -&gt; Handoff
-Контрольная CSV-проба -&gt; Проверка поведения: один переход и sample
-```
+Автоматические проверки доказывают сохранение поведения. Решение владельца принимает локальную полезность.
+Эти два факта не объявляют измеренное улучшение скорости или закрытие roadmap gates.
+Установленный package и существующие Runs кандидатом не переписаны.
 
-Четыре задания относятся только к aif-classic:
+## F Где находятся материалы
+- [Принятые файлы до/после](owner-review.html).
+- [Техническая приёмка и результаты](acceptance.md).
+- [Актуальный preview aif-classic](previews/aif-classic.md).
+- [Точный product patch](handoff/aif-classic-readability.patch).
+- [Команды воспроизведения](handoff/README.md).
+- [Прежний пробел fail/no_work](handoff/existing-verify-outcome-gap.md).
+- [Проверка кандидата текущим CLI](evidence/current-runtime.json).
+- [Прежний блокер локальных ворот](evidence/worktree-gate-failure.json).
+- [Завершённое исправление concurrency](../fix-concurrent-named-worktree-start/review.html).
+- [План и оставшиеся задачи](tasks.md).
 
-1. Найдите первый шаг и исполнителя verify.
-2. Найдите и измените bridge-инструкции в disposable копии.
-3. Проследите implementation после fix до следующей проверки.
-4. Объясните решение владельца, предел повторов и остановку.
-
-Приёмка требует сохранения поведения, 4/4 правильных ответов и улучшения времени без роста ошибок или подсказок. Несопоставимый замер не получает PASS.
-
-[Протокол измерений aif-classic](readability-protocol.md).
-
-Итог работы — проверенный diff aif-classic для repository workflows. Версия package, release и установка новой edition выполняются там отдельно.
-
-Плановые артефакты готовы к review. Все 11 задач реализации открыты. Исполняемые workflows пока не изменены.
-
-Основной риск сохраняется: Markdown добавляет переход между файлами. Его полезность проверит reader pilot aif-classic.
+Patch подготовлен для repository workflows. Он не выполняет version bump, release или установку.
 </textarea>
 <script>
 (() => {
@@ -2717,6 +2897,36 @@ if (panels.length > 1) {
   document.addEventListener('pointerdown', (e) => { if (box.open && !nav.contains(e.target)) setOpen(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && box.open && !nav.contains(e.target)) setOpen(false); });
 })();
+})();
+
+// ── Change markers: the Before / Changes / After switch ─────────────
+// The switch starts hidden because it needs this script. It swaps the am-view-* class of its diagram; the delta styles show the colors and badges only in
+// the Changes view and hide the items that do not exist in the view.
+(() => {
+  const VIEWS = ['before', 'changes', 'after'];
+  const setView = (el, view) => {
+    el.classList.remove(...VIEWS.map((v) => `am-view-${v}`));
+    el.classList.add(`am-view-${view}`);
+  };
+  for (const bar of document.querySelectorAll('.am-delta-bar')) {
+    const view = bar.parentElement;
+    const group = bar.querySelector('.am-delta-switch');
+    if (!group) continue;
+    group.hidden = false;
+    group.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-view]');
+      if (!btn) return;
+      setView(view, btn.dataset.view);
+      for (const b of group.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b === btn));
+    });
+  }
+  // The expand button copies only the drawing into the viewer; the viewer shows the view the diagram is in.
+  document.addEventListener('click', (e) => {
+    const host = e.target.closest?.('.am-diagram-expand')?.parentElement;
+    const canvas = document.querySelector('.am-lightbox-canvas');
+    const view = host && VIEWS.find((v) => host.classList.contains(`am-view-${v}`));
+    if (view && canvas) setView(canvas, view);
+  });
 })();
 </script>
 </body>

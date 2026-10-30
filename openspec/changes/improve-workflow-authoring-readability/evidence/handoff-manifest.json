@@ -1,0 +1,18 @@
+{
+  "upstream_commit": "c85306050df060dc4b381ba7512173806250b3a6",
+  "candidate_files": {
+    "README.md": "83b83bcc28ff102dba3ae21936f2a9fb7a1df6ce969d5a2ed5ee5006e57714d2",
+    "contexts/aif-verify-bridge.yaml": "5ac749706bc3b68ed80f115ca9fc94e122e8d42e76200b8c0a9edb0efa4d431c",
+    "instructions/aif-verify-bridge.md": "8772b0ef8121540cceb00cd912ba005ef434ed7fe467fde6e88913262a1fd24c",
+    "steps/verify.yaml": "c089ff7ce6f2ef7c6b08121ee2f0487e10090240436f0dbb6d7590a9fa9cd4b8",
+    "workflow.yaml": "45a76635211b5481a3fff86f25b68a87bf08e94a4e480e9cbd55556064df76a7",
+    "workflows/verify-batch.yaml": "ae6ae381804a866cdbfdb74e164c12ac4b3890e0a970f3804cb3cf63d1354206",
+    "workflows/verify-once.yaml": "57172e72ae79bb91f64a151e30e15780c38608b038172d434c214b87ede1b61d"
+  },
+  "patch_sha256": "d91952033fd67f59098d9eb0ae6b9bcba05f1afa148cc9ccadc91a229df48cf2",
+  "git_apply_check": "passed",
+  "git_apply_bytes_match": "passed",
+  "upstream_candidate_installed": false,
+  "human_acceptance": "accepted_by_owner_review; manual timings not measured",
+  "owner_review_evidence": "owner-review.json"
+}

@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-30",
+  "source": "Прямое сообщение пользователя в текущем чате, а не вывод из OS actor provenance.",
+  "question": "Как завершить приёмку aif-classic после просмотра сравнения «до/после»? Первый вариант означает: принять блочный YAML, Markdown-инструкции и карту README по вашему review; обновить план без обязательных замеров; явно записать, что ускорение чтения не измерено.",
+  "offered_choice": "Принять все три по review без замеров (рекомендую)",
+  "user_reply_verbatim": "Принимай",
+  "decision": "accepted_by_owner_review",
+  "accepted_parts": {
+    "block_yaml": "принято",
+    "markdown_instructions": "принято",
+    "readme_navigation": "принято"
+  },
+  "candidate_patch_sha256": "d91952033fd67f59098d9eb0ae6b9bcba05f1afa148cc9ccadc91a229df48cf2",
+  "candidate_files": {
+    "README.md": "83b83bcc28ff102dba3ae21936f2a9fb7a1df6ce969d5a2ed5ee5006e57714d2",
+    "contexts/aif-verify-bridge.yaml": "5ac749706bc3b68ed80f115ca9fc94e122e8d42e76200b8c0a9edb0efa4d431c",
+    "instructions/aif-verify-bridge.md": "8772b0ef8121540cceb00cd912ba005ef434ed7fe467fde6e88913262a1fd24c",
+    "steps/verify.yaml": "c089ff7ce6f2ef7c6b08121ee2f0487e10090240436f0dbb6d7590a9fa9cd4b8",
+    "workflow.yaml": "45a76635211b5481a3fff86f25b68a87bf08e94a4e480e9cbd55556064df76a7",
+    "workflows/verify-batch.yaml": "ae6ae381804a866cdbfdb74e164c12ac4b3890e0a970f3804cb3cf63d1354206",
+    "workflows/verify-once.yaml": "57172e72ae79bb91f64a151e30e15780c38608b038172d434c214b87ede1b61d"
+  },
+  "presented_comparison_sha256": "44cccb57c7123820654308ae45f6bb37ac3d99f915db11112bba7a8126e56e33",
+  "criteria_change_authorized": true,
+  "manual_reader_tasks_performed": false,
+  "reading_speed_measured": false,
+  "speed_improvement_claimed": false,
+  "csv_human_observation": "Не проводилось; остаётся короткая техническая контрольная проба, без отдельной человеческой приёмки.",
+  "original_tasks_replaced_by_owner_decision": {
+    "1.2": "Провести baseline четырёх reader tasks только для `aif-classic` по `readability-protocol.md`. Проверка: записаны время, верность, подсказки, порядок и знакомство с preview; pending не заменён успехом.",
+    "3.1": "Во временной копии существующего `csv-report` раскрыть только bindings и routes `stages.parse` по контрольному preview. Проверка: parsed value всего workflow совпадает; читатель находит следующий шаг и отказ; обе формы компилируются и дают прежний sample output. Команды и короткое наблюдение записаны в `acceptance.md`. Tracked CSV, steps, README, worker и schema не меняются; новых CSV tests и отдельного UX-пилота нет.",
+    "4.1": "Провести четыре candidate reader tasks только для `aif-classic`; удалить пробные edits перед semantic checks. Проверка: таблица замеров заполнена; знакомство, порядок и повторения раскрыты; чистые hashes восстановлены.",
+    "4.2": "Сопоставить результаты с gate и записать решение отдельно для block YAML, карты и Markdown source. Проверка: `acceptance.md` содержит принятие/доработку/отклонение с фактическими числами; несопоставимый замер не отмечен PASS. Для CSV достаточно результата задачи 3.1, без требования измеренного ускорения.",
+    "5.1": "Сохранить точный diff принятого AI Factory candidate и manifest baseline/skills/settings для repository workflows. Проверить compile и применимые package tests против зафиксированного latest stable Pri-Fly, отдельно от development binary. Проверка: воспроизводимые команды, versions и результаты в `acceptance.md`; без upstream commit/release/update и без объявления, что package уже поставлен. Недоступная stable-проверка оставляет эту задачу открытой."
+  },
+  "delivery_boundary": "Принят проверенный handoff. Upstream commit, version bump, release и установка этим решением не выполняются."
+}

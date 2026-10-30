@@ -1,0 +1,1 @@
+{"outcome": "passed", "prifly": "0.13.81", "binary_sha256": "sha256:bdbca429a41be9673e9d7db6c979302f086a6b507291e81118d314d42d09b66f", "platform": "darwin/arm64", "launches": 5, "distinct_builds": 4, "trusted_packages": 4, "profiled_sealed_as": "core-state/41", "boundary": "assisted handoff dispatched; no AI host answers it here", "registry_entries_removed": 1}

@@ -1,0 +1,6 @@
+{
+  "test": "TestCLIProjectContextSourcePreservesInlineBytes",
+  "exit_code": 1,
+  "reason": "intentional source bytes suffix drift detected",
+  "test_file_sha256": "dc742db19a6d5c7936e3a6a9983548a93f6f6cc9bfa8544c81ff2ce4f871c2d0"
+}

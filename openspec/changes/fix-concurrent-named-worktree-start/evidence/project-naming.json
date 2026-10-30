@@ -1,0 +1,27 @@
+{
+  "owner_request": "profile /4, project title and worktree_naming",
+  "project_profile": "prifly-project-profile/4",
+  "project_title": "Pri-Fly",
+  "naming_template": "{project_name}-{workflow}",
+  "bindings": {
+    "project_name": "prifly",
+    "workflow": "aif-classic"
+  },
+  "base": "prifly-aif-classic",
+  "branch": "prifly/prifly-aif-classic",
+  "preview": {
+    "path": ".prifly/work/claims/prifly-aif-classic",
+    "branch": "prifly/prifly-aif-classic",
+    "reserved": false
+  },
+  "summary_schema": "project-launch-summary/5",
+  "review_digest": "sha256:dc7696ca354fda62437a52a728cbb6863cca1e168be3e063330db43b0275a1da",
+  "profile_sha256": "9cfcd2bb85f64e2d78d90aee60611aad9de8196346acb47cce73bae71884784f",
+  "compile": "passed with stable 0.13.81",
+  "prepare": "passed with throwaway external authority; entry removed afterwards",
+  "new_runs": 0,
+  "new_claims": 0,
+  "current_run_renamed": false,
+  "upstream_package_modified": false,
+  "scope": "claim worktree only; not merged to main"
+}

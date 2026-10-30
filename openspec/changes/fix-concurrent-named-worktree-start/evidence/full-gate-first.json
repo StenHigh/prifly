@@ -1,0 +1,11 @@
+{
+  "command": "TMPDIR=/private/tmp GOMAXPROCS=2 make ci-check-once GO=/opt/homebrew/opt/go/libexec/bin/go CHECK_CONTEXT=codex-app-authorized CHECK_FOR_COMMIT=1",
+  "exit_code": 0,
+  "context": "codex-app-authorized",
+  "Go": "1.27.3 darwin/arm64",
+  "input_key": "605833050bf37771f4ce731461434a006c7e4cfbeb0cf18eadd75d02dab07963",
+  "log_sha256": "e7cffbe90db0dab0d001f7bdaa0391fd61925e62625863286e6168d452f806a6",
+  "log": ".cache/authoring-readability/full-fixed-first.log",
+  "qualification": "ordinary ci-check; not release race/e2e",
+  "followup": "final journal edits are staged and checked again"
+}

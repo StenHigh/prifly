@@ -1,0 +1,11 @@
+{
+  "command": "go test ./cmd/prifly -run '^TestNamedWorktreeConcurrentCLIProcessesFromPublishedExample$' -count=50",
+  "exit_code": 1,
+  "failed_iterations": 1,
+  "problem_codes": [
+    "claim_preparation_incomplete"
+  ],
+  "log_sha256": "f9b02b0d6b9839470ed54e14b567c90b3db3441c1c56c659ceb5af7fe8939e11",
+  "package_rename_error_seen": false,
+  "followup": "diagnose claim_preparation_incomplete; not accepted as passing stress batch"
+}

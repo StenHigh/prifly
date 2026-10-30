@@ -1,0 +1,8 @@
+{
+  "test": "TestPackageDirectoryPublicationCollision",
+  "exit_code": 1,
+  "phase": "behavior-preserving publication extraction; before collision handling",
+  "log_sha256": "e5542fa442df39eff509a137c7f56d12db0a369866bca6af1f958968e4a67430",
+  "runtime_source_sha256": "5eee1de48313618614ec09e2c32ef3dfc3e2081b88274ed0ba0932f53bf18e27",
+  "test_sha256": "a74080e1c4c7ff26f51769bb89a73291403dd322ffb1286734cf3aa1cf9e46b8"
+}

@@ -1,0 +1,839 @@
+--- a/aif-classic/README.md
++++ b/aif-classic/README.md
+@@ -1,4 +1,42 @@
+ # AI Factory classic workflow
++
++## Быстрый поиск исходников
++
++Основной путь читается в [workflow.yaml](workflow.yaml). Эта схема показывает
++обзор; условия выбора security и все terminal routes остаются в YAML.
++
++```text
++warmup → plan → improve → implement → verify → security? → review → commit → done
++                                      └─ gate требует участия → partial
++```
++
++| Что изменить или понять | Какой файл открыть |
++|---|---|
++| Entry, переходы и данные между стадиями | [workflow.yaml](workflow.yaml): entry, stages, input_bindings |
++| Инструкции verify bridge | [Markdown](instructions/aif-verify-bridge.md), подключённый [context.source](contexts/aif-verify-bridge.yaml) |
++| Подключённый upstream aif-verify skill | [contexts/aif-verify.yaml](contexts/aif-verify.yaml) |
++| Executor, ports и read-only plan capture verify | [steps/verify.yaml](steps/verify.yaml) |
++| Решение владельца и автоматический fix | [workflows/verify-once.yaml](workflows/verify-once.yaml): decide, owner-decides, fix |
++| Выключатель и число повторов verify | [workflows/verify-batch.yaml](workflows/verify-batch.yaml): choose, round |
++| Настройки конкретного проекта | Его extend.yaml: settings и exclude |
++
++Участок verify:
++
++```text
++verify выключен → unchanged → прежняя implementation
++verify включён → round → verify
++                          ├─ clean → succeeded
++                          ├─ owner-only / blocked → standing → partial
++                          └─ fix → новая implementation → следующий round
++                                                     └─ лимит → exhausted → partial
++```
++
++`decide.selection: first_match` проверяет owner-only перед blocking.
++`max_iterations: 8` — верхняя граница графа; default `verify_round_limit: 3`
++может быть изменён настройкой проекта. Успех fix требует повторной проверки.
++Сбой самого шага (`fail`/`no_work`) следует отдельному `stopped` route;
++конкретные outcomes callers нужно читать в YAML, а не выводить из этой схемы.
++
+
+ `aif-classic` следует обычному порядку AI Factory: `warmup → plan → improve →
+ implement → verify → security → review → commit`. Security и review —
+--- a/aif-classic/contexts/aif-verify-bridge.yaml
++++ b/aif-classic/contexts/aif-verify-bridge.yaml
+@@ -1,158 +1,4 @@
+ id: aif:context/aif-verify-bridge
+ version: 1.16.0
+ media_type: text/markdown; charset=utf-8
+-text: |
+-  # Pri-Fly adapter for the pinned aif-verify skill
+-
+-  The following supporting context is the pinned upstream `aif-verify` skill.
+-  Verify the implementation against what the plan promised. This step changes
+-  nothing: it declares no workspace effect, and its product is the gate result.
+-
+-  The plan the implementation was built from is laid out for you, read-only,
+-  in the claimed workspace at the location `workspace-trees.json` names — the
+-  place the pinned skill's own discovery looks, chosen by the Run's profile —
+-  because the implement step's capture took it out of the tree. It is the
+-  Run's doing, not the tree's history: read it, do not edit it, do not declare
+-  or report it as an output, and do not treat its presence, or its absence
+-  from git, as a finding. The engine takes it back after this step, and a
+-  write to it is refused as `effect_not_permitted`.
+-
+-  Report honestly, including that a check you could not run did not run. A gate
+-  that reports a pass it did not establish is worse than one that says it could
+-  not check: the first is believed, the second is acted on.
+-
+-  A finding blocks when the implementation does not do what the plan promised:
+-  a promise left unmet, a check that fails, a defect this change introduced.
+-  A finding that is real but about something else — debt that was already there,
+-  style, work beyond this change — does not block. Calling everything you found
+-  a warning is a decision and not a default: `blocking` is the only way this
+-  route can reach a repair, so a gate that never sets it turns the fix step off
+-  for good.
+-
+-  The `implementation` you are given names the base and the head this Run last
+-  recorded, and the tree can be ahead of it: a Run resumed where it stopped is
+-  handed the same tree, with whatever the developer committed or left
+-  uncommitted while it stood. Judge the tree as it is — HEAD and the working
+-  tree — and take what changed from `git diff <base_commit>` plus untracked
+-  files, not from the list in the artifact. A head the artifact does not name is
+-  not a finding; a change you did not look at because the list omitted it is.
+-
+-  Your tree is the whole branch, base included; the diff is only the part of
+-  it this Run changed. A finding about anything outside the diff — a method
+-  you did not see, a norm the change seems to break, a caller you expected —
+-  does not exist until you have looked for it in the tree and in the recent
+-  history of the touched paths (`git log` on them): cite the file or the
+-  commit that bears it out, or drop it. Absence from the diff is not absence
+-  from the project, and a base that moved an hour ago is still the base you
+-  judge against. Two fresh verifiers in a row reported as missing what the base
+-  had received two hours earlier, and read a deliberate exception to a norm as
+-  a defect; both were outside the diff, and both were in the tree.
+-
+-  The supporting skill above sets this field by a rule of its own. Where that
+-  rule and this paragraph disagree, this adapter governs — and the reason is
+-  worth more than the authority: `status` is reported here and read by nothing,
+-  no route in this workflow branches on it, while `blocking` decides only
+-  whether a fix round runs, which is a smaller and cheaper thing than any
+-  question about holding a merge. So a result carrying `status: warnings`
+-  together with `blocking: true` is correct here, and under `gate_warnings: fix`
+-  or `stop` it is required — even where the supporting skill's own rule would
+-  never produce such a result, which is a difference to follow rather than a
+-  contradiction to repair.
+-
+-  `decision_context.gate_checks` names the checks this project expects of this
+-  gate, one per line and in the project's own words. When it is not empty it is
+-  the whole composition: run those, and treat a document in the tree that lists
+-  a different set as out of date rather than as a second opinion. A gate whose
+-  composition lives only in project prose grows with the prose — a real Run took
+-  22 minutes against a usual 7 because a section still described a script that
+-  had been deleted, and nobody had lied: the document was simply older than the
+-  tree. When the value is empty, this project has declared no composition and
+-  the pinned skill's own procedure stands. A check you run beyond the
+-  composition — the pinned skill's own static analysis, for instance — is
+-  your judgement, not the project's composition: report what it found as
+-  such, and do not read it as the composition being wrong or out of date.
+-
+-  `decision_context.gate_warnings` says what this project does with findings
+-  that are real but do not block. It is answered before the Run starts, because
+-  an unattended Run has nobody to ask:
+-
+-  - `ignore` — report warnings as findings and leave `blocking` false.
+-  - `fix` — treat them as work: set `blocking` true so the caller sends them to
+-    the fix step with the blockers.
+-  - `stop` — set `blocking` true as well, but say in the findings that these are
+-    warnings the developer chose to look at personally. The fix step reads the
+-    same value and will report them back unchanged instead of editing code.
+-
+-  Your result is read by a bounded loop: the caller runs you again after a fix,
+-  and stops when nothing blocks or the declared number of rounds runs out. Do
+-  not run `/aif-fix`, commit, or decide what comes next.
+-
+-  The graph, not this verdict, selects remediation. A normal `pass` carries the
+-  gate to its decision, and a `needs_revision` with a usable gate takes that
+-  same decision: `blocking` starts the fix round, while `blocking_owner_only`
+-  stops for the developer. Do not run `/aif-fix`, commit, or create a new gate
+-  yourself. A plan file the fix step commits does not survive the route: the
+-  commit step deletes `.ai-factory/PLAN.md` as Run working state, so never treat
+-  its presence or absence in history as a finding.
+-
+-  Your verdict for this step is `pass` whatever you find. Blocking does not
+-  travel in the verdict: it travels in the `blocking` field of the `gate`
+-  artifact, and the stage after you reads it there to decide whether the fix
+-  step runs. Reporting `needs_revision` because findings block is the one
+-  mistake this step can make that costs the whole Run: it says you could not
+-  establish a result at all, so no fix round happens and the Run ends reporting
+-  your findings unchanged. Use it only when that is literally true.
+-
+-  One result is not a judgement of the work at all: that you could not judge
+-  it. Keep three states apart, because the graph routes them differently. A
+-  check that ran and failed against this tree is a finding about the work:
+-  `blocking` true, verdict `pass`, and the fix round takes it. Acceptance
+-  evidence that is missing or incomplete — a criterion nothing demonstrates, a
+-  test the change should have brought — is the same: a finding, `pass`, work
+-  for the fix step. A dependency a check needs that is not there — a database
+-  that does not answer, a service or network that is down, a runner that cannot
+-  start — says nothing about the work: return verdict `blocked`, with a gate
+-  whose `status` is `blocked`, `blocking` false, `suggested_next` `continue`,
+-  and findings that name what was unavailable, the command and the output that
+-  show it, and which checks it left unrun. `blocked` ends the Run with that gate
+-  in front of the developer; the check is repeated by `prifly project continue`
+-  once the dependency is back, not by a fix round with nothing to fix. It is not
+-  for a dependency this change broke — a migration that leaves the database
+-  unable to start is a finding — nor for a check you chose not to run, and
+-  `needs_revision` stays for a result you could not establish for any other
+-  reason. A real Run reported a database that had gone away as a failed gate
+-  with zero new test failures; the fix step found nothing to fix and the Run
+-  ended partial, blaming the work.
+-
+-  `blocking_owner_only` says whether another fix round could change anything.
+-  Set it true only when every blocker still standing is outside what any fix
+-  step may touch: a decision the developer owns, a rule that is itself wrong,
+-  access this Run does not have. One blocker a fix round could close makes it
+-  false. Getting this wrong in the safe direction stops the loop and puts the
+-  findings in front of a person; getting it wrong the other way spends rounds
+-  that cannot succeed, which is what a real Run did — two rounds and forty
+-  minutes after the answer was already known.
+-
+-  Warnings you are reporting because `gate_warnings` said to are not out of
+-  reach. `stop` means the developer means to read them, not that no fix step may
+-  touch them: the fix step is given them and reports them back unchanged, which
+-  is the whole of what `stop` does. A real Run set this field true on three such
+-  warnings and ended there, unattended, with nobody to decide. When you do set it
+-  true, name in the findings which blocker is out of reach and what puts it out
+-  of reach; a `true` nobody can check is how a Run stops for no reason.
+-
+-  The skill's requirements consistency gate is the clearest case of a blocker
+-  out of reach. `ERROR [requirement-conflict]` — the implementation contradicts
+-  a higher-priority requirement even where plan, code and tests agree — and
+-  `[requirement-ambiguity]` — sources conflict and nobody declared which wins
+-  — are findings about the requirements, not about the code. Report them as
+-  blockers with `blocking_owner_only` true, naming the sources: a fix step
+-  cannot choose between two authoritative documents, and a round spent trying
+-  is a round the developer has to read anyway. This holds when the skill
+-  raised the ambiguity as a warning too, whatever `gate_warnings` says about
+-  warnings in general — `fix` cannot mean "resolve the requirement".
+-
+-  `suggested_next` is reported, never obeyed. Say `/aif-fix` when the findings
+-  are work for the fix step and `continue` otherwise. The skill computes a wider
+-  set of commands of its own — rules, architecture, roadmap, commit — and none of
+-  them name a stage of this route, so they have no value here to report.
++source: .prifly/workflows/aif-classic/instructions/aif-verify-bridge.md
+--- /dev/null
++++ b/aif-classic/instructions/aif-verify-bridge.md
+@@ -0,0 +1,154 @@
++# Pri-Fly adapter for the pinned aif-verify skill
++
++The following supporting context is the pinned upstream `aif-verify` skill.
++Verify the implementation against what the plan promised. This step changes
++nothing: it declares no workspace effect, and its product is the gate result.
++
++The plan the implementation was built from is laid out for you, read-only,
++in the claimed workspace at the location `workspace-trees.json` names — the
++place the pinned skill's own discovery looks, chosen by the Run's profile —
++because the implement step's capture took it out of the tree. It is the
++Run's doing, not the tree's history: read it, do not edit it, do not declare
++or report it as an output, and do not treat its presence, or its absence
++from git, as a finding. The engine takes it back after this step, and a
++write to it is refused as `effect_not_permitted`.
++
++Report honestly, including that a check you could not run did not run. A gate
++that reports a pass it did not establish is worse than one that says it could
++not check: the first is believed, the second is acted on.
++
++A finding blocks when the implementation does not do what the plan promised:
++a promise left unmet, a check that fails, a defect this change introduced.
++A finding that is real but about something else — debt that was already there,
++style, work beyond this change — does not block. Calling everything you found
++a warning is a decision and not a default: `blocking` is the only way this
++route can reach a repair, so a gate that never sets it turns the fix step off
++for good.
++
++The `implementation` you are given names the base and the head this Run last
++recorded, and the tree can be ahead of it: a Run resumed where it stopped is
++handed the same tree, with whatever the developer committed or left
++uncommitted while it stood. Judge the tree as it is — HEAD and the working
++tree — and take what changed from `git diff <base_commit>` plus untracked
++files, not from the list in the artifact. A head the artifact does not name is
++not a finding; a change you did not look at because the list omitted it is.
++
++Your tree is the whole branch, base included; the diff is only the part of
++it this Run changed. A finding about anything outside the diff — a method
++you did not see, a norm the change seems to break, a caller you expected —
++does not exist until you have looked for it in the tree and in the recent
++history of the touched paths (`git log` on them): cite the file or the
++commit that bears it out, or drop it. Absence from the diff is not absence
++from the project, and a base that moved an hour ago is still the base you
++judge against. Two fresh verifiers in a row reported as missing what the base
++had received two hours earlier, and read a deliberate exception to a norm as
++a defect; both were outside the diff, and both were in the tree.
++
++The supporting skill above sets this field by a rule of its own. Where that
++rule and this paragraph disagree, this adapter governs — and the reason is
++worth more than the authority: `status` is reported here and read by nothing,
++no route in this workflow branches on it, while `blocking` decides only
++whether a fix round runs, which is a smaller and cheaper thing than any
++question about holding a merge. So a result carrying `status: warnings`
++together with `blocking: true` is correct here, and under `gate_warnings: fix`
++or `stop` it is required — even where the supporting skill's own rule would
++never produce such a result, which is a difference to follow rather than a
++contradiction to repair.
++
++`decision_context.gate_checks` names the checks this project expects of this
++gate, one per line and in the project's own words. When it is not empty it is
++the whole composition: run those, and treat a document in the tree that lists
++a different set as out of date rather than as a second opinion. A gate whose
++composition lives only in project prose grows with the prose — a real Run took
++22 minutes against a usual 7 because a section still described a script that
++had been deleted, and nobody had lied: the document was simply older than the
++tree. When the value is empty, this project has declared no composition and
++the pinned skill's own procedure stands. A check you run beyond the
++composition — the pinned skill's own static analysis, for instance — is
++your judgement, not the project's composition: report what it found as
++such, and do not read it as the composition being wrong or out of date.
++
++`decision_context.gate_warnings` says what this project does with findings
++that are real but do not block. It is answered before the Run starts, because
++an unattended Run has nobody to ask:
++
++- `ignore` — report warnings as findings and leave `blocking` false.
++- `fix` — treat them as work: set `blocking` true so the caller sends them to
++  the fix step with the blockers.
++- `stop` — set `blocking` true as well, but say in the findings that these are
++  warnings the developer chose to look at personally. The fix step reads the
++  same value and will report them back unchanged instead of editing code.
++
++Your result is read by a bounded loop: the caller runs you again after a fix,
++and stops when nothing blocks or the declared number of rounds runs out. Do
++not run `/aif-fix`, commit, or decide what comes next.
++
++The graph, not this verdict, selects remediation. A normal `pass` carries the
++gate to its decision, and a `needs_revision` with a usable gate takes that
++same decision: `blocking` starts the fix round, while `blocking_owner_only`
++stops for the developer. Do not run `/aif-fix`, commit, or create a new gate
++yourself. A plan file the fix step commits does not survive the route: the
++commit step deletes `.ai-factory/PLAN.md` as Run working state, so never treat
++its presence or absence in history as a finding.
++
++Your verdict for this step is `pass` whatever you find. Blocking does not
++travel in the verdict: it travels in the `blocking` field of the `gate`
++artifact, and the stage after you reads it there to decide whether the fix
++step runs. Reporting `needs_revision` because findings block is the one
++mistake this step can make that costs the whole Run: it says you could not
++establish a result at all, so no fix round happens and the Run ends reporting
++your findings unchanged. Use it only when that is literally true.
++
++One result is not a judgement of the work at all: that you could not judge
++it. Keep three states apart, because the graph routes them differently. A
++check that ran and failed against this tree is a finding about the work:
++`blocking` true, verdict `pass`, and the fix round takes it. Acceptance
++evidence that is missing or incomplete — a criterion nothing demonstrates, a
++test the change should have brought — is the same: a finding, `pass`, work
++for the fix step. A dependency a check needs that is not there — a database
++that does not answer, a service or network that is down, a runner that cannot
++start — says nothing about the work: return verdict `blocked`, with a gate
++whose `status` is `blocked`, `blocking` false, `suggested_next` `continue`,
++and findings that name what was unavailable, the command and the output that
++show it, and which checks it left unrun. `blocked` ends the Run with that gate
++in front of the developer; the check is repeated by `prifly project continue`
++once the dependency is back, not by a fix round with nothing to fix. It is not
++for a dependency this change broke — a migration that leaves the database
++unable to start is a finding — nor for a check you chose not to run, and
++`needs_revision` stays for a result you could not establish for any other
++reason. A real Run reported a database that had gone away as a failed gate
++with zero new test failures; the fix step found nothing to fix and the Run
++ended partial, blaming the work.
++
++`blocking_owner_only` says whether another fix round could change anything.
++Set it true only when every blocker still standing is outside what any fix
++step may touch: a decision the developer owns, a rule that is itself wrong,
++access this Run does not have. One blocker a fix round could close makes it
++false. Getting this wrong in the safe direction stops the loop and puts the
++findings in front of a person; getting it wrong the other way spends rounds
++that cannot succeed, which is what a real Run did — two rounds and forty
++minutes after the answer was already known.
++
++Warnings you are reporting because `gate_warnings` said to are not out of
++reach. `stop` means the developer means to read them, not that no fix step may
++touch them: the fix step is given them and reports them back unchanged, which
++is the whole of what `stop` does. A real Run set this field true on three such
++warnings and ended there, unattended, with nobody to decide. When you do set it
++true, name in the findings which blocker is out of reach and what puts it out
++of reach; a `true` nobody can check is how a Run stops for no reason.
++
++The skill's requirements consistency gate is the clearest case of a blocker
++out of reach. `ERROR [requirement-conflict]` — the implementation contradicts
++a higher-priority requirement even where plan, code and tests agree — and
++`[requirement-ambiguity]` — sources conflict and nobody declared which wins
++— are findings about the requirements, not about the code. Report them as
++blockers with `blocking_owner_only` true, naming the sources: a fix step
++cannot choose between two authoritative documents, and a round spent trying
++is a round the developer has to read anyway. This holds when the skill
++raised the ambiguity as a warning too, whatever `gate_warnings` says about
++warnings in general — `fix` cannot mean "resolve the requirement".
++
++`suggested_next` is reported, never obeyed. Say `/aif-fix` when the findings
++are work for the fix step and `continue` otherwise. The skill computes a wider
++set of commands of its own — rules, architecture, roadmap, commit — and none of
++them name a stage of this route, so they have no value here to report.
+--- a/aif-classic/steps/verify.yaml
++++ b/aif-classic/steps/verify.yaml
+@@ -4,15 +4,24 @@
+ title: Run read-only aif-verify over the implementation
+ kind: worker
+ inputs:
+-  implementation: {schema_ref: "{{schema_implementation}}"}
+-  plan: {schema_ref: "{{workspace_tree_manifest}}"}
++  implementation:
++    schema_ref: '{{schema_implementation}}'
++  plan:
++    schema_ref: '{{workspace_tree_manifest}}'
+ outputs:
+-  gate: {schema_ref: "{{schema_gate-result}}", required_for: [pass, needs_revision, blocked]}
+-executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
++  gate:
++    schema_ref: '{{schema_gate-result}}'
++    required_for: [pass, needs_revision, blocked]
++executor:
++  adapter_ref: '{{assisted_adapter}}'
++  operation: session
+ instructions_ref: "{{context_aif-verify-bridge}}"
+ context_refs: ["{{context_aif-verify}}"]
+-effects: {class: none, retry_class: pure}
+-session_limits: {active_timeout_ms: null}
++effects:
++  class: none
++  retry_class: pure
++session_limits:
++  active_timeout_ms: null
+ result_schema_ref: "{{step_result_schema_v2}}"
+ # Read-only materialisation: the engine lays the plan out where the pinned
+ # skill's own discovery looks and takes it back after the step. No
+--- a/aif-classic/workflow.yaml
++++ b/aif-classic/workflow.yaml
+@@ -8,11 +8,18 @@
+     default: fast
+     values:
+       fast:
+-        plan_capture: {kind: exact_file, path: .ai-factory/PLAN.md}
++        plan_capture:
++          kind: exact_file
++          path: .ai-factory/PLAN.md
+       full:
+-        plan_capture: {kind: direct_child_file, path: .ai-factory/plans}
++        plan_capture:
++          kind: direct_child_file
++          path: .ai-factory/plans
+       ultra:
+-        plan_capture: {kind: direct_child_tree, path: .ai-factory/plans, entrypoint: index.md}
++        plan_capture:
++          kind: direct_child_tree
++          path: .ai-factory/plans
++          entrypoint: index.md
+   references:
+     assisted_adapter: core:adapter/assisted-session@1.0.0
+     # 4.0.0 admits external_write beside none and workspace_write, with the same
+@@ -46,11 +53,14 @@
+   step_commit: "{{step_commit}}"
+   local_policy: "{{local_policy}}"
+ inputs:
+-  task: {schema_ref: schema_task}
++  task:
++    schema_ref: schema_task
+   security_enabled:
+     schema_ref: schema_feature-enabled
+     required: false
+-    configuration: {scope: project, default: true}
++    configuration:
++      scope: project
++      default: true
+ decision_catalog:
+   - .prifly/workflows/aif-classic/decisions/plan/profile.yaml
+   - .prifly/workflows/aif-classic/decisions/plan/tests.yaml
+@@ -63,13 +73,24 @@
+   - .prifly/workflows/aif-classic/decisions/gates/checks.yaml
+   - .prifly/workflows/aif-classic/decisions/gates/warnings.yaml
+ outputs:
+-  implementation: {schema_ref: schema_implementation, required_for: [succeeded]}
+-  plan: {schema_ref: schema_plan_manifest, required_for: [succeeded]}
+-  gate: {schema_ref: schema_gate-result, required_for: [partial]}
+-limits: {max_step_instances: 200, max_control_transitions: 1000, max_parallelism: 1, max_child_depth: 4}
++  implementation:
++    schema_ref: schema_implementation
++    required_for: [succeeded]
++  plan:
++    schema_ref: schema_plan_manifest
++    required_for: [succeeded]
++  gate:
++    schema_ref: schema_gate-result
++    required_for: [partial]
++limits:
++  max_step_instances: 200
++  max_control_transitions: 1000
++  max_parallelism: 1
++  max_child_depth: 4
+ policy_ref: local_policy
+ features:
+-  security: {input: security_enabled}
++  security:
++    input: security_enabled
+ # A Run that stopped — ended partial or rejected, or was cancelled — resumes
+ # with this same workflow where it stopped: `prifly project continue --launch
+ # <this launch> --source-run RUN`. The stages accepted before that point carry
+@@ -82,24 +103,44 @@
+   warmup:
+     kind: step
+     step_ref: step_warmup
+-    on: {pass: plan, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
++    on:
++      pass: plan
++      needs_revision: abandoned
++      fail: abandoned
++      no_work: abandoned
+     impossible_verdicts: [blocked]
+   plan:
+     kind: step
+     step_ref: step_plan
+-    input_bindings: {task: $inputs.task, handoff: $stages.warmup.handoff}
+-    on: {pass: improve, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
++    input_bindings:
++      task: $inputs.task
++      handoff: $stages.warmup.handoff
++    on:
++      pass: improve
++      needs_revision: abandoned
++      fail: abandoned
++      no_work: abandoned
+     impossible_verdicts: [blocked]
+   improve:
+     kind: call
+     workflow_ref: workflow_improve-or-pass
+-    input_bindings: {plan: $stages.plan.plan, handoff: $stages.warmup.handoff}
+-    on: {succeeded: implement, rejected: abandoned}
++    input_bindings:
++      plan: $stages.plan.plan
++      handoff: $stages.warmup.handoff
++    on:
++      succeeded: implement
++      rejected: abandoned
+   implement:
+     kind: step
+     step_ref: step_implement
+-    input_bindings: {plan: $stages.improve.plan, handoff: $stages.warmup.handoff}
+-    on: {pass: verify, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
++    input_bindings:
++      plan: $stages.improve.plan
++      handoff: $stages.warmup.handoff
++    on:
++      pass: verify
++      needs_revision: abandoned
++      fail: abandoned
++      no_work: abandoned
+     impossible_verdicts: [blocked]
+   # Every stage after a gate reads the implementation the gate returned, not the
+   # one the implement step produced: a fix round commits, and the artifact that
+@@ -113,26 +154,40 @@
+       implementation: $stages.implement.implementation
+       handoff: $stages.warmup.handoff
+       plan: $stages.implement.plan
+-    on: {succeeded: choose-security, partial: fix-after-verify}
++    on:
++      succeeded: choose-security
++      partial: fix-after-verify
+   choose-security:
+     kind: choice
+     selection: exclusive
+     branches:
+       - id: enabled
+-        predicate: {op: eq, left: $inputs.security_enabled, right: true}
++        predicate:
++          op: eq
++          left: $inputs.security_enabled
++          right: true
+         next: security
+     default: review
+   security:
+     kind: step
+     step_ref: step_security
+-    input_bindings: {implementation: $stages.verify.implementation}
+-    on: {pass: security-decision, needs_revision: fix-after-security, fail: abandoned, no_work: abandoned, blocked: security-blocked}
++    input_bindings:
++      implementation: $stages.verify.implementation
++    on:
++      pass: security-decision
++      needs_revision: fix-after-security
++      fail: abandoned
++      no_work: abandoned
++      blocked: security-blocked
+   security-decision:
+     kind: choice
+     selection: exclusive
+     branches:
+       - id: blockers
+-        predicate: {op: eq, left: $stages.security.gate#/blocking, right: true}
++        predicate:
++          op: eq
++          left: $stages.security.gate#/blocking
++          right: true
+         next: fix-after-security
+     default: review
+   review:
+@@ -142,38 +197,53 @@
+       implementation: $stages.verify.implementation
+       handoff: $stages.warmup.handoff
+       plan: $stages.implement.plan
+-    on: {succeeded: commit, partial: fix-after-review}
++    on:
++      succeeded: commit
++      partial: fix-after-review
+   commit:
+     kind: step
+     step_ref: step_commit
+-    input_bindings: {implementation: $stages.review.implementation}
+-    on: {pass: done, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
++    input_bindings:
++      implementation: $stages.review.implementation
++    on:
++      pass: done
++      needs_revision: abandoned
++      fail: abandoned
++      no_work: abandoned
+     impossible_verdicts: [blocked]
+   done:
+     kind: finish
+     outcome: succeeded
+-    output_bindings: {implementation: $stages.commit.implementation, plan: $stages.implement.plan}
++    output_bindings:
++      implementation: $stages.commit.implementation
++      plan: $stages.implement.plan
+   fix-after-verify:
+     kind: finish
+     outcome: partial
+-    output_bindings: {gate: $stages.verify.gate}
++    output_bindings:
++      gate: $stages.verify.gate
+     description: Verify rounds ended with blockers still open; the findings are reported unchanged.
+   fix-after-security:
+     kind: finish
+     outcome: partial
+-    output_bindings: {gate: $stages.security.gate}
++    output_bindings:
++      gate: $stages.security.gate
+     description: The gate proposes /aif-fix; Pri-Fly does not run it automatically.
+   security-blocked:
+     kind: finish
+     outcome: partial
+-    output_bindings: {gate: $stages.security.gate}
++    output_bindings:
++      gate: $stages.security.gate
+     description: A dependency the security checks need was unavailable, so the work was not judged; repeat with project continue once it is back.
+   fix-after-review:
+     kind: finish
+     outcome: partial
+-    output_bindings: {gate: $stages.review.gate}
++    output_bindings:
++      gate: $stages.review.gate
+     description: Review rounds ended with blockers still open; the findings are reported unchanged.
+   # A step that cannot finish its work has nowhere to go on this route: there
+   # is no revision loop outside the gates. Ending here reports that plainly,
+   # where an undeclared verdict would end the Run as an engine failure.
+-  abandoned: {kind: finish, outcome: rejected}
++  abandoned:
++    kind: finish
++    outcome: rejected
+--- a/aif-classic/workflows/verify-batch.yaml
++++ b/aif-classic/workflows/verify-batch.yaml
+@@ -19,17 +19,31 @@
+   verify_round_limit:
+     schema_ref: schema_round-limit
+     required: false
+-    configuration: {scope: project, default: 3}
++    configuration:
++      scope: project
++      default: 3
+   verify_enabled:
+     schema_ref: schema_feature-enabled
+     required: false
+-    configuration: {scope: project, default: true}
++    configuration:
++      scope: project
++      default: true
+ outputs:
+-  implementation: {schema_ref: schema_implementation, required_for: [succeeded]}
+-  gate: {schema_ref: schema_gate-result, required_for: [partial]}
+-limits: {max_step_instances: 20, max_control_transitions: 160, max_parallelism: 1, max_child_depth: 2}
++  implementation:
++    schema_ref: schema_implementation
++    required_for: [succeeded]
++  gate:
++    schema_ref: schema_gate-result
++    required_for: [partial]
++limits:
++  max_step_instances: 20
++  max_control_transitions: 160
++  max_parallelism: 1
++  max_child_depth: 2
+ policy_ref: local_policy
+-features: {verify: {input: verify_enabled}}
++features:
++  verify:
++    input: verify_enabled
+ # The switch lives here rather than in the root graph on purpose. When the root
+ # chose whether to call this workflow, the stage after it could not bind to its
+ # output — on the path that skipped it there was nothing to bind — so every
+@@ -45,38 +59,54 @@
+     selection: exclusive
+     branches:
+       - id: enabled
+-        predicate: {op: eq, left: $inputs.verify_enabled, right: true}
++        predicate:
++          op: eq
++          left: $inputs.verify_enabled
++          right: true
+         next: round
+     default: unchanged
+   unchanged:
+     kind: finish
+     outcome: succeeded
+-    output_bindings: {implementation: $inputs.implementation}
++    output_bindings:
++      implementation: $inputs.implementation
+     description: The verify gate is switched off for this project; the implementation passes through untouched.
+   round:
+     kind: repeat
+     body_workflow_ref: workflow_verify-once
+-    initial_bindings: {implementation: $inputs.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
+-    next_bindings: {implementation: $iteration.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
++    initial_bindings:
++      implementation: $inputs.implementation
++      handoff: $inputs.handoff
++      plan: $inputs.plan
++    next_bindings:
++      implementation: $iteration.implementation
++      handoff: $inputs.handoff
++      plan: $inputs.plan
+     continue_on: [partial]
+     until: false
+     max_iterations: 8
+     limit_configuration: verify_round_limit
+-    on_complete: {succeeded: passed, rejected: standing, no_work: unstarted}
++    on_complete:
++      succeeded: passed
++      rejected: standing
++      no_work: unstarted
+     on_limit: exhausted
+   passed:
+     kind: finish
+     outcome: succeeded
+-    output_bindings: {implementation: $stages.round.implementation}
++    output_bindings:
++      implementation: $stages.round.implementation
+   exhausted:
+     kind: finish
+     outcome: partial
+-    output_bindings: {gate: $stages.round.gate}
++    output_bindings:
++      gate: $stages.round.gate
+     description: The declared number of verify rounds ran out with blockers still open.
+   standing:
+     kind: finish
+     outcome: partial
+-    output_bindings: {gate: $stages.round.gate}
++    output_bindings:
++      gate: $stages.round.gate
+     description: A round stopped with its findings standing — no safe fix, the developer's call, or a dependency the checks need was unavailable, which the gate marks as blocked.
+   unstarted:
+     kind: finish
+--- a/aif-classic/workflows/verify-once.yaml
++++ b/aif-classic/workflows/verify-once.yaml
+@@ -16,17 +16,32 @@
+   handoff: schema_warmup-handoff
+   plan: schema_plan_manifest
+ outputs:
+-  implementation: {schema_ref: schema_implementation, required_for: [succeeded, partial]}
+-  gate: {schema_ref: schema_gate-result, required_for: [partial, rejected]}
+-limits: {max_step_instances: 2, max_control_transitions: 16, max_parallelism: 1, max_child_depth: 1}
++  implementation:
++    schema_ref: schema_implementation
++    required_for: [succeeded, partial]
++  gate:
++    schema_ref: schema_gate-result
++    required_for: [partial, rejected]
++limits:
++  max_step_instances: 2
++  max_control_transitions: 16
++  max_parallelism: 1
++  max_child_depth: 1
+ policy_ref: local_policy
+ entry: verify
+ stages:
+   verify:
+     kind: step
+     step_ref: step_verify
+-    input_bindings: {implementation: $inputs.implementation, plan: $inputs.plan}
+-    on: {pass: decide, needs_revision: decide, fail: stopped, no_work: stopped, blocked: blocked}
++    input_bindings:
++      implementation: $inputs.implementation
++      plan: $inputs.plan
++    on:
++      pass: decide
++      needs_revision: decide
++      fail: stopped
++      no_work: stopped
++      blocked: blocked
+   decide:
+     kind: choice
+     # `blocking_owner_only` implies `blocking`, so the two branches are true
+@@ -38,10 +53,16 @@
+     selection: first_match
+     branches:
+       - id: owner
+-        predicate: {op: eq, left: $stages.verify.gate#/blocking_owner_only, right: true}
++        predicate:
++          op: eq
++          left: $stages.verify.gate#/blocking_owner_only
++          right: true
+         next: owner-decides
+       - id: blocking
+-        predicate: {op: eq, left: $stages.verify.gate#/blocking, right: true}
++        predicate:
++          op: eq
++          left: $stages.verify.gate#/blocking
++          right: true
+         next: fix
+     default: clean
+   fix:
+@@ -51,31 +72,41 @@
+       gate: $stages.verify.gate
+       implementation: $inputs.implementation
+       handoff: $inputs.handoff
+-    on: {pass: fixed, needs_revision: unresolved, fail: stopped, no_work: stopped}
++    on:
++      pass: fixed
++      needs_revision: unresolved
++      fail: stopped
++      no_work: stopped
+     impossible_verdicts: [blocked]
+   clean:
+     kind: finish
+     outcome: succeeded
+-    output_bindings: {implementation: $inputs.implementation}
++    output_bindings:
++      implementation: $inputs.implementation
+   fixed:
+     kind: finish
+     outcome: partial
+-    output_bindings: {implementation: $stages.fix.implementation, gate: $stages.verify.gate}
++    output_bindings:
++      implementation: $stages.fix.implementation
++      gate: $stages.verify.gate
+     description: Blockers were fixed; the caller reviews the changed implementation again.
+   unresolved:
+     kind: finish
+     outcome: rejected
+-    output_bindings: {gate: $stages.verify.gate}
++    output_bindings:
++      gate: $stages.verify.gate
+     description: The fix step found no safe change it could make; the findings stand.
+   owner-decides:
+     kind: finish
+     outcome: rejected
+-    output_bindings: {gate: $stages.verify.gate}
++    output_bindings:
++      gate: $stages.verify.gate
+     description: What still blocks is the developer's to decide, so another fix round would spend a turn it cannot win.
+   blocked:
+     kind: finish
+     outcome: rejected
+-    output_bindings: {gate: $stages.verify.gate}
++    output_bindings:
++      gate: $stages.verify.gate
+     description: A dependency the verify checks need was unavailable, so the work was not judged; another round could not change that, and the gate names what was missing.
+   stopped:
+     kind: finish

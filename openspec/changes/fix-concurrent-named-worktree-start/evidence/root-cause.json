@@ -1,0 +1,33 @@
+{
+  "baseline_commit": "6de187d22435447c464b9b41269cd8b2aec50d2e",
+  "test": "TestNamedWorktreeConcurrentCLIProcessesFromPublishedExample",
+  "iterations": 20,
+  "failed_iterations": 2,
+  "exit_code": 1,
+  "environment": {
+    "Go": "1.27.3 darwin/arm64",
+    "TMPDIR": "/private/tmp",
+    "GOMAXPROCS": "2",
+    "GOTOOLCHAIN": "local"
+  },
+  "instrumentation": {
+    "baseline_commit": "6de187d22435447c464b9b41269cd8b2aec50d2e",
+    "scratch_source": "/var/folders/ww/psgy9dw96sv7qfbj2s8nyhs40000gn/T/prifly-baseline-naming-nqkkzmiy",
+    "baseline_file_sha256": "c4704ad64b3bbbf940abca648d385b1ca617edd5c20e644b27cfded097733b02",
+    "instrumented_file_sha256": "9c4fa9ca06d1448aa4c7cc5f30e96e4073f3f4a5aa37df05c91fee62f4408c8b",
+    "change": "temporary stderr cause before Problem envelope, only in named CLI helper",
+    "production_file_changed": false
+  },
+  "raw_errors": [
+    "rename /private/tmp/TestNamedWorktreeConcurrentCLIProcessesFromPublishedExample563100299/002/authority/.prifly/packages/f992f25e901853bd318845702b1a3fe09d126a611c2a295b50c01e0626542667.pending-package:eacf65de07f6c9feca0cdd25a4fe5e22 /private/tmp/TestNamedWorktreeConcurrentCLIProcessesFromPublishedExample563100299/002/authority/.prifly/packages/f992f25e901853bd318845702b1a3fe09d126a611c2a295b50c01e0626542667: file exists",
+    "rename /private/tmp/TestNamedWorktreeConcurrentCLIProcessesFromPublishedExample2518554901/002/authority/.prifly/packages/f992f25e901853bd318845702b1a3fe09d126a611c2a295b50c01e0626542667.pending-package:a3f551daab8ecc4712388ffb3d8001aa /private/tmp/TestNamedWorktreeConcurrentCLIProcessesFromPublishedExample2518554901/002/authority/.prifly/packages/f992f25e901853bd318845702b1a3fe09d126a611c2a295b50c01e0626542667: file exists"
+  ],
+  "log_sha256": "14325bd93f241d05ac739b21774b54010ee26a4f82125f1fa5139782e28b7721",
+  "production_file_changed": false,
+  "root_function": "Engine.materializePackage",
+  "root_path": "internal/runtime/packages.go",
+  "collision_line": 622,
+  "phase": "package bytes publication before package.trust and before Run admission",
+  "public_problem": "invalid_input",
+  "fix_implemented": false
+}

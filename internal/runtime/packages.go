@@ -619,8 +619,26 @@ func (e *Engine) materializePackage(root string, manifest packageManifest, paylo
 			return err
 		}
 	}
+	return e.publishPackageDirectory(root, staging, manifest, manifestBytes)
+}
+
+func (e *Engine) publishPackageDirectory(root, staging string, manifest packageManifest, manifestBytes []byte) error {
+	final := filepath.Join(e.Root, filepath.FromSlash(root))
 	if err := os.Rename(staging, final); err != nil {
-		return err
+		if !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		// Another importer may have published after our initial absence check.
+		existing, err := readLocal(e.Root, root+"/"+PackageManifestFile, MaxDefinitionBytes)
+		if err != nil {
+			return err
+		}
+		if rawDigest(existing) != rawDigest(manifestBytes) {
+			return fault("package_identity_conflict", "this package directory holds different sealed bytes")
+		}
+		if _, err := sealPackagePayload(final, manifest); err != nil {
+			return err
+		}
 	}
 	directory, err := os.Open(filepath.Join(e.Root, filepath.FromSlash(PackageRoot)))
 	if err != nil {

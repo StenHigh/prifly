@@ -1,0 +1,147 @@
+{
+  "pairs_equal": true,
+  "cases": [
+    {
+      "case": "owner-only",
+      "bridges": [
+        "aif-warmup-bridge",
+        "aif-plan-bridge",
+        "aif-implement-bridge",
+        "aif-verify-bridge"
+      ],
+      "status": "completed",
+      "outcome": "partial",
+      "refusal": null,
+      "implementation_bindings_checked": 1,
+      "all_implementation_bindings_current": true,
+      "verify_count": 1,
+      "fix_count": 0
+    },
+    {
+      "case": "exhausted",
+      "bridges": [
+        "aif-warmup-bridge",
+        "aif-plan-bridge",
+        "aif-implement-bridge",
+        "aif-verify-bridge",
+        "aif-fix-bridge"
+      ],
+      "status": "completed",
+      "outcome": "partial",
+      "refusal": null,
+      "implementation_bindings_checked": 1,
+      "all_implementation_bindings_current": true,
+      "verify_count": 1,
+      "fix_count": 1
+    },
+    {
+      "case": "disabled",
+      "bridges": [
+        "aif-warmup-bridge",
+        "aif-plan-bridge",
+        "aif-implement-bridge",
+        "aif-security-bridge",
+        "aif-review-challenge-bridge"
+      ],
+      "status": "running",
+      "outcome": null,
+      "refusal": null,
+      "implementation_bindings_checked": 2,
+      "all_implementation_bindings_current": true,
+      "verify_count": 0,
+      "fix_count": 0
+    },
+    {
+      "case": "clean",
+      "bridges": [
+        "aif-warmup-bridge",
+        "aif-plan-bridge",
+        "aif-implement-bridge",
+        "aif-verify-bridge",
+        "aif-security-bridge",
+        "aif-review-challenge-bridge"
+      ],
+      "status": "running",
+      "outcome": null,
+      "refusal": null,
+      "implementation_bindings_checked": 3,
+      "all_implementation_bindings_current": true,
+      "verify_count": 1,
+      "fix_count": 0
+    },
+    {
+      "case": "repaired",
+      "bridges": [
+        "aif-warmup-bridge",
+        "aif-plan-bridge",
+        "aif-implement-bridge",
+        "aif-verify-bridge",
+        "aif-fix-bridge",
+        "aif-verify-bridge",
+        "aif-security-bridge",
+        "aif-review-challenge-bridge"
+      ],
+      "status": "running",
+      "outcome": null,
+      "refusal": null,
+      "implementation_bindings_checked": 4,
+      "all_implementation_bindings_current": true,
+      "verify_count": 2,
+      "fix_count": 1
+    },
+    {
+      "case": "fail",
+      "bridges": [
+        "aif-warmup-bridge",
+        "aif-plan-bridge",
+        "aif-implement-bridge",
+        "aif-verify-bridge"
+      ],
+      "status": "failed",
+      "outcome": null,
+      "refusal": null,
+      "implementation_bindings_checked": 1,
+      "all_implementation_bindings_current": true,
+      "verify_count": 1,
+      "fix_count": 0,
+      "diagnostic_codes": [
+        "unhandled_child_outcome"
+      ]
+    },
+    {
+      "case": "no_work",
+      "bridges": [
+        "aif-warmup-bridge",
+        "aif-plan-bridge",
+        "aif-implement-bridge",
+        "aif-verify-bridge"
+      ],
+      "status": "failed",
+      "outcome": null,
+      "refusal": null,
+      "implementation_bindings_checked": 1,
+      "all_implementation_bindings_current": true,
+      "verify_count": 1,
+      "fix_count": 0,
+      "diagnostic_codes": [
+        "unhandled_child_outcome"
+      ]
+    },
+    {
+      "case": "blocked",
+      "bridges": [
+        "aif-warmup-bridge",
+        "aif-plan-bridge",
+        "aif-implement-bridge",
+        "aif-verify-bridge"
+      ],
+      "status": "completed",
+      "outcome": "partial",
+      "refusal": null,
+      "implementation_bindings_checked": 1,
+      "all_implementation_bindings_current": true,
+      "verify_count": 1,
+      "fix_count": 0
+    }
+  ]
+}

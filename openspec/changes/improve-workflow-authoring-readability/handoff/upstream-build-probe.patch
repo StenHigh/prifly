@@ -1,0 +1,40 @@
+--- /dev/null
++++ b/tests/probes/readability_builds.py
+@@ -0,0 +1,37 @@
++import argparse,hashlib,json,shutil,sys,tempfile
++from pathlib import Path
++p=argparse.ArgumentParser()
++for name in ['binary','baseline','candidate','skills','local-extend','output']:p.add_argument('--'+name,required=True,type=Path)
++a=p.parse_args()
++sys.path.insert(0,str(a.baseline.resolve()/'tests'))
++import verify
++binary=a.binary.resolve()
++root=Path(tempfile.mkdtemp(prefix='paired-build-'))
++repository,authority=verify.prepare_repository(binary,root)
++report=[]
++try:
++    for host,skills_root in [('codex-cli','.codex/skills'),('codex-app','.agents/skills')]:
++        shutil.rmtree(repository/skills_root)
++        shutil.copytree(a.skills.resolve(),repository/skills_root)
++        for settings in ['canonical','local']:
++            for profile in ['fast','full','ultra']:
++                pair=[]
++                for form in ['baseline','candidate']:
++                    target=repository/'.prifly/workflows/aif-classic'
++                    shutil.rmtree(target)
++                    shutil.copytree((a.baseline if form=='baseline' else a.candidate).resolve()/'aif-classic',target)
++                    if settings=='local':
++                        shutil.copyfile(a.local_extend.resolve(),target/'extend.yaml')
++                    output=root/f'{host}-{settings}-{profile}-{form}'
++                    compiled,_=verify.compile_package(binary,authority,repository,'aif-classic',output,host,profile)
++                    sealed={item['path']:hashlib.sha256((output/item['path']).read_bytes()).hexdigest() for item in compiled['components']}
++                    pair.append((compiled,sealed))
++                left,right=pair
++                for key in ['package','build_key','components']:
++                    assert left[0][key]==right[0][key],(host,settings,profile,key)
++                assert left[1]==right[1],(host,settings,profile,'sealed bytes')
++                report.append({'host':host,'settings':settings,'profile':profile,'package':left[0]['package'],'build_key':left[0]['build_key'],'components':len(left[1]),'exact_identity_and_bytes_equal':True,'component_sha256':left[1]})
++                print(host,settings,profile,'PASS',flush=True)
++    a.output.write_text(json.dumps({'pairs':report,'normalisation':'none; exact compiled identities and component bytes'},indent=2)+'\n')
++finally:
++    verify.forget_authority(authority)
