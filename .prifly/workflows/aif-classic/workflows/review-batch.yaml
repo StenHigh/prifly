@@ -1,7 +1,7 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/review-batch
-version: 1.5.0
+version: 1.11.0
 title: Review and fix until nothing blocks or the declared limit is reached
 refs:
   schema_implementation: "{{schema_implementation}}"
@@ -27,7 +27,9 @@ inputs:
 outputs:
   implementation: {schema_ref: schema_implementation, required_for: [succeeded]}
   gate: {schema_ref: schema_gate-result, required_for: [partial]}
-limits: {max_step_instances: 20, max_control_transitions: 160, max_parallelism: 1, max_child_depth: 2}
+# Eight rounds of three steps — the second reviewer, the review, a fix — is
+# what the repeat below may reach, and the limit has to cover every path it permits.
+limits: {max_step_instances: 24, max_control_transitions: 160, max_parallelism: 1, max_child_depth: 2}
 policy_ref: local_policy
 features: {review: {input: review_enabled}}
 # The switch lives here rather than in the root graph on purpose. When the root
@@ -77,7 +79,7 @@ stages:
     kind: finish
     outcome: partial
     output_bindings: {gate: $stages.round.gate}
-    description: A round found no safe fix, so the findings are reported unchanged.
+    description: A round stopped with its findings standing — no safe fix, the developer's call, or a dependency the checks need was unavailable, which the gate marks as blocked.
   unstarted:
     kind: finish
     outcome: no_work

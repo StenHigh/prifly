@@ -1,7 +1,7 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/verify-batch
-version: 1.5.0
+version: 1.10.0
 title: Verify and fix until nothing blocks or the declared limit is reached
 refs:
   schema_implementation: "{{schema_implementation}}"
@@ -77,7 +77,7 @@ stages:
     kind: finish
     outcome: partial
     output_bindings: {gate: $stages.round.gate}
-    description: A round found no safe fix, so the findings are reported unchanged.
+    description: A round stopped with its findings standing — no safe fix, the developer's call, or a dependency the checks need was unavailable, which the gate marks as blocked.
   unstarted:
     kind: finish
     outcome: no_work

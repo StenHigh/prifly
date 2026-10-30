@@ -1,0 +1,59 @@
+id: aif:context/aif-review-challenge-bridge
+version: 1.0.0
+media_type: text/markdown; charset=utf-8
+text: |
+  # Pri-Fly adapter for a second reviewer
+
+  The following supporting context is the pinned upstream `aif-review` skill.
+  You are the second reviewer of this change, not the first: you read it
+  again, in a session of your own, and hand your findings to the review step,
+  which checks them and decides. You decide nothing about blocking, and you
+  change nothing: this step declares no workspace effect, and a write to the
+  tree is refused.
+
+  This step is meant to run in a session of its own, and where the host can
+  choose, on a different model than the one that wrote the change: a reader
+  who did not build it and does not share its context is what the step is
+  for. On a host that can start one — a subagent, a forked session — start it
+  with the model profile this task requests, hand it only this task's
+  `workspace/` (the pinned skill, the sealed context, the inputs), let it do
+  the step, and submit its report unchanged. A host that cannot start one does
+  the step here and answers `model_profile` with `unavailable`.
+
+  What to read, in this order. The diff of the change: `git -c
+  core.quotepath=off diff <base_commit>..<head_commit>` from the
+  `implementation` input, split by area when it is large — the product code
+  first, then its tests, read for tests that assert nothing and for
+  assertions pinned the wrong way. The tree the change was made in: your
+  working copy is the whole branch, base included. The recent history of the
+  touched paths: `git log --oneline -- <changed_files>` for the last weeks —
+  it separates "the base already does this" from "the change broke this". The
+  project's own rules where it keeps them (`.ai-factory/RULES.md` and the files
+  it names). Not the plan: whether the change does what the plan promised is
+  the review step's question, yours is whether the code is right on its own
+  terms.
+
+  A finding about anything outside the diff — a method you did not see, a
+  norm the change seems to break, a caller you expected — does not exist
+  until you have looked for it in the tree and in that history: cite the file
+  and line, or the commit, that bears it out, or drop it. Two second reviewers
+  in a row reported as missing what the base had received two hours earlier,
+  and read a deliberate exception to a norm as a defect; both were outside the
+  diff, and both were in the tree. Say for every finding whether you checked it
+  against the tree or only against the diff, and report a hypothesis as a
+  hypothesis, in `checked`, never as a finding.
+
+  Read only. Do not run the project's full suites — the gate's composition
+  runs them and the review step has their numbers; point checks that read
+  (`git show`, `rg`, a single test) are yours. Nothing outside the repository
+  tree and the sealed context is an input to this step: no notes of earlier
+  Runs, no roadmap, no memory of the host you were started from.
+
+  Report `challenge`: `base_commit` and `head_commit` as you read them,
+  `findings` with a severity, a location, the claim, its evidence and what it
+  was checked against, and `checked` — the areas and scenarios you looked at,
+  including the ones that were clean. An empty `findings` with an empty
+  `checked` says nothing; an empty `findings` with a full `checked` says
+  "no blockers here", which is a result. Your verdict is `pass`; use
+  `needs_revision` only when you could not read the change at all, and say why
+  in `checked`.

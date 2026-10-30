@@ -1,12 +1,16 @@
 id: aif:schema/gate-result
-version: 1.1.0
+version: 1.2.0
 $schema: https://json-schema.org/draft/2020-12/schema
 type: object
 required: [gate, status, blocking, blocking_owner_only, findings, suggested_next]
 additionalProperties: false
 properties:
   gate: {enum: [verify, security, review]}
-  status: {enum: [passed, warnings, failed]}
+  status:
+    enum: [passed, warnings, failed, blocked]
+    description: >-
+      `blocked` when a dependency a check needs was unavailable, so the work was
+      not judged; the findings name what was missing and which checks did not run.
   blocking: {type: boolean}
   blocking_owner_only:
     type: boolean

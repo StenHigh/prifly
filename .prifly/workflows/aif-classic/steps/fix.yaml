@@ -1,6 +1,6 @@
 authoring: prifly-step/2
 id: aif:step/fix
-version: 1.2.0
+version: 1.4.0
 title: Run aif-fix over the findings a gate just reported
 kind: worker
 inputs:

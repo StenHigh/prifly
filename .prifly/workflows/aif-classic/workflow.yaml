@@ -1,7 +1,7 @@
 authoring: prifly-project-workflow/1
 package:
   id: aif:package/classic
-  version: 1.40.0
+  version: 1.47.0
   description: Canonical AI Factory development workflow with bounded plan improvement.
   requires_core_protocol: "1"
   profiles:
@@ -15,12 +15,17 @@ package:
         plan_capture: {kind: direct_child_tree, path: .ai-factory/plans, entrypoint: index.md}
   references:
     assisted_adapter: core:adapter/assisted-session@1.0.0
-    local_policy: core:policy/local@3.0.0
+    # 4.0.0 admits external_write beside none and workspace_write, with the same
+    # limits. None of this package's steps writes outside; a project step
+    # inserted through extend.yaml may (a Docker stack its tests raise), and it
+    # can only declare that under the policy the package pins.
+    local_policy: core:policy/local@4.0.0
     step_result_schema: core:schema/step-result@1.0.0
+    step_result_schema_v2: core:schema/step-result@2.0.0
     workspace_tree_manifest: core:schema/workspace-tree-manifest@1.0.0
 id: aif:workflow/classic
-schema_version: "4"
-version: 1.40.0
+schema_version: "8"
+version: 1.47.0
 title: AI Factory classic development workflow
 refs:
   schema_task: "{{schema_task}}"
@@ -65,17 +70,26 @@ limits: {max_step_instances: 200, max_control_transitions: 1000, max_parallelism
 policy_ref: local_policy
 features:
   security: {input: security_enabled}
+# A Run that stopped — ended partial or rejected, or was cancelled — resumes
+# with this same workflow where it stopped: `prifly project continue --launch
+# <this launch> --source-run RUN`. The stages accepted before that point carry
+# over and the tree is handed on; the gates judge the tree as it is.
+resumable:
+  from_outcomes: [partial, rejected]
+  from_cancelled: true
 entry: warmup
 stages:
   warmup:
     kind: step
     step_ref: step_warmup
     on: {pass: plan, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+    impossible_verdicts: [blocked]
   plan:
     kind: step
     step_ref: step_plan
     input_bindings: {task: $inputs.task, handoff: $stages.warmup.handoff}
     on: {pass: improve, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+    impossible_verdicts: [blocked]
   improve:
     kind: call
     workflow_ref: workflow_improve-or-pass
@@ -86,6 +100,7 @@ stages:
     step_ref: step_implement
     input_bindings: {plan: $stages.improve.plan, handoff: $stages.warmup.handoff}
     on: {pass: verify, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+    impossible_verdicts: [blocked]
   # Every stage after a gate reads the implementation the gate returned, not the
   # one the implement step produced: a fix round commits, and the artifact that
   # names the head has to follow the tree. The batches are called on every path
@@ -111,7 +126,7 @@ stages:
     kind: step
     step_ref: step_security
     input_bindings: {implementation: $stages.verify.implementation}
-    on: {pass: security-decision, needs_revision: fix-after-security, fail: abandoned, no_work: abandoned}
+    on: {pass: security-decision, needs_revision: fix-after-security, fail: abandoned, no_work: abandoned, blocked: security-blocked}
   security-decision:
     kind: choice
     selection: exclusive
@@ -133,6 +148,7 @@ stages:
     step_ref: step_commit
     input_bindings: {implementation: $stages.review.implementation}
     on: {pass: done, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+    impossible_verdicts: [blocked]
   done:
     kind: finish
     outcome: succeeded
@@ -147,6 +163,11 @@ stages:
     outcome: partial
     output_bindings: {gate: $stages.security.gate}
     description: The gate proposes /aif-fix; Pri-Fly does not run it automatically.
+  security-blocked:
+    kind: finish
+    outcome: partial
+    output_bindings: {gate: $stages.security.gate}
+    description: A dependency the security checks need was unavailable, so the work was not judged; repeat with project continue once it is back.
   fix-after-review:
     kind: finish
     outcome: partial

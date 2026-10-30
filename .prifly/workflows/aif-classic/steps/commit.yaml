@@ -1,6 +1,6 @@
 authoring: prifly-step/2
 id: aif:step/commit
-version: 1.4.0
+version: 1.6.0
 title: Run aif-commit after the selected quality gates
 kind: worker
 inputs:

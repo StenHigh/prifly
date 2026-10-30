@@ -5,10 +5,10 @@ packages:
     origin:
       repository: https://github.com/StenHigh/prifly-aif-workflows.git
       path: aif-classic
-      ref: v1.39.0
-      commit: c2aa705fd31991f19aa79a90d44f396b6d498371
-      digest: sha256:fedeb1a8f059541288eafab4a7a525e3029fc6facd08fad21267ff01782c0013
-      extend_digest: sha256:7a43a779f14a53ccffca17d3a1805814efd923baf4b116bc6d4ab5e65c285f78
+      ref: v1.53.0
+      commit: c85306050df060dc4b381ba7512173806250b3a6
+      digest: sha256:dd8aa903093d51b5e87e4f07fb5a4532715d343d3091d830ba5ad551fdaa38cc
+      extend_digest: sha256:faa3116b8df41d9a0739018ec297e774650ad8f01781176ef832ba787b0b1581
       catalog: https://github.com/StenHigh/prifly-workflows.git
 launches:
   aif-classic:
