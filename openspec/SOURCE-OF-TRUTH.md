@@ -78,6 +78,11 @@ Run contracts не получают новой версии только из-з
 
 ## Границы
 
+Датированные HTML в `specs/delivery-roadmap/reports/` — ненормативные
+аналитические снимки. [Roadmap](specs/delivery-roadmap/spec.md#factory-development)
+ссылается на них как на основания выбранных направлений. Они не создают второй
+backlog, не меняют ownership и не требуют custom document builder в проекте.
+
 OpenSpec не меняет Go runtime, user-facing YAML, sealed JSON package или
 сохранённые Runs. Historical release evidence и manifests сохранены в Git и
 archive changes; текущая документация не переписывает эту историю.
