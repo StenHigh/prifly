@@ -147,10 +147,16 @@ class EditorContractTest(unittest.TestCase):
             "context-v1",
             "workflow-catalog-v1",
         }
+        # Require composition schemas together when the engine publishes them;
+        # the same check also covers releases without composition support.
+        engine_manifest = json.loads((ROOT / "internal" / "runtime" / "authoring" / "manifest.json").read_text())
+        composition = {"project-workflow-folder-v2", "extension-v3"}
+        if composition.intersection(item["document"] for item in engine_manifest["schemas"]):
+            expected.update(composition)
         self.assertEqual({item["document"] for item in manifest["schemas"]}, expected)
         for item in manifest["schemas"]:
             self.assertEqual(Path(item["path"]).name, item["path"])
-            if item["document"] in {"project-profile-v2", "project-profile-v3", "project-profile-v4", "step-v1", "extension-v1", "extension-v2"}:
+            if item["document"] in {"project-profile-v2", "project-profile-v3", "project-profile-v4", "project-workflow-folder-v2", "step-v1", "extension-v1", "extension-v2", "extension-v3"}:
                 self.assertEqual(item["patterns"], [])
             else:
                 self.assertTrue(item["patterns"])

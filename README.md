@@ -146,18 +146,14 @@ prifly project runners add --host codex-app
 входу сценария, а не сочиняется для каждого Run. Общий `prifly-run` следует
 выбранному YAML и не добавляет правила AI Factory. Уже установленные exact
 инструкции обновляются командой `prifly project runners update`.
-При выборе по задаче runner может посоветовать launch по его title/description и
-критериям в соседнем `PROJECT.md`. Совет необязателен: его можно пропустить или
-отключить в проекте, сохранив все варианты для явного выбора. Точный ID сразу
-ведёт к его анкете. Для конечных вопросов runner вызывает применимый native
-инструмент Codex (`request_user_input` либо `request_user_input_async`) или
-Claude (`AskUserQuestion`); без такого инструмента ждёт текстовый ответ.
-Асинхронный показ вопроса ещё не является ответом. Выбор не подтверждает
-подготовленный запуск и executable effects.
+Как описать назначение launch, настроить необязательный совет и выбрать запуск —
+в [руководстве выбора запуска](examples/authoring/launch-choice-guide.md).
+Выбор не подтверждает подготовленный запуск и executable effects.
 Проверенный итог с `--prepare` доступен профилю `/3`; `/2` сохраняет старый
 запуск и не мигрирует автоматически. Проверки протокола не заменяют живое
 наблюдение диалогов Codex/Claude; его статус указан в
-[плане](openspec/changes/make-project-launch-workflow-neutral/tasks.md).
+[отдельном Claude follow-up](openspec/changes/verify-claude-launch-choice-ui/proposal.md)
+со статусом `DEFERRED`.
 
 Для contributor-проверки во время правок используйте `make check-fast`.
 Перед commit итоговый снимок должен пройти полный локальный состав:
@@ -391,6 +387,11 @@ config-каталоге. Срез добавлен в исходники; это
 | Решения Run и Decision Bridge | [Run decisions](openspec/specs/run-decisions/spec.md) |
 | Публичные JSON contracts | [Published contracts](openspec/specs/published-contracts/spec.md) |
 | Примеры и справочники YAML | [examples/](examples/README.md) |
+| Как описать и выбрать запуск | [Руководство выбора запуска](examples/authoring/launch-choice-guide.md) |
+| Как объявить вопросы до старта и во время Run | [Справочник решений Run](examples/authoring/run-decision-authoring-reference.yaml) |
+| Как продолжить, возобновить или восстановить Run | [Руководство продолжения](examples/authoring/continuation-guide.md) |
+| Как читать прогресс программы | [Диагностика прогресса](examples/troubleshooting.md#монитор-пишет-прогресс-не-сообщается-у-долгой-программы) |
+| Как открыть stdout/stderr программы | [Диагностика вывода](examples/troubleshooting.md#stdout_limit--stderr_limit-у-программы-которая-много-пишет) |
 | Виден отказ или странное поведение прогона | [Указатель по симптомам](examples/troubleshooting.md) |
 | Исчерпан storage budget существующего Run | [Read-only status и reviewed повышение](examples/authoring/storage-recovery-guide.md) |
 | Сообщить о проблеме безопасности | [Security policy](SECURITY.md) |

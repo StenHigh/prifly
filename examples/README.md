@@ -8,6 +8,17 @@
 имя поля. Если известен только симптом — отказ, диагностика или поведение
 прогона, — начните с [указателя по симптомам](troubleshooting.md).
 
+## С чего начать
+
+| Задача автора | Материал |
+|---|---|
+| Запустить обычную программу без Git и ИИ | [CSV → проверка → отчёт](workflows/csv-report/README.md) |
+| Описать несколько запусков и выбрать один | [Руководство выбора запуска](authoring/launch-choice-guide.md) |
+| Объявить вопросы до старта или во время Run | [Решения Run](authoring/run-decision-authoring-reference.yaml), [ответы проекта](authoring/extension-authoring-reference.yaml) |
+| Продолжить другим workflow или возобновить тем же | [Руководство продолжения](authoring/continuation-guide.md): `checkpoint`/`continuation` — ревизия 7; `resumable` — ревизия 8 |
+| Показать прогресс программы | [Диагностика прогресса](troubleshooting.md#монитор-пишет-прогресс-не-сообщается-у-долгой-программы) |
+| Открыть stdout/stderr программы | [Диагностика вывода](troubleshooting.md#stdout_limit--stderr_limit-у-программы-которая-много-пишет), [live output в привязке](authoring/extension-authoring-reference.yaml) |
+
 ## Что умеет движок и где это показано
 
 Строка на каждую возможность, которую объявляет `prifly capabilities`. Проверка
@@ -112,8 +123,9 @@ prifly capabilities --json | jq -c '{caps:.profiles[1].capabilities, unsupported
 
 - [`authoring/workflow-authoring-reference.yaml`](authoring/workflow-authoring-reference.yaml) — все
   поля `prifly-workflow/1`, восемь видов stages, bindings, limits и comments, а
-  также что открывают ревизии 4, 5 и 6: `impossible_verdicts`,
-  `technical_retries` и маршрут для `blocked`.
+  также что открывают ревизии 4–8: `impossible_verdicts`,
+  `technical_retries`, маршрут для `blocked`, `checkpoint`/`continuation`
+  и `resumable`.
 - [`authoring/blocked-guide.md`](authoring/blocked-guide.md) — как обрабатывать
   `blocked`: чем он отличается от `fail`, технического сбоя и паузы; как
   передать причину обещанным выходом у программного и ассистируемого шага; три
@@ -123,7 +135,20 @@ prifly capabilities --json | jq -c '{caps:.profiles[1].capabilities, unsupported
 - [`authoring/continuation-guide.md`](authoring/continuation-guide.md) — как
   сделать workflow продолжаемым: `checkpoint` (что сохранить),
   `continuation` (от каких Runs и откуда брать входы), проверка первым шагом,
-  передача рабочего дерева, восстановление и отказы. Ревизия 7.
+  передача рабочего дерева, восстановление и отказы. `checkpoint` и
+  `continuation` требуют ревизию 7; `resumable` для возобновления тем же
+  workflow — ревизию 8.
+- [`authoring/launch-choice-guide.md`](authoring/launch-choice-guide.md) —
+  назначения запусков через `title`/`description`, необязательный совет,
+  критерии `PROJECT.md`, точный ID и текстовый fallback. Отдельно показаны
+  выбор запуска, объявленные решения и подтверждение подготовленного старта.
+  Живая приёмка Claude остаётся `DEFERRED` в
+  [отдельном follow-up](../openspec/changes/verify-claude-launch-choice-ui/proposal.md).
+- [`authoring/run-decision-authoring-reference.yaml`](authoring/run-decision-authoring-reference.yaml) —
+  объявленные решения Run: `phase: preflight` до старта и `phase: runtime`
+  во время исполнения; варианты, recommendation, условия и destination.
+  Постоянные ответы проекта показаны в
+  [`extend.yaml`](authoring/extension-authoring-reference.yaml).
 - [`authoring/step-authoring-reference.yaml`](authoring/step-authoring-reference.yaml) — все поля
   `prifly-step/2` на новейшем контракте шага: ports, hooks, telemetry,
   `session_limits`, `workspace_trees`, `model_profile`, обещание выхода на
@@ -142,7 +167,8 @@ prifly capabilities --json | jq -c '{caps:.profiles[1].capabilities, unsupported
   момент установки (по нему `workflows update` видит изменения upstream), к
   локальному файлу он не относится и после правки `answers` не меняется.
 - [`authoring/project-profile-authoring-reference.yaml`](authoring/project-profile-authoring-reference.yaml) —
-  полный `.prifly/project.yaml` `/3`; hosts необязательны и выбираются явно;
+  полный `.prifly/project.yaml` `/4` с `worktree_naming`; для выбора запуска
+  достаточно `/3`. Hosts необязательны и выбираются явно;
   у launch — постоянный `workspace` (host не спрашивает, `--workspace`
   перебивает на один Run) и `preflight` — программа проекта, которую
   `project start` исполняет до любого захвата и отказывает при ненулевом коде.
