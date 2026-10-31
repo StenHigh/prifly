@@ -1,0 +1,235 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "authoring": {
+      "const": "prifly-extension-points/1"
+    },
+    "points": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 256,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "workflow": {
+            "type": "string",
+            "minLength": 1
+          },
+          "entry": {
+            "type": "string",
+            "minLength": 1
+          },
+          "between": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "type": "string",
+                "minLength": 1
+              },
+              "to": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ]
+          },
+          "input_bindings": {
+            "type": "object",
+            "minProperties": 0,
+            "maxProperties": 256,
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^\\$(inputs\\.[a-z][a-z0-9_-]*|stages\\.[^.]+\\.[^.]+)$"
+            }
+          },
+          "consumers": {
+            "type": "object",
+            "minProperties": 0,
+            "maxProperties": 256,
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "stage": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "input": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*$"
+                },
+                "output": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*$"
+                }
+              },
+              "required": [
+                "stage"
+              ],
+              "oneOf": [
+                {
+                  "required": [
+                    "input"
+                  ],
+                  "not": {
+                    "required": [
+                      "output"
+                    ]
+                  }
+                },
+                {
+                  "required": [
+                    "output"
+                  ],
+                  "not": {
+                    "required": [
+                      "input"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "routes": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "step": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "on": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "maxProperties": 256,
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_-]*$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "on_error": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "impossible_verdicts": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "maxItems": 5,
+                    "items": {
+                      "enum": [
+                        "pass",
+                        "needs_revision",
+                        "blocked",
+                        "fail",
+                        "no_work"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "on"
+                ]
+              },
+              "call": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "on": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "maxProperties": 256,
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_-]*$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "on_error": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "on"
+                ]
+              }
+            },
+            "required": [],
+            "anyOf": [
+              {
+                "required": [
+                  "step"
+                ]
+              },
+              {
+                "required": [
+                  "call"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "workflow",
+          "input_bindings",
+          "consumers",
+          "routes"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "entry"
+            ],
+            "not": {
+              "required": [
+                "between"
+              ]
+            }
+          },
+          {
+            "required": [
+              "between"
+            ],
+            "not": {
+              "required": [
+                "entry"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "authoring",
+    "points"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:extension-points:1",
+  "title": "Pri-Fly package-declared extension points"
+}

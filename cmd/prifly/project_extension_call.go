@@ -213,6 +213,9 @@ func projectValidateCallExtensionBindings(components []projectCompileComponent, 
 		return err
 	}
 	for _, extension := range options.Extensions {
+		if !projectExtensionEnabled(extension) {
+			continue
+		}
 		for _, c := range components {
 			if extension.Call != "" && c.Kind == "workflow" && projectExtensionWorkflowName(c.Ref.ID) == extension.Call {
 				if err := visit(c.Ref); err != nil {
@@ -227,7 +230,7 @@ func projectValidateCallExtensionBindings(components []projectCompileComponent, 
 	for name := range options.ExecutionBindings {
 		matches := []projectCompileComponent{}
 		for _, c := range components {
-			if projectExtensionWorkflowName(c.Ref.ID) == name {
+			if c.Kind == "step" && projectExtensionWorkflowName(c.Ref.ID) == name {
 				matches = append(matches, c)
 			}
 		}

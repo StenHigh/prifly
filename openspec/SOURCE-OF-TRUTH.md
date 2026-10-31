@@ -98,3 +98,8 @@ Project worktree naming включён в main source sets `workflow-and-context
 reviewed recovery после отмены writer и owner resolution для `domain-execution`,
 `runtime-resources`, `cli-protocol` и `published-contracts`. Ownership остаётся
 в main source sets; existing schemas и historical evidence не меняются.
+
+Пока `add-nested-project-extension-points` активен, его deltas уточняют opt-in
+package-declared points и explicit consumer bindings для `workflow-and-context`,
+`cli-protocol`, `published-contracts` и `specification-governance`. Ownership
+остаётся в main source sets. Новые authoring `/4` и points `/1` не меняют saved Runs.

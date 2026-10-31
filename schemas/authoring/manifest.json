@@ -15,6 +15,8 @@
     {"document": "step-v2", "id": "urn:prifly:yaml-authoring:step:2", "path": "step-v2.schema.json", "patterns": [".prifly/workflows/*/steps/**/*.yaml", ".prifly/workflows/*/project/steps/**/*.yaml"]},
     {"document": "check-v1", "id": "urn:prifly:yaml-authoring:check:1", "path": "check-v1.schema.json", "patterns": [".prifly/workflows/*/checks/**/*.yaml", ".prifly/workflows/*/project/checks/**/*.yaml"]},
     {"document": "context-v1", "id": "urn:prifly:yaml-authoring:context:1", "path": "context-v1.schema.json", "patterns": [".prifly/workflows/*/contexts/**/*.yaml", ".prifly/workflows/*/project/contexts/**/*.yaml"]},
-    {"document": "workflow-catalog-v1", "id": "urn:prifly:yaml-authoring:workflow-catalog:1", "path": "workflow-catalog-v1.schema.json", "patterns": ["catalog.yaml"]}
+    {"document": "workflow-catalog-v1", "id": "urn:prifly:yaml-authoring:workflow-catalog:1", "path": "workflow-catalog-v1.schema.json", "patterns": ["catalog.yaml"]},
+    {"document": "extension-v4", "id": "urn:prifly:yaml-authoring:extension:4", "path": "extension-v4.schema.json", "patterns": []},
+    {"document": "extension-points-v1", "id": "urn:prifly:yaml-authoring:extension-points:1", "path": "extension-points-v1.schema.json", "patterns": [".prifly/workflows/*/extension-points.yaml"]}
   ]
 }

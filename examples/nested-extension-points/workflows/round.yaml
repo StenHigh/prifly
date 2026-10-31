@@ -1,0 +1,40 @@
+authoring: prifly-workflow/1
+schema_version: "6"
+id: report-probe:workflow/round
+version: 1.0.0
+title: Read and optionally repair one candidate
+refs:
+  carrier: "{{schema_carrier}}"
+  reader: "{{step_read}}"
+  repair: "{{step_repair}}"
+  policy: "{{policy}}"
+inputs: {carrier: carrier}
+outputs:
+  carrier: {schema_ref: carrier, required_for: [succeeded, partial, rejected]}
+entry: read
+policy_ref: policy
+limits: {max_step_instances: 8, max_control_transitions: 16, max_child_depth: 1}
+stages:
+  read:
+    kind: step
+    step_ref: reader
+    input_bindings: {carrier: $inputs.carrier}
+    on: {pass: clean, needs_revision: repair, blocked: blocked, fail: stopped, no_work: stopped}
+  repair:
+    kind: step
+    step_ref: repair
+    input_bindings: {carrier: $inputs.carrier}
+    on: {pass: fixed, needs_revision: blocked, blocked: blocked, fail: stopped, no_work: stopped}
+  clean:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {carrier: $inputs.carrier}
+  fixed:
+    kind: finish
+    outcome: partial
+    output_bindings: {carrier: $stages.repair.carrier}
+  blocked:
+    kind: finish
+    outcome: rejected
+    output_bindings: {carrier: $inputs.carrier}
+  stopped: {kind: finish, outcome: no_work}

@@ -1,0 +1,4 @@
+id: report-probe:context/consume
+version: 1.0.0
+media_type: text/plain
+text: Synthetic project consumer. Read only the carrier's explicit original report and log refs.

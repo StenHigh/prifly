@@ -53,6 +53,7 @@ type projectPackageSource struct {
 	Build                *projectBuildProvenance
 	ExecutionBindings    *projectPackageExecution
 	Folder               string
+	ExtensionPoints      *projectExtensionPoints
 }
 
 type projectPackageDocument struct {
@@ -632,6 +633,13 @@ func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error
 	for _, path := range catalogSources {
 		read[path] = true
 	}
+	source.ExtensionPoints, extensionsPath, err = projectReadExtensionPoints(root, folder)
+	if err != nil {
+		return projectPackageSource{}, err
+	}
+	if extensionsPath != "" {
+		read[extensionsPath] = true
+	}
 	source.ReadPaths = slices.Sorted(maps.Keys(read))
 	source.RootValue = workflowValue
 	source.Folder = folder
@@ -984,7 +992,12 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 			pending = append(pending, projectPendingDocument{document: declaration, value: value, index: index})
 		}
 	}
-	callTargets, err := projectExtensionCallTargets(pending, options.Extensions)
+	pointExtensions, err := projectPreparePointExtensions(source, pending, options.Extensions)
+	if err != nil {
+		return nil, err
+	}
+	rootExtensions := projectPointRootExtensions(options.Extensions)
+	callTargets, err := projectExtensionCallTargets(pending, rootExtensions)
 	if err != nil {
 		return nil, err
 	}
@@ -995,6 +1008,13 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 		next := make([]projectPendingDocument, 0, len(pending))
 		progress := false
 		for _, item := range pending {
+			object, _ := item.value.(map[string]any)
+			id, _ := object["id"].(string)
+			selectedPoints := pointExtensions[id]
+			if !projectPointExtensionsReady(components, selectedPoints) {
+				next = append(next, item)
+				continue
+			}
 			if item.document.Extensions != "" && !projectExtensionCallsReady(components, callTargets) {
 				next = append(next, item)
 				continue
@@ -1011,8 +1031,11 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 			if err != nil {
 				return nil, usageError(fmt.Sprintf("project_compile_invalid_source: %s/%d: %s", item.document.Source, item.index, err))
 			}
+			if err := projectApplyPointExtensions(&component, components, selectedPoints); err != nil {
+				return nil, err
+			}
 			if item.document.Extensions != "" {
-				if err := projectApplyExtensions(&component, components, options.Extensions); err != nil {
+				if err := projectApplyExtensions(&component, components, rootExtensions); err != nil {
 					return nil, err
 				}
 			}

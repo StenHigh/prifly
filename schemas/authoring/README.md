@@ -122,3 +122,5 @@ records и legacy runtime-вопросы сохраняют `/1`. Сохранё
 [OpenSpec](../../openspec/specs/published-contracts/spec.md); он намеренно не
 дублирует их поля и bytes. Перечень контрактов этой сборки даёт `prifly schema`
 без аргумента, а сгенерированные bundles лежат в [`schemas/core/`](../core/).
+
+`extension-v4.schema.json` adds explicitly declared nested points; `extension-points-v1.schema.json` describes the package-owned sidecar. Existing extension-v1/v2 stay unchanged. `/3` is reserved for the independent workflow-composition change.

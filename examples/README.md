@@ -41,6 +41,7 @@
 | `telemetry.records` | то же объявление; записи читает `telemetry` | step |
 | `telemetry.aggregate` | то же объявление; сводку считает `telemetry` | step |
 | `project_call_extensions` | `prifly-extension/2`, Project `/3`; native Call (WorkflowRevision 1, core-state/2 и core-read/2), child fields требуют своих ревизий; Pri-Fly 0.13.78+ | [Вставки step/call](authoring/extension-authoring-reference.yaml) |
+| `project_extension_points` | Project `/3`, `prifly-extension/4`, points `/1`; native Call v1, Repeat v3, blocked v6, resumable v8; session external_write: StepDefinition v11 | [Точки подключения](authoring/extension-points-authoring-reference.yaml), [native example](nested-extension-points/README.md) |
 | `storage_budget_management` | CLI `storage budget show`, reviewed `set`, storage 10; YAML quota field отсутствует | [Восстановление storage](authoring/storage-recovery-guide.md) |
 | `on_error` | `on_error` у стадии | workflow |
 | `json_projection` | `pointer` и `projected_schema_ref` в binding | workflow |

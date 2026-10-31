@@ -90,11 +90,33 @@ step-only: stage ID берётся из `step`, допускается не бо
 bindings могут быть множественными, маршруты отвечают за outcomes callee.
 Его WorkflowInvocation живёт внутри того же Run, claim и candidate контекста.
 `between.from` / `between.to` должны находить ровно один прямой root route;
-compiler не изменяет source bytes или pinned Runs. Extension не предназначен
+compiler не изменяет source bytes или pinned Runs. Legacy root extension не предназначен
 для repeat, parallel, map, join, нескольких routes или рекурсивного patch
 internal graphs; сложный callee исполняется своим native graph. Это не
 runtime operator, plugin или отдельный Run. Точный контракт — в
 [workflow and context](../workflow-and-context/spec.md).
+
+Явная `prifly-extension/4` добавляет point branch: project выбирает declared
+[Workflow extension point](#workflow-extension-point), owned step либо Call
+и output port для каждого разрешённого consumer. Она не принимает произвольные
+workflow, anchor, routes или input sources. `enabled: false` сохраняет passthrough.
+Root entries сохраняют прежние правила.
+
+<a id="workflow-extension-point"></a>
+### Workflow extension point — Точка подключения расширения сценария
+
+Package-owned authoring declaration в `extension-points.yaml` с marker
+`prifly-extension-points/1`. Она фиксирует exact local WorkflowRevision по
+author ID, его entry либо один direct route, input sources, routes и именованные
+consumer ports. Consumer — явно указанный существующий input stage либо output
+finish. Project связывает каждый consumer alias с объявленным output своего
+step или native Call. Compiler применяет binding до sealing child и parent refs.
+
+Point поддерживает отдельный local workflow, в том числе body native repeat
+или callee. Он не патчит внутреннее состояние operator и не вводит transport,
+runtime stage kind или отдельный Run. Без выбранного расширения прежние bindings
+сохраняются. Native typed checks, effects и root recovery frontier остаются
+прежними. Новый carrier не меняет identity вложенных report/log ArtifactRef.
 
 <a id="project-workflow-setting"></a>
 ### Project workflow setting — Настройка сценария проекта

@@ -139,6 +139,8 @@ class EditorContractTest(unittest.TestCase):
             "extension",
             "extension-v1",
             "extension-v2",
+            "extension-v4",
+            "extension-points-v1",
             "run-decision-v1",
             "workflow-v1",
             "step-v1",
@@ -156,7 +158,7 @@ class EditorContractTest(unittest.TestCase):
         self.assertEqual({item["document"] for item in manifest["schemas"]}, expected)
         for item in manifest["schemas"]:
             self.assertEqual(Path(item["path"]).name, item["path"])
-            if item["document"] in {"project-profile-v2", "project-profile-v3", "project-profile-v4", "project-workflow-folder-v2", "step-v1", "extension-v1", "extension-v2", "extension-v3"}:
+            if item["document"] in {"project-profile-v2", "project-profile-v3", "project-profile-v4", "project-workflow-folder-v2", "step-v1", "extension-v1", "extension-v2", "extension-v3", "extension-v4"}:
                 self.assertEqual(item["patterns"], [])
             else:
                 self.assertTrue(item["patterns"])

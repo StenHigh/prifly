@@ -1527,15 +1527,19 @@ func (c *cli) projectWorkflows(ctx context.Context, args []string) error {
 }
 
 type projectWorkflowExtension struct {
-	Call          string            `json:",omitempty"`
-	InputBindings map[string]string `json:",omitempty"`
-	OnError       string            `json:",omitempty"`
-	ID            string
-	Workflow      string
-	From          string
-	To            string
-	Step          string
-	On            map[string]string
+	Point          string                 `json:",omitempty"`
+	OutputBindings map[string]string      `json:",omitempty"`
+	Enabled        *bool                  `json:",omitempty"`
+	ResolvedPoint  *projectExtensionPoint `json:"-"`
+	Call           string                 `json:",omitempty"`
+	InputBindings  map[string]string      `json:",omitempty"`
+	OnError        string                 `json:",omitempty"`
+	ID             string
+	Workflow       string
+	From           string
+	To             string
+	Step           string
+	On             map[string]string
 	// Absent stays absent in the b1 build key: an insertion that declares no
 	// impossible verdict seals exactly the bytes it sealed before the field
 	// existed, while declaring one is a different input and a different key.
@@ -1709,6 +1713,9 @@ func (c *cli) projectExtend(_ context.Context, args []string) error {
 	}
 	slices.Sort(known)
 	for _, extension := range extensions {
+		if extension.Point != "" {
+			return refusal("project_extension_point_requires_package", "points require project compile and a package declaration")
+		}
 		if extension.Call != "" {
 			return refusal("project_extension_call_requires_package", "call resolution requires the declared folder inventory; use project compile")
 		}
@@ -1777,10 +1784,15 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	result := projectWorkflowOptions{Extensions: []projectWorkflowExtension{}, Settings: map[string]map[string]any{}, Exclude: []string{}}
 	if raw, present := root["authoring"]; present {
-		if raw != "prifly-extension/2" {
-			return result, refusal("project_extension_unsupported_authoring", "authoring must select prifly-extension/2")
+		if raw != "prifly-extension/2" && raw != projectPointExtensionVersion {
+			return result, refusal("project_extension_unsupported_authoring", "authoring must select prifly-extension/2 or prifly-extension/4")
 		}
-		result.Authoring = "prifly-extension/2"
+		result.Authoring = raw.(string)
+		if result.Authoring == projectPointExtensionVersion {
+			if err := projectValidatePointShape("extension-v4", root); err != nil {
+				return result, err
+			}
+		}
 	}
 	if raw, exists := root["answers"]; exists {
 		answers, err := projectReadWorkflowAnswers(raw)
@@ -1852,12 +1864,30 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	if !ok {
 		return projectWorkflowOptions{}, refusal("project_extension_invalid", "extensions must be a list")
 	}
+	if result.Authoring == projectPointExtensionVersion && len(items) > 256 {
+		return result, refusal("project_extension_point_invalid", "at most 256 extensions are allowed")
+	}
 	extensions := make([]projectWorkflowExtension, 0, len(items))
 	seen := map[string]bool{}
 	for index, item := range items {
 		object, ok := item.(map[string]any)
 		if !ok {
 			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d must be an object", index))
+		}
+		if _, pointEntry := object["point"]; pointEntry {
+			if result.Authoring != projectPointExtensionVersion {
+				return result, refusal("project_extension_unsupported_authoring", "point requires authoring: prifly-extension/4")
+			}
+			extension, err := projectParsePointExtension(object)
+			if err != nil {
+				return result, err
+			}
+			if seen[extension.ID] {
+				return result, refusal("project_extension_invalid", "extension id must be unique")
+			}
+			seen[extension.ID] = true
+			extensions = append(extensions, extension)
+			continue
 		}
 		for key := range object {
 			switch key {

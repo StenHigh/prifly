@@ -140,3 +140,14 @@ extensions:
 # supporting files, allowlists and execution consent use the normal contract.
 # project extend is step-only; calls require project compile's folder inventory.
 # Reusable synthetic one/three-input examples: test/fixtures/project-call-extensions.
+
+# Nested opt-in project_extension_points: see extension-points-authoring-reference.yaml
+# and examples/nested-extension-points for package-declared anchors and consumers.
+# authoring: prifly-extension/4
+# extensions:
+#   - id: measure-after-repair
+#     point: after-repair
+#     call: measure-child
+#     output_bindings: {repeated: carrier}
+# The point owns workflow/anchor/inputs/routes; project entries cannot replace them.
+# enabled: false keeps passthrough. New output is required on its native route.

@@ -1,0 +1,82 @@
+# yaml-language-server: $schema=../../schemas/authoring/extension-points-v1.schema.json
+# capability: project_extension_points; opt-in authoring, Project profile /3+.
+# Minimum native contracts: Call WorkflowRevision 1; Repeat 3; blocked 6;
+# resumable root 8. Assisted external_write uses StepDefinition 11;
+# program external_write uses StepDefinition 14 and normal execution consent.
+# No new runtime state/read revision. extension-v1/v2 retain their old meaning.
+# extension/3 is reserved by independent workflow composition; this branch is /4.
+#
+# PACKAGE AUTHOR: extension-points.yaml beside workflow.yaml. Target an exact
+# full author workflow ID in the same folder, owned by the package. Targeting
+# an imported/installed definition or project-owned workflow is not supported.
+# entry means the exact current entry; between means ONE direct route in that
+# workflow. A child call/repeat BODY is a separate local workflow and can be
+# targeted. Operator internals, path wildcards and arbitrary patches cannot.
+#
+# input_bindings accepts whole $inputs.PORT or $stages.STAGE.PORT only.
+# Consumers explicitly name an EXISTING stage input or finish output binding.
+# routes fixes permitted step verdicts or call outcomes in the package.
+# Every selected point consumer MUST be bound. Missing/unguaranteed output,
+# mismatched schema, unavailable producer and cycles fail native compilation.
+authoring: prifly-extension-points/1
+points:
+  before-read:
+    workflow: report-probe:workflow/round
+    entry: read
+    input_bindings: {carrier: $inputs.carrier}
+    consumers:
+      reader: {stage: read, input: carrier}
+      repair: {stage: repair, input: carrier}
+      clean: {stage: clean, output: carrier}
+    routes:
+      step:
+        on: {pass: read, needs_revision: stopped, blocked: stopped, fail: stopped, no_work: stopped}
+      call:
+        on: {succeeded: read, partial: stopped, rejected: stopped}
+        on_error: stopped
+  after-repair:
+    workflow: report-probe:workflow/round
+    between: {from: repair, to: fixed}
+    input_bindings: {carrier: $stages.repair.carrier}
+    consumers:
+      repeated: {stage: fixed, output: carrier}
+    routes:
+      step:
+        on: {pass: fixed, needs_revision: stopped, blocked: stopped, fail: stopped, no_work: stopped}
+      call:
+        on: {succeeded: fixed, partial: stopped, rejected: stopped}
+        on_error: stopped
+
+# PROJECT AUTHOR: extend.yaml; edit this file and project/** only.
+# No workflow, between, input_bindings, on or arbitrary consumer keys here.
+# output_bindings maps each package consumer alias to a declared producer output.
+# Reusing step measure at two points uses independent extension IDs/slots.
+# Omit entries or set enabled: false to keep package passthrough.
+# Exactly one step/call per entry. Implementation is owned under project/.
+# authoring: prifly-extension/4
+# extensions:
+#   - id: measure-before-read
+#     point: before-read
+#     step: measure
+#     output_bindings: {reader: carrier, repair: carrier, clean: carrier}
+#   - id: measure-after-repair
+#     point: after-repair
+#     call: measure-child
+#     output_bindings: {repeated: carrier}
+
+# Data path:
+# input -> measure-before-read.carrier -> read/repair/clean
+# repair.carrier -> measure-after-repair.carrier -> fixed.carrier
+# fixed exports partial -> repeat.next_bindings -> next round's entry measurement
+# Fresh report/log refs travel inside carrier as ordinary public ArtifactRef.
+# Do not rewrite original report refs to the identity of a reused slot.
+#
+# Effects stay per definition: read is readonly/effects:none; synthetic measure
+# declares external_write system/operations/target. Reports do not grant rights.
+# Programs under either step or call use standard execution_bindings,
+# allowlist, supporting-file sealing and --allow-execution after review.
+#
+# Compile/prepare/start/continue and synthetic driver:
+# examples/nested-extension-points/README.md
+# Reviewed continue reruns the root call/repeat frontier. Nested-stage resume
+# is unsupported; changed accepted prefix keeps its native refusal.

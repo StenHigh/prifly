@@ -1,0 +1,4 @@
+id: report-probe:context/produce
+version: 1.0.0
+media_type: text/plain
+text: Synthetic producer. Publish a report, log, and explicit refs from reserved output slots.

@@ -1,0 +1,11 @@
+authoring: prifly-step/1
+id: report-probe:step/repair
+version: 1.0.0
+title: Return a candidate with the same immutable reports
+kind: worker
+inputs: {carrier: {schema_ref: "{{schema_carrier}}"}}
+outputs: {carrier: {schema_ref: "{{schema_carrier}}", required_for: [pass]}}
+executor: {adapter_ref: "{{adapter}}", operation: session}
+instructions_ref: "{{context_repair}}"
+effects: {class: workspace_write, retry_class: never}
+result_schema_ref: "{{result}}"

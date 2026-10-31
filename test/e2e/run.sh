@@ -24,3 +24,4 @@ python3 -B test/e2e/verify-parallel-worktrees.py --binary "$binary" --target "$h
 python3 -B test/e2e/verify-monitor.py --binary "$binary" --target "$home/fixtures/monitor"
 python3 -B test/e2e/verify-capacity.py --binary "$binary" --target "$home/fixtures/capacity"
 python3 -B test/e2e/verify-progress.py --binary "$binary" --target "$home/fixtures/progress"
+python3 -B test/e2e/verify-extension-points.py --binary "$binary" --output "$home/extension-points-results.json"

@@ -164,10 +164,15 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 		if len(extension.ImpossibleVerdicts) != 0 {
 			raisedByInsertion = true
 		}
+		if extension.Point != "" && projectExtensionEnabled(extension) && extension.Step != "" && source.ExtensionPoints != nil {
+			if point, ok := source.ExtensionPoints.Points[extension.Point]; ok && point.Routes.Step != nil && len(point.Routes.Step.ImpossibleVerdicts) != 0 {
+				raisedByInsertion = true
+			}
+		}
 	}
 	callExtensions := false
 	for _, extension := range options.Extensions {
-		if extension.Call != "" {
+		if projectExtensionEnabled(extension) && (extension.Call != "" || extension.Point != "") {
 			callExtensions = true
 			break
 		}
@@ -297,13 +302,16 @@ func projectBuildVariant(source projectPackageSource, components []projectCompil
 		"decision_catalog": source.DecisionCatalog, "package_profile": profile, "values": values,
 		"settings": options.Settings, "exclude": options.Exclude, "extensions": options.Extensions, "documents": inputDocuments,
 	}
+	if source.ExtensionPoints != nil {
+		input["extension_points"] = source.ExtensionPoints
+	}
 	if source.ExecutionBindings != nil {
 		input["execution_bindings"] = source.ExecutionBindings
 	}
 	// The marked call path seals its declared resource contract as part of
 	// the reviewed package. Legacy b1 inputs must keep their exact encoding.
 	for _, extension := range options.Extensions {
-		if extension.Call != "" {
+		if projectExtensionEnabled(extension) && (extension.Call != "" || extension.Point != "") {
 			input["call_resources"] = options.Resources
 			break
 		}

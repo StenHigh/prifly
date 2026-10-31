@@ -1,0 +1,409 @@
+{
+  "candidate_binary_sha256": "ba36d9214529f9ba2b3588e1fcb9da07fbaf12dae072f404e99721d6e2824995",
+  "boundary": "Bounded native extension-point checks. Synthetic replies; no LLM or provision.",
+  "complete": true,
+  "cases": [
+    {
+      "case": "success",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": "project_start_stale_launch"
+    },
+    {
+      "case": "repair",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read",
+        "repair",
+        "measure",
+        "measure",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "failed",
+      "outcome": "partial",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "continue",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read",
+        "measure",
+        "read"
+      ],
+      "runs": 2,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": {
+        "frontier": "cycle",
+        "reused": [
+          "produce"
+        ],
+        "source_unchanged": true,
+        "nested_resume_refusal": "resume_from_stage_invalid",
+        "changed_prefix_refusal": "recover_prefix_changed"
+      },
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "call-partial",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read",
+        "repair",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "blocked",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "fail",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "no_work",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "missing-output",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": {
+        "schema_version": "1",
+        "code": "output_required_missing",
+        "message": "this output port is required for the reported verdict and was not reported",
+        "retryable": false,
+        "correlation_id": "correlation:4fd22303de262574a4338ef2fa26bb1b",
+        "violations": [
+          {
+            "pointer": "/result/outputs/report",
+            "reason": "this output port is required for the reported verdict and was not reported"
+          }
+        ],
+        "safe_next_actions": [
+          "doctor",
+          "run.status"
+        ]
+      },
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "absent",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": false,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "disabled",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": false,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    }
+  ],
+  "legacy_compatibility": {
+    "baseline": "v0.13.82",
+    "fixture_source": "95ea2cb77b69570c24891694e8e23bcf2d9102cb",
+    "exact_build_package_components_equal": true,
+    "build_key": "sha256:43a01f23205a7ad60a1496e37831c23794f26e4faac5f420a7736e8f0488d8ef",
+    "package": {
+      "id": "report-probe:package/transport",
+      "version": "0.0.0-b1.ioqb6izalj5nmcqus3rxqmocg6kpe3spvlc7iifhonxi6bei3dxq",
+      "digest": "sha256:b4a3d430ecf5fac3ceb5bb7f0650c3c30a769ec92bc8aef21fdc433b39e4892c"
+    },
+    "components": [
+      {
+        "kind": "context",
+        "ref": {
+          "id": "report-probe:context/consume",
+          "version": "0.0.0-b1.ipwhwipu36hgq6oy246mpkisvsblmobiu5oul57cxyxji3f6ln5a",
+          "digest": "sha256:ed6035a6e65b54743a08b23d81cef0bfd213fc04f62c873f81402b3a40eb9d94"
+        },
+        "path": "contexts/000.txt"
+      },
+      {
+        "kind": "context",
+        "ref": {
+          "id": "report-probe:context/measure",
+          "version": "0.0.0-b1.n735wpi6zjmdwcz3giq4v6qtqii2iukq7yzrkwfnwclg2nfubsrq",
+          "digest": "sha256:f4c8368e1078da38d2054933027ce9e0f93077f1e96b52d6d77fa0d54810eec1"
+        },
+        "path": "contexts/001.txt"
+      },
+      {
+        "kind": "context",
+        "ref": {
+          "id": "report-probe:context/produce",
+          "version": "0.0.0-b1.srnhdnavei7quruy667htttg47juu23oyx5wm2d5njgysv2oszga",
+          "digest": "sha256:eddb993db3d79a9727af479f82b0829fc10abfcd4c7f132f4c29169c7c623f89"
+        },
+        "path": "contexts/002.txt"
+      },
+      {
+        "kind": "context",
+        "ref": {
+          "id": "report-probe:context/read",
+          "version": "0.0.0-b1.4gcsawo372itvzkgdfx46edpqiyyjc7p5zdobiul3u2xdqcppwua",
+          "digest": "sha256:44dfe9642ccf8db5d6c35e425aa2b484cca20b1143b9ded08d96308abfeab980"
+        },
+        "path": "contexts/003.txt"
+      },
+      {
+        "kind": "context",
+        "ref": {
+          "id": "report-probe:context/repair",
+          "version": "0.0.0-b1.haxbyxpctbu654rt47wuhhkc7so5vddgp4so5arh4jv2eslieada",
+          "digest": "sha256:5674f26ac286378e81c4bec7f37a942a0df3fcd0b388b47b9c71318ea6d2a99b"
+        },
+        "path": "contexts/004.txt"
+      },
+      {
+        "kind": "schema",
+        "ref": {
+          "id": "report-probe:schema/carrier",
+          "version": "0.0.0-b1.hclmre3l6zbonxo4yqwxyxrnnykbtgt7f2nxnc3vgw2qz27zrqfq",
+          "digest": "sha256:9d2707c01ce97836c62fb75eac3c8051af4fcc29fbe831ae36e67e31caa2c3c0"
+        },
+        "path": "schemas/005.json"
+      },
+      {
+        "kind": "schema",
+        "ref": {
+          "id": "report-probe:schema/report",
+          "version": "0.0.0-b1.nq4jiznnokkfhlbnacsdd64n5tqqsu66xelofzotil6iqs4log3q",
+          "digest": "sha256:cb47f8b5e2a9f356a8edc033041c6abdbaeabf19a5585ef38599c4b56aef54e0"
+        },
+        "path": "schemas/006.json"
+      },
+      {
+        "kind": "step",
+        "ref": {
+          "id": "report-probe:step/consume",
+          "version": "0.0.0-b1.jdh63bs5hystdbww64o4qbqg6dpcj67irpwyhoqdeiutllhle7kq",
+          "digest": "sha256:318a7ea086af2e6066146a1865db28802c5a492bf3977107fddbad9b2b5b98ea"
+        },
+        "path": "steps/007.json"
+      },
+      {
+        "kind": "step",
+        "ref": {
+          "id": "report-probe:step/measure",
+          "version": "0.0.0-b1.k6lwiuey5u7kwi66x2knaea2f2k2suhrw55wouqmc6iimsyppkba",
+          "digest": "sha256:649f7d939088c002d681df6c9f612724f32c05c082b61054620eb63cdd97bfaa"
+        },
+        "path": "steps/008.json"
+      },
+      {
+        "kind": "step",
+        "ref": {
+          "id": "report-probe:step/produce",
+          "version": "0.0.0-b1.raa3cbnt3mxvusy6uex7brrdhmzowjwydo7ufbu6jmbqbpxexvlq",
+          "digest": "sha256:9cc2be99ca508275ff61afa90e1b31f80e078601a6110425a3c75d2116833e20"
+        },
+        "path": "steps/009.json"
+      },
+      {
+        "kind": "step",
+        "ref": {
+          "id": "report-probe:step/read",
+          "version": "0.0.0-b1.jmlljs5vpknppip3bvqmxgf7gylbrjj4szhng4g4iazodhbsguzq",
+          "digest": "sha256:a4af0ec46aad2e9a9299d8f13b9dfa91cd046c8482f6b00a92648b718690556c"
+        },
+        "path": "steps/010.json"
+      },
+      {
+        "kind": "step",
+        "ref": {
+          "id": "report-probe:step/repair",
+          "version": "0.0.0-b1.igdeczfxjikkua6l4elhqxo7bkwd5lr5pryc73jvzie7eaeajp6q",
+          "digest": "sha256:40632f603447eb7bf420bad9de7ca78fa15b0437bc0e42f60a1c14edf2399f03"
+        },
+        "path": "steps/011.json"
+      },
+      {
+        "kind": "workflow",
+        "ref": {
+          "id": "report-probe:workflow/round",
+          "version": "0.0.0-b1.akmjgrn72qvfxovoop4fv7n6dtl7bksh3sszafmyymup3ac7aiia",
+          "digest": "sha256:da932ae5a25c1ca8209b727d2e57b075f10de6d5fa6ce1c7a3dfda45d67307b1"
+        },
+        "path": "workflows/012.json"
+      },
+      {
+        "kind": "workflow",
+        "ref": {
+          "id": "report-probe:workflow/transport",
+          "version": "0.0.0-b1.v7siuoweg7u6y2i52piglz3papjvmby7s6fr2dxifdx43wzsrbla",
+          "digest": "sha256:ef45240ece6b5b885e8a28a04534cbe25fa98a1d8628ec58d7234a20bca9c2e4"
+        },
+        "path": "workflows/013.json"
+      }
+    ]
+  },
+  "release_qualification": "pending owner release; source-candidate evidence only",
+  "repair_regressions": [
+    "package-relative ownership",
+    "legacy root Call plus nested point cycle",
+    "null and double discriminators refused by embedded closed schema"
+  ]
+}

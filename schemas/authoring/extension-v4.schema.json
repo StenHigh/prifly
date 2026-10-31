@@ -1,0 +1,402 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:extension:4",
+  "title": "Pri-Fly declared extension points and root step/call extensions",
+  "type": "object",
+  "additionalProperties": false,
+  "minProperties": 1,
+  "properties": {
+    "profile": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "answers": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "decision_policy": {
+          "enum": [
+            "attended",
+            "autonomous"
+          ]
+        },
+        "preflight": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "additionalProperties": true
+        },
+        "runtime": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": true
+      }
+    },
+    "resources": {
+      "description": "Exclusive resources of this project: each name with how many attempts of the whole authority may hold it at once (limit, default 1) and the root stages of this workflow whose attempts hold it, including every attempt inside a call such a stage makes. A machine may override the limit in local.yaml. The names are the project's; Pri-Fly reads no meaning into them.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stages"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          },
+          "stages": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "references": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "execution_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "steps"
+      ],
+      "properties": {
+        "steps": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "executable",
+              "timeout_ms",
+              "grace_ms",
+              "max_output_bytes"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "executable": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "files": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "timeout_ms": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3600000
+              },
+              "grace_ms": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5000
+              },
+              "max_output_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16777216
+              },
+              "live_output": {
+                "type": "boolean",
+                "description": "Open this program's stdout and stderr to readers of the Run while it works (state 43)."
+              },
+              "output_limit_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16777216,
+                "description": "Per-stream output limit; absent keeps 64 KiB."
+              },
+              "context_profile_ref": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "exclude": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "uniqueItems": true
+    },
+    "extensions": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "workflow",
+                  "between",
+                  "step",
+                  "on"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "workflow": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "between": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "from",
+                      "to"
+                    ],
+                    "properties": {
+                      "from": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "to": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "step": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "on": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minProperties": 1
+                  },
+                  "impossible_verdicts": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "pass",
+                        "fail",
+                        "needs_revision",
+                        "no_work"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "uniqueItems": true
+                  },
+                  "input_bindings": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "maxProperties": 1,
+                    "propertyNames": {
+                      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "pattern": "^\\$stages\\.[^.]+\\..+$"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "workflow",
+                  "between",
+                  "on",
+                  "call"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "workflow": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "between": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "from",
+                      "to"
+                    ],
+                    "properties": {
+                      "from": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "to": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "on": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minProperties": 1
+                  },
+                  "input_bindings": {
+                    "type": "object",
+                    "maxProperties": 256,
+                    "propertyNames": {
+                      "minLength": 1
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "pattern": "^\\$stages\\.[^.]+\\.[^.]+$"
+                    }
+                  },
+                  "call": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_-]*$"
+                  },
+                  "on_error": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$"
+              },
+              "point": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$"
+              },
+              "step": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$"
+              },
+              "call": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "output_bindings": {
+                "type": "object",
+                "minProperties": 0,
+                "maxProperties": 256,
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*$"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "point",
+              "output_bindings"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "step"
+                ],
+                "not": {
+                  "required": [
+                    "call"
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "call"
+                ],
+                "not": {
+                  "required": [
+                    "step"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "maxItems": 256
+    },
+    "authoring": {
+      "const": "prifly-extension/4"
+    }
+  },
+  "required": [
+    "authoring"
+  ]
+}

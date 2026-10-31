@@ -1,0 +1,48 @@
+authoring: prifly-project-workflow/1
+package:
+  id: report-probe:package/transport
+  version: 1.0.0
+  description: Generic artifact transport and project measurement anchor reproducer.
+  requires_core_protocol: "1"
+  references:
+    adapter: core:adapter/assisted-session@1.0.0
+    policy: core:policy/local@4.0.0
+    result: core:schema/step-result@2.0.0
+id: report-probe:workflow/transport
+version: 1.0.0
+schema_version: "8"
+title: Preserve reports across a bounded repair loop
+inputs: {}
+outputs:
+  carrier: {schema_ref: "{{schema_carrier}}", required_for: [succeeded, partial]}
+entry: produce
+resumable:
+  from_outcomes: [partial, rejected]
+  from_cancelled: true
+policy_ref: "{{policy}}"
+limits: {max_step_instances: 12, max_control_transitions: 32, max_child_depth: 2}
+stages:
+  produce:
+    kind: step
+    step_ref: "{{step_produce}}"
+    input_bindings: {}
+    on: {pass: cycle, needs_revision: abandoned, fail: abandoned, no_work: abandoned, blocked: abandoned}
+  cycle:
+    kind: repeat
+    body_workflow_ref: "{{workflow_round}}"
+    initial_bindings: {carrier: $stages.produce.carrier}
+    next_bindings: {carrier: $iteration.carrier}
+    continue_on: [partial]
+    until: false
+    max_iterations: 2
+    on_complete: {succeeded: done, rejected: standing, no_work: abandoned}
+    on_limit: standing
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {carrier: $stages.cycle.carrier}
+  standing:
+    kind: finish
+    outcome: partial
+    output_bindings: {carrier: $stages.cycle.carrier}
+  abandoned: {kind: finish, outcome: rejected}

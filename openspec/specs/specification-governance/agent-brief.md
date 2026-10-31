@@ -57,3 +57,10 @@ qualification или результат gate остаётся непровере
 
 Пиши по-русски, простыми словами, начиная с результата. Отчёт называет:
 что сделано, что намеренно не сделано и почему, точный результат ворот.
+
+Для opt-in nested extensions прочитай active change
+`add-nested-project-extension-points`. Package author фиксирует anchor, inputs,
+routes и consumer ports в `extension-points.yaml`; project author выбирает
+implementation и explicit outputs в `extend.yaml` `/4`. Reader получает новый
+carrier только по объявленному binding. Публикация report не расширяет effects
+reader и не доказывает реальный provision либо release.

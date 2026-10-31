@@ -49,7 +49,7 @@ func Capabilities() CapabilityManifest {
 		Unsupported: []string{"artifact_checks", "subscriptions", "unattended", "external_write", "destructive", "managed_isolation", "automatic_retry", "telemetry.compare", "provider_usage", "profiling"},
 	}
 	profile := &manifest.Profiles[1]
-	profile.Capabilities = append(profile.Capabilities, "project_call_extensions")
+	profile.Capabilities = append(profile.Capabilities, "project_call_extensions", "project_extension_points")
 	profile.StateVersion, profile.ReadVersion = CoreNeutralStateVersion, CoreNeutralReadVersion
 	profile.StateVersions = append(profile.StateVersions, CoreNeutralStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreNeutralReadVersion)

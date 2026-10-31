@@ -1,0 +1,24 @@
+authoring: prifly-workflow/1
+schema_version: "6"
+id: report-probe:workflow/measure-child
+version: 1.0.0
+title: Project-owned native measurement call
+inputs: {carrier: {schema_ref: "{{schema_carrier}}"}}
+outputs: {carrier: {schema_ref: "{{schema_carrier}}", required_for: [succeeded]}}
+allowed_outcomes: [succeeded, partial, rejected]
+entry: measure
+policy_ref: "{{policy}}"
+limits: {max_step_instances: 1, max_control_transitions: 4}
+stages:
+  measure:
+    kind: step
+    step_ref: "{{step_measure}}"
+    input_bindings: {carrier: $inputs.carrier}
+    on: {pass: done, needs_revision: partial, blocked: partial, fail: stopped, no_work: stopped}
+    on_error: stopped
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {carrier: $stages.measure.carrier}
+  partial: {kind: finish, outcome: partial}
+  stopped: {kind: finish, outcome: rejected}

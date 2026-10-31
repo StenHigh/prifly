@@ -1,0 +1,4 @@
+id: report-probe:context/repair
+version: 1.0.0
+media_type: text/plain
+text: Synthetic repair. Change candidate metadata without rewriting the original report.
