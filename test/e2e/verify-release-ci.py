@@ -33,7 +33,7 @@ def main() -> int:
         "permissions:\n  contents: read",
         "build-linux-amd64:",
         "build-darwin-arm64:",
-        "runs-on: macos-14",
+        "runs-on: macos-15",
         'test "$(uname -s)" = Darwin',
         'test "$(uname -m)" = arm64',
         "CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build",
