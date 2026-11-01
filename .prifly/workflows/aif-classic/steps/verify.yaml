@@ -1,19 +1,19 @@
 authoring: prifly-step/2
 id: aif:step/verify
-version: 1.11.0
+version: 1.16.0
 title: Run read-only aif-verify over the implementation
 kind: worker
 inputs:
   implementation: {schema_ref: "{{schema_implementation}}"}
   plan: {schema_ref: "{{workspace_tree_manifest}}"}
 outputs:
-  gate: {schema_ref: "{{schema_gate-result}}", required_for: [pass, needs_revision]}
+  gate: {schema_ref: "{{schema_gate-result}}", required_for: [pass, needs_revision, blocked]}
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
 instructions_ref: "{{context_aif-verify-bridge}}"
 context_refs: ["{{context_aif-verify}}"]
 effects: {class: none, retry_class: pure}
 session_limits: {active_timeout_ms: null}
-result_schema_ref: "{{step_result_schema}}"
+result_schema_ref: "{{step_result_schema_v2}}"
 # Read-only materialisation: the engine lays the plan out where the pinned
 # skill's own discovery looks and takes it back after the step. No
 # `output_port`, so nothing is captured and a write to it is refused.

@@ -1,0 +1,18 @@
+{
+  "command": "go test ./internal/runtime -run '^TestPackageDirectoryPublicationCollision$|^TestPackageIdentityConflictAndRepeatedImport$|^TestChangedPackageBytesDoNotResolve$|^TestPackageImportRejectsUndeclaredAndMismatchedContent$|^TestPackageImportSealsDeclaredBytesAndRecordsTrust$' -count=1",
+  "exit_code": 0,
+  "regression_cases": [
+    "identical",
+    "manifest-conflict",
+    "payload-drift",
+    "undeclared-file",
+    "missing-staging"
+  ],
+  "log_sha256": "6e8f3977a695e6b6fa9abf74f15215a5504e45ee9a07fc7f9e8cd44c12e7af3b",
+  "production_files": [
+    "internal/runtime/packages.go"
+  ],
+  "new_test_file": "internal/runtime/package_publication_test.go",
+  "global_lock_added": false,
+  "retry_count_changed": false
+}

@@ -1,0 +1,198 @@
+{
+  "binary": {
+    "path": ".cache/authoring-readability/prifly-registry-fixed",
+    "sha256": "85a7c3712d0e9fae156da47515163350081a8eecbe354dc97954bc681bd7af93",
+    "version": "0.2.0-dev.5",
+    "go": "go1.27.3",
+    "source": "Claim HEAD 6de187d плюс staged исправления публикации пакета и реестра Git; локальная сборка без установки."
+  },
+  "paired_builds": {
+    "exit_code": 0,
+    "pairs": 12,
+    "normalisation": "none",
+    "all_equal": true,
+    "evidence": "Полные данные сохранены в .cache/authoring-readability/current-paired-builds.json; прежняя полная матрица — paired-builds.json",
+    "log_sha256": "cc89e01592a14c323ea8c71926c1bf866a12ae26dd5eea0f9df0dfd3903339ac",
+    "output_sha256": "6779fbce618c2c91a7b5d93958101fa2af8bb7eb619c141901b5e291bb6bd55e"
+  },
+  "routes": {
+    "exit_code": 0,
+    "pairs_equal": true,
+    "cases": [
+      "owner-only",
+      "exhausted",
+      "disabled",
+      "clean",
+      "repaired",
+      "fail",
+      "no_work",
+      "blocked"
+    ],
+    "evidence": "Полные данные сохранены в .cache/authoring-readability/current-routes.json; прежняя полная матрица — routes.json",
+    "log_sha256": "0bb263dfe58e830d436c1d467100b03b6cc11d4b843bc6fbd648b66e87620d0e",
+    "output_sha256": "58444e3ae355538a9af2d845eafbfe78e2b9c189c0d273bc0240be970ee855e8",
+    "results": [
+      {
+        "case": "owner-only",
+        "bridges": [
+          "aif-warmup-bridge",
+          "aif-plan-bridge",
+          "aif-implement-bridge",
+          "aif-verify-bridge"
+        ],
+        "status": "completed",
+        "outcome": "partial",
+        "refusal": null,
+        "implementation_bindings_checked": 1,
+        "all_implementation_bindings_current": true,
+        "verify_count": 1,
+        "fix_count": 0,
+        "diagnostic_codes": []
+      },
+      {
+        "case": "exhausted",
+        "bridges": [
+          "aif-warmup-bridge",
+          "aif-plan-bridge",
+          "aif-implement-bridge",
+          "aif-verify-bridge",
+          "aif-fix-bridge"
+        ],
+        "status": "completed",
+        "outcome": "partial",
+        "refusal": null,
+        "implementation_bindings_checked": 1,
+        "all_implementation_bindings_current": true,
+        "verify_count": 1,
+        "fix_count": 1,
+        "diagnostic_codes": []
+      },
+      {
+        "case": "disabled",
+        "bridges": [
+          "aif-warmup-bridge",
+          "aif-plan-bridge",
+          "aif-implement-bridge",
+          "aif-security-bridge",
+          "aif-review-challenge-bridge"
+        ],
+        "status": "running",
+        "outcome": null,
+        "refusal": null,
+        "implementation_bindings_checked": 2,
+        "all_implementation_bindings_current": true,
+        "verify_count": 0,
+        "fix_count": 0,
+        "diagnostic_codes": []
+      },
+      {
+        "case": "clean",
+        "bridges": [
+          "aif-warmup-bridge",
+          "aif-plan-bridge",
+          "aif-implement-bridge",
+          "aif-verify-bridge",
+          "aif-security-bridge",
+          "aif-review-challenge-bridge"
+        ],
+        "status": "running",
+        "outcome": null,
+        "refusal": null,
+        "implementation_bindings_checked": 3,
+        "all_implementation_bindings_current": true,
+        "verify_count": 1,
+        "fix_count": 0,
+        "diagnostic_codes": []
+      },
+      {
+        "case": "repaired",
+        "bridges": [
+          "aif-warmup-bridge",
+          "aif-plan-bridge",
+          "aif-implement-bridge",
+          "aif-verify-bridge",
+          "aif-fix-bridge",
+          "aif-verify-bridge",
+          "aif-security-bridge",
+          "aif-review-challenge-bridge"
+        ],
+        "status": "running",
+        "outcome": null,
+        "refusal": null,
+        "implementation_bindings_checked": 4,
+        "all_implementation_bindings_current": true,
+        "verify_count": 2,
+        "fix_count": 1,
+        "diagnostic_codes": []
+      },
+      {
+        "case": "fail",
+        "bridges": [
+          "aif-warmup-bridge",
+          "aif-plan-bridge",
+          "aif-implement-bridge",
+          "aif-verify-bridge"
+        ],
+        "status": "failed",
+        "outcome": null,
+        "refusal": null,
+        "implementation_bindings_checked": 1,
+        "all_implementation_bindings_current": true,
+        "verify_count": 1,
+        "fix_count": 0,
+        "diagnostic_codes": [
+          "unhandled_child_outcome"
+        ]
+      },
+      {
+        "case": "no_work",
+        "bridges": [
+          "aif-warmup-bridge",
+          "aif-plan-bridge",
+          "aif-implement-bridge",
+          "aif-verify-bridge"
+        ],
+        "status": "failed",
+        "outcome": null,
+        "refusal": null,
+        "implementation_bindings_checked": 1,
+        "all_implementation_bindings_current": true,
+        "verify_count": 1,
+        "fix_count": 0,
+        "diagnostic_codes": [
+          "unhandled_child_outcome"
+        ]
+      },
+      {
+        "case": "blocked",
+        "bridges": [
+          "aif-warmup-bridge",
+          "aif-plan-bridge",
+          "aif-implement-bridge",
+          "aif-verify-bridge"
+        ],
+        "status": "completed",
+        "outcome": "partial",
+        "refusal": null,
+        "implementation_bindings_checked": 1,
+        "all_implementation_bindings_current": true,
+        "verify_count": 1,
+        "fix_count": 0,
+        "diagnostic_codes": []
+      }
+    ]
+  },
+  "candidate_files": {
+    "README.md": "83b83bcc28ff102dba3ae21936f2a9fb7a1df6ce969d5a2ed5ee5006e57714d2",
+    "contexts/aif-verify-bridge.yaml": "5ac749706bc3b68ed80f115ca9fc94e122e8d42e76200b8c0a9edb0efa4d431c",
+    "instructions/aif-verify-bridge.md": "8772b0ef8121540cceb00cd912ba005ef434ed7fe467fde6e88913262a1fd24c",
+    "steps/verify.yaml": "c089ff7ce6f2ef7c6b08121ee2f0487e10090240436f0dbb6d7590a9fa9cd4b8",
+    "workflow.yaml": "45a76635211b5481a3fff86f25b68a87bf08e94a4e480e9cbd55556064df76a7",
+    "workflows/verify-batch.yaml": "ae6ae381804a866cdbfdb74e164c12ac4b3890e0a970f3804cb3cf63d1354206",
+    "workflows/verify-once.yaml": "57172e72ae79bb91f64a151e30e15780c38608b038172d434c214b87ede1b61d"
+  },
+  "candidate_bytes_match_original_handoff": true,
+  "paid_models_called": false,
+  "human_acceptance": "pending: владелец отложил",
+  "package_installed": false
+}

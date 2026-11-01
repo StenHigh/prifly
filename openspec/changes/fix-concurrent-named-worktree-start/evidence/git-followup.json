@@ -1,0 +1,21 @@
+{
+  "initial_failure": "concurrency-first-batch.json",
+  "diagnostic_batches": {
+    "naming-git-cause.log": {
+      "command": "go test ./cmd/prifly -run '^TestNamedWorktreeConcurrentCLIProcessesFromPublishedExample$' -count=100 -failfast",
+      "exit_code": 0,
+      "iterations": 100,
+      "instrumentation": "stderr trace of Git failures in disposable source",
+      "sha256": "df39a603b1e87eed883035b283a0f5a67fbb1212eedef731cf6b78756756430f"
+    },
+    "naming-git-cause-second.log": {
+      "command": "go test ./cmd/prifly -run '^TestNamedWorktreeConcurrentCLIProcessesFromPublishedExample$' -count=100 -failfast",
+      "exit_code": 0,
+      "iterations": 100,
+      "instrumentation": "stderr trace of Git failures in disposable source",
+      "sha256": "40393e5d55fa98dc72f139879914fba4a780ea212ac19229b80d53d5b52abad3"
+    }
+  },
+  "conclusion": "claim_preparation_incomplete not reproduced; not treated as resolved",
+  "production_worktree_code_changed": false
+}

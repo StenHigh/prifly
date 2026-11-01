@@ -1,5 +1,5 @@
 id: aif:context/aif-commit-bridge
-version: 1.4.0
+version: 1.5.0
 media_type: text/markdown; charset=utf-8
 text: |
   # Pri-Fly adapter for the pinned aif-commit skill
@@ -10,8 +10,10 @@ text: |
 
   Do this step in the order below, and run the skill only where it is named.
 
-  1. The fast-mode plan file is working state, not project history. If
-     `.ai-factory/PLAN.md` exists in the claimed workspace, delete it. If it was
+  1. The fast-mode plan file is working state, not project history. By now it
+     is normally gone — the implement step's capture took it out of the tree,
+     and the gates that read it gave it back — so its absence is the expected
+     case. If `.ai-factory/PLAN.md` is still in the claimed workspace, delete it. If it was
      tracked, commit that single removal. A plan left in the repository makes
      the next Run's plan step refuse to start: that step is declared as creating
      the file, so Pri-Fly will not overwrite bytes it cannot attribute to it

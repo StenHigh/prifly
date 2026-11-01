@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/stenhigh/prifly/internal/local"
+	"github.com/stenhigh/prifly/internal/purity"
 )
 
 // A claimed Git worktree is the only place an assisted session may change
@@ -883,6 +884,13 @@ func (e *Engine) claimWorkspacePath(claim WorktreeClaim) (string, error) {
 func (e *Engine) git(ctx context.Context, dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
+	if len(args) > 0 && args[0] == "worktree" {
+		lock, err := e.gitWorktreeRegistryLock(ctx, dir)
+		if err != nil {
+			return "", err
+		}
+		defer lock.Close()
+	}
 	command := exec.CommandContext(ctx, "git", args...)
 	command.Dir = dir
 	command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0"}
@@ -895,6 +903,49 @@ func (e *Engine) git(ctx context.Context, dir string, args ...string) (string, e
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+// Git exposes a worktree registration before its commondir is complete.
+// Protect only registry commands; claims and work in separate trees stay concurrent.
+func (e *Engine) gitWorktreeRegistryLock(ctx context.Context, dir string) (*os.File, error) {
+	purity.Guard("git worktree registry lock")
+	common, err := e.git(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
+	}
+	file, err := os.OpenFile(filepath.Join(common, "prifly-worktrees.lock"), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)
+	if err != nil {
+		return nil, err
+	}
+	info, err := file.Stat()
+	if err == nil && !info.Mode().IsRegular() {
+		err = local.ErrUnsafePath
+	}
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	for {
+		if err = ctx.Err(); err != nil {
+			break
+		}
+		err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(driverLockRetryEvery):
+		}
+	}
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	return file, nil
 }
 
 // claimPresence reports whether the owner is still presumed present. An expired

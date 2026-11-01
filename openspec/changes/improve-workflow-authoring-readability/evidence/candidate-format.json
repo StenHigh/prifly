@@ -1,0 +1,15 @@
+{
+  "flow_mappings_expanded": 64,
+  "changed_files": [
+    "README.md",
+    "contexts/aif-verify-bridge.yaml",
+    "instructions/aif-verify-bridge.md",
+    "steps/verify.yaml",
+    "workflow.yaml",
+    "workflows/verify-batch.yaml",
+    "workflows/verify-once.yaml"
+  ],
+  "bridge_bytes": 9938,
+  "bridge_sha256": "8772b0ef8121540cceb00cd912ba005ef434ed7fe467fde6e88913262a1fd24c",
+  "yaml_values_equal": true
+}

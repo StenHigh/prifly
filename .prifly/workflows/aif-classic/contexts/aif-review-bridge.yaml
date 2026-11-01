@@ -1,5 +1,5 @@
 id: aif:context/aif-review-bridge
-version: 1.9.0
+version: 1.13.0
 media_type: text/markdown; charset=utf-8
 text: |
   # Pri-Fly adapter for the pinned aif-review skill
@@ -20,6 +20,17 @@ text: |
   run. A gate that reports a pass it did not establish is worse than one that
   reports it could not check.
 
+  A second reviewer read this change before you, in a session of its own, and
+  its findings are your `challenge` input. They are claims, not findings, until
+  you have checked each one against the tree — or better, by running it —
+  and set its severity yourself: raise, lower or drop, collapse the ones that
+  duplicate yours, and carry the ones that stand into `findings` marked as
+  the second reviewer's. Its `checked` list is part of what this gate covered;
+  say so. On a live Run the second reader found the real blocker of a round
+  and three defects in the fix that followed, and invented nothing in nine
+  findings — because every one was checked, not summed. `blocking` stays
+  yours alone.
+
   A finding blocks when the change under review is wrong on its own terms: it
   does not do what the plan promised, it breaks something that worked, or it
   leaves the tree in a state the next reader cannot rely on. A finding that is
@@ -27,6 +38,25 @@ text: |
   beyond this change — does not block. Calling everything you found a warning is
   a decision and not a default: `blocking` is the only way this route can reach
   a repair, so a gate that never sets it turns the fix step off for good.
+
+  The `implementation` you are given names the base and the head this Run last
+  recorded, and the tree can be ahead of it: a Run resumed where it stopped is
+  handed the same tree, with whatever the developer committed or left
+  uncommitted while it stood. Judge the tree as it is — HEAD and the working
+  tree — and take what changed from `git diff <base_commit>` plus untracked
+  files, not from the list in the artifact. A head the artifact does not name is
+  not a finding; a change you did not look at because the list omitted it is.
+
+  Your tree is the whole branch, base included; the diff is only the part of
+  it this Run changed. A finding about anything outside the diff — a method
+  you did not see, a norm the change seems to break, a caller you expected —
+  does not exist until you have looked for it in the tree and in the recent
+  history of the touched paths (`git log` on them): cite the file or the
+  commit that bears it out, or drop it. Absence from the diff is not absence
+  from the project, and a base that moved an hour ago is still the base you
+  judge against. Two fresh reviewers in a row reported as missing what the base
+  had received two hours earlier, and read a deliberate exception to a norm as
+  a defect; both were outside the diff, and both were in the tree.
 
   The supporting skill above sets this field by a rule of its own. Where that
   rule and this paragraph disagree, this adapter governs — and the reason is
@@ -54,11 +84,33 @@ text: |
   and stops when nothing blocks or the declared number of rounds runs out. Do
   not run `/aif-fix`, commit, or decide what comes next.
 
-  The gate artifact, not its verdict, selects the repair route. Return `pass`
-  as the normal verdict after every established gate. If an upstream procedure
-  produces `needs_revision` together with a valid gate, Pri-Fly routes it to
-  the same decision: `blocking` starts the fix round and `blocking_owner_only`
-  stops for the owner. Do not invoke `/aif-fix`, commit, or a new gate yourself.
+  The graph, not this verdict, selects remediation. A normal `pass` carries the
+  gate to its decision, and a `needs_revision` with a usable gate takes that
+  same decision: `blocking` starts the fix round, while `blocking_owner_only`
+  stops for the developer. Do not run `/aif-fix`, commit, or create a new gate
+  yourself. Blocking travels in the `blocking` field of the `gate` artifact;
+  use `needs_revision` only when no usable gate can be reported.
+
+  One result is not a judgement of the work at all: that you could not judge
+  it. Keep three states apart, because the graph routes them differently. A
+  check that ran and failed against this tree is a finding about the work:
+  `blocking` true, verdict `pass`, and the fix round takes it. Acceptance
+  evidence that is missing or incomplete — a criterion nothing demonstrates, a
+  test the change should have brought — is the same: a finding, `pass`, work
+  for the fix step. A dependency a check needs that is not there — a database
+  that does not answer, a service or network that is down, a runner that cannot
+  start — says nothing about the work: return verdict `blocked`, with a gate
+  whose `status` is `blocked`, `blocking` false, `suggested_next` `continue`,
+  and findings that name what was unavailable, the command and the output that
+  show it, and which checks it left unrun. `blocked` ends the Run with that gate
+  in front of the developer; the check is repeated by `prifly project continue`
+  once the dependency is back, not by a fix round with nothing to fix. It is not
+  for a dependency this change broke — a migration that leaves the database
+  unable to start is a finding — nor for a check you chose not to run, and
+  `needs_revision` stays for a result you could not establish for any other
+  reason. A real Run reported a database that had gone away as a failed gate
+  with zero new test failures; the fix step found nothing to fix and the Run
+  ended partial, blaming the work.
 
   This is one session. Where the skill reaches for a separate reviewer session,
   use one only if the host platform actually provides it; where it does not,

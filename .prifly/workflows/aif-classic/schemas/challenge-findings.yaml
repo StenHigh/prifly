@@ -1,0 +1,42 @@
+id: aif:schema/challenge-findings
+version: 1.0.0
+$schema: https://json-schema.org/draft/2020-12/schema
+type: object
+required: [base_commit, head_commit, findings, checked]
+additionalProperties: false
+properties:
+  base_commit: {type: string, pattern: "^[0-9a-f]{40}$"}
+  head_commit: {type: string, pattern: "^[0-9a-f]{40}$"}
+  findings:
+    type: array
+    maxItems: 60
+    items:
+      type: object
+      required: [severity, location, claim, evidence, checked_against]
+      additionalProperties: false
+      properties:
+        severity: {enum: [critical, major, suggestion]}
+        location: {type: string, minLength: 1, maxLength: 400}
+        claim: {type: string, minLength: 1, maxLength: 2000}
+        evidence:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: >-
+            What in the tree, the diff or the touched paths' history bears the
+            claim out — a file and line, a commit, a command and its output. A
+            finding without one is a hypothesis, and a hypothesis is not
+            reported as a finding.
+        checked_against:
+          enum: [tree, diff]
+          description: >-
+            Whether the claim was looked up in the tree (and, where it matters,
+            the touched paths' history) or rests on the diff alone. The review
+            step treats the two differently.
+  checked:
+    type: array
+    maxItems: 40
+    items: {type: string, minLength: 1, maxLength: 400}
+    description: >-
+      The areas and scenarios that were looked at, whether or not they yielded
+      a finding. An empty findings list means nothing without this.

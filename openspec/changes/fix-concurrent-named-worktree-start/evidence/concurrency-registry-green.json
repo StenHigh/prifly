@@ -1,0 +1,31 @@
+{
+  "command": "TMPDIR=/private/tmp GOMAXPROCS=2 GOTOOLCHAIN=local GOTELEMETRY=off go test ./cmd/prifly -run ^TestNamedWorktreeConcurrentCLIProcessesFromPublishedExample$ -count=50 -json",
+  "go": "go1.27.3 darwin/arm64",
+  "batches": [
+    {
+      "log": ".cache/authoring-readability/naming-registry-fixed-50.jsonl",
+      "sha256": "564f60d772e7f4234e4269273dd6484b02b4dfd061015aef226fd5ec352a8d72",
+      "exit_code": 0,
+      "passes": 50,
+      "failures": 0,
+      "elapsed_seconds": 78.151
+    },
+    {
+      "log": ".cache/authoring-readability/naming-registry-final-50.jsonl",
+      "sha256": "74bc22d755087e87e048918aa197891c1849ec7255df4ee1911877368872ff18",
+      "exit_code": 0,
+      "passes": 50,
+      "failures": 0,
+      "elapsed_seconds": 125.539
+    }
+  ],
+  "test_modified": false,
+  "discarded_failures": false,
+  "earlier_failed_batch": "concurrency-first-batch.json",
+  "linux_ci": {
+    "configured": true,
+    "job": "verify/packages → make test-rest → ./cmd/prifly",
+    "executed_in_this_session": false
+  },
+  "task_3_1": "выполнен локальный фиксированный batch; удалённый Linux CI ещё не запускался"
+}

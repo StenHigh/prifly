@@ -1,7 +1,7 @@
 authoring: prifly-workflow/1
-schema_version: "4"
+schema_version: "6"
 id: aif:workflow/verify-once
-version: 1.8.0
+version: 1.13.0
 title: Verify the implementation once and fix what blocks it
 refs:
   schema_implementation: "{{schema_implementation}}"
@@ -26,7 +26,7 @@ stages:
     kind: step
     step_ref: step_verify
     input_bindings: {implementation: $inputs.implementation, plan: $inputs.plan}
-    on: {pass: decide, needs_revision: decide, fail: stopped, no_work: stopped}
+    on: {pass: decide, needs_revision: decide, fail: stopped, no_work: stopped, blocked: blocked}
   decide:
     kind: choice
     # `blocking_owner_only` implies `blocking`, so the two branches are true
@@ -52,6 +52,7 @@ stages:
       implementation: $inputs.implementation
       handoff: $inputs.handoff
     on: {pass: fixed, needs_revision: unresolved, fail: stopped, no_work: stopped}
+    impossible_verdicts: [blocked]
   clean:
     kind: finish
     outcome: succeeded
@@ -71,6 +72,11 @@ stages:
     outcome: rejected
     output_bindings: {gate: $stages.verify.gate}
     description: What still blocks is the developer's to decide, so another fix round would spend a turn it cannot win.
+  blocked:
+    kind: finish
+    outcome: rejected
+    output_bindings: {gate: $stages.verify.gate}
+    description: A dependency the verify checks need was unavailable, so the work was not judged; another round could not change that, and the gate names what was missing.
   stopped:
     kind: finish
     outcome: no_work

@@ -1,0 +1,72 @@
+{
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "git_version": "git version 2.53.0",
+  "baseline_sha": "6de187d22435447c464b9b41269cd8b2aec50d2e",
+  "direct_git_reproduction": {
+    "probe": {
+      "path": ".cache/authoring-readability/git-native-probe.py",
+      "sha256": "81c8fddd82399026066a352774c555cd6b1ac74d2f69c50ce425a512bba0530e"
+    },
+    "log": {
+      "path": ".cache/authoring-readability/git-native-probe.log",
+      "sha256": "58c702dccefc9d1a3d68720ea30fad8a7ab9b0935bcbff059b5e69a4d606f9eb"
+    },
+    "configured_iterations": 500,
+    "failed_iteration_zero_based": 167,
+    "exit_code": 1,
+    "stderr": "Preparing worktree (checking out 'prifly/smsplace-trucker-default-123-02')\nfatal: failed to read .git/worktrees/smsplace-trucker-default-123/commondir: Undefined error: 0",
+    "mechanism": "Два git worktree add используют общий реестр. Один читает запись другого до завершения записи commondir. Pri-Fly, SQLite, package import и Docker не участвуют.",
+    "scope_of_inference": "Ранний публичный claim_preparation_incomplete не сохранил Git stderr. Прямая проба устанавливает механизм в этой фазе, но не восстанавливает прежний stderr."
+  },
+  "primary_sources": [
+    "https://github.com/git/git/blob/v2.53.0/builtin/worktree.c#L414-L476",
+    "https://github.com/git/git/blob/v2.53.0/worktree.c#L113-L140"
+  ],
+  "deterministic_regression": {
+    "test": "TestGitWorktreeRegistryLockCoversCommand",
+    "red_exit_code": 1,
+    "red": {
+      "path": ".cache/authoring-readability/registry-red.log",
+      "sha256": "8c002c2656ac069bcaf6e1475dc7fb53d34f280c1ca50ddb577a6cdf125fa326"
+    },
+    "red_fact": "Команды Git worktree add/remove/prune/list выполняются без общего lock. FIFO задаёт точку внутри команды без sleeps для задания порядка.",
+    "green_exit_code": 0,
+    "green": {
+      "path": ".cache/authoring-readability/registry-green-final.log",
+      "sha256": "e497f1b74112541ba7495f79c5844c660d0e30d78e31af6e894195c5fa479a0c"
+    },
+    "coverage": [
+      "lock held across subprocess",
+      "released on success and Git error",
+      "same file from linked worktree",
+      "independent repositories",
+      "cancelled acquisition",
+      "symlink and FIFO refusal"
+    ],
+    "test_file": {
+      "path": "internal/runtime/worktree_registry_test.go",
+      "sha256": "9497740770244e544921b1e8270a3703665028f26218166c696c604572c5837e"
+    },
+    "final_baseline_confirmation": {
+      "baseline_sha": "6de187d22435447c464b9b41269cd8b2aec50d2e",
+      "exit_code": 1,
+      "log": ".cache/authoring-readability/registry-red-confirmed.log",
+      "sha256": "c613462429e14432c41d45ae052aab720b2f41fe4a8d069fd40790f102ad3588",
+      "test_scope": "Окончательный TestGitWorktreeRegistryLockCoversCommand. Тесты private helper не копируются: helper отсутствует на baseline."
+    }
+  },
+  "implementation": {
+    "file": {
+      "path": "internal/runtime/worktrees.go",
+      "sha256": "c26691f654e033dcbcaa9b68dfcfcc69a5de142cd6b3a8846355c9883284d065"
+    },
+    "scope": "Все команды Engine.git worktree: named и legacy add/remove/prune. Другие Git-команды и выполнение workflow остаются параллельными.",
+    "file_name": "<git-common-dir>/prifly-worktrees.lock",
+    "never_unlink": true,
+    "bounded_by": "existing gitTimeout plus caller context",
+    "limitations": [
+      "Lock соблюдают только Pri-Fly callers; внешний git worktree его не соблюдает.",
+      "Lock держится до конца одной команды Git worktree, включая checkout."
+    ]
+  }
+}

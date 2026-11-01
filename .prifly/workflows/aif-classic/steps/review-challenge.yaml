@@ -1,0 +1,22 @@
+authoring: prifly-step/2
+id: aif:step/review-challenge
+version: 1.1.0
+title: Read the change again as a second reviewer, in a session of its own
+kind: worker
+inputs:
+  implementation: {schema_ref: "{{schema_implementation}}"}
+  plan: {schema_ref: "{{workspace_tree_manifest}}"}
+outputs:
+  challenge: {schema_ref: "{{schema_challenge-findings}}", required_for: [pass, needs_revision]}
+executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
+instructions_ref: "{{context_aif-review-challenge-bridge}}"
+context_refs: ["{{context_aif-review}}"]
+effects: {class: none, retry_class: pure}
+session_limits: {active_timeout_ms: null}
+result_schema_ref: "{{step_result_schema}}"
+# The plan is laid out read-only, as for verify and review; what this step
+# needs from it is the claimed workspace it arrives with, so the second
+# reviewer reads the tree the change was made in and not only the diff.
+workspace_trees:
+  - input_port: plan
+    capture: "{{plan_capture}}"

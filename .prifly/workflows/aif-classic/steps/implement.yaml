@@ -1,6 +1,6 @@
 authoring: prifly-step/2
 id: aif:step/implement
-version: 1.6.0
+version: 1.7.0
 title: Run aif-implement against the accepted plan
 kind: worker
 inputs:

@@ -1,0 +1,8 @@
+{
+  "compared_with": "c85306050df060dc4b381ba7512173806250b3a6",
+  "different_files": [
+    "extend.yaml"
+  ],
+  "reason": "preserved consumer settings",
+  "extend_sha256": "44deb007e0faa23ec5d6a88b01bf01322c3805905d1a63cda9677e32378f45fe"
+}

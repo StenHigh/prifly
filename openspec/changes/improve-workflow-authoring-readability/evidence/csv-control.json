@@ -1,0 +1,18 @@
+[
+  {
+    "form": "baseline",
+    "build_key": "sha256:0dd3486e9a03252a4af22d335b6b42ccb59aa4232218953d616f8087eb148d60",
+    "outcome": "succeeded",
+    "report_sha256": "01039be885c010a9ef6c52c7e62841b6b6f5f92eb7727b7e8f519e608703969c",
+    "report": "Pri-Fly CSV report\nRows: 3\nTotal: 24\n",
+    "parsed_workflow_equal": true
+  },
+  {
+    "form": "candidate",
+    "build_key": "sha256:0dd3486e9a03252a4af22d335b6b42ccb59aa4232218953d616f8087eb148d60",
+    "outcome": "succeeded",
+    "report_sha256": "01039be885c010a9ef6c52c7e62841b6b6f5f92eb7727b7e8f519e608703969c",
+    "report": "Pri-Fly CSV report\nRows: 3\nTotal: 24\n",
+    "parsed_workflow_equal": true
+  }
+]
