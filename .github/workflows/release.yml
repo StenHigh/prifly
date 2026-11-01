@@ -54,6 +54,7 @@ jobs:
           cache: false
       - name: Build and qualify the darwin/arm64 release binary natively
         env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
           PRIFLY_RELEASE_PUBLIC_KEY: ${{ vars.PRIFLY_RELEASE_PUBLIC_KEY }}
         run: |
           test -n "${PRIFLY_RELEASE_PUBLIC_KEY:-}"
@@ -64,6 +65,9 @@ jobs:
           mkdir release-inputs
           CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false -ldflags "-X github.com/stenhigh/prifly/internal/runtime.Version=${RELEASE_VERSION} -X github.com/stenhigh/prifly/internal/release.PublicKeyHex=${PRIFLY_RELEASE_PUBLIC_KEY}" -o release-inputs/prifly-darwin-arm64 ./cmd/prifly
           qualification="$(mktemp -d)"
+          xcrun vtool -show-build release-inputs/prifly-darwin-arm64 > "$qualification/build-version.txt"
+          cat "$qualification/build-version.txt"
+          grep -Eq '^[[:space:]]*minos[[:space:]]+14\.0(\.0)?$' "$qualification/build-version.txt"
           release-inputs/prifly-darwin-arm64 version
           release-inputs/prifly-darwin-arm64 init "$qualification/project"
           release-inputs/prifly-darwin-arm64 --project "$qualification/project" doctor

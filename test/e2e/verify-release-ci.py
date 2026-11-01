@@ -34,6 +34,8 @@ def main() -> int:
         "build-linux-amd64:",
         "build-darwin-arm64:",
         "runs-on: macos-15",
+        'MACOSX_DEPLOYMENT_TARGET: "14.0"',
+        "xcrun vtool -show-build release-inputs/prifly-darwin-arm64",
         'test "$(uname -s)" = Darwin',
         'test "$(uname -m)" = arm64',
         "CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build",
