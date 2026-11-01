@@ -360,7 +360,7 @@ func projectWorkflowFolderMarker(workflowPath string) bool {
 		return false
 	}
 	object, ok := value.(map[string]any)
-	return ok && object["authoring"] == projectWorkflowFolderVersion
+	return ok && (object["authoring"] == projectWorkflowFolderVersion || object["authoring"] == projectWorkflowCompositionVersion)
 }
 
 // discoverProjectWorkflowFolders finds folders by their marker alone, never by
@@ -517,7 +517,9 @@ type projectWorkflowInspection struct {
 }
 
 func inspectProjectWorkflowFolder(root, folder string) (projectWorkflowInspection, error) {
-	source, err := readProjectWorkflowFolder(root, folder)
+	// Installation inspects an inert staging mirror without project.yaml.
+	// Resolve parents/imports only when compiling in the registered project.
+	source, err := readProjectWorkflowFolderRaw(root, folder)
 	if err != nil {
 		return projectWorkflowInspection{}, err
 	}
@@ -530,6 +532,9 @@ func inspectProjectWorkflowFolder(root, folder string) (projectWorkflowInspectio
 		return projectWorkflowInspection{}, refusal("project_workflow_folder_invalid", err.Error())
 	}
 	title, _ := workflow["title"].(string)
+	if title == "" && value.(map[string]any)["authoring"] == projectWorkflowCompositionVersion {
+		title = projectExtensionWorkflowName(workflow["id"].(string))
+	}
 	return projectWorkflowInspection{source: source, title: title}, nil
 }
 

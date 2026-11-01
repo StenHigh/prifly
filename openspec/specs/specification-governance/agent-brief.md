@@ -44,6 +44,21 @@ qualification или результат gate остаётся непровере
 Всегда запускай команды из явного target worktree или передавай ему `-C`.
 Зелёный результат в соседнем дереве не доказывает ничего о редактируемом.
 
+## Композиция сценария
+
+Композиция workflow выполняется в compiler. Импорты читают source exports,
+а `extends` наследует effective graph и extensions. Несколько родителей
+требуют единственной ближайшей exact основы. Общие contributions включаются
+один раз; пересечение дополнений требует явного `arrange`.
+
+```text
+parents + source imports → ordered layers → consumer extend → native graph
+```
+
+`prifly-project-workflow/2` и `prifly-extension/3` не меняют закреплённые Runs.
+Required/not-required/unknown определяет вызываемый workflow по task и candidate evidence.
+Core не определяет UI/UX по имени файла. Synthetic engine tests не квалифицируют браузер.
+
 ## Не делай
 
 - Не создавай новый синоним, тип или JSON field без нового предметного смысла.

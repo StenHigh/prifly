@@ -42,6 +42,9 @@ func (c *cli) projectAuthority(root string, profile projectProfile) error {
 // from extend.yaml (projectBindings, keyed by the step's short name). A step
 // bound by both is refused: the package's program is not overridden quietly.
 func projectReadExecution(projectRoot string, source projectPackageSource, components []projectCompileComponent, values map[string]any, projectBindings map[string]any) (*projectPackageExecution, error) {
+	if source.Composition != nil {
+		return projectReadCompositionExecution(projectRoot, source, components, values, projectBindings)
+	}
 	root, _ := source.RootValue.(map[string]any)
 	raw, present := root["execution_bindings"]
 	if !present && len(projectBindings) == 0 {
@@ -141,7 +144,7 @@ func projectReadExecution(projectRoot string, source projectPackageSource, compo
 	for name, rawConfig := range projectBindings {
 		var ref flow.Ref
 		for _, component := range components {
-			if component.Kind == "step" && component.Ref.ID[strings.LastIndex(component.Ref.ID, "/")+1:] == name {
+			if component.Kind == "step" && projectCompositionComponentNamed(component, name) {
 				if ref.ID != "" {
 					return nil, refusal("project_execution_invalid", "ambiguous inserted step "+name)
 				}

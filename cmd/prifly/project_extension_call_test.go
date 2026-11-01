@@ -133,7 +133,7 @@ func TestProjectCallExtensionParserDiscriminatesBranches(t *testing.T) {
 		{"empty bindings", strings.Replace(callExtensionSource, "{handoff: $stages.build.handoff}", "{}", 1), ""},
 		{"many bindings", strings.Replace(callExtensionSource, "{handoff: $stages.build.handoff}", "{handoff: $stages.build.handoff, other: $stages.build.handoff}", 1), ""},
 		{"unmarked", strings.TrimPrefix(callExtensionSource, "authoring: prifly-extension/2\n"), "project_extension_unsupported_authoring"},
-		{"unknown marker", strings.Replace(callExtensionSource, "prifly-extension/2", "prifly-extension/3", 1), "project_extension_unsupported_authoring"},
+		{"unknown marker", strings.Replace(callExtensionSource, "prifly-extension/2", "prifly-extension/999", 1), "project_extension_unsupported_authoring"},
 		{"both", strings.Replace(callExtensionSource, "call: review", "call: review\n    step: tests", 1), "project_extension_invalid"},
 		{"neither", strings.Replace(callExtensionSource, "    call: review\n", "", 1), "project_extension_invalid"},
 		{"impossible verdict", callExtensionSource + "    impossible_verdicts: []\n", "project_extension_invalid"},

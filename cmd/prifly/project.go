@@ -1527,13 +1527,19 @@ func (c *cli) projectWorkflows(ctx context.Context, args []string) error {
 }
 
 type projectWorkflowExtension struct {
-	Point          string                 `json:",omitempty"`
-	OutputBindings map[string]string      `json:",omitempty"`
-	Enabled        *bool                  `json:",omitempty"`
-	ResolvedPoint  *projectExtensionPoint `json:"-"`
-	Call           string                 `json:",omitempty"`
-	InputBindings  map[string]string      `json:",omitempty"`
-	OnError        string                 `json:",omitempty"`
+	Composed       bool                     `json:",omitempty"`
+	Source         string                   `json:",omitempty"`
+	Selector       string                   `json:",omitempty"`
+	Group          *projectCompositionGroup `json:",omitempty"`
+	StageID        string                   `json:",omitempty"`
+	Bindings       map[string]any           `json:",omitempty"`
+	Point          string                   `json:",omitempty"`
+	OutputBindings map[string]string        `json:",omitempty"`
+	Enabled        *bool                    `json:",omitempty"`
+	ResolvedPoint  *projectExtensionPoint   `json:"-"`
+	Call           string                   `json:",omitempty"`
+	InputBindings  map[string]string        `json:",omitempty"`
+	OnError        string                   `json:",omitempty"`
 	ID             string
 	Workflow       string
 	From           string
@@ -1784,8 +1790,8 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 	}
 	result := projectWorkflowOptions{Extensions: []projectWorkflowExtension{}, Settings: map[string]map[string]any{}, Exclude: []string{}}
 	if raw, present := root["authoring"]; present {
-		if raw != "prifly-extension/2" && raw != projectPointExtensionVersion {
-			return result, refusal("project_extension_unsupported_authoring", "authoring must select prifly-extension/2 or prifly-extension/4")
+		if raw != "prifly-extension/2" && raw != projectPointExtensionVersion && raw != projectCompositionExtensionVersion {
+			return result, refusal("project_extension_unsupported_authoring", "authoring must select prifly-extension/2, prifly-extension/3 or prifly-extension/4")
 		}
 		result.Authoring = raw.(string)
 		if result.Authoring == projectPointExtensionVersion {
@@ -1814,7 +1820,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 			return projectWorkflowOptions{}, refusal("project_extension_invalid", "settings must be an object")
 		}
 		for workflow, rawInputs := range settings {
-			if !projectValueName.MatchString(workflow) {
+			if !projectValueName.MatchString(workflow) && !(result.Authoring == projectCompositionExtensionVersion && projectCompositionQualified(workflow)) {
 				return projectWorkflowOptions{}, refusal("project_extension_invalid", "settings workflow must be a valid name")
 			}
 			inputs, ok := rawInputs.(map[string]any)
@@ -1897,7 +1903,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 			}
 		}
 		text := func(name string) (string, bool) { value, ok := object[name].(string); return value, ok && value != "" }
-		extension := projectWorkflowExtension{}
+		extension := projectWorkflowExtension{Composed: result.Authoring == projectCompositionExtensionVersion}
 		var okID, okWorkflow, okStep bool
 		if extension.ID, okID = text("id"); !okID || seen[extension.ID] {
 			return projectWorkflowOptions{}, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d id must be unique and non-empty", index))
@@ -1916,7 +1922,7 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 				return result, refusal("project_extension_unsupported_authoring", fmt.Sprintf("extensions/%d call requires authoring: prifly-extension/2", index))
 			}
 			var valid bool
-			if extension.Call, valid = text("call"); !valid || !projectValueName.MatchString(extension.Call) {
+			if extension.Call, valid = text("call"); !valid || !(projectValueName.MatchString(extension.Call) || extension.Composed && projectCompositionQualified(extension.Call)) {
 				return result, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d call must name a local workflow", index))
 			}
 			if _, present := object["impossible_verdicts"]; present {
@@ -1978,7 +1984,30 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 		// binding like any authored one — that the producer ran on this path,
 		// that it has that output, that the schemas agree — so nothing here
 		// repeats it; this only reads the expression.
-		if extension.Call != "" {
+		if raw, declared := object["input_bindings"]; extension.Composed && declared {
+			bindings, ok := raw.(map[string]any)
+			if !ok || len(bindings) > 256 {
+				return result, refusal("project_extension_invalid", "input_bindings must be an object with at most 256 ports")
+			}
+			extension.Bindings = bindings
+			for port, value := range bindings {
+				if port == "" {
+					return result, refusal("project_extension_invalid", "empty input port")
+				}
+				switch value := value.(type) {
+				case string:
+					if !projectCompositionBindingExpression(value) {
+						return result, refusal("project_extension_invalid", "invalid binding source: "+value)
+					}
+				case map[string]any:
+					if len(value) == 0 {
+						return result, refusal("project_extension_invalid", "empty typed binding")
+					}
+				default:
+					return result, refusal("project_extension_invalid", "binding must be an expression or typed object")
+				}
+			}
+		} else if extension.Call != "" {
 			if raw, present := object["input_bindings"]; present {
 				bindings, valid := raw.(map[string]any)
 				if !valid || len(bindings) > 256 {
@@ -1987,11 +2016,24 @@ func parseProjectWorkflowOptions(data []byte) (projectWorkflowOptions, error) {
 				extension.InputBindings = make(map[string]string, len(bindings))
 				for port, rawSource := range bindings {
 					expression, valid := rawSource.(string)
-					if !valid || !projectCallBindingExpression(expression) || port == "" {
+					if !valid || !(projectCallBindingExpression(expression) || extension.Composed && projectCompositionBindingExpression(expression)) || port == "" {
 						return result, refusal("project_extension_invalid", fmt.Sprintf("extensions/%d input_bindings.%s requires $stages.STAGE.PORT", index, port))
 					}
 					extension.InputBindings[port] = expression
 				}
+			}
+		} else if raw, declared := object["input_bindings"]; declared && extension.Composed {
+			bindings, ok := raw.(map[string]any)
+			if !ok || len(bindings) > 256 {
+				return result, refusal("project_extension_invalid", "input_bindings must be an object with at most 256 ports")
+			}
+			extension.InputBindings = map[string]string{}
+			for port, rawExpression := range bindings {
+				expression, ok := rawExpression.(string)
+				if !ok || port == "" || !projectCompositionBindingExpression(expression) {
+					return result, refusal("project_extension_invalid", "invalid input binding: "+port)
+				}
+				extension.InputBindings[port] = expression
 			}
 		} else if raw, declared := object["input_bindings"]; declared {
 			bindings, ok := raw.(map[string]any)
@@ -2149,7 +2191,10 @@ func projectExtensionWorkflowName(id string) string {
 
 func applyProjectExtension(workflow map[string]any, extension projectWorkflowExtension, ref any) error {
 	stageID := extension.Step
-	if extension.Call != "" {
+	if extension.StageID != "" {
+		stageID = extension.StageID
+	}
+	if extension.StageID == "" && (extension.Call != "" || extension.Composed) {
 		stageID = extension.ID
 	}
 	definition, ok := workflow["definition"].(map[string]any)
@@ -2211,6 +2256,13 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 	// Every other stage name an extension writes is checked against the graph
 	// before anything moves; the producer it binds to is one of them.
 	bindings := map[string]any{}
+	for port, raw := range extension.Bindings {
+		binding, err := flow.CompileAuthoringBinding(raw, nil)
+		if err != nil {
+			return refusal("project_extension_invalid", err.Error())
+		}
+		bindings[port] = binding
+	}
 	if extension.Input != "" {
 		if _, exists := stages[extension.InputStage]; !exists {
 			return refusal("project_extension_unknown_stage", extension.InputStage)
@@ -2218,6 +2270,10 @@ func applyProjectExtension(workflow map[string]any, extension projectWorkflowExt
 		bindings[extension.Input] = map[string]any{"from": "stage_output", "stage_id": extension.InputStage, "port": extension.InputPort}
 	}
 	for port, expression := range extension.InputBindings {
+		if extension.Composed && strings.HasPrefix(expression, "$inputs.") {
+			bindings[port] = map[string]any{"from": "workflow_input", "port": strings.TrimPrefix(expression, "$inputs.")}
+			continue
+		}
 		parts := strings.Split(strings.TrimPrefix(expression, projectExtensionStageSource), ".")
 		if len(parts) != 2 {
 			return refusal("project_extension_invalid", "input_bindings."+port+" requires $stages.STAGE.PORT")
@@ -2520,8 +2576,15 @@ func (profile projectProfile) launchDetails(root string) ([]projectLaunchDetail,
 			return nil, refusal("project_profile_invalid", "workflow "+id+": "+err.Error())
 		}
 		object, ok := value.(map[string]any)
-		if !ok || object["authoring"] != projectWorkflowFolderVersion {
-			return nil, refusal("project_profile_invalid", "workflow "+id+" must be a prifly-project-workflow/1 folder root")
+		if !ok || object["authoring"] != projectWorkflowFolderVersion && object["authoring"] != projectWorkflowCompositionVersion {
+			return nil, refusal("project_profile_invalid", "workflow "+id+" must be a prifly-project-workflow/1 folder root or an opt-in prifly-project-workflow/2 folder root")
+		}
+		if object["authoring"] == projectWorkflowCompositionVersion {
+			source, err := readProjectWorkflowFolder(root, filepath.Dir(path))
+			if err != nil {
+				return nil, err
+			}
+			value = source.RootValue
 		}
 		inputs, err := projectFolderLaunchInputs(value)
 		if err != nil {

@@ -24,7 +24,7 @@ def build(view, presets, provenance=None):
         refs[key] = ref
 
     if provenance is not None:
-        if provenance.get('schema_version') != 'prifly-build-provenance/1' or provenance.get('algorithm') != 'b1':
+        if provenance.get('schema_version') not in ('prifly-build-provenance/1', 'prifly-build-provenance/2') or provenance.get('algorithm') != 'b1':
             raise ValueError('unsupported build provenance')
         for mapping in provenance['components']:
             author, compiled = mapping['author_ref'], mapping['compiled_ref']

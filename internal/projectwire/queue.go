@@ -17,6 +17,7 @@ type DecisionState struct {
 }
 
 type LaunchSummary struct {
+	Composition         *CompositionReview            `json:"composition,omitempty"`
 	WorktreeNaming      *WorktreeNamingReview         `json:"worktree_naming,omitempty"`
 	WorktreeNamePreview *prifly.WorktreeNamePreview   `json:"worktree_name_preview,omitempty"`
 	WorktreeClaim       *prifly.WorktreeClaim         `json:"worktree_claim,omitempty"`

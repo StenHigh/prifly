@@ -50,6 +50,8 @@ class LightProjectionTests(unittest.TestCase):
                                      for source, dest in zip(refs, derived)]}
         resolved = MODULE.build({'run': {'definitions': derived}}, presets, provenance)
         self.assertTrue(all(row['workflow_ref']['version'].startswith('0.0.0-b1.') for row in resolved['workflows']))
+        composed = {**provenance, 'schema_version': 'prifly-build-provenance/2', 'composition': {}}
+        self.assertEqual(resolved, MODULE.build({'run': {'definitions': derived}}, presets, composed))
         duplicate = {'ref': {**refs[0]['ref'], 'digest': 'sha256:' + 'f' * 64}}
         with self.assertRaisesRegex(ValueError, 'ambiguous'):
             MODULE.build({'run': {'definitions': refs + [duplicate]}}, presets)

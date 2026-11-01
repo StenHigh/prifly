@@ -1,0 +1,87 @@
+# Совместимость с v0.13.83: /3 не применяет extension points /4.
+# Composition отказывает на sidecar любого source package, effective /4 и point entries.
+# Library import без sidecar игнорирует standalone extend.yaml, включая /4.
+# yaml-language-server: $schema=../../schemas/authoring/project-workflow-folder-v2.schema.json
+# Requires capability workflow_composition and Project profile /3 or /4.
+# Folder /2 is opt-in. Legacy folder /1 and extension /2 keep their contracts.
+# This is one derived root. Registered parents supply its graph and ports.
+authoring: prifly-project-workflow/2
+package:
+  id: example:package/smsplace-delivery
+  version: 1.0.0
+  description: A shared classic graph with UI/UX and audit contributions.
+  requires_core_protocol: "1"
+id: example:workflow/smsplace-delivery
+version: 1.0.0
+title: Delivery with conditional interface acceptance
+extends: [classic-ui, classic-audit] # One nearest exact common classic base.
+# Scalar extends: aif-classic is sufficient for a single parent.
+# Limits inherit only when parents agree. An explicit limits record replaces
+# that record; the compiler never adds capacity for wrappers or parallelism.
+# Graph, ports, policy and internal stages are inherited, not patched here.
+# A folder may separately publish its OWN components:
+# exports:
+#   workflows:
+#     review-for-change: "{{workflow_review-for-change}}"
+#   steps:
+#     tests: "{{step_tests}}"
+# Root source refs may name exports declared under imports:
+# imports: {ui: aif-ui-ux}
+# refs: {quality: ui.review-for-change} # On a full source root, not a derived patch.
+#
+# Adjacent extend.yaml selects extension-v3.schema.json explicitly:
+# authoring: prifly-extension/3
+# arrange:
+#   - id: extra-checks
+#     between: {from: tests, to: commit}
+#     parallel: [classic-ui.interface-review, classic-audit.test-audit]
+#     on: {succeeded: commit, rejected: abandoned}
+# Replace parallel with sequence to require both in the declared order.
+# A group is inherited intact as a named contribution by its descendants.
+# Nested choice belongs inside sequence/parallel when another check is mandatory.
+# choice:
+#   selection: first_match
+#   branches:
+#     - predicate: {op: eq, left: $inputs.task#/kind, right: interface}
+#       use: classic-audit.interface-audit
+#   default: classic-audit.general-audit
+#   on_unknown: rejected
+# Every contribution on an attachment edge must occur exactly once structurally.
+# A parallel group lowers to native all/all/wait; partial is a rejection.
+# Sibling outputs never move across scopes implicitly. Declare a typed child
+# workflow when the composition needs to exchange branch results.
+#
+# A single-parent consumer can attach the exported applicability workflow:
+# authoring: prifly-extension/3
+# imports: {ui: aif-ui-ux}
+# layers: [../../layers/delivery.yaml] # Relative to this file, within repository.
+# extensions:
+#   - id: interface-review
+#     workflow: root
+#     between: {from: tests, to: commit}
+#     call: ui.review-for-change
+#     input_bindings:
+#       task: $inputs.task
+#       implementation: $stages.review.implementation
+#     on: {succeeded: commit, partial: abandoned, rejected: abandoned}
+#     on_error: abandoned
+# The Call always executes. The provider records required/not-required/unknown.
+# Only not-required skips browser checks. Missing/unknown stops acceptance.
+# No extension condition guesses applicability from filenames in Core.
+#
+# settings:
+#   ui.review-for-change:
+#     browser: {width: 1280} # Only a declared project-scoped input may be set.
+# An input object is replaced atomically; missing keys do not merge recursively.
+# Native typed projection form, using a declared exact schema placeholder:
+# input_bindings:
+#   candidate: {from: "$stages.review.implementation#/candidate",
+#               projected_schema_ref: "{{schema_candidate}}"}
+# Public imports never override a provider's program, policy or private graph.
+#
+# Inspect before execution:
+# prifly project compile --repository . --package smsplace-delivery --explain
+# No output directory is required for explain. Compile/prepare execute no programs.
+# New views: project-compile/3, project-launch-summary/6, prifly-build-provenance/2.
+# Runnable synthetic sources and all three applicability paths are documented at
+# ../workflow-composition/README.md. The real aif-ui-ux export is a later package release.

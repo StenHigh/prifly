@@ -1,0 +1,25 @@
+{
+  "baseline_commit": "94b7eb2ccad4828b9e9db363ce2236f6427b4e5f",
+  "cases": [
+    {
+      "case": "parents",
+      "code": "project_workflow_folder_invalid",
+      "effects": false
+    },
+    {
+      "case": "imports",
+      "code": "project_extension_invalid",
+      "effects": false
+    },
+    {
+      "case": "layers",
+      "code": "project_extension_invalid",
+      "effects": false
+    },
+    {
+      "case": "groups",
+      "code": "project_extension_invalid",
+      "effects": false
+    }
+  ]
+}

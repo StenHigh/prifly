@@ -177,10 +177,17 @@ var recoveryPublicContracts []byte
 //go:embed worktree-naming.schema.json
 var worktreeNamingContracts []byte
 
+//go:embed workflow-composition.schema.json
+var workflowCompositionContracts []byte
+
 //go:embed light.schema.json
 var lightContracts []byte
 
 func publicBundles() [][]byte {
+	return append(historicalPublicBundles(), workflowCompositionContracts)
+}
+
+func historicalPublicBundles() [][]byte {
 	return [][]byte{publicContracts, corePublicContracts, choiceContracts, invocationPublicContracts, repeatPublicContracts, contextPublicContracts, sessionPublicContracts, waiverPublicContracts, parallelPublicContracts, mapPublicContracts, waitPublicContracts, guardPublicContracts, reportedCostPublicContracts, artifactPublicationPublicContracts, artifactClosurePublicContracts, publicationSubscriptionPublicContracts, publicationChecksPublicContracts, publicationNewOnlyPublicContracts, publicationFailurePublicContracts, actionIntentPublicContracts, actionAdmissionPublicContracts, actionGrantAdmissionPublicContracts, actionDeliveryPublicContracts, forkPublicContracts, workspacePublicContracts, workspaceTreePublicContracts, decisionStatePublicContracts, runDecisionPublicContracts, neutralStartPublicContracts, executionBindingPublicContracts, timedSessionPublicContracts, routedSessionPublicContracts, effectsSessionPublicContracts, materializedSessionPublicContracts, stageWorkPublicContracts, environmentSourcePublicContracts, programEnvironmentPublicContracts, modelProfilePublicContracts, profileTranslationPublicContracts, runFinishPublicContracts, recoveryPublicContracts, externalWritePublicContracts, continuationPublicContracts, nextHandoffPublicContracts, nextAwaitingHostPublicContracts, questionPublicContracts, resourcePublicContracts, executionBindingSourceContracts, programProgressContracts, executionBindingOutputContracts, liveOutputPublicContracts, taskQueuePublicContracts, ClaimOwnershipSchema, storageBudgetStatusContracts, storageBudgetReviewContracts, storageBudgetResultContracts, authorityStorageBudgetContracts, worktreeNamingContracts, lightContracts}
 }
 

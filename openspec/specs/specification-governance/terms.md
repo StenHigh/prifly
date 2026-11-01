@@ -1,6 +1,6 @@
 # Словарь Pri-Fly
 
-Редакция 1.37. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
+Редакция 1.38. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
 
 Используем привычный отраслевой термин, когда его смысл подходит. Собственные понятия Pri-Fly определяем явно; сходство названий не означает совместимости с Temporal, Argo, OpenTelemetry или другим продуктом. Английское название закрепляет понятие, русский текст объясняет его. Краткие имена существующего Go-кода перечислены как соответствия, а не как новые сущности.
 
@@ -118,12 +118,59 @@ runtime stage kind или отдельный Run. Без выбранного р
 сохраняются. Native typed checks, effects и root recovery frontier остаются
 прежними. Новый carrier не меняет identity вложенных report/log ArtifactRef.
 
+### Композиция исходников сценария
+
+<a id="component-export"></a>
+**Component export — Экспорт компонента.** Публичное имя собственного PackageComponent
+в `prifly-project-workflow/2.exports`. Допускаются workflow и step. Зависимые schemas,
+contexts, checks и файлы программ входят в closure. Их включение не делает их публичными.
+
+<a id="component-import"></a>
+**Component import — Импорт компонента.** Локальный alias связывает объявленный package
+из `project.yaml` с его source exports. Compiler закрепляет exact refs и supporting bytes.
+Импорт не выполняет standalone extend, preflight или launch provider. Registry не служит
+поиском неимпортированного sibling; compiler не загружает отсутствующий source из сети.
+
+<a id="workflow-parent"></a>
+**Workflow parent — Родитель сценария.** Непосредственно выбранная через `extends`
+folder с её effective graph и расширениями. Производная folder задаёт собственные root
+и package identities. Несколько родителей образуют конечный ациклический граф наследования.
+
+<a id="workflow-base"></a>
+**Workflow base — Основа сценария.** Единственный ближайший общий exact source ancestor
+родителей. Ромб наследования достигает этой основы несколькими путями. Compiler включает
+общий маршрут один раз. Несвязанные основы и несовместимые source identities дают отказ.
+
+<a id="workflow-layer"></a>
+**Workflow layer — Слой сценария.** Плоский authoring-документ `/3` с ограниченными
+settings и extensions. Compiler читает layers в объявленном порядке относительно документа.
+Путь остаётся внутри repository без symlinks. Слой не объявляет `layers`, `extends` или `arrange`.
+Значение configuration input заменяется целиком; произвольного рекурсивного YAML merge нет.
+
+<a id="workflow-contribution"></a>
+**Workflow contribution — Дополнение сценария.** Добавление с source identity,
+локальным ID, bindings, outcomes и точкой подключения. Оно содержит step, Call либо
+явную группу. Общий source с одинаковым effective contract включается один раз.
+Совпадение имён независимых дополнений не означает общего происхождения.
+
+<a id="workflow-composition"></a>
+**Workflow composition — Композиция сценария.** Подготовка source graph из родителей,
+слоёв и импортов до native compilation. `arrange` явно объединяет дополнения одного
+перехода через sequence, parallel или choice. Parallel использует native all/wait join.
+Compiler не повышает limits. Эти понятия не создают новый Run, WorkflowInvocation,
+Registry, TrustDecision или runtime operator. Обзор — `WorkflowCompositionV1`.
+
+В `prifly-extension/3` extension получает явный stage `id`, квалифицированные `step`/`call`
+targets и `workflow: root`. Bindings допускают root inputs и native typed projections.
+Формат `/2` сохраняет локальное разрешение и прежние ограничения bindings.
+
 <a id="project-workflow-setting"></a>
 ### Project workflow setting — Настройка сценария проекта
 
 Tracked JSON value в `extend.yaml.settings`, который compiler применяет только
 к exact project-scoped configuration input named workflow того же Project
-workflow folder. Значение проверяется исходной schema input и становится
+workflow folder в legacy forms. Формат `/3` также допускает явно импортированный
+workflow export через qualified target. Значение проверяется исходной schema input и становится
 default новой WorkflowRevision до sealing; это не environment variable,
 runtime override или неограниченный patch definition.
 
@@ -1573,6 +1620,9 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 <!-- glossary-bindings:start -->
 | Термин | Исходник от корня | Go | JSON |
 |---|---|---|---|
+| [Workflow composition](#workflow-composition) | `internal/projectwire/composition.go` | `projectwire.CompositionReview` | — |
+| [Workflow composition](#workflow-composition) | `internal/projectwire/composition.go` | `projectwire.CompositionReview.Sources` | `sources` |
+| [Workflow composition](#workflow-composition) | `internal/projectwire/composition.go` | `projectwire.CompositionReview.Groups` | `groups` |
 | [WorkflowRevision](#workflow-revision) | `internal/flow/types.go` | `flow.WorkflowRevision` | — |
 | [Resolution](#resolution) | `internal/runtime/model.go` | `runtime.ObligationResolution` | — |
 | [Resolution](#resolution) | `internal/runtime/model.go` | `runtime.ObligationResolution.Outcome` | `outcome` |

@@ -32,6 +32,13 @@ class Selection(unittest.TestCase):
         command, _ = module.choose(["examples/README.md"], GRAPH, ROOT)
         self.assertIn("./internal/runtime", packages(command))
 
+    def test_composition_and_point_fixtures_run_their_consumers(self):
+        for path in ["examples/nested-extension-points/workflow.yaml",
+                     "test/fixtures/workflow-composition/consumer/extend.yaml"]:
+            with self.subTest(path=path):
+                command, _ = module.choose([path], GRAPH, ROOT)
+                self.assertEqual(packages(command), ["./cmd/prifly", "./internal/flow", "./internal/runtime"])
+
     def test_a_changed_test_runs_the_parallel_guard(self):
         command, _ = module.choose(["internal/flow/flow_test.go"], GRAPH, ROOT)
         self.assertIn("./internal/testguard", packages(command))

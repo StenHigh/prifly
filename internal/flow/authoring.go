@@ -689,6 +689,12 @@ func authorBindings(value any, refs map[string]any, path string) (map[string]any
 	return result, nil
 }
 
+// CompileAuthoringBinding lowers one source expression or typed binding using
+// the same rules as an authored workflow stage. Native validation follows it.
+func CompileAuthoringBinding(value any, refs map[string]any) (map[string]any, error) {
+	return authorBinding(value, refs, "/input_bindings")
+}
+
 func authorBinding(value any, refs map[string]any, path string) (map[string]any, error) {
 	if shorthand, ok := value.(string); ok {
 		return authorSource(shorthand, refs, path)

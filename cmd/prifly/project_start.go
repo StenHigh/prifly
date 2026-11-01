@@ -536,6 +536,10 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if naming != nil || handedNaming != nil {
 			summary.SchemaVersion = "project-launch-summary/5"
 		}
+		if compiled.Composition != nil {
+			summary.SchemaVersion = "project-launch-summary/6"
+			summary.Composition = compiled.Composition
+		}
 		summary.Continuation = continuationReview
 		summary.AllowDuplicateContinuation = *allowDuplicateContinuation
 		summary.Recovery = recoveryPlan
@@ -1010,6 +1014,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			result.SchemaVersion = "project-start/4"
 		}
 		result.QueueTask = queueBinding
+		if compiled.Composition != nil {
+			result.SchemaVersion = "project-start/6"
+		}
 		resultBytes, err := json.Marshal(result)
 		if err != nil {
 			return err
@@ -1021,6 +1028,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if finalized.Receipt.Rejection != nil {
 			return finalized.Receipt.Rejection
 		}
+	}
+	if compiled.Composition != nil {
+		result.SchemaVersion = "project-start/6"
 	}
 	if claim != nil && claim.Naming != nil {
 		response, err := json.Marshal(result)

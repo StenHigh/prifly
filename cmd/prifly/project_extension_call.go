@@ -29,7 +29,11 @@ func projectExtensionCallTargets(pending []projectPendingDocument, extensions []
 		for i, item := range pending {
 			object, _ := item.value.(map[string]any)
 			id, _ := object["id"].(string)
-			if projectExtensionWorkflowName(id) != extension.Call {
+			name := projectExtensionWorkflowName(id)
+			if item.document.Name != "" {
+				name = item.document.Name
+			}
+			if name != extension.Call {
 				continue
 			}
 			if item.document.Kind == "workflow" {
@@ -71,7 +75,11 @@ func projectExtensionDependencyCycles(pending []projectPendingDocument, targets 
 		object, _ := item.value.(map[string]any)
 		id, _ := object["id"].(string)
 		version, _ := object["version"].(string)
-		aliases[item.document.AliasPrefix+"_"+projectExtensionWorkflowName(id)] = i
+		alias := item.document.AliasPrefix + "_" + projectExtensionWorkflowName(id)
+		if item.document.Alias != "" {
+			alias = item.document.Alias
+		}
+		aliases[alias] = i
 		identities[id+"@"+version] = i
 	}
 	edges := make([][]int, len(pending))
@@ -149,7 +157,7 @@ func projectExtensionCallsReady(components []projectCompileComponent, targets ma
 func projectApplyCallExtension(workflow map[string]any, extension projectWorkflowExtension, components []projectCompileComponent) error {
 	var child projectCompileComponent
 	for _, c := range components {
-		if c.Kind == "workflow" && projectExtensionWorkflowName(c.Ref.ID) == extension.Call {
+		if c.Kind == "workflow" && projectCompositionComponentNamed(c, extension.Call) {
 			if child.Ref.ID != "" {
 				return refusal("project_extension_call_ambiguous", extension.ID+".call matches multiple workflows")
 			}
@@ -212,17 +220,17 @@ func projectValidateCallExtensionBindings(components []projectCompileComponent, 
 		})
 		return err
 	}
-	for _, extension := range options.Extensions {
+	for _, extension := range projectCompositionLeaves(options.Extensions) {
 		if !projectExtensionEnabled(extension) {
 			continue
 		}
 		for _, c := range components {
-			if extension.Call != "" && c.Kind == "workflow" && projectExtensionWorkflowName(c.Ref.ID) == extension.Call {
+			if extension.Call != "" && c.Kind == "workflow" && projectCompositionComponentNamed(c, extension.Call) {
 				if err := visit(c.Ref); err != nil {
 					return err
 				}
 			}
-			if extension.Step != "" && c.Kind == "step" && projectExtensionWorkflowName(c.Ref.ID) == extension.Step {
+			if extension.Step != "" && c.Kind == "step" && projectCompositionComponentNamed(c, extension.Step) {
 				allowed[c.Ref] = true
 			}
 		}
@@ -230,7 +238,7 @@ func projectValidateCallExtensionBindings(components []projectCompileComponent, 
 	for name := range options.ExecutionBindings {
 		matches := []projectCompileComponent{}
 		for _, c := range components {
-			if c.Kind == "step" && projectExtensionWorkflowName(c.Ref.ID) == name {
+			if c.Kind == "step" && projectCompositionComponentNamed(c, name) {
 				matches = append(matches, c)
 			}
 		}

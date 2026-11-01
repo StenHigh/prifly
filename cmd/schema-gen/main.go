@@ -93,7 +93,7 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if field.PkgPath != "" {
 						continue
 					}
-					if worktreeNamingField(t, field.Name) {
+					if worktreeNamingField(t, field.Name) || t == reflect.TypeFor[projectwire.LaunchSummary]() && field.Name == "Composition" {
 						continue
 					}
 					// Skip before recursion: removing the property afterwards would
@@ -379,6 +379,7 @@ var documentContracts = []struct {
 }{
 	{"light", "generate read-only Light contracts", lightSchema},
 	{"worktree-naming", "generate opt-in Project worktree naming contracts", worktreeNamingSchema},
+	{"workflow-composition", "generate opt-in workflow composition contracts", workflowCompositionSchema},
 	{"storage-budget-status", "generate StorageBudgetStatus", func() ([]byte, error) {
 		return storageBudgetSchema("StorageBudgetStatus", "storage-budget-status", reflect.TypeFor[prifly.StorageBudgetStatus]())
 	}},

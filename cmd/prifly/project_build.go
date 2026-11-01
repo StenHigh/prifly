@@ -31,6 +31,8 @@ const projectBuildVersion = "prifly-build-provenance/1"
 //go:embed project_build.schema.json
 var projectBuildSchema []byte
 
+var projectBuildCompositionSchema = projectwire.BuildProvenanceV2Schema
+
 type projectBuildIdentity = projectwire.BuildIdentity
 
 type projectBuildMapping struct {
@@ -41,16 +43,17 @@ type projectBuildMapping struct {
 }
 
 type projectBuildProvenance struct {
-	SchemaVersion  string                    `json:"schema_version"`
-	Algorithm      string                    `json:"algorithm"`
-	AuthorPackage  projectBuildIdentity      `json:"author_package"`
-	BuildKey       string                    `json:"build_key"`
-	PackageProfile string                    `json:"package_profile"`
-	Values         map[string]any            `json:"values"`
-	Settings       map[string]map[string]any `json:"settings"`
-	Exclude        []string                  `json:"exclude"`
-	RootRef        flow.Ref                  `json:"root_ref"`
-	Components     []projectBuildMapping     `json:"components"`
+	Composition    *projectwire.CompositionReview `json:"composition,omitempty"`
+	SchemaVersion  string                         `json:"schema_version"`
+	Algorithm      string                         `json:"algorithm"`
+	AuthorPackage  projectBuildIdentity           `json:"author_package"`
+	BuildKey       string                         `json:"build_key"`
+	PackageProfile string                         `json:"package_profile"`
+	Values         map[string]any                 `json:"values"`
+	Settings       map[string]map[string]any      `json:"settings"`
+	Exclude        []string                       `json:"exclude"`
+	RootRef        flow.Ref                       `json:"root_ref"`
+	Components     []projectBuildMapping          `json:"components"`
 }
 
 func projectCanonicalJSON(value any) ([]byte, error) {
@@ -111,7 +114,7 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	variant := projectNeutralProfile(profileVersion)
 	if !variant {
 		if options.Authoring != "" {
-			return projectCompileResult{}, refusal("project_compile_profile_required", "prifly-extension/2 requires Project profile /3")
+			return projectCompileResult{}, refusal("project_compile_profile_required", options.Authoring+" requires Project profile /3")
 		}
 		object, _ := source.RootValue.(map[string]any)
 		if _, exists := object["execution_bindings"]; exists {
@@ -170,7 +173,7 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 			}
 		}
 	}
-	callExtensions := false
+	callExtensions := source.Composition != nil
 	for _, extension := range options.Extensions {
 		if projectExtensionEnabled(extension) && (extension.Call != "" || extension.Point != "") {
 			callExtensions = true
@@ -195,7 +198,7 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	// The profile is read on every compile and is where each package's source is
 	// declared, so it belongs in the list a reader checks their edit against.
 	sources := append([]string{filepath.ToSlash(filepath.Join(".prifly", "project.yaml"))}, source.ReadPaths...)
-	if callExtensions && source.ExecutionBindings != nil {
+	if callExtensions && source.ExecutionBindings != nil && source.Composition == nil {
 		for _, binding := range source.ExecutionBindings.Bindings {
 			for name := range binding.Files {
 				relative, err := projectRelativePath(root, filepath.Join(source.Folder, filepath.FromSlash(name)))
@@ -206,12 +209,19 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 			}
 		}
 	}
+	if source.Composition != nil {
+		sources = append(sources, slices.Collect(maps.Keys(source.Composition.Files))...)
+	}
 	slices.Sort(sources)
 	result := projectCompileResult{SchemaVersion: "project-compile/1", Repository: root, Package: ref, Output: output, Components: components, ExecutionBindings: source.ExecutionBindings, PackageVerdictsUnclosed: unclosed, Sources: slices.Compact(sources), ModelProfiles: options.ModelProfiles, Resources: options.Resources, CallExtensions: callExtensions}
 	if source.Build != nil {
 		result.SchemaVersion = "project-compile/2"
 		result.AuthorPackage = &source.Build.AuthorPackage
 		result.BuildKey = source.Build.BuildKey
+	}
+	if source.Composition != nil {
+		result.SchemaVersion = "project-compile/3"
+		result.Composition = &source.Composition.CompositionReview
 	}
 	return result, nil
 }
@@ -305,6 +315,11 @@ func projectBuildVariant(source projectPackageSource, components []projectCompil
 	if source.ExtensionPoints != nil {
 		input["extension_points"] = source.ExtensionPoints
 	}
+	if source.Composition != nil {
+		provenance.SchemaVersion = "prifly-build-provenance/2"
+		provenance.Composition = &source.Composition.CompositionReview
+		input["composition"] = provenance.Composition
+	}
 	if source.ExecutionBindings != nil {
 		input["execution_bindings"] = source.ExecutionBindings
 	}
@@ -392,7 +407,17 @@ func projectBuildVariant(source projectPackageSource, components []projectCompil
 }
 
 func validateProjectBuild(data []byte, components []projectCompileComponent) error {
-	schema, err := flow.Canonical(projectBuildSchema)
+	selected := projectBuildSchema
+	var edition struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &edition); err != nil {
+		return err
+	}
+	if edition.SchemaVersion == "prifly-build-provenance/2" {
+		selected = projectBuildCompositionSchema
+	}
+	schema, err := flow.Canonical(selected)
 	if err != nil {
 		return err
 	}
@@ -446,7 +471,7 @@ func validateProjectBuild(data []byte, components []projectCompileComponent) err
 }
 
 func projectCompiledLaunchPath(root string, launch projectLaunch, compiled projectCompileResult) (string, error) {
-	if compiled.SchemaVersion != "project-compile/2" {
+	if compiled.SchemaVersion != "project-compile/2" && compiled.SchemaVersion != "project-compile/3" {
 		return projectCompiledLaunchWorkflow(root, launch, compiled.Components)
 	}
 	data, err := readFile(filepath.Join(compiled.Output, projectBuildFile), flow.MaxDocumentBytes)

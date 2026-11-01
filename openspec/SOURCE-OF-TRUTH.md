@@ -45,6 +45,11 @@ OpenSpec.
 
 ## Как вести изменение
 
+До archive `add-workflow-component-imports-and-layers` его deltas задают opt-in
+folder `/2`, extension `/3` и compile-time composition. Остальные правила
+workflow-and-context, CLI и published contracts сохраняют указанный выше source set.
+Core implementation, release replay, выпуск пакета и пилот smsplace имеют отдельную приёмку.
+
 1. Найди capability в таблице и прочитай её current source set.
 2. Создай change: `openspec new change <kebab-case-name>`; для Codex можно
    попросить `$openspec-propose`.

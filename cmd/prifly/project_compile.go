@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
+	"github.com/stenhigh/prifly/internal/projectwire"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 	"go.yaml.in/yaml/v3"
 )
@@ -54,6 +55,7 @@ type projectPackageSource struct {
 	ExecutionBindings    *projectPackageExecution
 	Folder               string
 	ExtensionPoints      *projectExtensionPoints
+	Composition          *projectComposition
 }
 
 type projectPackageDocument struct {
@@ -66,6 +68,9 @@ type projectPackageDocument struct {
 	Extensions   string
 	FolderRoot   bool
 	FolderMember bool
+	Value        any
+	Name         string
+	Alias        string
 }
 
 type projectCompileComponent struct {
@@ -76,6 +81,8 @@ type projectCompileComponent struct {
 	Resource  *flow.ContextResource `json:"-"`
 	Root      bool                  `json:"-"`
 	AuthorRef flow.Ref              `json:"-"`
+	Name      string                `json:"-"`
+	Names     []string              `json:"-"`
 }
 
 type projectPendingDocument struct {
@@ -90,13 +97,15 @@ type projectWorkflowFeature struct {
 }
 
 type projectCompileResult struct {
-	SchemaVersion string                    `json:"schema_version"`
-	Repository    string                    `json:"repository"`
-	Package       flow.Ref                  `json:"package"`
-	Output        string                    `json:"output"`
-	Components    []projectCompileComponent `json:"components"`
-	AuthorPackage *projectBuildIdentity     `json:"author_package,omitempty"`
-	BuildKey      string                    `json:"build_key,omitempty"`
+	Composition   *projectwire.CompositionReview `json:"composition,omitempty"`
+	Explanation   []string                       `json:"explanation,omitempty"`
+	SchemaVersion string                         `json:"schema_version"`
+	Repository    string                         `json:"repository"`
+	Package       flow.Ref                       `json:"package"`
+	Output        string                         `json:"output"`
+	Components    []projectCompileComponent      `json:"components"`
+	AuthorPackage *projectBuildIdentity          `json:"author_package,omitempty"`
+	BuildKey      string                         `json:"build_key,omitempty"`
 	// PackageVerdictsUnclosed names the package stages the completeness rule
 	// stopped judging because this document reached the verdict revision by
 	// insertion rather than authorship. It rides in the result rather than on
@@ -124,13 +133,22 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 	output := f.String("output", "", "new directory outside the repository and local authority")
 	host := f.String("host", "", "host entry point that selects project skills")
 	packageProfile := f.String("package-profile", "", "per-compilation package profile")
+	explain := f.Bool("explain", false, "show source composition and effective settings; output directory is optional")
 	values := stringsFlag{}
 	f.Var(&values, "value", "explicit YAML value NAME=JSON")
 	if err := parse(f, args); err != nil {
 		return err
 	}
-	if *name == "" || *output == "" {
+	if *name == "" || *output == "" && !*explain {
 		return usageError("project compile requires --package and --output")
+	}
+	if *output == "" && *explain {
+		directory, err := os.MkdirTemp("", "prifly-composition-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(directory)
+		*output = filepath.Join(directory, "compiled")
 	}
 	root, err := projectRoot(ctx, *repository)
 	if err != nil {
@@ -226,6 +244,12 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 		return err
 	}
 	complete = true
+	if *explain {
+		if result.Composition == nil {
+			return refusal("project_composition_marker_required", "--explain requires a composed workflow")
+		}
+		result.Explanation = projectCompositionExplain(source, options, result.Components)
+	}
 	return c.emit(result)
 }
 
@@ -560,6 +584,14 @@ func projectCompileSkillsRoot(root string, profile projectProfile, host string) 
 }
 
 func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error) {
+	return projectReadComposedFolder(root, folder)
+}
+
+func readProjectWorkflowFolderRaw(root, folder string) (projectPackageSource, error) {
+	return readProjectWorkflowFolderSource(root, folder, true)
+}
+
+func readProjectWorkflowFolderSource(root, folder string, catalog bool) (projectPackageSource, error) {
 	workflowPath := filepath.Join(folder, "workflow.yaml")
 	workflowValue, err := projectYAMLDocument(workflowPath)
 	if err != nil {
@@ -619,7 +651,10 @@ func readProjectWorkflowFolder(root, folder string) (projectPackageSource, error
 		return projectPackageSource{}, err
 	}
 	var catalogSources []string
-	source.DecisionCatalog, catalogSources, err = projectWorkflowFolderDecisionCatalog(root, folder, workflowValue, source)
+	_, derived := workflowValue.(map[string]any)["extends"]
+	if catalog && !derived {
+		source.DecisionCatalog, catalogSources, err = projectWorkflowFolderDecisionCatalog(root, folder, workflowValue, source)
+	}
 	if err != nil {
 		return projectPackageSource{}, err
 	}
@@ -908,15 +943,28 @@ func projectFolderWorkflowDefinition(value any) (map[string]any, error) {
 	if !ok {
 		return nil, errors.New("workflow.yaml must be an object")
 	}
-	if authoring, _ := workflow["authoring"].(string); authoring != projectWorkflowFolderVersion {
-		return nil, errors.New("workflow.yaml authoring must be " + projectWorkflowFolderVersion)
+	if authoring, _ := workflow["authoring"].(string); authoring != projectWorkflowFolderVersion && authoring != projectWorkflowCompositionVersion {
+		return nil, errors.New("workflow.yaml authoring must be " + projectWorkflowFolderVersion + " or " + projectWorkflowCompositionVersion)
 	}
 	if _, ok := workflow["package"].(map[string]any); !ok {
 		return nil, errors.New("workflow.yaml package must be an object")
 	}
+	if workflow["authoring"] == projectWorkflowCompositionVersion {
+		id, idOK := workflow["id"].(string)
+		version, versionOK := workflow["version"].(string)
+		if !idOK || !versionOK {
+			return nil, errors.New("folder /2 requires explicit string root id and version")
+		}
+		if _, err := projectIdentity(id, version); err != nil {
+			return nil, err
+		}
+	}
 	result := make(map[string]any, len(workflow)-1)
 	for key, field := range workflow {
-		if key != "package" && key != "decision_catalog" && key != "execution_bindings" {
+		if workflow["authoring"] != projectWorkflowCompositionVersion && (key == "imports" || key == "exports" || key == "extends") {
+			return nil, errors.New("composition fields require prifly-project-workflow/2")
+		}
+		if key != "package" && key != "decision_catalog" && key != "execution_bindings" && key != "imports" && key != "exports" && key != "extends" {
 			result[key] = field
 		}
 	}
@@ -965,7 +1013,9 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 			return nil, refusal("project_package_invalid", "document sources must be .yaml")
 		}
 		var documents []any
-		if declaration.FolderRoot && source.RootValue != nil {
+		if declaration.Value != nil {
+			documents = []any{projectCompositionClone(declaration.Value)}
+		} else if declaration.FolderRoot && source.RootValue != nil {
 			documents = []any{source.RootValue}
 		} else {
 			documents, err = projectYAMLDocuments(path)
@@ -997,7 +1047,14 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 		return nil, err
 	}
 	rootExtensions := projectPointRootExtensions(options.Extensions)
-	callTargets, err := projectExtensionCallTargets(pending, rootExtensions)
+	callExtensions := rootExtensions
+	if source.Composition != nil {
+		callExtensions = projectCompositionLeaves(callExtensions)
+		for index := range callExtensions {
+			callExtensions[index].ID = callExtensions[index].Selector
+		}
+	}
+	callTargets, err := projectExtensionCallTargets(pending, callExtensions)
 	if err != nil {
 		return nil, err
 	}
@@ -1035,8 +1092,19 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 				return nil, err
 			}
 			if item.document.Extensions != "" {
-				if err := projectApplyExtensions(&component, components, rootExtensions); err != nil {
-					return nil, err
+				component.Name = item.document.Name
+				var applyErr error
+				if source.Composition != nil {
+					extensions, err := projectCompositionRenderBindings(options.Extensions, values)
+					if err != nil {
+						return nil, err
+					}
+					applyErr = projectApplyComposedExtensions(&component, &components, extensions)
+				} else {
+					applyErr = projectApplyExtensions(&component, components, rootExtensions)
+				}
+				if applyErr != nil {
+					return nil, applyErr
 				}
 			}
 			if err := projectAddComponent(output, item.document, component, values, &components); err != nil {
@@ -1283,12 +1351,20 @@ func projectContextComponent(document projectPackageDocument, id, version, media
 
 func projectAddComponent(output string, document projectPackageDocument, component projectCompileComponent, values map[string]any, components *[]projectCompileComponent) error {
 	name := component.Ref.ID[strings.LastIndex(component.Ref.ID, "/")+1:]
-	for _, existing := range *components {
+	for index, existing := range *components {
 		if existing.Ref.ID == component.Ref.ID && existing.Ref.Version == component.Ref.Version {
+			if document.Name != "" && existing.Ref == component.Ref && existing.Kind == component.Kind && !document.FolderRoot {
+				(*components)[index].Names = append((*components)[index].Names, document.Name)
+				values[document.Alias] = projectRefValue(existing.Ref)
+				return nil
+			}
 			return refusal("project_compile_duplicate_component", component.Ref.ID+"@"+component.Ref.Version)
 		}
 	}
 	alias := document.AliasPrefix + "_" + name
+	if document.Alias != "" {
+		alias = document.Alias
+	}
 	if _, exists := values[alias]; exists {
 		return refusal("project_compile_duplicate_value", alias)
 	}
@@ -1299,6 +1375,7 @@ func projectAddComponent(output string, document projectPackageDocument, compone
 	}
 	component.Path = fmt.Sprintf("%s/%03d%s", directory, index, suffix)
 	component.Root = document.FolderRoot
+	component.Name = document.Name
 	if output != "" {
 		if err := writeProjectComponent(output, component); err != nil {
 			return err
@@ -1310,6 +1387,9 @@ func projectAddComponent(output string, document projectPackageDocument, compone
 }
 
 func projectReadWorkflowOptions(root string, source projectPackageSource, values map[string]any) (projectWorkflowOptions, error) {
+	if source.Composition != nil {
+		return source.Composition.Options, nil
+	}
 	result := projectWorkflowOptions{Extensions: []projectWorkflowExtension{}, Settings: map[string]map[string]any{}, Exclude: []string{}}
 	for _, document := range source.Documents {
 		if document.Extensions == "" {
@@ -1388,6 +1468,9 @@ func projectApplyWorkflowOptions(pending []projectPendingDocument, options proje
 			continue
 		}
 		workflow := projectExtensionWorkflowName(id)
+		if item.document.Name != "" {
+			workflow = item.document.Name
+		}
 		if _, exists := authors[workflow]; exists {
 			return refusal("project_option_duplicate_workflow", workflow)
 		}
@@ -1533,7 +1616,14 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 	steps := map[string]projectCompileComponent{}
 	for _, candidate := range components {
 		if candidate.Kind == "step" {
-			steps[candidate.Ref.ID[strings.LastIndex(candidate.Ref.ID, "/")+1:]] = candidate
+			name := projectExtensionWorkflowName(candidate.Ref.ID)
+			if candidate.Name != "" {
+				name = candidate.Name
+			}
+			steps[name] = candidate
+			for _, alias := range candidate.Names {
+				steps[alias] = candidate
+			}
 		}
 	}
 	// An extension names components by their short folder name, while every
@@ -1545,7 +1635,11 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 	}
 	slices.Sort(known)
 	for _, extension := range extensions {
-		if workflowName := projectExtensionWorkflowName(component.Ref.ID); extension.Workflow != workflowName {
+		workflowName := projectExtensionWorkflowName(component.Ref.ID)
+		if component.Name != "" {
+			workflowName = component.Name
+		}
+		if extension.Workflow != workflowName {
 			return refusal("project_extension_unknown_workflow", extension.Workflow+" (known: "+workflowName+")")
 		}
 		if extension.Call != "" {
@@ -1562,7 +1656,7 @@ func projectApplyExtensions(component *projectCompileComponent, components []pro
 		if err := json.Unmarshal(step.Bytes, &definition); err != nil {
 			return refusal("project_extension_invalid_step_source", extension.Step+" is not a StepDefinition")
 		}
-		if err := projectExtensionInputs(definition, extension.Input); err != nil {
+		if err := projectExtensionInputs(definition, extension.Input); err != nil && !extension.Composed {
 			return err
 		}
 		if err := applyProjectExtension(workflow, extension, projectRefValue(step.Ref)); err != nil {
