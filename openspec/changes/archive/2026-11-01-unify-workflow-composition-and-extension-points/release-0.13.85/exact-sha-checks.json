@@ -1,0 +1,20 @@
+{
+  "verify": {
+    "state": "success",
+    "run_id": 41337932218,
+    "attempt": 1,
+    "url": "https://github.com/StenHigh/prifly/actions/runs/41337932218",
+    "finished": 1793558673.0,
+    "reason": "direct full batch on exact SHA",
+    "sha": "3e91ba5cbebee382df701a8e8e278a57cd876d16"
+  },
+  "qualify": {
+    "state": "success",
+    "run_id": 41337938588,
+    "attempt": 1,
+    "url": "https://github.com/StenHigh/prifly/actions/runs/41337938588",
+    "finished": 1793559859.0,
+    "reason": "direct full batch on exact SHA",
+    "sha": "3e91ba5cbebee382df701a8e8e278a57cd876d16"
+  }
+}

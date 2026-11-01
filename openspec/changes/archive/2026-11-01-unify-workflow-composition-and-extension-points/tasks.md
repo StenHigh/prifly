@@ -61,6 +61,10 @@
 
 ## 8. Отдельный выпуск и consumer qualification
 
-- [ ] 8.1 Перед выпуском запустить `python3 scripts/ensure-release-checks.py --sha SHA --ref main --wait` на фиксированном release commit. Проверка: зелёные exact-SHA verify/qualify; публикация требует отдельного поручения.
-- [ ] 8.2 Выпустить через `python3 scripts/tag-release.py vX.Y.Z` и повторить оба CLI harness на exact published binary. Проверка: version/SHA256/signatures, unchanged `/4` и mixed `/5` evidence отдельно от source candidate.
+- [x] 8.1 Перед выпуском запустить `python3 scripts/ensure-release-checks.py --sha SHA --ref main --wait` на фиксированном release commit. Проверка: зелёные exact-SHA verify/qualify; публикация требует отдельного поручения.
+- [x] 8.2 Выпустить через `python3 scripts/tag-release.py vX.Y.Z` и повторить оба CLI harness на exact published binary. Проверка: version/SHA256/signatures, unchanged `/4` и mixed `/5` evidence отдельно от source candidate.
 - [ ] 8.3 Передать unified authoring downstream workflows и отдельно провести живую consumer приёмку. Проверка: реальные browser lifecycle, permissions, fresh candidate correlation и owner acceptance; Core fixture не закрывает F2/P1/P2/smsplace.
+
+## Граница архива
+
+Core v0.13.85 выпущен и проверен на exact published binary. Задача 8.3 остаётся отдельной по утверждённым `plan_constraints`: живая downstream приёмка не входила в этот Core release. Evidence: `release-0.13.85.md` и JSON рядом.

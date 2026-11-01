@@ -1,0 +1,61 @@
+{
+  "binary_sha256": "d512311554b31f469c912b3e1a2d65128edf99362d8ab29314c91448134fe954",
+  "scope": "Published /3 smoke; full /3 matrix belongs to exact-SHA qualify",
+  "cases": [
+    {
+      "operator": "sequence",
+      "mode": "required",
+      "outcome": "succeeded",
+      "run_id": "run:1f223db5b80febb7a82eeed8bdd53ab54afbbaa47613b6a807fb69b872daa675",
+      "invocations": 5,
+      "steps": [
+        "applicability",
+        "reader",
+        "tests",
+        "commit",
+        "draft-mr",
+        "audit",
+        "prepare"
+      ],
+      "applicability_calls": 1,
+      "synthetic": true
+    },
+    {
+      "operator": "parallel",
+      "mode": "required",
+      "outcome": "succeeded",
+      "run_id": "run:c03bf3b82bc0a30f0bad81bf66e7bd187ec208e26e152dec6024f3b39b69c7f7",
+      "invocations": 5,
+      "steps": [
+        "tests",
+        "prepare",
+        "audit",
+        "draft-mr",
+        "reader",
+        "applicability",
+        "commit"
+      ],
+      "applicability_calls": 1,
+      "synthetic": true
+    },
+    {
+      "operator": "choice",
+      "mode": "required",
+      "outcome": "succeeded",
+      "run_id": "run:a39a469e9a2c360e530c7abbf15bb8e1a3b41ddd8f7470749a768136b4f9f2c2",
+      "invocations": 6,
+      "steps": [
+        "applicability",
+        "commit",
+        "prepare",
+        "tests",
+        "audit",
+        "reader",
+        "draft-mr"
+      ],
+      "applicability_calls": 1,
+      "synthetic": true
+    }
+  ],
+  "complete": true
+}

@@ -110,9 +110,10 @@ package-declared points и explicit consumer bindings для `workflow-and-conte
 остаётся в main source sets. Новые authoring `/4` и points `/1` не меняют saved Runs.
 
 
-Пока `unify-workflow-composition-and-extension-points` активен, его deltas
-задают явные extension `/5`, folder `/3`, b2 и новые Project DTO для main source
-sets `workflow-and-context`, `cli-protocol`, `published-contracts` и
-`specification-governance`. Старые `/3` и `/4` сохраняют собственные boundaries.
-Ownership main source sets не переносится. Qualification и release требуют
-отдельного exact-candidate evidence; historical evidence не переписывается.
+Единые composition и points включены в main source sets `workflow-and-context`,
+`cli-protocol`, `published-contracts` и `specification-governance`: extension `/5`,
+folder `/3`, b2 и новые Project DTO. Старые `/3` и `/4` сохраняют собственные
+boundaries и baseline active changes до своего archive/sync. Ownership не
+переносится. История и evidence Core v0.13.85 сохраняются в archived
+`2026-11-01-unify-workflow-composition-and-extension-points`. Приёмка downstream
+остаётся отдельной; historical evidence не переписывается.

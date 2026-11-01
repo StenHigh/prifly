@@ -81,9 +81,11 @@ carrier только по объявленному binding. Публикация
 reader и не доказывает реальный provision либо release.
 
 
-Для совместной composition и points используется active change
-`unify-workflow-composition-and-extension-points`. Root выбирает extension `/5`
-либо folder `/3` явно. Проверяйте source owner до flattening, public point
+Совместные composition и points определены в main source sets
+`workflow-and-context`, `cli-protocol`, `published-contracts` и
+`specification-governance`. История выпуска Core v0.13.85 находится в archived
+`2026-11-01-unify-workflow-composition-and-extension-points`.
+Root выбирает extension `/5` либо folder `/3` явно. Проверяйте source owner до flattening, public point
 export и изоляцию compiled variants. Старый `/4` остаётся на прежнем пути.
 Группа в точке с consumers получает отказ; explicit typed Call передаёт carrier.
 Source candidate и опубликованный replay имеют отдельное evidence.

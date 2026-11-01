@@ -1,0 +1,142 @@
+{
+  "boundary": "Native /5 point groups, inherited /4, private hook and explicit carrier Call.",
+  "binary_sha256": "d512311554b31f469c912b3e1a2d65128edf99362d8ab29314c91448134fe954",
+  "cases": [
+    {
+      "case": "sequence",
+      "run": "run:1f8efe10b323a80bd68f037ff735367d640b8606874dfd03cc7cb854d6294fc9",
+      "status": "completed",
+      "outcome": "succeeded",
+      "seen": [
+        "produce",
+        "measure",
+        "read",
+        "audit",
+        "commit"
+      ],
+      "nested_ref": {
+        "artifact_id": "artifact:77fc19769ade8e82b61692ab72d78b71c9b03deb560e377779fe7a9bd0aacfc0",
+        "revision": 1,
+        "digest": "sha256:609e521821a2901d5121a2181d85c4f8858d8c499907adf630f674feb6cec64d"
+      },
+      "summary_schema": "project-launch-summary/7",
+      "start_schema": "project-start/7"
+    },
+    {
+      "case": "parallel",
+      "run": "run:dcda1a4dbf3f092c7e13afb9c0705c0f77f6ce2c404ce7b519babc78a9754663",
+      "status": "completed",
+      "outcome": "succeeded",
+      "seen": [
+        "produce",
+        "audit",
+        "measure",
+        "read",
+        "commit"
+      ],
+      "nested_ref": {
+        "artifact_id": "artifact:a0bd7508709fcfc64e7716314a01b3a054325ce5285d93426f128c447fd19a59",
+        "revision": 1,
+        "digest": "sha256:609e521821a2901d5121a2181d85c4f8858d8c499907adf630f674feb6cec64d"
+      },
+      "summary_schema": "project-launch-summary/7",
+      "start_schema": "project-start/7"
+    },
+    {
+      "case": "choice",
+      "run": "run:517268269a76e4802568404fda9f00e7ae0a563c56f122236776e58029f99c02",
+      "status": "completed",
+      "outcome": "succeeded",
+      "seen": [
+        "produce",
+        "measure",
+        "read",
+        "commit"
+      ],
+      "nested_ref": {
+        "artifact_id": "artifact:4c81c5bcd56d3bbb7d4126c61c5a698518c20d9239d61489acad5ae9c624a3dc",
+        "revision": 1,
+        "digest": "sha256:609e521821a2901d5121a2181d85c4f8858d8c499907adf630f674feb6cec64d"
+      },
+      "summary_schema": "project-launch-summary/7",
+      "start_schema": "project-start/7"
+    },
+    {
+      "case": "choice-default",
+      "run": "run:2cd7e7f1000652581a112bb286caea871c5605e669287a863e056ecab482c9ff",
+      "status": "completed",
+      "outcome": "succeeded",
+      "seen": [
+        "produce",
+        "audit",
+        "commit"
+      ],
+      "nested_ref": null,
+      "summary_schema": "project-launch-summary/7",
+      "start_schema": "project-start/7"
+    },
+    {
+      "case": "choice-unknown",
+      "run": "run:52262a50611f0efb66340c2fdbb5b8c6cc09125c9442d45f378b3949298b8ede",
+      "status": "completed",
+      "outcome": "rejected",
+      "seen": [
+        "produce"
+      ],
+      "nested_ref": null,
+      "summary_schema": "project-launch-summary/7",
+      "start_schema": "project-start/7"
+    },
+    {
+      "case": "audit-fail",
+      "run": "run:0db46d27d1dfd8a24826bdbb6d286b233c12eddb61af87b3af91deed221609cf",
+      "status": "completed",
+      "outcome": "rejected",
+      "seen": [
+        "produce",
+        "audit",
+        "measure",
+        "read"
+      ],
+      "nested_ref": {
+        "artifact_id": "artifact:5658d58a0bed23106b8f6e9d82801c7ca36e730203509a04612674edf7bdf955",
+        "revision": 1,
+        "digest": "sha256:609e521821a2901d5121a2181d85c4f8858d8c499907adf630f674feb6cec64d"
+      },
+      "summary_schema": "project-launch-summary/7",
+      "start_schema": "project-start/7"
+    },
+    {
+      "case": "technical-error",
+      "run": "run:02251a41929699f56243c401ef4d74d5d399dfc9bfdf74f4de36b3ca2b6ff9ef",
+      "status": "completed",
+      "outcome": "rejected",
+      "seen": [
+        "produce",
+        "measure",
+        "read"
+      ],
+      "nested_ref": {
+        "artifact_id": "artifact:4f8360c21d0904aacebcf95a1b7064a084be3887847343404fd1d3fdc3b77f7b",
+        "revision": 1,
+        "digest": "sha256:609e521821a2901d5121a2181d85c4f8858d8c499907adf630f674feb6cec64d"
+      },
+      "summary_schema": "project-launch-summary/7",
+      "start_schema": "project-start/7"
+    },
+    {
+      "case": "cancel-after-audit",
+      "run": "run:f5cd627d7e30ba189d914f3b20d84e0af429b4a211f72a251242e8fbbf440eeb",
+      "status": "cancelled",
+      "outcome": null,
+      "seen": [
+        "produce",
+        "audit"
+      ],
+      "nested_ref": null,
+      "summary_schema": "project-launch-summary/7",
+      "start_schema": "project-start/7"
+    }
+  ],
+  "complete": true
+}

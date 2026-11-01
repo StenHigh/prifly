@@ -1,0 +1,60 @@
+{
+  "binary_sha256": "d512311554b31f469c912b3e1a2d65128edf99362d8ab29314c91448134fe954",
+  "baseline_version": "v0.13.83",
+  "baseline_binary_sha256": "ced33bbe96f1ae0f932061a35be5097c842ae8ca24801daef559dab5dd35b2e2",
+  "cases": {
+    "selected": {
+      "status": "PASS",
+      "files": 17,
+      "package": {
+        "id": "report-probe:package/transport",
+        "version": "0.0.0-b1.i5krncolfr72zlqthmgnlgejgd43ubqbhrvtp7ju4npot5a7xc3q",
+        "digest": "sha256:7c2197bc63a80d1c610277a2adc652add458b0f74afe64590a6b66399013498f"
+      },
+      "build_key": "sha256:47551689cb2c7facae133b0cd5988930f9ba06013c6b37fd34e35ee9f41fb8b7"
+    },
+    "absent": {
+      "status": "PASS",
+      "files": 17,
+      "package": {
+        "id": "report-probe:package/transport",
+        "version": "0.0.0-b1.vl3czgbnbm25bnp5h6najkhbif3qqamz3554arpcj4lffvrmvl7q",
+        "digest": "sha256:1f51301512288a73c4dc3be8595cf8db7181e567bad422e460cffed4e1671ae0"
+      },
+      "build_key": "sha256:aaf62c982d0b35d0b5fd3f9a04a8e14177080199df7bc045e24f1652d62caaff"
+    },
+    "disabled": {
+      "status": "PASS",
+      "files": 17,
+      "package": {
+        "id": "report-probe:package/transport",
+        "version": "0.0.0-b1.inggbx2lz5mnimnhtmyk7bpy2a2kulkyncxkv5yezxc3xnxnnxca",
+        "digest": "sha256:05a9810f4f480f70da55950315d5500330f7c173ff0d67bda23e6326d0544780"
+      },
+      "build_key": "sha256:434c60df4bcf58d431a79b30af85f8d034aa2d5868aeaaf704cdc5bbb6ed6dc4"
+    }
+  },
+  "refusals": {
+    "unknown_point": {
+      "status": "PASS",
+      "code": "project_extension_point_unknown",
+      "exit_code": 2
+    },
+    "foreign_implementation": {
+      "status": "PASS",
+      "code": "project_extension_point_component_not_permitted",
+      "exit_code": 2
+    },
+    "forbidden_input": {
+      "status": "PASS",
+      "code": "project_extension_point_invalid",
+      "exit_code": 2
+    },
+    "missing_output": {
+      "status": "PASS",
+      "code": "unknown_port",
+      "exit_code": 2
+    }
+  },
+  "complete": true
+}

@@ -1,0 +1,43 @@
+{
+  "release": "https://github.com/StenHigh/prifly/releases/tag/v0.13.85",
+  "version": "v0.13.85",
+  "sha": "3e91ba5cbebee382df701a8e8e278a57cd876d16",
+  "darwin_architecture": "arm64",
+  "darwin_minimum_macos": "14.0",
+  "legacy_signature": "PASS",
+  "jcs_signature": "PASS",
+  "asset_sha256": {
+    "prifly-darwin-arm64.tar.gz": "71821649d8d4e027597ebb7ddcc73ff1b7c75bfdc763c262c266e7b05908fcb1",
+    "prifly-linux-amd64.tar.gz": "0982fac9136eeaf0e37ff0af38154f3da356c91d1eb29d3e5679820e998729af"
+  },
+  "binary_sha256": "d512311554b31f469c912b3e1a2d65128edf99362d8ab29314c91448134fe954",
+  "published_replay": "PASS",
+  "consumer_qualification": false,
+  "replays": {
+    "legacy4": {
+      "report": "/tmp/prifly-v0.13.85-release-validation/legacy4.json",
+      "sha256": "7a6f4dc9dc442981855d7863c3d19d19c7aa30e2ea7b720f3be979ff31945c75",
+      "cases": 11
+    },
+    "mixed5": {
+      "report": "/tmp/prifly-v0.13.85-release-validation/mixed5.json",
+      "sha256": "14a9645ddaf5ee5a062cbe4c0b0bdd22e17794b0b7f2bba1d3d1e1817fa34428",
+      "cases": 11
+    },
+    "groups5": {
+      "report": "/tmp/prifly-v0.13.85-release-validation/groups5.json",
+      "sha256": "56c3d33d0e5caf003f7c95f1ab67fa49b186b4ea02d07dec40f1024ecc5e5fff",
+      "cases": 8
+    },
+    "legacy3-smoke": {
+      "report": "/tmp/prifly-v0.13.85-release-validation/legacy3-smoke.json",
+      "sha256": "63d33558bca6bf01f2e93b2ce9ee28b9a7f9cd0a0baa1f7a52bea34c54e303d3",
+      "cases": 3
+    },
+    "legacy4-bytes": {
+      "report": "/tmp/prifly-v0.13.85-release-validation/legacy4-bytes.json",
+      "sha256": "ae94c777002793114f255fc5fe80eca2767654adb21f88b93c8bee242e401dc0",
+      "cases": 3
+    }
+  }
+}

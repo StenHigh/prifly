@@ -1,0 +1,265 @@
+{
+  "binary_sha256": "d512311554b31f469c912b3e1a2d65128edf99362d8ab29314c91448134fe954",
+  "authoring": "prifly-extension/5",
+  "boundary": "Unified composition/point transport. Synthetic replies; native engine and real ArtifactRefs.",
+  "cases": [
+    {
+      "case": "success",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": "project_start_stale_launch"
+    },
+    {
+      "case": "repair",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read",
+        "repair",
+        "measure",
+        "measure",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "failed",
+      "outcome": "partial",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "continue",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read",
+        "measure",
+        "read"
+      ],
+      "runs": 2,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": {
+        "frontier": "cycle",
+        "reused": [
+          "produce"
+        ],
+        "source_unchanged": true,
+        "nested_resume_refusal": "resume_from_stage_invalid",
+        "changed_prefix_refusal": "recover_prefix_changed"
+      },
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "blocked",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "fail",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "no_work",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "call-partial",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure",
+        "read",
+        "repair",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "missing-output",
+      "outcome": "rejected",
+      "handoffs": [
+        "produce",
+        "measure"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": true,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": {
+        "schema_version": "1",
+        "code": "output_required_missing",
+        "message": "this output port is required for the reported verdict and was not reported",
+        "retryable": false,
+        "correlation_id": "correlation:ab63bd34a969fea699509879404a831d",
+        "violations": [
+          {
+            "pointer": "/result/outputs/carrier",
+            "reason": "this output port is required for the reported verdict and was not reported"
+          }
+        ],
+        "safe_next_actions": [
+          "doctor",
+          "run.status"
+        ]
+      },
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "absent",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": false,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    },
+    {
+      "case": "disabled",
+      "outcome": "succeeded",
+      "handoffs": [
+        "produce",
+        "read"
+      ],
+      "runs": 1,
+      "fresh_carrier_checked": false,
+      "report_log_refs_checked": true,
+      "producer_directories_removed": true,
+      "invalid_refs": {
+        "unknown": "not_found",
+        "missing_revision": "integrity_failure",
+        "substituted_digest": "integrity_failure"
+      },
+      "continue": null,
+      "missing_output_refusal": null,
+      "stale_prepare_refusal": null
+    }
+  ],
+  "complete": true
+}
