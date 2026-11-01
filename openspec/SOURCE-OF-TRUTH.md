@@ -108,3 +108,11 @@ reviewed recovery после отмены writer и owner resolution для `dom
 package-declared points и explicit consumer bindings для `workflow-and-context`,
 `cli-protocol`, `published-contracts` и `specification-governance`. Ownership
 остаётся в main source sets. Новые authoring `/4` и points `/1` не меняют saved Runs.
+
+
+Пока `unify-workflow-composition-and-extension-points` активен, его deltas
+задают явные extension `/5`, folder `/3`, b2 и новые Project DTO для main source
+sets `workflow-and-context`, `cli-protocol`, `published-contracts` и
+`specification-governance`. Старые `/3` и `/4` сохраняют собственные boundaries.
+Ownership main source sets не переносится. Qualification и release требуют
+отдельного exact-candidate evidence; historical evidence не переписывается.

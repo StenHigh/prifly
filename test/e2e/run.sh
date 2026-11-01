@@ -26,3 +26,5 @@ python3 -B test/e2e/verify-capacity.py --binary "$binary" --target "$home/fixtur
 python3 -B test/e2e/verify-progress.py --binary "$binary" --target "$home/fixtures/progress"
 python3 -B test/e2e/verify-extension-points.py --binary "$binary" --output "$home/extension-points-results.json"
 python3 -B test/e2e/verify-workflow-composition.py --binary "$binary" --report "$home/workflow-composition-results.json"
+python3 -B test/e2e/verify-unified-composition.py --binary "$binary" --output "$home/unified-composition-results.json"
+python3 -B test/e2e/verify-unified-groups.py --binary "$binary" --output "$home/unified-groups-results.json"

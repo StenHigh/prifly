@@ -164,6 +164,26 @@ Registry, TrustDecision или runtime operator. Обзор — `WorkflowComposi
 targets и `workflow: root`. Bindings допускают root inputs и native typed projections.
 Формат `/2` сохраняет локальное разрешение и прежние ограничения bindings.
 
+<a id="compiled-workflow-variant"></a>
+### Compiled workflow variant — Вариант сборки сценария
+
+Неизменяемый результат compiler для одного source workflow с определёнными
+point policy и settings. Extension `/5` изолирует варианты по выбранному import
+и workflow export. Общий private child получает отдельный вариант, если его
+policy различается. Одинаковый effective variant одного владельца используется
+повторно. Вариант не является Run либо WorkflowInvocation.
+
+Source owner означает исходную package inventory до flattening. Совпадение ID
+или содержимого не передаёт ownership другому source. Folder `/3` публикует
+точку через `exports.points`: public workflow export и local sidecar point.
+Он разрешает hook внутри closure, а не прямой доступ к private workflow.
+
+Extension `/5` объединяет композицию и точки через явный root opt-in.
+Прежние `/3` и `/4` сохраняют свои readers и b1 identities. Новые variants
+используют b2 и provenance `/3`. Число marker означает версию конкретного
+документа. Точка с consumer ports принимает один Step либо typed Call;
+автоматическая группа требует пустого `consumers`.
+
 <a id="project-workflow-setting"></a>
 ### Project workflow setting — Настройка сценария проекта
 
@@ -1623,6 +1643,9 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [Workflow composition](#workflow-composition) | `internal/projectwire/composition.go` | `projectwire.CompositionReview` | — |
 | [Workflow composition](#workflow-composition) | `internal/projectwire/composition.go` | `projectwire.CompositionReview.Sources` | `sources` |
 | [Workflow composition](#workflow-composition) | `internal/projectwire/composition.go` | `projectwire.CompositionReview.Groups` | `groups` |
+| [Compiled workflow variant](#compiled-workflow-variant) | `internal/projectwire/composition_points.go` | `projectwire.CompositionVariantReview` | — |
+| [Compiled workflow variant](#compiled-workflow-variant) | `internal/projectwire/composition_points.go` | `projectwire.CompositionVariantReview.VariantKey` | `variant_key` |
+| [Workflow extension point](#workflow-extension-point) | `internal/projectwire/composition_points.go` | `projectwire.CompositionPointReview.Consumers` | `consumers` |
 | [WorkflowRevision](#workflow-revision) | `internal/flow/types.go` | `flow.WorkflowRevision` | — |
 | [Resolution](#resolution) | `internal/runtime/model.go` | `runtime.ObligationResolution` | — |
 | [Resolution](#resolution) | `internal/runtime/model.go` | `runtime.ObligationResolution.Outcome` | `outcome` |

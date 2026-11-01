@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pri-Fly unified composition provenance v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "algorithm",
+    "author_package",
+    "build_key",
+    "package_profile",
+    "values",
+    "settings",
+    "exclude",
+    "root_ref",
+    "components",
+    "composition",
+    "build_inputs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "prifly-build-provenance/3"
+    },
+    "algorithm": {
+      "const": "b2"
+    },
+    "author_package": {
+      "$ref": "#/$defs/identity"
+    },
+    "build_key": {
+      "$ref": "#/$defs/digest"
+    },
+    "package_profile": {
+      "type": "string"
+    },
+    "values": {
+      "type": "object"
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "exclude": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "root_ref": {
+      "$ref": "#/$defs/ref"
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "author_ref",
+          "compiled_ref",
+          "path",
+          "source_owner",
+          "source",
+          "source_digest",
+          "variant_key",
+          "variant_inputs"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "workflow",
+              "step",
+              "check",
+              "schema",
+              "context"
+            ]
+          },
+          "author_ref": {
+            "$ref": "#/$defs/ref"
+          },
+          "compiled_ref": {
+            "$ref": "#/$defs/ref"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^(workflows|steps|checks|schemas|contexts)/[0-9]+\\.(json|txt)$"
+          },
+          "source_owner": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_digest": {
+            "type": "string",
+            "minLength": 1
+          },
+          "variant_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "variant_inputs": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "composition": {
+      "$ref": "#/$defs/composition"
+    },
+    "build_inputs": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[A-Za-z0-9.-]+)?$",
+      "maxLength": 64
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        }
+      }
+    },
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "parents",
+        "sources",
+        "files",
+        "imports",
+        "layers",
+        "contributions",
+        "groups",
+        "owners",
+        "points",
+        "variants"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "workflow-composition/2"
+        },
+        "parents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contributions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        },
+        "imports": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "mode",
+              "members"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "mode": {
+                "enum": [
+                  "sequence",
+                  "parallel",
+                  "choice"
+                ]
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "owners": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source",
+              "digest"
+            ],
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "digest": {
+                "$ref": "#/$defs/digest"
+              }
+            }
+          }
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "owner",
+              "name",
+              "source",
+              "scope",
+              "enabled",
+              "target",
+              "implementations",
+              "consumers",
+              "export"
+            ],
+            "properties": {
+              "owner": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "target": {
+                "$ref": "#/$defs/ref"
+              },
+              "implementations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ref"
+                }
+              },
+              "consumers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "export": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "owner",
+              "source",
+              "author_ref",
+              "variant_key",
+              "compiled_ref",
+              "scopes",
+              "settings"
+            ],
+            "properties": {
+              "owner": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "author_ref": {
+                "$ref": "#/$defs/ref"
+              },
+              "variant_key": {
+                "$ref": "#/$defs/digest"
+              },
+              "compiled_ref": {
+                "$ref": "#/$defs/ref"
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$id": "urn:prifly:build-provenance:3"
+}

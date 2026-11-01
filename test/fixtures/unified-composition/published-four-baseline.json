@@ -1,0 +1,126 @@
+{
+  "version": "v0.13.83",
+  "source_sha": "389808611e40f17d5bbcedebf4580e0db93eb06b",
+  "binary_sha256": "ced33bbe96f1ae0f932061a35be5097c842ae8ca24801daef559dab5dd35b2e2",
+  "cases": {
+    "selected": {
+      "schema_version": "project-compile/2",
+      "package": {
+        "id": "report-probe:package/transport",
+        "version": "0.0.0-b1.i5krncolfr72zlqthmgnlgejgd43ubqbhrvtp7ju4npot5a7xc3q",
+        "digest": "sha256:7c2197bc63a80d1c610277a2adc652add458b0f74afe64590a6b66399013498f"
+      },
+      "build_key": "sha256:47551689cb2c7facae133b0cd5988930f9ba06013c6b37fd34e35ee9f41fb8b7",
+      "files": {
+        "build-provenance.json": "sha256:bf23dd5a222806bd368151fef43bccdb7e6f076501eb8866fed8bd12ac94acd6",
+        "contexts/000.txt": "sha256:ed6035a6e65b54743a08b23d81cef0bfd213fc04f62c873f81402b3a40eb9d94",
+        "contexts/001.txt": "sha256:a0b5f3454a0e1b27549e7d9e08f4eb405f21f19aca66efdec2e3e9c436f54dce",
+        "contexts/002.txt": "sha256:eddb993db3d79a9727af479f82b0829fc10abfcd4c7f132f4c29169c7c623f89",
+        "contexts/003.txt": "sha256:44dfe9642ccf8db5d6c35e425aa2b484cca20b1143b9ded08d96308abfeab980",
+        "contexts/004.txt": "sha256:5674f26ac286378e81c4bec7f37a942a0df3fcd0b388b47b9c71318ea6d2a99b",
+        "prifly.package.json": "sha256:7c2197bc63a80d1c610277a2adc652add458b0f74afe64590a6b66399013498f",
+        "schemas/005.json": "sha256:3563e64f8374fe85cf5e2e626febe2aef00d5aa800ce6de6e4d212655b7a19be",
+        "schemas/006.json": "sha256:6c494765c03dca7cce360d2c586104b28ff25b464676bb5aeff1ced388aa6677",
+        "steps/007.json": "sha256:c40b0fa2696f4cb9a4dca308a7d25d0c434f0f9a0989968357872b19bb3f79fa",
+        "steps/008.json": "sha256:0431885c7de4a42513945c6e9ee7f0156eae2ff23edf196cbc8ae2e47b868f20",
+        "steps/009.json": "sha256:be3c8f28160089a1795396451bc6241b90540dae3a6f701099190009fd21ee58",
+        "steps/010.json": "sha256:e3f09178f95a9d3ecf9424b38cbcc6f9303079c39db55aba6ac27f105ffe4cff",
+        "steps/011.json": "sha256:00f15175a3a4f65007f766770fea00e52015b88dfd5e92a2d80c8458729c3b3e",
+        "workflows/012.json": "sha256:2c3d11d7b75a77f92a58d9074d423651bff9134827c99ecb9368123f63308cfd",
+        "workflows/013.json": "sha256:944a67a3c66f23ec6a5b61877a956917b13fc93569d1f138f5e11b95c126019c",
+        "workflows/014.json": "sha256:45a178976ef2fe7ab98ca5a5c66c92ac7ac516496bbf8e3220bfc1d6404a540f"
+      }
+    },
+    "absent": {
+      "schema_version": "project-compile/2",
+      "package": {
+        "id": "report-probe:package/transport",
+        "version": "0.0.0-b1.vl3czgbnbm25bnp5h6najkhbif3qqamz3554arpcj4lffvrmvl7q",
+        "digest": "sha256:1f51301512288a73c4dc3be8595cf8db7181e567bad422e460cffed4e1671ae0"
+      },
+      "build_key": "sha256:aaf62c982d0b35d0b5fd3f9a04a8e14177080199df7bc045e24f1652d62caaff",
+      "files": {
+        "build-provenance.json": "sha256:363e1f24164e07e9eb3cd1bcc779f397d7f9c1b68be5c27369f204aef0940cd1",
+        "contexts/000.txt": "sha256:ed6035a6e65b54743a08b23d81cef0bfd213fc04f62c873f81402b3a40eb9d94",
+        "contexts/001.txt": "sha256:a0b5f3454a0e1b27549e7d9e08f4eb405f21f19aca66efdec2e3e9c436f54dce",
+        "contexts/002.txt": "sha256:eddb993db3d79a9727af479f82b0829fc10abfcd4c7f132f4c29169c7c623f89",
+        "contexts/003.txt": "sha256:44dfe9642ccf8db5d6c35e425aa2b484cca20b1143b9ded08d96308abfeab980",
+        "contexts/004.txt": "sha256:5674f26ac286378e81c4bec7f37a942a0df3fcd0b388b47b9c71318ea6d2a99b",
+        "prifly.package.json": "sha256:1f51301512288a73c4dc3be8595cf8db7181e567bad422e460cffed4e1671ae0",
+        "schemas/005.json": "sha256:184f0943d3f78ebb60aa02c95dcb1521d0ca27e4f56ccc1dc5102cd5dd9c4610",
+        "schemas/006.json": "sha256:f9d7e68011b800320df9122508c9c670efda53f8c2b3d21cfc2ed99379f63aaf",
+        "steps/007.json": "sha256:20e544ad181dbb1bd10229d6018e7a3a06989ab643d65226b4fdbcaaecb6b860",
+        "steps/008.json": "sha256:42807d393bb9f7f30a8544a99c58940f523fdb39e5fced76c21c126dd0ae3a0a",
+        "steps/009.json": "sha256:af3b0609d7f3e6a709016136c5291ef098647ea05e7a0346fbc3867fd4ab632c",
+        "steps/010.json": "sha256:5816f9c2c3034cd00aff29d0820272ef7b2c52f6bbe24ec9eb01eb66eda09808",
+        "steps/011.json": "sha256:170826e89e0e2efbf4e7358b840813ec908b253bb778b752a94fc7b5d3304a77",
+        "workflows/012.json": "sha256:b090032dd4c7e3919bb8d49d0ab00348e2839ae349d226e99d475555dc3ae3d4",
+        "workflows/013.json": "sha256:8ba38d7e7f4a8c1a48cef9f33399e7870aa6d6cc23e44ce4be8730b951c21cc4",
+        "workflows/014.json": "sha256:f146a97717828560aa497f9362f212c81d73ce93a76b8d51df54c70950208792"
+      }
+    },
+    "disabled": {
+      "schema_version": "project-compile/2",
+      "package": {
+        "id": "report-probe:package/transport",
+        "version": "0.0.0-b1.inggbx2lz5mnimnhtmyk7bpy2a2kulkyncxkv5yezxc3xnxnnxca",
+        "digest": "sha256:05a9810f4f480f70da55950315d5500330f7c173ff0d67bda23e6326d0544780"
+      },
+      "build_key": "sha256:434c60df4bcf58d431a79b30af85f8d034aa2d5868aeaaf704cdc5bbb6ed6dc4",
+      "files": {
+        "build-provenance.json": "sha256:34d9bab9335e3d8a2b4dbd14cb2f995b265a84790915a588f9c85f9033baf3bc",
+        "contexts/000.txt": "sha256:ed6035a6e65b54743a08b23d81cef0bfd213fc04f62c873f81402b3a40eb9d94",
+        "contexts/001.txt": "sha256:a0b5f3454a0e1b27549e7d9e08f4eb405f21f19aca66efdec2e3e9c436f54dce",
+        "contexts/002.txt": "sha256:eddb993db3d79a9727af479f82b0829fc10abfcd4c7f132f4c29169c7c623f89",
+        "contexts/003.txt": "sha256:44dfe9642ccf8db5d6c35e425aa2b484cca20b1143b9ded08d96308abfeab980",
+        "contexts/004.txt": "sha256:5674f26ac286378e81c4bec7f37a942a0df3fcd0b388b47b9c71318ea6d2a99b",
+        "prifly.package.json": "sha256:05a9810f4f480f70da55950315d5500330f7c173ff0d67bda23e6326d0544780",
+        "schemas/005.json": "sha256:68446acc10224dc2157190cf406a66fe7fa1daa8f4f8a722620418928559ae03",
+        "schemas/006.json": "sha256:8db26fa294c2b8eadda78a6092b2b23da232586a00361782836cbaef6cde3770",
+        "steps/007.json": "sha256:a7849c81acb451b4f3cfde5ad11b9e6287fc8fbb5ac16f60938cb2fa7bed101f",
+        "steps/008.json": "sha256:3ecb585ef3a34ec09da7e215e6c20aeb3bb00b394be366fc65a150f6e56eef5f",
+        "steps/009.json": "sha256:43a5bf97bd1cac5033933a2d018e688dc0f9688d1269b5cc165dd90368c5188a",
+        "steps/010.json": "sha256:e3b5334fd437db22b86615c5e2175690aec6e904b4536c4038260c181da0017b",
+        "steps/011.json": "sha256:997210e771ecc4c34d02d6d393e3a5a06b8995782f0dc1c7a5228e8cba9c8c83",
+        "workflows/012.json": "sha256:4bccc33d4cb71cdc230c0d40acee1fde550af8d06d28d394576787ca10876db7",
+        "workflows/013.json": "sha256:f72294f9d536c8ee2aaf5c99f104c1db48a1454aa0cdbea399cc01ed84d8ce81",
+        "workflows/014.json": "sha256:88f4eab3b516779b6a93a3f153ea6d18db470dfd8901077250c66251aac778f0"
+      }
+    }
+  },
+  "refusals": {
+    "unknown_point": {
+      "old": "point: before-read",
+      "new": "point: private",
+      "exit_code": 2,
+      "code": "project_extension_point_unknown",
+      "violations": []
+    },
+    "foreign_implementation": {
+      "old": "step: measure",
+      "new": "step: read",
+      "exit_code": 2,
+      "code": "project_extension_point_component_not_permitted",
+      "violations": []
+    },
+    "forbidden_input": {
+      "old": "point: before-read",
+      "new": "point: before-read\n    input_bindings: {}",
+      "exit_code": 2,
+      "code": "project_extension_point_invalid",
+      "violations": []
+    },
+    "missing_output": {
+      "old": "reader: carrier",
+      "new": "reader: missing",
+      "exit_code": 2,
+      "code": "unknown_port",
+      "violations": [
+        {
+          "pointer": "/definition/stages/read/input_bindings/carrier/port",
+          "reason": "producer output does not exist"
+        }
+      ]
+    }
+  }
+}

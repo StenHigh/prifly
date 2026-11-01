@@ -180,11 +180,14 @@ var worktreeNamingContracts []byte
 //go:embed workflow-composition.schema.json
 var workflowCompositionContracts []byte
 
+//go:embed workflow-composition-points.schema.json
+var workflowCompositionPointsContracts []byte
+
 //go:embed light.schema.json
 var lightContracts []byte
 
 func publicBundles() [][]byte {
-	return append(historicalPublicBundles(), workflowCompositionContracts)
+	return append(historicalPublicBundles(), workflowCompositionContracts, workflowCompositionPointsContracts)
 }
 
 func historicalPublicBundles() [][]byte {

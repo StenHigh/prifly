@@ -36,6 +36,12 @@ var projectBuildCompositionSchema = projectwire.BuildProvenanceV2Schema
 type projectBuildIdentity = projectwire.BuildIdentity
 
 type projectBuildMapping struct {
+	SourceOwner   string         `json:"source_owner,omitempty"`
+	Source        string         `json:"source,omitempty"`
+	SourceDigest  string         `json:"source_digest,omitempty"`
+	VariantKey    string         `json:"variant_key,omitempty"`
+	VariantInputs map[string]any `json:"variant_inputs,omitempty"`
+
 	Kind        string   `json:"kind"`
 	AuthorRef   flow.Ref `json:"author_ref"`
 	CompiledRef flow.Ref `json:"compiled_ref"`
@@ -43,6 +49,8 @@ type projectBuildMapping struct {
 }
 
 type projectBuildProvenance struct {
+	Inputs map[string]any `json:"build_inputs,omitempty"`
+
 	Composition    *projectwire.CompositionReview `json:"composition,omitempty"`
 	SchemaVersion  string                         `json:"schema_version"`
 	Algorithm      string                         `json:"algorithm"`
@@ -135,7 +143,7 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 	if err != nil {
 		return projectCompileResult{}, err
 	}
-	if err := projectValidateCallExtensionBindings(components, options); err != nil {
+	if err := projectValidateCompilationBindings(source, components, options); err != nil {
 		return projectCompileResult{}, err
 	}
 	source.ExecutionBindings, err = projectReadExecution(root, source, components, values, options.ExecutionBindings)
@@ -157,7 +165,11 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 		if err := projectSealExecution(source.ExecutionBindings, components); err != nil {
 			return projectCompileResult{}, err
 		}
-		source.Version, err = projectBuildPackageVersion(source.Build.BuildKey)
+		if source.Unified != nil {
+			source.Version, err = projectUnifiedPackageVersion(source.Build.BuildKey)
+		} else {
+			source.Version, err = projectBuildPackageVersion(source.Build.BuildKey)
+		}
 		if err != nil {
 			return projectCompileResult{}, err
 		}
@@ -223,6 +235,9 @@ func compileAndSealProjectPackage(root, skillsRoot, output, profileVersion, sele
 		result.SchemaVersion = "project-compile/3"
 		result.Composition = &source.Composition.CompositionReview
 	}
+	if source.Unified != nil {
+		result.SchemaVersion = "project-compile/4"
+	}
 	return result, nil
 }
 
@@ -269,6 +284,9 @@ func projectMapDefinitionRefs(value any, configuration bool, visit func(flow.Ref
 }
 
 func projectBuildVariant(source projectPackageSource, components []projectCompileComponent, profile string, values map[string]any, options projectWorkflowOptions) ([]projectCompileComponent, *projectBuildProvenance, error) {
+	if source.Unified != nil {
+		return projectBuildUnifiedVariant(source, components, profile, values, options)
+	}
 	components = slices.Clone(components)
 	slices.SortFunc(components, func(a, b projectCompileComponent) int {
 		return strings.Compare(a.Kind+":"+a.Ref.String(), b.Kind+":"+b.Ref.String())
@@ -414,6 +432,9 @@ func validateProjectBuild(data []byte, components []projectCompileComponent) err
 	if err := json.Unmarshal(data, &edition); err != nil {
 		return err
 	}
+	if edition.SchemaVersion == "prifly-build-provenance/3" {
+		selected = projectwire.BuildProvenanceV3Schema
+	}
 	if edition.SchemaVersion == "prifly-build-provenance/2" {
 		selected = projectBuildCompositionSchema
 	}
@@ -432,6 +453,9 @@ func validateProjectBuild(data []byte, components []projectCompileComponent) err
 	var build projectBuildProvenance
 	if err := json.Unmarshal(data, &build); err != nil {
 		return err
+	}
+	if build.SchemaVersion == "prifly-build-provenance/3" {
+		return projectValidateUnifiedBuild(build, components)
 	}
 	if len(build.Components) != len(components) {
 		return refusal("project_compile_invalid_provenance", "component inventory differs")
@@ -471,7 +495,7 @@ func validateProjectBuild(data []byte, components []projectCompileComponent) err
 }
 
 func projectCompiledLaunchPath(root string, launch projectLaunch, compiled projectCompileResult) (string, error) {
-	if compiled.SchemaVersion != "project-compile/2" && compiled.SchemaVersion != "project-compile/3" {
+	if compiled.SchemaVersion != "project-compile/2" && compiled.SchemaVersion != "project-compile/3" && compiled.SchemaVersion != "project-compile/4" {
 		return projectCompiledLaunchWorkflow(root, launch, compiled.Components)
 	}
 	data, err := readFile(filepath.Join(compiled.Output, projectBuildFile), flow.MaxDocumentBytes)
@@ -489,6 +513,9 @@ func projectCompiledLaunchPath(root string, launch projectLaunch, compiled proje
 		return "", refusal("project_compile_invalid_provenance", "build identity differs")
 	}
 	version, err := projectBuildPackageVersion(build.BuildKey)
+	if build.Algorithm == "b2" {
+		version, err = projectUnifiedPackageVersion(build.BuildKey)
+	}
 	if err != nil {
 		return "", err
 	}

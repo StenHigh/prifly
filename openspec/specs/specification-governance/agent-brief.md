@@ -79,3 +79,11 @@ routes и consumer ports в `extension-points.yaml`; project author выбира
 implementation и explicit outputs в `extend.yaml` `/4`. Reader получает новый
 carrier только по объявленному binding. Публикация report не расширяет effects
 reader и не доказывает реальный provision либо release.
+
+
+Для совместной composition и points используется active change
+`unify-workflow-composition-and-extension-points`. Root выбирает extension `/5`
+либо folder `/3` явно. Проверяйте source owner до flattening, public point
+export и изоляцию compiled variants. Старый `/4` остаётся на прежнем пути.
+Группа в точке с consumers получает отказ; explicit typed Call передаёт carrier.
+Source candidate и опубликованный replay имеют отдельное evidence.

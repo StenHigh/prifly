@@ -36,6 +36,8 @@ type projectCompositionSetting struct {
 }
 
 type projectCompositionProgram struct {
+	Owner string
+
 	Folder    string
 	Value     any
 	Extension bool
@@ -43,6 +45,12 @@ type projectCompositionProgram struct {
 }
 
 type projectCompositionNode struct {
+	unified         bool
+	points          map[string][]projectUnifiedPoint
+	pointExports    map[string]projectUnifiedPointExport
+	importUses      map[string]string
+	importUseLabels map[string]string
+
 	source           projectPackageSource
 	name             string
 	key              string
@@ -64,6 +72,8 @@ type projectCompositionNode struct {
 }
 
 type projectCompositionReader struct {
+	unified bool
+
 	root       string
 	profile    projectProfile
 	nodes      map[string]*projectCompositionNode
@@ -102,11 +112,19 @@ func projectCompositionBindingExpression(expression string) bool {
 }
 
 func projectReadComposedFolder(root, folder string) (projectPackageSource, error) {
+	if unified, err := projectUnifiedOptIn(root, folder); err != nil {
+		return projectPackageSource{}, err
+	} else if unified {
+		return projectReadUnifiedFolder(root, folder)
+	}
 	source, err := readProjectWorkflowFolderRaw(root, folder)
 	if err != nil {
 		return source, err
 	}
 	object := source.RootValue.(map[string]any)
+	if object["authoring"] == projectUnifiedFolderVersion {
+		return source, refusal("project_composition_source_invalid", "unified root requires a confined regular workflow.yaml")
+	}
 	marked := object["authoring"] == projectWorkflowCompositionVersion
 	if data, err := readFile(filepath.Join(folder, "extend.yaml"), flow.MaxDocumentBytes); err == nil {
 		if value, err := flow.Parse(data, "yaml"); err == nil {
@@ -229,10 +247,19 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 	defer delete(r.active, key)
 	// A flattened inventory cannot prove package ownership for point targets.
 	// Refuse even an unused declaration before collecting any provider documents.
-	if _, err := os.Lstat(filepath.Join(folder, projectExtensionPointsFile)); err == nil {
+	if _, err := os.Lstat(filepath.Join(folder, projectExtensionPointsFile)); err == nil && !r.unified {
 		return nil, refusal("project_composition_extension_points_unsupported", name+": extension-points.yaml cannot participate in composition")
-	} else if !os.IsNotExist(err) {
+	} else if err != nil && !os.IsNotExist(err) {
 		return nil, err
+	}
+	if r.unified {
+		relative, err := projectRelativePath(r.root, filepath.Join(folder, "workflow.yaml"))
+		if err != nil {
+			return nil, err
+		}
+		if err := r.record(relative); err != nil {
+			return nil, err
+		}
 	}
 	source, err := readProjectWorkflowFolderSource(r.root, folder, effective)
 	if err != nil {
@@ -244,7 +271,7 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 		return nil, err
 	}
 	prefix := fmt.Sprintf("n%x", sha256.Sum256([]byte(relativeFolder)))[:17]
-	n := &projectCompositionNode{source: source, name: name, key: key, prefix: prefix, locals: map[string]string{}, exports: map[string]string{}, imports: map[string]*projectCompositionNode{}, ancestors: map[string]*projectCompositionNode{}}
+	n := &projectCompositionNode{unified: r.unified, points: map[string][]projectUnifiedPoint{}, pointExports: map[string]projectUnifiedPointExport{}, importUses: map[string]string{}, importUseLabels: map[string]string{}, source: source, name: name, key: key, prefix: prefix, locals: map[string]string{}, exports: map[string]string{}, imports: map[string]*projectCompositionNode{}, ancestors: map[string]*projectCompositionNode{}}
 	r.nodes[modeKey] = n
 	n.ancestors[key] = n
 	for key, logical := range maps.Clone(n.source.References) {
@@ -254,7 +281,7 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 		n.source.References[alias] = logical
 	}
 	if raw, exists := object["imports"]; exists {
-		if object["authoring"] != projectWorkflowCompositionVersion {
+		if object["authoring"] != projectWorkflowCompositionVersion && !(r.unified && object["authoring"] == projectUnifiedFolderVersion) {
 			return nil, refusal("project_composition_marker_required", name+": imports require folder /2")
 		}
 		if err := r.readImports(n, raw, depth); err != nil {
@@ -282,8 +309,13 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 		doc.Value = value
 		n.locals[alias] = doc.Alias
 	}
+	if r.unified {
+		if err := n.readUnifiedPoints(); err != nil {
+			return nil, err
+		}
+	}
 	if raw, exists := object["exports"]; exists {
-		if object["authoring"] != projectWorkflowCompositionVersion {
+		if object["authoring"] != projectWorkflowCompositionVersion && !(r.unified && object["authoring"] == projectUnifiedFolderVersion) {
 			return nil, refusal("project_composition_marker_required", name+": exports require folder /2")
 		}
 		groups, ok := raw.(map[string]any)
@@ -291,6 +323,9 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 			return nil, refusal("project_composition_invalid_export", name+": exports must be a nonempty object")
 		}
 		for group, rawExports := range groups {
+			if group == "points" && r.unified && object["authoring"] == projectUnifiedFolderVersion {
+				continue
+			}
 			kind := strings.TrimSuffix(group, "s")
 			if group != "steps" && group != "workflows" {
 				return nil, refusal("project_composition_invalid_export", name+": unknown export kind "+group)
@@ -324,9 +359,14 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 			}
 		}
 	}
+	if r.unified {
+		if err := n.readUnifiedPointExports(); err != nil {
+			return nil, err
+		}
+	}
 	{
 		if raw, exists := object["extends"]; exists {
-			if object["authoring"] != projectWorkflowCompositionVersion {
+			if object["authoring"] != projectWorkflowCompositionVersion && !(r.unified && object["authoring"] == projectUnifiedFolderVersion) {
 				return nil, refusal("project_composition_marker_required", name+": extends requires folder /2")
 			}
 			parents := []any{raw}
@@ -357,6 +397,17 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 				}
 			} else {
 				n.inheritDocuments()
+			}
+		}
+	}
+	if r.unified {
+		n.inheritUnifiedPoints()
+		if err := n.validateUnifiedOwnPoints(); err != nil {
+			return nil, err
+		}
+		if effective {
+			if err := r.readOptions(n, depth); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -409,10 +460,12 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 				}
 			}
 		}
-		if err := r.readOptions(n, depth); err != nil {
-			return nil, err
+		if !r.unified {
+			if err := r.readOptions(n, depth); err != nil {
+				return nil, err
+			}
 		}
-		if err := projectCompositionArrangeNode(n); err != nil {
+		if err := projectArrangeCompilationNode(n); err != nil {
 			return nil, err
 		}
 	}
@@ -457,6 +510,13 @@ func (r *projectCompositionReader) readImports(n *projectCompositionNode, raw an
 }
 
 func (n *projectCompositionNode) target(name, kind string) (string, error) {
+	if n.unified && projectCompositionQualified(name) {
+		return n.unifiedImportedTarget(name, kind)
+	}
+	return n.legacyTarget(name, kind)
+}
+
+func (n *projectCompositionNode) legacyTarget(name, kind string) (string, error) {
 	if projectCompositionQualified(name) {
 		parts := strings.Split(name, ".")
 		provider := n.imports[parts[0]]
@@ -569,7 +629,15 @@ func (n *projectCompositionNode) inherit() error {
 	rootDoc.Value = root
 	for _, parent := range n.parents {
 		for _, ext := range parent.options.Extensions {
-			ext.Workflow = rootDoc.Name
+			if n.unified && ext.UnifiedPoint != nil {
+				p := *ext.UnifiedPoint
+				if p.Target == parent.rootDocument().Name {
+					p.Target = rootDoc.Name
+				}
+				ext.UnifiedPoint = &p
+			} else {
+				ext.Workflow = rootDoc.Name
+			}
 			found := false
 			for _, existing := range n.options.Extensions {
 				if existing.Source == ext.Source {
@@ -583,7 +651,15 @@ func (n *projectCompositionNode) inherit() error {
 				}
 			}
 			if !found {
-				ext.Workflow = rootDoc.Name
+				if n.unified && ext.UnifiedPoint != nil {
+					p := *ext.UnifiedPoint
+					if p.Target == parent.rootDocument().Name {
+						p.Target = rootDoc.Name
+					}
+					ext.UnifiedPoint = &p
+				} else {
+					ext.Workflow = rootDoc.Name
+				}
 				n.options.Extensions = append(n.options.Extensions, ext)
 			}
 		}
@@ -676,10 +752,10 @@ func (r *projectCompositionReader) readOptions(n *projectCompositionNode, depth 
 	if !ok {
 		return refusal("project_composition_invalid_layer", relative+": expected object")
 	}
-	if err := projectCompositionCheckPointBoundary(object, relative); err != nil {
+	if err := r.checkPointBoundary(object, relative); err != nil {
 		return err
 	}
-	marked := object["authoring"] == projectCompositionExtensionVersion
+	marked := object["authoring"] == projectCompositionExtensionVersion || r.unified && object["authoring"] == projectUnifiedExtensionVersion
 	if raw, exists := object["layers"]; exists {
 		if !marked {
 			return refusal("project_composition_marker_required", relative+": layers require /3")
@@ -713,10 +789,10 @@ func (r *projectCompositionReader) readOptions(n *projectCompositionNode, depth 
 				return err
 			}
 			layerObject, ok := layer.(map[string]any)
-			if err := projectCompositionCheckPointBoundary(layerObject, layerRelative); err != nil {
+			if err := r.checkPointBoundary(layerObject, layerRelative); err != nil {
 				return err
 			}
-			if !ok || layerObject["authoring"] != projectCompositionExtensionVersion {
+			if !ok || layerObject["authoring"] != projectCompositionExtensionVersion && !(r.unified && layerObject["authoring"] == projectUnifiedExtensionVersion) {
 				return refusal("project_composition_invalid_layer", layerRelative+": layer requires /3")
 			}
 			for _, key := range []string{"layers", "extends", "arrange"} {
@@ -743,10 +819,17 @@ func (r *projectCompositionReader) readOptions(n *projectCompositionNode, depth 
 }
 
 func (r *projectCompositionReader) optionsDocument(n *projectCompositionNode, object map[string]any, source string, depth int) (projectWorkflowOptions, error) {
-	if err := projectCompositionCheckPointBoundary(object, source); err != nil {
+	if r.unified {
+		return r.unifiedOptionsDocument(n, object, source, depth)
+	}
+	return r.legacyOptionsDocument(n, object, source, depth)
+}
+
+func (r *projectCompositionReader) legacyOptionsDocument(n *projectCompositionNode, object map[string]any, source string, depth int) (projectWorkflowOptions, error) {
+	if err := r.checkPointBoundary(object, source); err != nil {
 		return projectWorkflowOptions{}, err
 	}
-	marked := object["authoring"] == projectCompositionExtensionVersion
+	marked := object["authoring"] == projectCompositionExtensionVersion || r.unified && object["authoring"] == projectUnifiedExtensionVersion
 	if raw, exists := object["imports"]; exists {
 		if !marked {
 			return projectWorkflowOptions{}, refusal("project_composition_marker_required", source+": imports require /3")
@@ -943,6 +1026,9 @@ func (n *projectCompositionNode) mergeParentOptions(own projectWorkflowOptions) 
 }
 
 func (r *projectCompositionReader) finish(n *projectCompositionNode) (projectPackageSource, error) {
+	if r.unified {
+		return r.finishUnified(n)
+	}
 	if n.options.Exclude == nil {
 		n.options.Exclude = []string{}
 	}
@@ -1203,6 +1289,24 @@ func projectCompositionExplain(source projectPackageSource, options projectWorkf
 					result = append(result, "  "+setting.Source+" = "+string(value))
 				}
 			}
+		}
+	}
+
+	if composition.Unified != nil {
+		for _, owner := range composition.Unified.Owners {
+			result = append(result, "Owner "+owner.Source+" "+owner.Digest)
+		}
+		for _, variant := range composition.Unified.Variants {
+			settings, _ := json.Marshal(variant.Settings)
+			result = append(result, "Variant "+variant.AuthorRef.String()+" from "+variant.Owner+" ["+strings.Join(variant.Scopes, ", ")+"] -> "+variant.CompiledRef.String()+"; settings="+string(settings))
+		}
+		for _, point := range composition.Unified.Points {
+			state := "disabled"
+			if point.Enabled {
+				state = "active"
+			}
+			bindings, _ := json.Marshal(point.Consumers)
+			result = append(result, "Point "+point.Owner+"#"+point.Name+" ("+state+", "+point.Scope+") -> "+point.Target.String()+"; consumers="+string(bindings))
 		}
 	}
 	result = append(result, "Every contribution is invoked. Its workflow decides applicability; no skip is assumed before execution.")

@@ -56,9 +56,12 @@ type projectPackageSource struct {
 	Folder               string
 	ExtensionPoints      *projectExtensionPoints
 	Composition          *projectComposition
+	Unified              *projectUnifiedBuild
 }
 
 type projectPackageDocument struct {
+	Unified *projectUnifiedDefinition
+
 	Kind         string
 	Source       string
 	AliasPrefix  string
@@ -74,6 +77,9 @@ type projectPackageDocument struct {
 }
 
 type projectCompileComponent struct {
+	Unified    *projectUnifiedDefinition `json:"-"`
+	CompileRef flow.Ref                  `json:"-"`
+
 	Kind      string                `json:"kind"`
 	Ref       flow.Ref              `json:"ref"`
 	Path      string                `json:"path"`
@@ -597,6 +603,11 @@ func readProjectWorkflowFolderSource(root, folder string, catalog bool) (project
 	if err != nil {
 		return projectPackageSource{}, refusal("project_workflow_folder_invalid", err.Error())
 	}
+	if object, ok := workflowValue.(map[string]any); ok && object["authoring"] == projectUnifiedFolderVersion {
+		if err := projectValidatePointShape("project-workflow-folder-v3", object); err != nil {
+			return projectPackageSource{}, err
+		}
+	}
 	if _, err := projectFolderWorkflowDefinition(workflowValue); err != nil {
 		return projectPackageSource{}, refusal("project_workflow_folder_invalid", err.Error())
 	}
@@ -943,13 +954,13 @@ func projectFolderWorkflowDefinition(value any) (map[string]any, error) {
 	if !ok {
 		return nil, errors.New("workflow.yaml must be an object")
 	}
-	if authoring, _ := workflow["authoring"].(string); authoring != projectWorkflowFolderVersion && authoring != projectWorkflowCompositionVersion {
+	if authoring, _ := workflow["authoring"].(string); authoring != projectWorkflowFolderVersion && authoring != projectWorkflowCompositionVersion && authoring != projectUnifiedFolderVersion {
 		return nil, errors.New("workflow.yaml authoring must be " + projectWorkflowFolderVersion + " or " + projectWorkflowCompositionVersion)
 	}
 	if _, ok := workflow["package"].(map[string]any); !ok {
 		return nil, errors.New("workflow.yaml package must be an object")
 	}
-	if workflow["authoring"] == projectWorkflowCompositionVersion {
+	if workflow["authoring"] == projectWorkflowCompositionVersion || workflow["authoring"] == projectUnifiedFolderVersion {
 		id, idOK := workflow["id"].(string)
 		version, versionOK := workflow["version"].(string)
 		if !idOK || !versionOK {
@@ -961,7 +972,7 @@ func projectFolderWorkflowDefinition(value any) (map[string]any, error) {
 	}
 	result := make(map[string]any, len(workflow)-1)
 	for key, field := range workflow {
-		if workflow["authoring"] != projectWorkflowCompositionVersion && (key == "imports" || key == "exports" || key == "extends") {
+		if workflow["authoring"] != projectWorkflowCompositionVersion && workflow["authoring"] != projectUnifiedFolderVersion && (key == "imports" || key == "exports" || key == "extends") {
 			return nil, errors.New("composition fields require prifly-project-workflow/2")
 		}
 		if key != "package" && key != "decision_catalog" && key != "execution_bindings" && key != "imports" && key != "exports" && key != "extends" {
@@ -1042,7 +1053,7 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 			pending = append(pending, projectPendingDocument{document: declaration, value: value, index: index})
 		}
 	}
-	pointExtensions, err := projectPreparePointExtensions(source, pending, options.Extensions)
+	pointExtensions, err := projectPrepareCompilationPoints(source, pending, options.Extensions)
 	if err != nil {
 		return nil, err
 	}
@@ -1058,7 +1069,7 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 	if err != nil {
 		return nil, err
 	}
-	if err := projectApplyWorkflowOptions(pending, options); err != nil {
+	if err := projectApplyCompilationOptions(source, pending, options); err != nil {
 		return nil, err
 	}
 	for len(pending) > 0 {
@@ -1068,6 +1079,9 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 			object, _ := item.value.(map[string]any)
 			id, _ := object["id"].(string)
 			selectedPoints := pointExtensions[id]
+			if source.Unified != nil {
+				selectedPoints = pointExtensions[item.document.Name]
+			}
 			if !projectPointExtensionsReady(components, selectedPoints) {
 				next = append(next, item)
 				continue
@@ -1088,7 +1102,7 @@ func compileProjectPackage(root, skillsRoot, output string, source projectPackag
 			if err != nil {
 				return nil, usageError(fmt.Sprintf("project_compile_invalid_source: %s/%d: %s", item.document.Source, item.index, err))
 			}
-			if err := projectApplyPointExtensions(&component, components, selectedPoints); err != nil {
+			if err := projectApplyCompilationPoints(&component, &components, selectedPoints); err != nil {
 				return nil, err
 			}
 			if item.document.Extensions != "" {
@@ -1374,6 +1388,10 @@ func projectAddComponent(output string, document projectPackageDocument, compone
 		directory, suffix = "contexts", ".txt"
 	}
 	component.Path = fmt.Sprintf("%s/%03d%s", directory, index, suffix)
+	component.Unified = document.Unified
+	if document.Unified != nil {
+		component.Names = append(component.Names, document.Unified.Alias)
+	}
 	component.Root = document.FolderRoot
 	component.Name = document.Name
 	if output != "" {

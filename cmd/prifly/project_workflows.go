@@ -360,7 +360,7 @@ func projectWorkflowFolderMarker(workflowPath string) bool {
 		return false
 	}
 	object, ok := value.(map[string]any)
-	return ok && (object["authoring"] == projectWorkflowFolderVersion || object["authoring"] == projectWorkflowCompositionVersion)
+	return ok && (object["authoring"] == projectWorkflowFolderVersion || object["authoring"] == projectWorkflowCompositionVersion || object["authoring"] == projectUnifiedFolderVersion)
 }
 
 // discoverProjectWorkflowFolders finds folders by their marker alone, never by
@@ -532,7 +532,7 @@ func inspectProjectWorkflowFolder(root, folder string) (projectWorkflowInspectio
 		return projectWorkflowInspection{}, refusal("project_workflow_folder_invalid", err.Error())
 	}
 	title, _ := workflow["title"].(string)
-	if title == "" && value.(map[string]any)["authoring"] == projectWorkflowCompositionVersion {
+	if title == "" && (value.(map[string]any)["authoring"] == projectWorkflowCompositionVersion || value.(map[string]any)["authoring"] == projectUnifiedFolderVersion) {
 		title = projectExtensionWorkflowName(workflow["id"].(string))
 	}
 	return projectWorkflowInspection{source: source, title: title}, nil

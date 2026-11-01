@@ -1,0 +1,699 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:prifly:yaml-authoring:project-workflow-folder:3",
+  "title": "Pri-Fly workflow folder with public point exports",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "authoring",
+    "package",
+    "id",
+    "version"
+  ],
+  "properties": {
+    "authoring": {
+      "const": "prifly-project-workflow/3"
+    },
+    "package": {
+      "$ref": "#/$defs/package"
+    },
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "refs": {
+      "type": "object",
+      "additionalProperties": {}
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/port"
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/port"
+      }
+    },
+    "features": {
+      "$ref": "#/$defs/features"
+    },
+    "decision_catalog": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "execution_bindings": {
+      "$ref": "#/$defs/execution_bindings"
+    },
+    "allowed_outcomes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "entry": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stages": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/stage"
+      }
+    },
+    "limits": {
+      "$ref": "#/$defs/limits"
+    },
+    "policy_ref": {
+      "$ref": "#/$defs/reference"
+    },
+    "checkpoint": {
+      "description": "Revision 7: the schema of the point this workflow's work can be continued from. A step stage names the output reporting it with `checkpoint: PORT`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_ref"
+      ],
+      "properties": {
+        "schema_ref": {
+          "$ref": "#/$defs/reference"
+        }
+      }
+    },
+    "continuation": {
+      "description": "Revision 7: which finished Runs this workflow continues and where each input comes from in them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_workflows",
+        "inputs"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "from_outcomes"
+          ]
+        },
+        {
+          "required": [
+            "from_cancelled"
+          ]
+        }
+      ],
+      "properties": {
+        "from_workflows": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "from_outcomes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "succeeded",
+              "rejected",
+              "no_work",
+              "partial",
+              "completed_with_waivers"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "from_cancelled": {
+          "const": true,
+          "description": "Also continue a cancelled Run: it has no outcome, and its accepted steps and tree are what it leaves."
+        },
+        "inputs": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "source_input"
+                ],
+                "properties": {
+                  "source_input": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "stage",
+                  "output",
+                  "verdict"
+                ],
+                "properties": {
+                  "stage": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "output": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "verdict": {
+                    "enum": [
+                      "pass",
+                      "fail",
+                      "needs_revision",
+                      "no_work",
+                      "blocked"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "stage",
+                  "output",
+                  "outcome"
+                ],
+                "properties": {
+                  "stage": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "output": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "outcome": {
+                    "enum": [
+                      "succeeded",
+                      "rejected",
+                      "no_work",
+                      "partial",
+                      "completed_with_waivers"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "checkpoint"
+                ],
+                "properties": {
+                  "checkpoint": {
+                    "const": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "resumable": {
+      "description": "Revision 8: this workflow's own stopped Runs may be resumed by it from where they stopped -- those ended with one of these outcomes, or cancelled. The resumed Run takes the source Run's inputs; nothing is mapped.",
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "from_outcomes"
+          ]
+        },
+        {
+          "required": [
+            "from_cancelled"
+          ]
+        }
+      ],
+      "properties": {
+        "from_outcomes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "succeeded",
+              "rejected",
+              "no_work",
+              "partial",
+              "completed_with_waivers"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "from_cancelled": {
+          "const": true,
+          "description": "Also resume a cancelled Run from the stage it was stopped at."
+        }
+      }
+    },
+    "imports": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      }
+    },
+    "extends": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          }
+        }
+      ]
+    },
+    "exports": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^\\{\\{step_[a-z][a-z0-9_-]*\\}\\}$"
+          }
+        },
+        "workflows": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^\\{\\{workflow_[a-z][a-z0-9_-]*\\}\\}$"
+          }
+        },
+        "points": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 256,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "workflow",
+              "point"
+            ],
+            "properties": {
+              "workflow": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$"
+              },
+              "point": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "execution_bindings": {
+      "description": "Profile /3 only. Logical local programs; compilation never executes them.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/execution_binding"
+          }
+        },
+        "checks": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/execution_binding"
+          }
+        }
+      }
+    },
+    "execution_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executable",
+        "timeout_ms",
+        "grace_ms",
+        "max_output_bytes"
+      ],
+      "properties": {
+        "executable": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        "args": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "type": "object",
+          "maxProperties": 256,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600000
+        },
+        "grace_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000
+        },
+        "max_output_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "live_output": {
+          "type": "boolean",
+          "description": "Open this program's stdout and stderr to readers of the Run while it works (state 43)."
+        },
+        "output_limit_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216,
+          "description": "Per-stream output limit; absent keeps 64 KiB."
+        },
+        "context_profile_ref": {
+          "$ref": "#/$defs/reference"
+        }
+      }
+    },
+    "package": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "description",
+        "requires_core_protocol"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requires_core_protocol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requested_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "references": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "profiles": {
+          "type": "object",
+          "required": [
+            "default",
+            "values"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "default": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            },
+            "values": {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "pattern": "^[a-z][a-z0-9_-]*$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "minProperties": 1,
+                "propertyNames": {
+                  "pattern": "^[a-z][a-z0-9_-]*$"
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "reference": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object"
+        }
+      ]
+    },
+    "port": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "type": "object",
+          "additionalProperties": true
+        }
+      ]
+    },
+    "features": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input"
+        ],
+        "properties": {
+          "input": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "step",
+            "call",
+            "choice",
+            "repeat",
+            "parallel",
+            "map",
+            "wait",
+            "finish"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "limits": {
+      "type": "object",
+      "required": [
+        "max_step_instances",
+        "max_control_transitions"
+      ],
+      "properties": {
+        "max_step_instances": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_control_transitions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_parallelism": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_child_depth": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "extends"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "refs"
+              ]
+            },
+            {
+              "required": [
+                "inputs"
+              ]
+            },
+            {
+              "required": [
+                "outputs"
+              ]
+            },
+            {
+              "required": [
+                "stages"
+              ]
+            },
+            {
+              "required": [
+                "entry"
+              ]
+            },
+            {
+              "required": [
+                "policy_ref"
+              ]
+            },
+            {
+              "required": [
+                "features"
+              ]
+            },
+            {
+              "required": [
+                "allowed_outcomes"
+              ]
+            },
+            {
+              "required": [
+                "schema_version"
+              ]
+            },
+            {
+              "required": [
+                "checkpoint"
+              ]
+            },
+            {
+              "required": [
+                "continuation"
+              ]
+            },
+            {
+              "required": [
+                "resumable"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "entry",
+          "stages",
+          "limits",
+          "policy_ref"
+        ]
+      }
+    }
+  ]
+}

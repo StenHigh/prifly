@@ -126,3 +126,10 @@ records и legacy runtime-вопросы сохраняют `/1`. Сохранё
 без аргумента, а сгенерированные bundles лежат в [`schemas/core/`](../core/).
 
 `extension-v4.schema.json` adds explicitly declared nested points; `extension-points-v1.schema.json` describes the package-owned sidecar. Existing extension-v1/v2 stay unchanged. `/3` is reserved for the independent workflow-composition change.
+
+
+`extension-v5.schema.json` объединяет composition и declared points через явный
+root opt-in. `project-workflow-folder-v3.schema.json` добавляет `exports.points`.
+Sidecar `/1` и старые `/3` и `/4` сохраняют свои contracts. Новый marker выбирается
+явно; импорт provider не переводит старый root в новый режим.
+[Поля и минимальные native revisions](../../examples/authoring/unified-composition-authoring-reference.yaml).

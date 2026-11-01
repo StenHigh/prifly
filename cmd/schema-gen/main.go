@@ -380,6 +380,7 @@ var documentContracts = []struct {
 	{"light", "generate read-only Light contracts", lightSchema},
 	{"worktree-naming", "generate opt-in Project worktree naming contracts", worktreeNamingSchema},
 	{"workflow-composition", "generate opt-in workflow composition contracts", workflowCompositionSchema},
+	{"workflow-composition-points", "generate unified composition and points contracts", workflowCompositionPointsSchema},
 	{"storage-budget-status", "generate StorageBudgetStatus", func() ([]byte, error) {
 		return storageBudgetSchema("StorageBudgetStatus", "storage-budget-status", reflect.TypeFor[prifly.StorageBudgetStatus]())
 	}},

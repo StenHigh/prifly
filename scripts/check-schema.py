@@ -85,6 +85,7 @@ def check(args, generator):
 		("live-output", ["--live-output"], ("internal/runtime/live-output.schema.json", "schemas/core/live-output.schema.json")),
         ("worktree-naming", ["--worktree-naming"], ("internal/runtime/worktree-naming.schema.json", "schemas/core/worktree-naming.schema.json")),
         ("workflow-composition", ["--workflow-composition"], ("internal/runtime/workflow-composition.schema.json", "schemas/core/workflow-composition.schema.json")),
+        ("workflow-composition-points", ["--workflow-composition-points"], ("internal/runtime/workflow-composition-points.schema.json", "schemas/core/workflow-composition-points.schema.json")),
         ("task-queue", ["--task-queue"], ("internal/runtime/task-queue.schema.json", "schemas/core/task-queue.schema.json")),
         ("project-task-queue", ["--project-task-queue"], ("schemas/core/project-task-queue.schema.json",)),
         ("project-task-queue-read", ["--project-task-queue-read"], ("schemas/core/project-task-queue-read.schema.json",)),

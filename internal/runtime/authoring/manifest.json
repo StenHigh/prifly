@@ -19,6 +19,8 @@
     {"document": "extension-v4", "id": "urn:prifly:yaml-authoring:extension:4", "path": "extension-v4.schema.json", "patterns": []},
     {"document": "extension-points-v1", "id": "urn:prifly:yaml-authoring:extension-points:1", "path": "extension-points-v1.schema.json", "patterns": [".prifly/workflows/*/extension-points.yaml"]},
     {"document": "project-workflow-folder-v2", "id": "urn:prifly:yaml-authoring:project-workflow-folder:2", "path": "project-workflow-folder-v2.schema.json", "patterns": []},
-    {"document": "extension-v3", "id": "urn:prifly:yaml-authoring:extension:3", "path": "extension-v3.schema.json", "patterns": []}
+    {"document": "extension-v3", "id": "urn:prifly:yaml-authoring:extension:3", "path": "extension-v3.schema.json", "patterns": []},
+    {"document": "extension-v5", "id": "urn:prifly:yaml-authoring:extension:5", "path": "extension-v5.schema.json", "patterns": []},
+    {"document": "project-workflow-folder-v3", "id": "urn:prifly:yaml-authoring:project-workflow-folder:3", "path": "project-workflow-folder-v3.schema.json", "patterns": []}
   ]
 }

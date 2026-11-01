@@ -421,13 +421,19 @@ func projectPointConsumerBinding(stages map[string]any, consumer projectPointCon
 
 func projectPointExtensionsReady(components []projectCompileComponent, extensions []projectWorkflowExtension) bool {
 	for _, extension := range extensions {
+		if extension.Group != nil {
+			if !projectPointExtensionsReady(components, projectCompositionLeaves(extension.Group.Members)) {
+				return false
+			}
+			continue
+		}
 		kind, name := "step", extension.Step
 		if extension.Call != "" {
 			kind, name = "workflow", extension.Call
 		}
 		found := false
 		for _, c := range components {
-			if c.Kind == kind && projectExtensionWorkflowName(c.Ref.ID) == name {
+			if c.Kind == kind && (extension.UnifiedPoint == nil && projectExtensionWorkflowName(c.Ref.ID) == name || extension.UnifiedPoint != nil && (projectCompositionComponentNamed(c, name) || c.Name == "" && projectExtensionWorkflowName(c.Ref.ID) == name)) {
 				found = true
 				break
 			}
@@ -467,7 +473,7 @@ func projectApplyPointExtensions(component *projectCompileComponent, components 
 		}
 		var target projectCompileComponent
 		for _, c := range components {
-			if c.Kind == kind && projectExtensionWorkflowName(c.Ref.ID) == name {
+			if c.Kind == kind && (extension.UnifiedPoint == nil && projectExtensionWorkflowName(c.Ref.ID) == name || extension.UnifiedPoint != nil && (projectCompositionComponentNamed(c, name) || c.Name == "" && projectExtensionWorkflowName(c.Ref.ID) == name)) {
 				target = c
 				break
 			}

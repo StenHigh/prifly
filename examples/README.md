@@ -43,6 +43,7 @@
 | `project_call_extensions` | `prifly-extension/2`, Project `/3`; native Call (WorkflowRevision 1, core-state/2 и core-read/2), child fields требуют своих ревизий; Pri-Fly 0.13.78+ | [Вставки step/call](authoring/extension-authoring-reference.yaml) |
 | `project_extension_points` | Project `/3`, `prifly-extension/4`, points `/1`; native Call v1, Repeat v3, blocked v6, resumable v8; session external_write: StepDefinition v11 | [Точки подключения](authoring/extension-points-authoring-reference.yaml), [native example](nested-extension-points/README.md) |
 | `workflow_composition` | Folder `/2`, extension `/3`, Project `/3` или `/4`; lowering в native Call/Choice/Parallel, fields children требуют своих native ревизий; нужен build с этой capability | [Imports, parents, layers, groups](authoring/workflow-composition-authoring-reference.yaml), [пример](workflow-composition/README.md) |
+| `workflow_composition_with_points` | Extension `/5`, folder `/3`, sidecar `/1`, Project `/3` или `/4`; native Call v1, Parallel v2, projection v5, blocked v6, resumable v8; отдельный opt-in, b2 | [Единый контракт](authoring/unified-composition-authoring-reference.yaml), [запускаемый пример](unified-composition/README.md) |
 | `storage_budget_management` | CLI `storage budget show`, reviewed `set`, storage 10; YAML quota field отсутствует | [Восстановление storage](authoring/storage-recovery-guide.md) |
 | `on_error` | `on_error` у стадии | workflow |
 | `json_projection` | `pointer` и `projected_schema_ref` в binding | workflow |

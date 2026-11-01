@@ -255,6 +255,8 @@ Compiler отдельно проверяет source imports и actual definition
 - Нормализованные selected point contracts, implementation targets, output bindings и effective settings.
 - Canonical dependency variant keys, включая implementations и generated groups.
 
+Canonical native variant record сохраняет `source_variant_key`: hash нормализованной authoring policy и её зависимостей до native lowering. Он различает явный disabled choice и отсутствующую настройку, даже когда native bodies совпадают. Review points сохраняют отдельное `export` для выбранного публичного имени; local/inherited selectors имеют пустое значение.
+
 Variant key использует author/source targets и dependency keys до sealing. Compiled refs и final package digest в него не входят.
 Это исключает цикл между variant key, build key и compiled refs.
 Alias spelling и абсолютный machine path не определяют owner. Независимые source origins не объединяются только по одинаковому содержимому.

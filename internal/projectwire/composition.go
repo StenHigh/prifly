@@ -8,6 +8,8 @@ var BuildProvenanceV2Schema []byte
 // CompositionReview describes source preparation, never a runtime lookup.
 // Files pins all source bytes, including inherited and imported dependencies.
 type CompositionReview struct {
+	Unified *CompositionPointsDetails `json:"-"`
+
 	SchemaVersion string                   `json:"schema_version"`
 	Parents       []string                 `json:"parents"`
 	Sources       []string                 `json:"sources"`

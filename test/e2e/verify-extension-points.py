@@ -32,7 +32,7 @@ def git(*args):
     subprocess.run(["git", "-c", "user.name=Pri-Fly fixture", "-c", "user.email=fixture@example.invalid", *map(str, args)], check=True, capture_output=True, timeout=30)
 
 
-def run_case(binary, case):
+def run_case(binary, case, extension_authoring="prifly-extension/4", setup=None):
     with tempfile.TemporaryDirectory(prefix="prifly-points-") as temporary:
         root = Path(temporary)
         repository, authority = root / "repository", root / "authority"
@@ -50,6 +50,11 @@ def run_case(binary, case):
         text = profile.read_text().replace("packages: {}", "packages:\n  transport: {source: .prifly/workflows/transport}")
         text = text.replace("launches: {}", "launches:\n  transport:\n    title: Native extension points\n    description: Synthetic replies, no provision.\n    kind: workflow\n    workflow: .prifly/workflows/transport/workflow.yaml")
         profile.write_text(text)
+        if extension_authoring != "prifly-extension/4":
+            extension = folder / "extend.yaml"
+            extension.write_text(extension.read_text().replace("prifly-extension/4", extension_authoring))
+        if setup is not None:
+            setup(repository, folder)
         (repository / "metadata.txt").write_text("original\n")
         git("-C", repository, "add", "-A")
         git("-C", repository, "commit", "-qm", "Generic fixture")
@@ -261,12 +266,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--extension-authoring", choices=["prifly-extension/4", "prifly-extension/5"], default="prifly-extension/4")
     parser.add_argument("--cases", nargs="+", choices=CASES, default=CASES)
     args = parser.parse_args()
     binary = args.binary.resolve(strict=True)
     result = {"binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(), "boundary": __doc__, "cases": [], "complete": False}
     for case in args.cases:
-        result["cases"].append(run_case(binary, case))
+        result["cases"].append(run_case(binary, case, args.extension_authoring))
         print(case, "PASS", flush=True)
         args.output.write_text(json.dumps(result, indent=2) + "\n")
     result["complete"] = True

@@ -35,4 +35,4 @@ Composition `/3` и точки `/4` решают разные задачи, но
 
 Нормативное ownership capabilities не переносится: main specs остаются source sets по `SOURCE-OF-TRUTH.md`. Этот change добавляет delta для `/5`. Active changes `/3` и `/4` сохраняют свои области; `/5` не переписывает их историю и release evidence.
 
-Проектирование создаёт только артефакты change. Код, опубликованные schemas, main specs и glossary пока не меняются. Реализация требует отдельного поручения.
+Planning checkpoint `4c4a9cd6` зафиксировал проект до реализации. Владелец затем подтвердил Run aif-classic и поручил довести `/5` до рабочего Core release. Статус реализации и отдельной downstream qualification фиксирует `tasks.md`.

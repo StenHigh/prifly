@@ -42,6 +42,9 @@ func (c *cli) projectAuthority(root string, profile projectProfile) error {
 // from extend.yaml (projectBindings, keyed by the step's short name). A step
 // bound by both is refused: the package's program is not overridden quietly.
 func projectReadExecution(projectRoot string, source projectPackageSource, components []projectCompileComponent, values map[string]any, projectBindings map[string]any) (*projectPackageExecution, error) {
+	if source.Unified != nil {
+		return projectReadUnifiedExecution(projectRoot, source, components, values)
+	}
 	if source.Composition != nil {
 		return projectReadCompositionExecution(projectRoot, source, components, values, projectBindings)
 	}
@@ -263,7 +266,11 @@ func projectSealExecution(payload *projectPackageExecution, components []project
 	}
 	refs := make(map[flow.Ref]flow.Ref, len(components))
 	for _, component := range components {
-		refs[component.AuthorRef] = component.Ref
+		if component.CompileRef.ID != "" {
+			refs[component.CompileRef] = component.Ref
+		} else {
+			refs[component.AuthorRef] = component.Ref
+		}
 	}
 	for i := range payload.Bindings {
 		binding := &payload.Bindings[i]

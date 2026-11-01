@@ -50,7 +50,7 @@ func Capabilities() CapabilityManifest {
 	}
 	profile := &manifest.Profiles[1]
 	profile.Capabilities = append(profile.Capabilities, "project_call_extensions", "project_extension_points")
-	profile.Capabilities = append(profile.Capabilities, "workflow_composition")
+	profile.Capabilities = append(profile.Capabilities, "workflow_composition", "workflow_composition_with_points")
 	profile.StateVersion, profile.ReadVersion = CoreNeutralStateVersion, CoreNeutralReadVersion
 	profile.StateVersions = append(profile.StateVersions, CoreNeutralStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreNeutralReadVersion)

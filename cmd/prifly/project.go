@@ -1527,6 +1527,8 @@ func (c *cli) projectWorkflows(ctx context.Context, args []string) error {
 }
 
 type projectWorkflowExtension struct {
+	UnifiedPoint *projectUnifiedPoint `json:",omitempty"`
+
 	Composed       bool                     `json:",omitempty"`
 	Source         string                   `json:",omitempty"`
 	Selector       string                   `json:",omitempty"`
@@ -2576,10 +2578,10 @@ func (profile projectProfile) launchDetails(root string) ([]projectLaunchDetail,
 			return nil, refusal("project_profile_invalid", "workflow "+id+": "+err.Error())
 		}
 		object, ok := value.(map[string]any)
-		if !ok || object["authoring"] != projectWorkflowFolderVersion && object["authoring"] != projectWorkflowCompositionVersion {
+		if !ok || object["authoring"] != projectWorkflowFolderVersion && object["authoring"] != projectWorkflowCompositionVersion && object["authoring"] != projectUnifiedFolderVersion {
 			return nil, refusal("project_profile_invalid", "workflow "+id+" must be a prifly-project-workflow/1 folder root or an opt-in prifly-project-workflow/2 folder root")
 		}
-		if object["authoring"] == projectWorkflowCompositionVersion {
+		if object["authoring"] == projectWorkflowCompositionVersion || object["authoring"] == projectUnifiedFolderVersion {
 			source, err := readProjectWorkflowFolder(root, filepath.Dir(path))
 			if err != nil {
 				return nil, err

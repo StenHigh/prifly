@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=../../schemas/authoring/extension-v5.schema.json
+# Требуется capability workflow_composition_with_points и Project profile /3 либо /4.
+# /5 включается явно в выбранном root. Прежний /4 сохраняет прежний compiler и b1.
+# Это справочник полей. Полный запускаемый пример: ../unified-composition/README.md.
+# Native minimum: Call v1, Parallel v2, projection v5, blocked v6, resumable v8.
+# Автор задаёт достаточные limits: compiler не увеличивает их для wrappers.
+authoring: prifly-extension/5
+imports:
+  ui: ui-library # Явное имя package из project.yaml; Registry не заменяет import.
+# layers: [../../layers/shared.yaml] # Layer /5: settings/imports/extensions; без layers/extends/arrange.
+# settings: {ui.review: {locale: ru}} # Только project-scoped configuration input этого export.
+extensions:
+  - id: measure-before-read
+    point: {import: ui, export: before-read} # Только явно опубликованный point export.
+    call: measurement # Собственный project/workflows/measurement.yaml.
+    output_bindings:
+      reader: carrier # Каждый consumer из sidecar получает объявленный output.
+      finish: carrier
+    enabled: true # false оставляет passthrough и не включает program реализации в closure.
+# Scalar selector: point: before-commit — local либо однозначный inherited point.
+# Parent selector: point: {parent: classic, name: before-commit} — immediate parent.
+# Imported implementation: call: ui.review — explicit public workflow export.
+# В point entry запрещены workflow/between/input_bindings/on/on_error и новые consumers.
+#
+# Parent /4 и его project implementation сохраняют исходного владельца.
+# Номер marker относится к документу, а не ко всем возможностям движка.
+#
+# Folder /3 публикует точку отдельно от workflow:
+# authoring: prifly-project-workflow/3
+# package:
+#   profiles:
+#     default: base
+#     values: {base: {label: reviewed}} # Folder /3 сохраняет package profiles и late-bound values.
+# exports:
+#   workflows:
+#     review: "{{workflow_ui-review}}"
+#   points:
+#     before-read: {workflow: review, point: before-read-private}
+# workflow — имя public export; point — local sidecar /1 declaration.
+# Point может находиться в private child/repeat body внутри closure этого export.
+# Экспорт workflow не публикует его остальные points. Root launch не экспортируется.
+#
+# Автоматическая группа разрешена только при пустом consumers:
+# arrange:
+#   - id: quality
+#     point: {parent: classic, name: before-commit}
+#     parallel: [delivery.interface-review, delivery.audit]
+# sequence требует успеха каждого member по порядку; parallel использует all/all/wait.
+# choice требует explicit default и on_unknown: rejected.
+# Call routes точки: succeeded/rejected/on_error; Step routes обязаны им соответствовать.
+# Точка с carrier consumers принимает один Step либо explicit typed Call, без implicit branch transport.
+#
+# Два import aliases дают независимые policies. Два exports с общим private child тоже изолированы.
+# Feature одного исходника сохраняется во всех variants; exclude применяется к каждому.
+# exclude конфликтует с explicit true setting того же feature input.
+# Одинаковые effective variants одного source owner имеют один exact compiled ref.
+# Разные owners сохраняют свои definitions. Для межпакетных ports закрепите одну внешнюю exact schema.
+# Новый compiler выдаёт b2, provenance /3, compile /4 и summary/start /7.
+# Старые schemas, b1, saved Runs и native recovery frontier не изменяются.
+
+# Review composition /2 keeps the selected public point name in points[].export.
+# points[].name remains the owner's local sidecar name. Local/inherited selectors have an empty export.

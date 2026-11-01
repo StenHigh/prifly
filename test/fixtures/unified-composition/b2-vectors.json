@@ -1,0 +1,193 @@
+{
+  "canonicalization": "RFC8785; ASCII-only vectors computed independently with Python hashlib/base64",
+  "vectors": [
+    {
+      "name": "base",
+      "variant_inputs": {
+        "owner": ".prifly/workflows/library",
+        "source": ".prifly/workflows/library/workflows/review.yaml",
+        "source_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "workflow",
+        "author_id": "example:workflow/review",
+        "author_version": "1.2.3",
+        "root": false,
+        "settings": {
+          "mode": "strict"
+        },
+        "document": {
+          "dependency": {
+            "owner": ".prifly/workflows/worker",
+            "kind": "step",
+            "author_id": "example:step/check",
+            "author_version": "1.0.0",
+            "variant_key": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "policy": {
+            "point": "before-read",
+            "enabled": true,
+            "outputs": {
+              "reader": "carrier"
+            }
+          }
+        },
+        "source_variant_key": "sha256:2190f8c94925a282451de09d28c658cd169c27473d5e284bd980e4136f2d55ea"
+      },
+      "variant_key": "sha256:8dff846d88c4987ab04fec46f6b06d309244afcd2c07d359c3a902fa691abb0d",
+      "build_inputs": {
+        "algorithm": "b2",
+        "variants": [
+          "sha256:8dff846d88c4987ab04fec46f6b06d309244afcd2c07d359c3a902fa691abb0d"
+        ]
+      },
+      "build_key": "sha256:1ec8c205a179bc45683f7a97e9d7e264018d69f152b093728bf378587ef5f7dd",
+      "package_version": "0.0.0-b2.d3emebnbpg6ek2b7pkl6tv7cmqay22prkkyjg4ul6n4fq7xv67oq",
+      "component_version": "0.0.0-b2.zuhpjtocayoww36eiz6c4dbvjygjzuc4dzg6o3hleo4pc2ffxafa"
+    },
+    {
+      "name": "owner",
+      "variant_inputs": {
+        "owner": ".prifly/workflows/another",
+        "source": ".prifly/workflows/library/workflows/review.yaml",
+        "source_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "workflow",
+        "author_id": "example:workflow/review",
+        "author_version": "1.2.3",
+        "root": false,
+        "settings": {
+          "mode": "strict"
+        },
+        "document": {
+          "dependency": {
+            "owner": ".prifly/workflows/worker",
+            "kind": "step",
+            "author_id": "example:step/check",
+            "author_version": "1.0.0",
+            "variant_key": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "policy": {
+            "point": "before-read",
+            "enabled": true,
+            "outputs": {
+              "reader": "carrier"
+            }
+          }
+        },
+        "source_variant_key": "sha256:2190f8c94925a282451de09d28c658cd169c27473d5e284bd980e4136f2d55ea"
+      },
+      "variant_key": "sha256:5cf766f5a945ffe749325c013a717260daa5a3e3a6714761dc3230e4f50b2882",
+      "build_inputs": {
+        "algorithm": "b2",
+        "variants": [
+          "sha256:5cf766f5a945ffe749325c013a717260daa5a3e3a6714761dc3230e4f50b2882"
+        ]
+      },
+      "build_key": "sha256:42fc48d5178f99a387207540b73d00872f86f218f52887f549e90da98c22fe83",
+      "package_version": "0.0.0-b2.il6ervixr6m2hbzaovalopiaq4xyn4qy6uuip5kj5eg2tdbc72bq",
+      "component_version": "0.0.0-b2.urfzuj45ah6s7zmhpuxbjrzgvk2gcyfsq3nh6fc4rzmvjsd4oj4a"
+    },
+    {
+      "name": "settings",
+      "variant_inputs": {
+        "owner": ".prifly/workflows/library",
+        "source": ".prifly/workflows/library/workflows/review.yaml",
+        "source_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "workflow",
+        "author_id": "example:workflow/review",
+        "author_version": "1.2.3",
+        "root": false,
+        "settings": {
+          "mode": "loose"
+        },
+        "document": {
+          "dependency": {
+            "owner": ".prifly/workflows/worker",
+            "kind": "step",
+            "author_id": "example:step/check",
+            "author_version": "1.0.0",
+            "variant_key": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "policy": {
+            "point": "before-read",
+            "enabled": true,
+            "outputs": {
+              "reader": "carrier"
+            }
+          }
+        },
+        "source_variant_key": "sha256:2190f8c94925a282451de09d28c658cd169c27473d5e284bd980e4136f2d55ea"
+      },
+      "variant_key": "sha256:434f430d204b555bb1334be6b3f300c307132142f4c786ea5955eb38be4f71c4",
+      "build_inputs": {
+        "algorithm": "b2",
+        "variants": [
+          "sha256:434f430d204b555bb1334be6b3f300c307132142f4c786ea5955eb38be4f71c4"
+        ]
+      },
+      "build_key": "sha256:e09e865d09bddba72eb6f5bdd7b1075cdc620f3a4f7880ec368036ab2713e06c",
+      "package_version": "0.0.0-b2.4cpimxijxxn2olvw6w65pmihltogedz2j54ib3bwqa3kwjyt4bwa",
+      "component_version": "0.0.0-b2.dyn34skp5uhqogckgtf6pdecbxbs24gclhnxaalafzogxgqbjjja"
+    },
+    {
+      "name": "policy",
+      "variant_inputs": {
+        "owner": ".prifly/workflows/library",
+        "source": ".prifly/workflows/library/workflows/review.yaml",
+        "source_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "workflow",
+        "author_id": "example:workflow/review",
+        "author_version": "1.2.3",
+        "root": false,
+        "settings": {
+          "mode": "strict"
+        },
+        "document": {
+          "policy": {
+            "enabled": false
+          }
+        },
+        "source_variant_key": "sha256:ee871a5235d3a4d57638420ec7b7b55160653f4d9a99373017a14a72bbf30522"
+      },
+      "variant_key": "sha256:98d3f78490562309fddc4480873665c4a4cee6e4aac1d0b5b8fa373f642f9abf",
+      "build_inputs": {
+        "algorithm": "b2",
+        "variants": [
+          "sha256:98d3f78490562309fddc4480873665c4a4cee6e4aac1d0b5b8fa373f642f9abf"
+        ]
+      },
+      "build_key": "sha256:0839ce90389bd0dae446889b0aa5a46ecf68ea30297e069c8a6654f7893ee51d",
+      "package_version": "0.0.0-b2.ba445ebytpinvzcgrcnqvjnen3hwr2rqff7anhekmzkppcj64uoq",
+      "component_version": "0.0.0-b2.lneucq3jysg6hf7qf6ezpsj3axyhcxrw3tqz6auuvf3l4k4i3mda"
+    },
+    {
+      "name": "dependency",
+      "variant_inputs": {
+        "owner": ".prifly/workflows/library",
+        "source": ".prifly/workflows/library/workflows/review.yaml",
+        "source_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "kind": "workflow",
+        "author_id": "example:workflow/review",
+        "author_version": "1.2.3",
+        "root": false,
+        "settings": {
+          "mode": "strict"
+        },
+        "document": {
+          "dependency": {
+            "variant_key": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        },
+        "source_variant_key": "sha256:3a9f72deb6fced89831c0c98dfdcb69838125ad7bc7e6f6c394bf25a57063e4f"
+      },
+      "variant_key": "sha256:cc01db6b9be0726f54ead2e2186ba7a47aeb35c704d43fc5ab9d6a415ae60eac",
+      "build_inputs": {
+        "algorithm": "b2",
+        "variants": [
+          "sha256:cc01db6b9be0726f54ead2e2186ba7a47aeb35c704d43fc5ab9d6a415ae60eac"
+        ]
+      },
+      "build_key": "sha256:e49c1cd8bdfeabd96c830bb30bfb149b8603519c64233f7a71b58bcbc71a22fe",
+      "package_version": "0.0.0-b2.4sobzwf572v5s3edbozqx6yutodagum4mqrt66trwwf4xry2el7a",
+      "component_version": "0.0.0-b2.txrerhzcowdtnp6oajjoenqzbhz5h6qe2nrwaeqjnptt42spxg2q"
+    }
+  ]
+}

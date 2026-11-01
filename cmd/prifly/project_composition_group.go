@@ -579,6 +579,9 @@ func (l *projectCompositionLowerer) predicate(raw any) (flow.Predicate, error) {
 		return predicate, err
 	}
 	encoded, _ = json.Marshal(value)
+	// Unmarshal into a fresh value: lifting a stage field removes stage_id.
+	// Reusing the old nested pointer would retain that deleted field.
+	predicate = flow.Predicate{}
 	err = json.Unmarshal(encoded, &predicate)
 	return predicate, err
 }
