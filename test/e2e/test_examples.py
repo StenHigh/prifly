@@ -155,10 +155,13 @@ class EditorContractTest(unittest.TestCase):
         composition = {"project-workflow-folder-v2", "extension-v3"}
         if composition.intersection(item["document"] for item in engine_manifest["schemas"]):
             expected.update(composition)
+        unified = {"project-workflow-folder-v3", "extension-v5"}
+        if unified.intersection(item["document"] for item in engine_manifest["schemas"]):
+            expected.update(unified)
         self.assertEqual({item["document"] for item in manifest["schemas"]}, expected)
         for item in manifest["schemas"]:
             self.assertEqual(Path(item["path"]).name, item["path"])
-            if item["document"] in {"project-profile-v2", "project-profile-v3", "project-profile-v4", "project-workflow-folder-v2", "step-v1", "extension-v1", "extension-v2", "extension-v3", "extension-v4"}:
+            if item["document"] in {"project-profile-v2", "project-profile-v3", "project-profile-v4", "project-workflow-folder-v2", "project-workflow-folder-v3", "step-v1", "extension-v1", "extension-v2", "extension-v3", "extension-v4", "extension-v5"}:
                 self.assertEqual(item["patterns"], [])
             else:
                 self.assertTrue(item["patterns"])
@@ -173,6 +176,10 @@ class EditorContractTest(unittest.TestCase):
         self.assertEqual(
             (EXAMPLES / "authoring" / "extension-authoring-reference.yaml").read_text().splitlines()[0],
             "# yaml-language-server: $schema=../../schemas/authoring/extension.schema.json",
+        )
+        self.assertEqual(
+            (EXAMPLES / "authoring" / "unified-composition-authoring-reference.yaml").read_text().splitlines()[0],
+            "# yaml-language-server: $schema=../../schemas/authoring/extension-v5.schema.json",
         )
         self.assertEqual(
             (EXAMPLES / "authoring" / "workflow-authoring-reference.yaml").read_text().splitlines()[0],
