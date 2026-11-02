@@ -57,9 +57,9 @@ func TestProjectRunnerUpdateReplacesEveryReleasedRunner(t *testing.T) {
 func TestProjectRunnerTextIsPinned(t *testing.T) {
 	t.Parallel()
 	pinned := map[string]string{
-		"codex-cli":   "sha256:0afdfb48ffb9e231f1c4aacfb53a632489d2697542e5318bbabef30c0892e462",
-		"codex-app":   "sha256:4c6ea6c8d7482f615b9cf7b5a21adb0406298b92d2cd95193beeb21cebc86cd6",
-		"claude-code": "sha256:a4cd849229d04be1d98c3bf121f970e2065c0de1a7821f9318846afea5af25f5",
+		"codex-cli":   "sha256:8b41697a12e26ab9c39e38296f834614ecccffa39c09da0e01a6cdafc5ad9a4a",
+		"codex-app":   "sha256:9672d71bcd812d99204d5be1ba182e0d8d31c01d5d8d1146067900060ce6c9b7",
+		"claude-code": "sha256:a1fc77989fb2b9630da894461decb992e8026ebbc501e505291c1b4c5c5200f2",
 	}
 	for _, host := range projectHosts {
 		sum := sha256.Sum256([]byte(projectRunnerSkill(host)))
@@ -108,6 +108,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:2a7926a7c8bcabc6bde25f9d9ddd39dc747dfee7c90d2e756ab90245bae6752d",
 			"sha256:8893834b96d1c734e7ac189d2530a5fbb17cdc772d1cd3b7e98dff02232efbbe",
 			"sha256:b942c81525e653b2a7b85f42c34ec039e92e651a7a673f8d622a1dabb306cb40",
+			"sha256:0afdfb48ffb9e231f1c4aacfb53a632489d2697542e5318bbabef30c0892e462",
 		},
 		"codex-app": {
 			"sha256:0fecbf3f6b3b67b2347896025b6f0e28f64d7cf6002b5151790bcb8352623376",
@@ -141,6 +142,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:88eeec40fb72ae4acadc590d399ab8cdddb6c2a09bcdfe18c156c676c550864b",
 			"sha256:caa8e9b64ce05b2033de31a59adcf6e114519dc2b8571145764f08e10b063614",
 			"sha256:fabafe11d5f47ecdc105f0a2139cbc4c2a7ae704f69e442bdcee89eae538b6e7",
+			"sha256:4c6ea6c8d7482f615b9cf7b5a21adb0406298b92d2cd95193beeb21cebc86cd6",
 		},
 		"claude-code": {
 			"sha256:416af8429794e5adef4b7180427c3b74b517404b44f36be226f752aa0f61196d",
@@ -174,6 +176,7 @@ func TestProjectFrozenRunnerTextIsPinned(t *testing.T) {
 			"sha256:829cafc746f1c60df4e67ec4baa42af4fb13e28cd5874fcbbb636f04e77fc0d8",
 			"sha256:bc09b8871a8f6dce192ff083361c85d6ec7dcd12854a36ae2c37ea538e94d115",
 			"sha256:6c3ed9ed2f3c0fb90096a1794ace5d919d3d37edfda195dd9f45ef3af840edda",
+			"sha256:a4cd849229d04be1d98c3bf121f970e2065c0de1a7821f9318846afea5af25f5",
 		},
 	}
 	for _, host := range projectHosts {
@@ -192,60 +195,30 @@ func TestProjectCurrentRunnerIsWorkflowNeutral(t *testing.T) {
 	t.Parallel()
 	for _, host := range projectHosts {
 		t.Run(host.ID, func(t *testing.T) {
+			t.Parallel()
 			skill := projectRunnerSkill(host)
-			// A one-task package must not acquire an industry process from its
-			// host instructions. Its actual graph remains the package's concern.
-			for _, absent := range []string{"AI Factory", "aif-", "reviewer", "improve", "commit", "successful exits are silent", "{{host}}", "{{question_tool}}"} {
+			for _, absent := range []string{"AI Factory", "aif-", "reviewer", "improve", "commit", "{{host}}", "{{question_tool}}"} {
 				if strings.Contains(skill, absent) {
-					t.Errorf("generic runner adds %q", absent)
+					t.Errorf("generic host adds %q", absent)
 				}
 			}
-			for _, required := range []string{
-				"--host " + host.ID, "--prepare", "--expected-launch-digest DIGEST", "review_digest",
-				"--expected-decision-catalog-digest DIGEST", "--preflight-answer ID=JSON", "--runtime-answer ID=JSON",
-				"No Git work in /3 means no workspace\n   question or claim", "optional runtime",
-				"Respect declared defaults", "not a guessed value", "Prepare is read-only",
-				"same selected host", "exactly the prepared arguments", "never drop a stale-digest check",
-				"session task --run RUN_ID --all", "permitted_effects", "pending_request_digest",
-				"For an undeclared native skill question that neither", "stop that task", "do not choose a hidden model answer",
-				// From 41 a report lists the questions its step answered; the old
-				// rule said Pri-Fly recorded no answer, and now it records the
-				// host's statement.
-				"`question_report: required`", "`answered_questions`", "answered_questions_missing", "it is a statement, not a default", "`take_command`", "`resource_busy` is a wait, not a failure",
-				"not present actor provenance as proof", "local owner and host can share the same OS",
-				"launch_summary when present and decision ledger", "project_profile_version",
-				"For legacy /2, do not pass --prepare or --expected-launch-digest",
-				"session_limits for each exact step", "legacy_absolute_timeout_ms", "unbounded waiting",
-				"--yield-execution", "yield_execution:true", "answer\n   saved", "not \"work resumed\"",
-				"run drive RUN_ID", "run next RUN_ID", "do not ask that known answer again",
-				// The paragraph that told a host to inspect claim list and
-				// capacity show after a refusal left this file at 0.13.37: the
-				// refusals themselves now carry claim.list, claim.release,
-				// capacity.show and capacity.set in safe_next_actions, and text
-				// that repeats the tool is text a reader learns to skip.
-				"No active host means no automatic wakeup", "does not intercept native questions automatically",
-				// A host that read `run.attempts` as a positional list got
-				// `Cannot index object with number` and gave up on the field.
-				"`run.attempts` by `id` -- the value the task calls `attempt_id`",
-				"The continuations list indexes declarations; it is not admission", "preserve dirty work", "inherited accepted root stage", "--repository REPOSITORY",
-				"project_continue_undeclared", "takes over as it was left, with every file its steps left there", "arrived_from", "continuations", "project_continue_active_child", "--allow-duplicate-continuation",
-			} {
-				if !strings.Contains(strings.ToLower(skill), strings.ToLower(required)) {
-					t.Errorf("generic runner lost %q", required)
+			for _, required := range []string{"--host " + host.ID, "permitted_effects", "review_digest", "--expected-launch-digest DIGEST", "--expected-decision-catalog-digest DIGEST", "pending_request_digest", "--yield-execution", "answered_questions", "question_report: required", "take_command", "model_profile", "references/manual/index.md", "project runners", "update --check"} {
+				if !strings.Contains(skill, required) {
+					t.Errorf("host protocol lost %q", required)
 				}
 			}
-			prepare := strings.Index(skill, "project questionnaire --repository \"$PWD\" --launch ID --prepare")
-			show := strings.Index(skill, "show the returned project-launch-summary/3 before starting")
-			start := strings.Index(skill, "project start --repository")
+			prepare := strings.Index(skill, "Prepare with project questionnaire --prepare")
+			show := strings.Index(skill, "Show the returned launch summary")
+			start := strings.Index(skill, "Then call project start --repository")
 			if prepare < 0 || show <= prepare || start <= show {
-				t.Fatal("start can precede preparation and presentation of the summary")
+				t.Fatal("execution can precede read-only prepare and summary review")
 			}
 			tool, other := "request_user_input", "AskUserQuestion"
 			if host.ID == "claude-code" {
 				tool, other = other, tool
 			}
 			if !strings.Contains(skill, tool) || strings.Contains(skill, other) {
-				t.Fatal("runner selected the wrong native question tool")
+				t.Fatal("host has the wrong native question tool")
 			}
 		})
 	}
@@ -302,34 +275,20 @@ func TestProjectRunnerDeliversAdviceAndNativeChoiceBeforeQuestionnaire(t *testin
 		t.Run(host.ID, func(t *testing.T) {
 			t.Parallel()
 			text := projectRunnerSkill(host)
-			questionnaire := strings.Index(text, "project questionnaire --repository")
-			for _, rule := range []string{
-				"Advice is optional and separate from selection", "PROJECT.md may disable advice entirely",
-				"all declared launches\nremain selectable", "Never substitute a similar ID",
-				"single launch, skip advice", "Without task text", "purposes are insufficient",
-				"The developer's explicit alternative wins", "deterministic pages with next/back",
-				"separate actual user reply", "preselected option, dismissal or timeout",
-				"Do not switch host modes", "Before the answer, do not import a package",
-				"separate permitted confirmation channel", "Free text, file paths and arbitrary JSON",
-			} {
+			questionnaire := strings.Index(text, "Read project questionnaire --repository")
+			for _, rule := range []string{"purpose recommendation is optional", "preserve every selectable ID", "Never\nsubstitute a similar ID", "wait for the actual user reply", "preselection, dismissal", "deterministic pages", "Do not switch host", "Free text, paths and JSON stay free-form"} {
 				at := strings.Index(text, rule)
 				if at < 0 || at >= questionnaire {
-					t.Errorf("rule %q missing before questionnaire", rule)
+					t.Errorf("choice rule %q absent before questionnaire", rule)
 				}
 			}
-			input := strings.Index(text, "Collect typed inputs with")
-			for _, rule := range []string{"Preserve the original task text and URLs", "chosen workflow's declared input and format", "file-only workflow receives only"} {
-				at := strings.Index(text, rule)
-				if at < questionnaire || at >= input {
-					t.Errorf("input rule %q missing before collection", rule)
+			for _, rule := range []string{"Preserve the original task text and URLs", "selected launch's declared ports", "never invent a universal brief or task port"} {
+				if !strings.Contains(text, rule) {
+					t.Errorf("typed task binding lost %q", rule)
 				}
 			}
-			async := strings.Contains(text, "request_user_input_async")
-			if async != (host.ID != "claude-code") {
-				t.Fatal("wrong host tool guidance")
-			}
-			if strings.Contains(text, "{{launch_question_tools}}") {
-				t.Fatal("unrendered tool placeholder")
+			if strings.Contains(text, "request_user_input_async") != (host.ID != "claude-code") {
+				t.Fatal("wrong async tool for host")
 			}
 		})
 	}

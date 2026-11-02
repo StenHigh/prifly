@@ -8,6 +8,8 @@
 имя поля. Если известен только симптом — отказ, диагностика или поведение
 прогона, — начните с [указателя по симптомам](troubleshooting.md).
 
+Справочник оператора и host: [задача → команда → результат](operations/index.md).
+
 ## С чего начать
 
 | Задача автора | Материал |
@@ -63,7 +65,7 @@
 | `parallel` | `kind: parallel` с `branches` и `join` | workflow |
 | `map` | `kind: map` с запечатанной коллекцией | workflow |
 | `wait` | `kind: wait` с корреляцией | workflow |
-| `schedule` | `schedule` у ожидания; `prifly schedule` | workflow |
+| `schedule` | `schedule` у ожидания; отдельной публичной команды schedule в этой сборке нет | workflow |
 | `live_guards` | объявляется при создании Run, не в графе | — |
 | `reported_cost` | `reported_costs` в отчёте хоста | — |
 | `artifact_publication` | `hooks.<имя>.artifact` с `cardinality` | step |

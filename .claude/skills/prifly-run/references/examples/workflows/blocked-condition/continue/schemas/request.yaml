@@ -1,0 +1,7 @@
+id: example:schema/blocked-request
+version: 1.0.0
+type: object
+additionalProperties: false
+required: [subject]
+properties:
+  subject: {type: string, minLength: 1, maxLength: 200}

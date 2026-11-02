@@ -1,0 +1,12 @@
+authoring: prifly-step/2
+id: report-probe:step/read
+version: 1.0.0
+title: Read the original report without another measurement
+kind: worker
+repository_workspace: read_only
+inputs: {carrier: {schema_ref: "{{schema_carrier}}"}}
+outputs: {}
+executor: {adapter_ref: "{{adapter}}", operation: session}
+instructions_ref: "{{context_read}}"
+effects: {class: none, retry_class: pure}
+result_schema_ref: "{{result}}"

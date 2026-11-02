@@ -117,3 +117,6 @@ boundaries и baseline active changes до своего archive/sync. Ownership 
 переносится. История и evidence Core v0.13.85 сохраняются в archived
 `2026-11-01-unify-workflow-composition-and-extension-points`. Приёмка downstream
 остаётся отдельной; historical evidence не переписывается.
+
+Пока `add-agent-operations-handbook` активен, его deltas уточняют доставку эксплуатационного справочника и обязательные updates host runner для `release-documentation-layout` и `cli-protocol`.
+Нормативное владение не переносится. Прямые CLI-команды сохраняют явное обновление; saved Runs и published schemas не меняются.

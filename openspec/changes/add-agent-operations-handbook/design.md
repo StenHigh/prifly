@@ -83,7 +83,7 @@ prifly-run/
 ```
 
 Канонические страницы находятся в `examples/operations/`.
-Один Go `embed.FS` рядом со страницами включает их в CLI build; CLI доставляет exact bytes в host roots.
+Один Go `embed.FS` рядом со страницами включает их в CLI build; CLI доставляет страницы в host roots, разрешая их относительные ссылки для установленной структуры.
 Пакет с embedded страницами не импортируется authority runtime и не содержит предметной логики.
 Это стандартная доставка assets; custom document builder или HTML generator не создаётся.
 
@@ -92,11 +92,12 @@ prifly-run/
 Общий embed boundary для `examples/` может находиться в `examples/embed.go`; он включает только явно выбранные assets.
 Схемы, уже доступные через `prifly schema`, запрашиваются по точному имени вместо ненужного копирования всего schema tree.
 Если пример имеет относительную ссылку, доставка либо включает её цель, либо явно даёт команду `schema` для installed версии.
+Manual pages размещаются в `references/manual/`, существующие examples — в `references/examples/`. Markdown links и editor-schema comments разрешаются при установке; payload YAML/JSON и программы примеров не исполняются.
 Список assets и локальные ссылки проверяются в установленной временной структуре, где Core checkout отсутствует.
 
 Все внутренние ссылки manual остаются относительными и работают в репозитории и установленной копии.
 Ссылки на нормативные источники при доставке ведут на соответствующий release tag, а не на moving `main`.
-Для dev build указывается source commit и статус unreleased; он не объявляется stable release.
+Для dev build указывается recorded VCS commit и статус unreleased. Если build отключил VCS metadata, source ref явно unavailable; внешние ссылки ведут на локальное объяснение, а не на выдуманный tag.
 Идентичность поставки и digest assets хранятся в служебном metadata установки runner.
 Этот metadata не является новым runtime contract или trusted package.
 

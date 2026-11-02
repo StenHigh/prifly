@@ -1,0 +1,400 @@
+{
+  "source_repository": "StenHigh/prifly-aif-workflows",
+  "source_sha": "3499115956903abd264fbde2be2f432d07bc2c43",
+  "review_defaults": {
+    "lens": "Code",
+    "report_stage": "review",
+    "report_port": "report",
+    "report_schema_id": "aif-evidence:schema/report",
+    "report_schema_version": "1.0.0",
+    "gate_stage": "evaluate",
+    "gate_alternatives": [],
+    "gate_port": "gate",
+    "gate_schema_id": "aif-evidence:schema/gate",
+    "gate_schema_version": "1.0.0",
+    "gate_scope": "lens",
+    "gate_ancestor": 0,
+    "repair_ancestor": 0,
+    "gate_report_inputs": [
+      "report"
+    ],
+    "request_port": "request",
+    "candidate_port": "candidate",
+    "candidate_stage": "capture",
+    "candidate_output": "candidate",
+    "repair_stages": [],
+    "enabled": null,
+    "disabled_state": "disabled",
+    "round_pointer": "/round",
+    "candidate_pointer": "/candidate",
+    "request_pointer": "/request_digest",
+    "checks_pointer": "/checks",
+    "gate_status_pointer": "/status",
+    "gate_blocking_pointer": "/blocking",
+    "gate_owner_pointer": "/blocking_owner_only",
+    "findings_pointer": "/findings"
+  },
+  "workflows": [
+    {
+      "workflow_id": "aif-evidence:workflow/quality",
+      "workflow_version": "1.0.0",
+      "phases": [
+        {
+          "stage": "capture",
+          "key": "review",
+          "label": "Подготовка ревью"
+        },
+        {
+          "stage": "review",
+          "key": "review",
+          "label": "Ревью"
+        },
+        {
+          "stage": "evaluate",
+          "key": "review",
+          "label": "Приёмка"
+        }
+      ],
+      "reviews": [
+        {}
+      ]
+    },
+    {
+      "workflow_id": "aif-product:workflow/quality",
+      "workflow_version": "1.0.0",
+      "phases": [
+        {
+          "stage": "ui",
+          "key": "review",
+          "label": "UI-ревью"
+        },
+        {
+          "stage": "ux",
+          "key": "review",
+          "label": "UX-ревью"
+        }
+      ],
+      "reviews": [
+        {
+          "lens": "UI",
+          "report_stage": "ui",
+          "gate_scope": "aggregate",
+          "gate_report_inputs": [
+            "ui_report"
+          ]
+        },
+        {
+          "lens": "UX",
+          "report_stage": "ux",
+          "gate_scope": "aggregate",
+          "gate_report_inputs": [
+            "ux_report"
+          ]
+        }
+      ]
+    },
+    {
+      "workflow_id": "aif-feature:workflow/product-quality",
+      "workflow_version": "1.0.0",
+      "phases": [
+        {
+          "stage": "ui",
+          "key": "review",
+          "label": "UI-ревью"
+        },
+        {
+          "stage": "ux",
+          "key": "review",
+          "label": "UX-ревью"
+        }
+      ],
+      "reviews": [
+        {
+          "lens": "UI",
+          "report_stage": "ui",
+          "gate_scope": "aggregate",
+          "gate_report_inputs": [
+            "ui_report"
+          ]
+        },
+        {
+          "lens": "UX",
+          "report_stage": "ux",
+          "gate_scope": "aggregate",
+          "gate_report_inputs": [
+            "ux_report"
+          ]
+        }
+      ]
+    },
+    {
+      "workflow_id": "aif-feature:workflow/quality-round",
+      "workflow_version": "1.2.3",
+      "phases": [
+        {
+          "stage": "capture",
+          "key": "review",
+          "label": "Подготовка candidate"
+        },
+        {
+          "stage": "security",
+          "key": "review",
+          "label": "Security-ревью"
+        },
+        {
+          "stage": "review",
+          "key": "review",
+          "label": "Code-ревью"
+        },
+        {
+          "stage": "repair-backend",
+          "key": "implementation",
+          "label": "Исправление"
+        },
+        {
+          "stage": "repair-frontend",
+          "key": "implementation",
+          "label": "Исправление"
+        },
+        {
+          "stage": "repair-parallel",
+          "key": "implementation",
+          "label": "Исправление"
+        },
+        {
+          "stage": "repair-uiux",
+          "key": "implementation",
+          "label": "Исправление"
+        }
+      ],
+      "reviews": [
+        {
+          "lens": "Checks",
+          "report_stage": "checks",
+          "gate_stage": "aggregate-backend",
+          "gate_alternatives": [
+            "aggregate-frontend",
+            "aggregate-parallel",
+            "aggregate-uiux"
+          ],
+          "gate_schema_id": "aif-feature:schema/feature-gate",
+          "gate_scope": "aggregate",
+          "gate_report_inputs": [
+            "checks_report"
+          ],
+          "repair_stages": [
+            "repair-backend",
+            "repair-frontend",
+            "repair-parallel",
+            "repair-uiux"
+          ]
+        },
+        {
+          "lens": "Security",
+          "report_stage": "security",
+          "gate_stage": "aggregate-backend",
+          "gate_alternatives": [
+            "aggregate-frontend",
+            "aggregate-parallel",
+            "aggregate-uiux"
+          ],
+          "gate_schema_id": "aif-feature:schema/feature-gate",
+          "gate_scope": "aggregate",
+          "gate_report_inputs": [
+            "security_report"
+          ],
+          "repair_stages": [
+            "repair-backend",
+            "repair-frontend",
+            "repair-parallel",
+            "repair-uiux"
+          ]
+        },
+        {
+          "lens": "Code",
+          "report_stage": "review",
+          "gate_stage": "aggregate-backend",
+          "gate_alternatives": [
+            "aggregate-frontend",
+            "aggregate-parallel",
+            "aggregate-uiux"
+          ],
+          "gate_schema_id": "aif-feature:schema/feature-gate",
+          "gate_scope": "aggregate",
+          "gate_report_inputs": [
+            "review_report"
+          ],
+          "repair_stages": [
+            "repair-backend",
+            "repair-frontend",
+            "repair-parallel",
+            "repair-uiux"
+          ]
+        }
+      ]
+    },
+    {
+      "workflow_id": "aif-feature:workflow/parallel-security",
+      "workflow_version": "1.2.3",
+      "phases": [
+        {
+          "stage": "reader",
+          "key": "review",
+          "label": "Security-ревью"
+        }
+      ],
+      "reviews": [
+        {
+          "lens": "Security",
+          "report_stage": "reader",
+          "gate_stage": "aggregate-parallel",
+          "gate_schema_id": "aif-feature:schema/feature-gate",
+          "gate_scope": "aggregate",
+          "gate_ancestor": 2,
+          "gate_report_inputs": [
+            "bundle"
+          ],
+          "repair_stages": [
+            "repair-backend",
+            "repair-frontend",
+            "repair-parallel",
+            "repair-uiux"
+          ]
+        }
+      ]
+    },
+    {
+      "workflow_id": "aif-feature:workflow/parallel-review",
+      "workflow_version": "1.2.3",
+      "phases": [
+        {
+          "stage": "reader",
+          "key": "review",
+          "label": "Code-ревью"
+        }
+      ],
+      "reviews": [
+        {
+          "lens": "Code",
+          "report_stage": "reader",
+          "gate_stage": "aggregate-parallel",
+          "gate_schema_id": "aif-feature:schema/feature-gate",
+          "gate_scope": "aggregate",
+          "gate_ancestor": 2,
+          "gate_report_inputs": [
+            "bundle"
+          ],
+          "repair_stages": [
+            "repair-backend",
+            "repair-frontend",
+            "repair-parallel",
+            "repair-uiux"
+          ]
+        }
+      ]
+    },
+    {
+      "workflow_id": "aif-feature:workflow/parallel-ui",
+      "workflow_version": "1.0.0",
+      "phases": [
+        {
+          "stage": "reader",
+          "key": "review",
+          "label": "UI-ревью"
+        }
+      ],
+      "reviews": [
+        {
+          "lens": "UI",
+          "report_stage": "reader",
+          "gate_stage": "evaluate",
+          "gate_port": "assessment",
+          "gate_schema_id": "aif-feature:schema/uiux-evidence",
+          "gate_scope": "aggregate",
+          "gate_ancestor": 2,
+          "repair_ancestor": 4,
+          "candidate_stage": "",
+          "candidate_output": "",
+          "gate_report_inputs": [
+            "bundle"
+          ],
+          "repair_stages": [
+            "repair-backend",
+            "repair-frontend",
+            "repair-parallel",
+            "repair-uiux"
+          ],
+          "gate_status_pointer": "/gate/status",
+          "gate_blocking_pointer": "/gate/blocking",
+          "gate_owner_pointer": "/gate/blocking_owner_only",
+          "findings_pointer": "/gate/findings"
+        }
+      ]
+    },
+    {
+      "workflow_id": "aif-feature:workflow/parallel-ux",
+      "workflow_version": "1.0.0",
+      "phases": [
+        {
+          "stage": "reader",
+          "key": "review",
+          "label": "UX-ревью"
+        }
+      ],
+      "reviews": [
+        {
+          "lens": "UX",
+          "report_stage": "reader",
+          "gate_stage": "evaluate",
+          "gate_port": "assessment",
+          "gate_schema_id": "aif-feature:schema/uiux-evidence",
+          "gate_scope": "aggregate",
+          "gate_ancestor": 2,
+          "repair_ancestor": 4,
+          "candidate_stage": "",
+          "candidate_output": "",
+          "gate_report_inputs": [
+            "bundle"
+          ],
+          "repair_stages": [
+            "repair-backend",
+            "repair-frontend",
+            "repair-parallel",
+            "repair-uiux"
+          ],
+          "gate_status_pointer": "/gate/status",
+          "gate_blocking_pointer": "/gate/blocking",
+          "gate_owner_pointer": "/gate/blocking_owner_only",
+          "findings_pointer": "/gate/findings"
+        }
+      ]
+    },
+    {
+      "workflow_id": "aif-feature:workflow/feature",
+      "workflow_version": "1.2.3",
+      "phases": [
+        {
+          "stage": "warmup",
+          "key": "plan",
+          "label": "Подготовка"
+        },
+        {
+          "stage": "plan",
+          "key": "plan",
+          "label": "План"
+        },
+        {
+          "stage": "implement",
+          "key": "implementation",
+          "label": "Реализация"
+        },
+        {
+          "stage": "quality",
+          "key": "review",
+          "label": "Проверки и ревью"
+        }
+      ],
+      "reviews": []
+    }
+  ]
+}

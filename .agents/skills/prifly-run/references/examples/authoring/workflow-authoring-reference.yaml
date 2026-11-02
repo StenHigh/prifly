@@ -1,0 +1,304 @@
+# yaml-language-server: schema ref unavailable in this development build; use prifly schema for the installed contract
+# Complete reference for one prifly-workflow/1 source. It documents every
+# authoring field and every currently supported stage kind. The zero digests
+# deliberately make this a reference, not an executable package: copy only
+# the pieces you need and replace refs with exact bytes from `prifly inventory`.
+authoring: prifly-workflow/1 # Required marker; this YAML is lowered before sealing.
+schema_version: "4" # Optional: the compiler derives the lowest version the source needs; impossible_verdicts below needs v4.
+# Revision 6 adds one verdict, `blocked`: a step saying it could not judge the
+# work at all, which is not a judgement that the work is bad. A gate stopped by
+# something it does not judge -- a database that never answered -- returns it,
+# and the stage routes it where its author decided. Not back to itself: a stage
+# graph is acyclic and the compiler refuses that edge as `cycle`. The three
+# shapes that work (authoring/blocked-guide.md walks through each):
+#   remedy and retry, bounded -- the gate and a remedy step inside the body of a
+#     `repeat`; the body finishes `partial` on blocked, `continue_on: [partial]`
+#     runs it again, `max_iterations` bounds it and `on_limit` says where it
+#     goes when the condition never comes;
+#   wait for the condition -- `on.blocked` to a `wait` stage whose `on_event`
+#     leads back into a fresh body (again via `repeat`) and whose
+#     `timeout_seconds` + `on_timeout` bound the wait;
+#   stop and continue later -- `on.blocked` to a finish with an outcome
+#     (`partial`, say) that binds the reason as an output; a workflow declaring
+#     `continuation` (revision 7) continues that Run with `project continue`.
+# Revisions 4 and 5 answer for the four verdicts they were published with and
+# cannot name this one: a plan is recompiled from sealed bytes on every read, so
+# their set does not move. A step returns it only if its result_schema_ref names
+# the contract that carries it (core:schema/step-result 2.0.0).
+id: example:workflow/full-reference # Required stable identity.
+version: 1.0.0 # Required; increase when sealed bytes change.
+title: Full workflow authoring reference # Optional: defaults to id.
+
+# Optional local names for exact immutable refs. They are never ranges or network lookups.
+refs:
+  value_schema: {id: example:schema/value, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  item_schema: {id: example:schema/item, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  projection_schema: {id: example:schema/projection, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  content_check: {id: example:check/content, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  policy: {id: example:policy/local, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  worker_step: {id: example:step/worker, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  child_workflow: {id: example:workflow/child, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  repeat_body: {id: example:workflow/repeat-body, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  parallel_branch: {id: example:workflow/parallel-branch, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  map_body: {id: example:workflow/map-body, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  compensation_workflow: {id: example:workflow/compensate, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  publication_source: {id: example:source/publication, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  event_schema: {id: example:schema/event, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+
+# Inputs and outputs are optional maps; omit either map entirely when empty.
+inputs:
+  request:
+    schema_ref: value_schema # JSON is inferred from schema_ref.
+    content_check_refs: [content_check] # Optional accepted-byte checks.
+    description: Request supplied when the Run starts.
+    required: true # Default is true; written here for the full reference.
+  attachment:
+    format: blob # Blob ports use media_types instead of schema_ref.
+    media_types: [text/plain]
+    description: Optional file from the owner.
+    required: false
+  repeat_limit:
+    schema_ref: value_schema
+    description: Project may lower this author-defined loop ceiling.
+    required: false
+    configuration: {scope: project, default: 3} # scope is project or run; default is optional.
+
+# Project workflow folders may additionally declare optional features. This
+# compiler-only metadata is removed before sealing; it maps a team-friendly name
+# to a boolean project input while the ordinary Choice below owns both routes.
+# features:
+#   optional_quality: {input: quality_enabled}
+outputs:
+  report:
+    schema_ref: value_schema
+    content_check_refs: [content_check]
+    description: Final typed result.
+    required_for: [succeeded] # Empty list is the safe default.
+  archive:
+    format: blob
+    media_types: [application/zip]
+    description: Optional exported file.
+    required_for: []
+
+# Optional; compiler derives all finish outcomes when this list is omitted.
+allowed_outcomes: [succeeded, completed_with_waivers, no_work, partial, rejected]
+
+# Required global bounds. max_parallelism and max_child_depth have defaults,
+# but they are explicit here because this is the complete reference.
+limits:
+  max_step_instances: 128
+  max_control_transitions: 1024
+  max_parallelism: 4
+  max_child_depth: 4
+policy_ref: policy # Required policy of this workflow.
+entry: start # Required ID of the first stage.
+
+# Revision 7 (capability workflow_continuation): what this workflow keeps and
+# what it continues from. Either field raises the derived revision to 7.
+#
+# checkpoint is the schema of the point the work can be continued from. What it
+# holds is yours -- a commit, a document version, a row id; the engine keeps
+# and hands it over and never reads it. A step stage names the output that
+# reports it (see `checkpoint:` on `start` below); make that output
+# required_for every verdict after which you want to continue, fail and blocked
+# included, or the step may end without reporting one.
+# checkpoint: {schema_ref: value_schema}
+#
+# continuation makes this workflow a continuation of finished Runs. It is what
+# `prifly project continue --source-run RUN` reads: the source Run's workflow
+# must be listed and its outcome must be one of from_outcomes, or it was
+# cancelled and from_cancelled is true (a technical failure is recovered with
+# `project recover`, not continued). Each listed
+# input is taken from the source Run in exactly one of four ways; inputs not
+# listed are supplied by the launch as usual. The continuation gets the source
+# Run's claimed tree as it was left, uncommitted files included; checking that
+# tree against the checkpoint is the job of your entry step, not the engine's.
+# continuation:
+#   from_workflows: [example:workflow/full-reference]
+#   from_outcomes: [partial, rejected]
+#   from_cancelled: true # Also a cancelled Run (no outcome; e.g. its driver was killed). At least one of the two.
+#   inputs:
+#     request: {source_input: request} # An input of the source Run.
+#     attachment: {stage: start, output: archive, verdict: pass} # Accepted output of a root stage; for a call stage write outcome: instead of verdict:.
+#     repeat_limit: {checkpoint: true} # The source Run's last accepted checkpoint.
+#
+# Revision 8 (capability workflow_resume): resumable lets this workflow resume
+# its own stopped Runs with `prifly project continue` and the launch the Run
+# was started with. It names which Runs -- ended with one of from_outcomes, or
+# cancelled when from_cancelled is true, at least one of the two -- and maps
+# nothing: the resumed Run takes the source Run's inputs. Stages accepted
+# before the point it stopped at are carried; that stage and everything after
+# it run again in the source Run's tree. The field raises the revision to 8.
+# resumable:
+#   from_outcomes: [partial, rejected]
+#   from_cancelled: true
+#
+# All three are commented out here because this reference lowers to revision
+# 4, and revisions 7 and 8 also answer for the verdict blocked on every step
+# stage.
+
+stages:
+  # A worker Step runs one StepDefinition. `on` routes its declared verdicts.
+  start:
+    kind: step
+    step_ref: worker_step
+    # technical_retries: 2 # Optional; WorkflowRevision 5+, budget 1..8 additional technical attempts.
+    # Use only when the referenced step declares effects.retry_class pure or
+    # idempotent. pure also requires effects.class none. never, deduplicated
+    # and reconcile_required refuse unsupported_retries. A business verdict
+    # does not consume this budget or ask for a retry. Omit the field for no
+    # technical retries; do not put it on a control stage. This reference stays
+    # revision 4, so the field is commented out.
+    # checkpoint: result # Revision 7: this output reports the workflow's checkpoint.
+    input_bindings:
+      request:
+        from: $inputs.request#/subject # $inputs.PORT is workflow_input; # needs a projected schema.
+        projected_schema_ref: projection_schema
+      fixed_mode: {from: literal, schema_ref: value_schema, value: preview} # Literal is explicit.
+    on: {pass: call_child, fail: rejected, needs_revision: rejected, skipped: rejected, waived: rejected}
+    # Every verdict a step can return is either routed above or declared
+    # impossible here; saying nothing about one is refused when sealing.
+    # Declare a verdict impossible only where the step cannot produce it: the
+    # runtime never reads this list, so a wrong entry costs exactly what a
+    # forgotten route costs — the report is accepted, the step completes, and
+    # only the routing fails. Where you are unsure, route a real outcome.
+    # Worked example of closing all four on a real package, including why a
+    # round whose step never ran routes to no_work rather than to an outcome
+    # declared as carrying a gate result (which would mean inventing an empty
+    # one — lying in the artifact to satisfy the graph):
+    # https://github.com/StenHigh/prifly-aif-workflows/blob/6e9664d105210137a51568aeadb1ce35b4969e61/README.md
+    # That link is pinned to a commit on purpose, so it cannot change under
+    # this file — which also means it shows that package as it stood then, not
+    # as it stands now. Read it for the reasoning, not as the package's current
+    # shape.
+    impossible_verdicts: [no_work]
+    compensation:
+      workflow_ref: compensation_workflow
+      input_bindings:
+        prior_effect:
+          from: $compensation#/effect
+          projected_schema_ref: projection_schema
+    description: Produce the first result and, if needed, describe compensation.
+    on_error: rejected
+
+  # Call runs one child workflow and routes its workflow outcome.
+  call_child:
+    kind: call
+    workflow_ref: child_workflow
+    input_bindings: {request: $stages.start.result} # $stages.STAGE.PORT is stage_output.
+    on: {succeeded: choose, completed_with_waivers: choose, no_work: rejected, rejected: rejected, partial: rejected}
+    description: Delegate to a sealed child workflow.
+    on_error: rejected
+
+  # Choice selects a declared route; it never calls a model or infers a branch.
+  # Overlapping branches are what first_match is for: it stops at the first
+  # non-false branch. exclusive instead evaluates every branch and refuses two
+  # true ones with ambiguous_branch, so branches written for it must not overlap.
+  choose:
+    kind: choice
+    selection: first_match # Required; the only other value is exclusive.
+    branches:
+      - id: ready
+        predicate:
+          op: all # all/any contain predicates; eq/ne compare operands.
+          args:
+            - {op: eq, left: $stages.start.result#/ready, right: true}
+            - {op: exists, ref: $inputs.attachment}
+        next: repeat
+      - id: changed
+        predicate: {op: ne, left: $stages.start.result#/state, right: unchanged}
+        next: repeat
+    default: rejected # Route when no predicate is true.
+    on_unknown: rejected # Route when a predicate cannot be decided.
+    description: Choose only among already declared predicates.
+    on_error: rejected
+
+  # Repeat passes initial data to the first body invocation and iteration output
+  # to every following one. Its maximum can be lowered through a named input.
+  repeat:
+    kind: repeat
+    body_workflow_ref: repeat_body
+    initial_bindings:
+      request: $inputs.request
+      subscription: $subscription.publication_source.handle # v3 durable source handle.
+      cursor: $subscription.publication_source.cursor
+    next_bindings:
+      request: $iteration.result # $iteration.PORT is the prior body output.
+      subscription: $subscription.publication_source.handle
+      cursor: $iteration.next_cursor
+    continue_on: [partial]
+    until: {op: eq, left: $iteration.done, right: true}
+    max_iterations: 3
+    limit_configuration: repeat_limit
+    on_complete: {succeeded: parallel, completed_with_waivers: parallel, no_work: parallel, rejected: rejected, partial: parallel}
+    on_limit: rejected
+    on_unknown: rejected
+    description: Bounded refinement; no "retry until it works" behaviour.
+    on_error: rejected
+
+  # Parallel runs named child workflows and releases only the declared join.
+  parallel:
+    kind: parallel
+    branches:
+      - id: first_reviewer
+        workflow_ref: parallel_branch
+        input_bindings: {request: $stages.start.result}
+      - id: second_reviewer
+        workflow_ref: parallel_branch
+        input_bindings: {request: $stages.start.result}
+    join:
+      mode: quorum # For mode all omit required_successes, use selection all and remainder wait.
+      accept_outcomes: [succeeded, completed_with_waivers]
+      required_successes: 1
+      selection: first_observed
+      remainder: cancel
+    max_parallelism: 2
+    on: {satisfied: map_items, unsatisfied: rejected}
+    description: Two independent reviewers; each reads an explicit binding.
+    on_error: rejected
+
+  # Map invokes a body once per sealed item; the key prevents position-based identity.
+  map_items:
+    kind: map
+    items: $publication.start # v3 publication source; it is not a mutable workspace scan.
+    body_workflow_ref: map_body
+    item_input: item
+    item_key_pointer: /id
+    input_bindings: {request: $inputs.request}
+    max_items: 100
+    max_parallelism: 4
+    join:
+      mode: all
+      accept_outcomes: [succeeded]
+      selection: all
+      remainder: wait
+    on: {satisfied: wait_for_event, unsatisfied: rejected, empty: done}
+    description: Process every sealed item, or follow the explicit empty route.
+    on_error: rejected
+
+  # Wait records a durable request before waiting. A null timeout omits on_timeout.
+  wait_for_event:
+    kind: wait
+    source_ref: publication_source
+    event_type: item_ready
+    event_schema_ref: event_schema
+    correlation_input:
+      from: $inputs.request#/correlation
+      projected_schema_ref: projection_schema
+    timeout_seconds: 300
+    on_event: done
+    on_timeout: rejected
+    description: Continue on the matching event or the declared timeout.
+    on_error: rejected
+
+  # Finish exposes only declared outputs and one terminal outcome.
+  done:
+    kind: finish
+    outcome: succeeded
+    output_bindings: {report: $stages.start.result}
+    description: Successful terminal result.
+  rejected:
+    kind: finish
+    outcome: rejected
+    output_bindings: {}
+    description: Terminal declared rejection.

@@ -17,7 +17,7 @@
 | `internal/release/` | Контракт публичной поставки: манифест, подпись, проверка |
 | `schemas/` | Опубликованные JSON Schema (`core/`, `foundation/`, `authoring/`); проверяются `make schemas-check` |
 | `test/e2e/`, `test/fixtures/` | Black-box проверки собранного CLI и локальные fixture-воркеры |
-| `examples/` | Справочники авторинга YAML и `troubleshooting.md` (симптом → причина → поле) |
+| `examples/` | Справочники авторинга YAML, эксплуатации (`operations/`) и диагностики; `handbook.go` встраивает поставляемые runner assets |
 
 ## Границы
 

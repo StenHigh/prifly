@@ -1,0 +1,14 @@
+authoring: prifly-step/1
+id: report-probe:step/produce
+version: 1.0.0
+title: Publish one report and its original log
+kind: worker
+inputs: {}
+outputs:
+  log: {format: blob, media_types: [text/plain], required_for: [pass]}
+  report: {schema_ref: "{{schema_report}}", required_for: [pass]}
+  carrier: {schema_ref: "{{schema_carrier}}", required_for: [pass]}
+executor: {adapter_ref: "{{adapter}}", operation: session}
+instructions_ref: "{{context_produce}}"
+effects: {class: none, retry_class: pure}
+result_schema_ref: "{{result}}"

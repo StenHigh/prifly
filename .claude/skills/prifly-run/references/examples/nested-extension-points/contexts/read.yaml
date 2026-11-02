@@ -1,0 +1,4 @@
+id: report-probe:context/read
+version: 1.0.0
+media_type: text/plain
+text: Synthetic reader. Export only the explicitly declared report and log refs.

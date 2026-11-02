@@ -1,0 +1,11 @@
+authoring: prifly-step/1
+id: report-probe:step/consume
+version: 1.0.0
+title: Consume the declared original report
+kind: worker
+inputs: {carrier: {schema_ref: "{{schema_carrier}}"}}
+outputs: {}
+executor: {adapter_ref: "{{adapter}}", operation: session}
+instructions_ref: "{{context_consume}}"
+effects: {class: none, retry_class: pure}
+result_schema_ref: "{{result}}"

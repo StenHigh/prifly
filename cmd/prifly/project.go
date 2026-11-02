@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
@@ -2974,7 +2975,7 @@ const projectRunnerCallExtensionInstructions = "\nNative calls, including projec
 	"native settlement. It does not prove an external actor stopped. A changed\n" +
 	"accepted child requires a reviewed legal root replay point, not stale output reuse.\n"
 
-func projectRunnerSkill(host projectHost) string {
+func projectRunnerSkillBeforeHandbook(host projectHost) string {
 	return strings.Replace(projectRunnerSkillBeforeWorktreeNaming(host), "## 1. Start\n", "## 1. Start\n"+projectRunnerWorktreeNamingInstructions, 1)
 }
 
@@ -3260,7 +3261,7 @@ func projectRunnerSkillAccepted(host projectHost, skill string) bool {
 // no particular order. A file matching one of them is generated, not authored,
 // so it may be replaced.
 func projectKnownRunnerSkills(host projectHost) []string {
-	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host), projectRunnerSkillBeforeLaunchAdvice(host), projectRunnerSkillBeforeQueue(host), projectRunnerSkillBeforeCallExtensions(host), projectRunnerSkillBeforeWorktreeNaming(host)}
+	return []string{projectRunnerSkillBeforeNeutral(host), projectRunnerSkillBeforeRequestDigest(host), projectRunnerSkillBeforeCatalog(host), projectRunnerSkillBeforeDecisionBridge(host), projectPreviousRunnerSkill(host), projectRunnerSkillBeforeTiming(host), projectRunnerSkillBeforeStateID(host), projectRunnerSkillBeforeAttemptID(host), projectRunnerSkillBeforeEffects(host), projectRunnerSkillBeforeOverlay(host), projectRunnerSkillBeforeWorkspace(host), projectRunnerSkillBeforeAttemptField(host), projectRunnerSkillBeforeEffectsRule(host), projectRunnerSkillBeforeShortening(host), projectRunnerSkillBeforeModelProfile(host), projectRunnerSkillBeforeTranslation(host), projectRunnerSkillBeforeControlLoop(host), projectRunnerSkillBeforeContinuation(host), projectRunnerSkillBeforeExplicitHead(host), projectRunnerSkillBeforeDeclaredContinuation(host), projectRunnerSkillBeforeHandoff(host), projectRunnerSkillBeforeResume(host), projectRunnerSkillBeforeAwaitingHost(host), projectRunnerSkillBeforeQuestions(host), projectRunnerSkillBeforeDecisionKeys(host), projectRunnerSkillBeforeResources(host), projectRunnerSkillBeforeChainedResume(host), projectRunnerSkillBeforeLaunchAdvice(host), projectRunnerSkillBeforeQueue(host), projectRunnerSkillBeforeCallExtensions(host), projectRunnerSkillBeforeWorktreeNaming(host), projectRunnerSkillBeforeHandbook(host)}
 }
 
 func checkProjectRunnerRoot(root string, host projectHost) error {
@@ -3392,84 +3393,78 @@ func projectRunnerConflict(host projectHost) error {
 // ordinary update rewrites a tracked runner, and until now the only way to
 // learn that was to have it happen.
 func checkProjectRunnerUpdates(root string, hosts ...projectHost) (updated, missing []string, err error) {
+	if _, err := os.Lstat(filepath.Join(root, ".prifly-runner-update.lock")); err == nil {
+		return nil, nil, refusal("project_runner_conflict", "runner update is in progress; retry after it completes")
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, nil, err
+	}
+	return checkProjectRunnerUpdatesUnlocked(root, hosts...)
+}
+
+func checkProjectRunnerUpdatesUnlocked(root string, hosts ...projectHost) (updated, missing []string, err error) {
+	assets, err := projectRunnerAssets()
+	if err != nil {
+		return nil, nil, err
+	}
 	updated, missing = []string{}, []string{}
 	for _, host := range hosts {
 		if err := checkProjectRunnerRoot(root, host); err != nil {
 			return nil, nil, err
 		}
-		path := filepath.Join(projectRunnerPath(root, host), "SKILL.md")
-		info, err := os.Lstat(path)
-		if errors.Is(err, os.ErrNotExist) {
+		skillRoot := projectRunnerPath(root, host)
+		data, err := runnerReadFile(skillRoot, "SKILL.md")
+		if errors.Is(err, fs.ErrNotExist) {
 			missing = append(missing, host.ID)
 			continue
 		}
 		if err != nil {
-			return nil, nil, err
-		}
-		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 			return nil, nil, projectRunnerConflict(host)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, nil, err
-		}
-		if string(data) == projectRunnerSkill(host) {
-			continue
 		}
 		if !projectRunnerSkillAccepted(host, string(data)) {
 			return nil, nil, projectRunnerConflict(host)
 		}
-		updated = append(updated, host.ID)
+		changed, _, err := inspectRunnerAssets(skillRoot, assets)
+		if err != nil {
+			return nil, nil, err
+		}
+		if changed || string(data) != projectRunnerSkill(host) {
+			updated = append(updated, host.ID)
+		}
 	}
 	return updated, missing, nil
 }
 
 func updateProjectRunners(root string, hosts ...projectHost) (updated, missing []string, err error) {
-	type runnerUpdate struct {
-		host projectHost
-		path string
+	unlock, err := lockProjectRunners(root)
+	if err != nil {
+		return nil, nil, err
 	}
-	updates := make([]runnerUpdate, 0, len(projectHosts))
-	missing = []string{}
-	for _, host := range hosts {
-		if err := checkProjectRunnerRoot(root, host); err != nil {
-			return nil, nil, err
-		}
-		path := filepath.Join(projectRunnerPath(root, host), "SKILL.md")
-		info, err := os.Lstat(path)
-		if errors.Is(err, os.ErrNotExist) {
-			missing = append(missing, host.ID)
-			continue
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			return nil, nil, projectRunnerConflict(host)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, nil, err
-		}
-		switch string(data) {
-		case projectRunnerSkill(host):
-			continue
-		default:
-			if !projectRunnerSkillAccepted(host, string(data)) {
-				return nil, nil, projectRunnerConflict(host)
-			}
-			updates = append(updates, runnerUpdate{host: host, path: path})
-		}
+	defer unlock()
+	updated, missing, err = checkProjectRunnerUpdatesUnlocked(root, hosts...)
+	if err != nil {
+		return nil, nil, err
 	}
 	if len(hosts) != 0 && len(missing) == len(hosts) {
 		return nil, nil, refusal("project_runner_missing", "project runners update requires "+filepath.ToSlash(filepath.Join(hosts[0].SkillsRoot, "prifly-run", "SKILL.md")))
 	}
-	updated = make([]string, 0, len(updates))
-	for _, update := range updates {
-		if err := replaceProjectRunner(update.path, projectRunnerSkill(update.host)); err != nil {
-			return nil, nil, err
+	assets, err := projectRunnerAssets()
+	if err != nil {
+		return nil, nil, err
+	}
+	completed := []string{}
+	for _, host := range hosts {
+		if !slices.Contains(updated, host.ID) {
+			continue
 		}
-		updated = append(updated, update.host.ID)
+		skillRoot := projectRunnerPath(root, host)
+		_, previous, err := inspectRunnerAssets(skillRoot, assets)
+		if err == nil {
+			err = installRunnerBundle(skillRoot, host, assets, previous)
+		}
+		if err != nil {
+			return nil, nil, refusal("project_runner_conflict", fmt.Sprintf("runner bundle update failed for %s; already updated hosts: %v; %v", host.ID, completed, err))
+		}
+		completed = append(completed, host.ID)
 	}
 	return updated, missing, nil
 }
@@ -3513,6 +3508,13 @@ func writeProjectRunners(root string, hosts ...projectHost) error {
 		skill := projectRunnerSkill(host)
 		if err := os.WriteFile(filepath.Join(runner, "SKILL.md"), []byte(skill), 0644); err != nil {
 			return err
+		}
+		assets, err := projectRunnerAssets()
+		if err != nil {
+			return err
+		}
+		if err := installRunnerBundle(runner, host, assets, nil); err != nil {
+			return refusal("project_runner_conflict", fmt.Sprintf("runner bundle install failed for %s at %s: %v", host.ID, runner, err))
 		}
 	}
 	return nil

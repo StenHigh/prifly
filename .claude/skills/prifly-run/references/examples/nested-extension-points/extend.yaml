@@ -1,0 +1,10 @@
+authoring: prifly-extension/4
+extensions:
+  - id: measure-before-read
+    point: before-read
+    step: measure
+    output_bindings: {reader: carrier, repair: carrier, clean: carrier}
+  - id: measure-after-repair
+    point: after-repair
+    call: measure-child
+    output_bindings: {repeated: carrier}

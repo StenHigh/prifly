@@ -1,0 +1,77 @@
+# yaml-language-server: schema ref unavailable in this development build; use prifly schema for the installed contract
+# Optional local queue is authority state, never an extra YAML key here.
+# Requires queue-bound core-state/44, core-read/44 and Project profile /3;
+# questionnaire --prepare: project-launch-summary/4; start: project-start/4.
+# prifly project queue add --input TASK.json --priority 10 --command-id add:one
+# prifly project queue claim-next --owner session:one --command-id claim:one
+# prifly project queue show --task-id TASK_ID
+# Preserve request_bytes (base64 exact UTF-8 TaskInput) and request_digest.
+# Pass all four selection fields through questionnaire/prepare/start/continue:
+# --task-id TASK_ID --task-owner session:one --task-revision 1 --task-claim-generation 1
+# Read declared typed inputs independently, obtain actual answers, then prepare
+# and start with --expected-launch-digest DIGEST --command-id start:one.
+# Read fields: queue_task.selection.{task_id,task_revision,request_digest,owner,
+# claim_generation}, queue_task.intent_id, queue_request_bytes (exact TaskInput);
+# no queue fields on legacy Runs.
+# A missing answer/launch waits; claim-next never dispatches. A stale revision
+# refuses before preflight. queue_reconcile_required never authorizes a retry:
+# inspect project queue reconcile --intent-id INTENT_ID with the same selection
+# and --command-id reconcile:one. Explicit --resolution not_started (reserved)
+# or effects_resolved (dispatching) needs --reason after dispatcher termination.
+# release/complete use the same selection and --reason, with a new command-id;
+# they refuse active/uncertain Runs. complete records local processing only.
+# Complete reference for .prifly/project.yaml. Git is optional in profile /3.
+# hosts is optional: omit it entirely for command-only workflows. Any selected
+# host uses its fixed root; install it with project runners add --host HOST.
+# Pri-Fly does not guess the host by checking which folders happen to exist.
+# Git-writing assisted work requires an explicit worktree or checkout choice
+# per Run; ordinary commands use private scratch and do not claim a repository.
+# /2 remains a supported legacy profile with Git, all three hosts and RunBrief.
+# Existing /2 profiles migrate only by explicit reviewed edit, never at start.
+# /3 keeps authored IDs/versions; compile/start report author_package alongside
+# the exact compiled build. Program machine paths belong in ignored local.yaml,
+# never here. execution_bindings belongs in a package's root workflow.yaml.
+schema_version: prifly-project-profile/4
+title: Example project # Optional human-facing name, sealed into new Runs.
+# Optional shared naming for NEW worktree claims only (profile /4).
+# Example workflow must declare a JSON input task with source/id string fields.
+# Full executable fixture and --input / --input-ref commands:
+# ../workflows/named-worktree/README.md
+# prepare summary /5: policy is reviewed; worktree_name_preview reserved=false.
+# start /5 records actual suffix; repeat command ID returns the same result.
+# Handover keeps the recorded name; checkout/no Workspace ignore input bindings.
+worktree_naming:
+  template: "{project_name}-{task_source}-{task_id}"
+  bindings:
+    project_name: {value: example}
+    task_source: {input: task, pointer: /source}
+    task_id: {input: task, pointer: /id}
+
+hosts:
+  codex-cli: .codex/skills # The `prifly-run` skill installed for Codex CLI.
+  codex-app: .agents/skills # The `prifly-run` skill installed for Codex Desktop.
+  claude-code: .claude/skills # The `prifly-run` skill installed for Claude Code.
+packages:
+  example:
+    source: .prifly/workflows/example # One folder with workflow.yaml and its YAML components.
+    origin: # Written by `prifly project workflows add`; omit it for a hand-written folder.
+      repository: https://github.com/StenHigh/prifly.git # Full Git URL without credentials.
+      path: examples/example # Workflow folder inside that repository.
+      ref: v0.4.0 # Tag, branch or commit that was requested.
+      commit: "0000000000000000000000000000000000000000" # Exact commit that was fetched; a string, not a YAML number.
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # Tree digest without the root extend.yaml; update refuses local drift.
+      extend_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000 # Upstream extend.yaml at install time, when it shipped one.
+      catalog: https://github.com/StenHigh/prifly-workflows.git # Catalog that named the entry, when one did.
+launches:
+  example:
+    title: Example workflow # Human-facing chooser label; an ID is not a purpose rule.
+    description: A tracked YAML workflow package. # Explain purpose/limits here; the host may use this for optional advice.
+    kind: workflow # The only supported launch kind.
+    workflow: .prifly/workflows/example/workflow.yaml # Marker file inside the package source.
+    workspace: worktree # Optional standing choice; the host does not ask, --workspace still overrides for one Run.
+    # Optional program project start runs in the repository before it takes
+    # anything; exit 0 lets the launch go on, anything else refuses it with the
+    # program's output. The binary is the one allowed with
+    # `project local set --allow-executable shell=/bin/sh`; no --allow-execution
+    # is needed for the project's own declaration. --prepare does not run it.
+    preflight: {executable: shell, args: [.prifly/preflight.sh], timeout_ms: 60000}

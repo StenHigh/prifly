@@ -42,7 +42,7 @@ func TestAIFClassicAndRunnerDescribeOneControlLoop(t *testing.T) {
 	if strings.Contains(string(bridge), "`needs_revision` skips") {
 		t.Fatal("verify bridge still documents the terminal repair bypass")
 	}
-	for _, required := range []string{"After every accepted session report", "`program`, call", "waiting or terminal state", "actually provides a separate-session mechanism"} {
+	for _, required := range []string{"after start and every accepted report", "For control/program", "Waiting/terminal states", "separate session is optional only when actually available"} {
 		if !strings.Contains(projectRunnerSkill(projectHostByID(t, "codex-app")), required) {
 			t.Errorf("Codex runner lacks %q", required)
 		}

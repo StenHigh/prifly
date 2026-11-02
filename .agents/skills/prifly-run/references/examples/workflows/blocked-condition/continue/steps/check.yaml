@@ -1,0 +1,18 @@
+# A program that needs one condition before it can do its work. When the
+# condition holds it passes; when it does not, it returns blocked -- not fail:
+# nothing is wrong with the work, it could not be done -- and hands over why.
+# Promising the obstacle on blocked is what makes it reach the next stage;
+# for a program the authoring ladder lowers that to step contract v12.
+authoring: prifly-step/1
+id: example:step/check-condition
+version: 1.0.0
+title: Check the condition
+kind: worker
+inputs:
+  request: {schema_ref: "{{schema_blocked-request}}"}
+outputs:
+  result: {schema_ref: "{{schema_blocked-result}}", required_for: [pass]}
+  obstacle: {schema_ref: "{{schema_obstacle}}", required_for: [blocked]}
+executor: {adapter_ref: "{{adapter}}", operation: process}
+effects: {class: none, retry_class: never}
+result_schema_ref: "{{result}}"

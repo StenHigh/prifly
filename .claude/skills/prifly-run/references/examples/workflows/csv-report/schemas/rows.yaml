@@ -1,0 +1,17 @@
+id: example:schema/rows
+version: 1.0.0
+type: object
+additionalProperties: false
+required: [rows]
+properties:
+  rows:
+    type: array
+    minItems: 1
+    maxItems: 10000
+    items:
+      type: object
+      additionalProperties: false
+      required: [name, amount]
+      properties:
+        name: {type: string, minLength: 1}
+        amount: {type: integer, minimum: 0, maximum: 9007199254740991}

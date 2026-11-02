@@ -196,7 +196,7 @@ func TestCLIProjectInitCreatesTrackedProfileAndSeparateAuthority(t *testing.T) {
 		if host.ID == "claude-code" {
 			questionTool = "AskUserQuestion"
 		}
-		if err != nil || string(runner) != projectRunnerSkill(host) || !strings.Contains(string(runner), "project workflows --repository") || strings.Contains(string(runner), "task_recipe") || !strings.Contains(string(runner), "prifly_executable") || !strings.Contains(string(runner), "--host "+host.ID) || !strings.Contains(string(runner), questionTool) || !strings.Contains(string(runner), "deterministic\npages") || !strings.Contains(string(runner), "wait without mutation") || !strings.Contains(string(runner), "RunBrief text") || !strings.Contains(string(runner), "project questionnaire") || !strings.Contains(string(runner), "attended or autonomous policy") || !strings.Contains(string(runner), "waiting_decision") || !strings.Contains(string(runner), "--request-digest") || !strings.Contains(string(runner), "--envelope-digest") || !strings.Contains(string(runner), "project start") || !strings.Contains(string(runner), "project workflows search") || !strings.Contains(string(runner), "project workflows add NAME") {
+		if err != nil || string(runner) != projectRunnerSkill(host) || strings.Contains(string(runner), "task_recipe") || !strings.Contains(string(runner), "prifly_executable") || !strings.Contains(string(runner), "--host "+host.ID) || !strings.Contains(string(runner), questionTool) || !strings.Contains(string(runner), "references/manual/index.md") || !strings.Contains(string(runner), "--expected-launch-digest") {
 			t.Fatalf("project profile omitted the %s runner skill: %v %q", host.ID, err, runner)
 		}
 	}
@@ -3442,14 +3442,14 @@ func TestCLIProjectRunnersUpdateKeepsTheProjectOverlayAndNamesIt(t *testing.T) {
 		t.Fatalf("the generated runner was not replaced: %v", err)
 	}
 	body := string(data)
-	pointer := strings.Index(body, "If PROJECT.md exists beside this file, read it right after this text")
-	if pointer < 0 || !strings.Contains(body, "PROJECT.md wins where the two") || !strings.Contains(body, "replaces this file only, never PROJECT.md") {
+	pointer := strings.Index(body, "Read PROJECT.md beside this")
+	if pointer < 0 || !strings.Contains(body, "its project rules win") || !strings.Contains(body, "never PROJECT.md") {
 		t.Fatalf("the generated runner does not name the overlay, its precedence and what update replaces")
 	}
 	// The runner stopped being a numbered list at 0.13.37; what this guard is
 	// about is that the overlay is named before the protocol, not which words
 	// the protocol starts with.
-	if firstStep := strings.Index(body, "\n## 1. Start"); firstStep < 0 || pointer > firstStep {
+	if firstStep := strings.Index(body, "\n## 1. Before a new Run"); firstStep < 0 || pointer > firstStep {
 		t.Fatalf("the overlay is named after the protocol starts, not in the first lines: pointer=%d first_step=%d", pointer, firstStep)
 	}
 }

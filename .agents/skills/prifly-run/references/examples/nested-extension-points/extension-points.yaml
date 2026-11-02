@@ -1,0 +1,28 @@
+authoring: prifly-extension-points/1
+points:
+  before-read:
+    workflow: report-probe:workflow/round
+    entry: read
+    input_bindings: {carrier: $inputs.carrier}
+    consumers:
+      reader: {stage: read, input: carrier}
+      repair: {stage: repair, input: carrier}
+      clean: {stage: clean, output: carrier}
+    routes:
+      step:
+        on: {pass: read, needs_revision: stopped, blocked: stopped, fail: stopped, no_work: stopped}
+      call:
+        on: {succeeded: read, partial: stopped, rejected: stopped}
+        on_error: stopped
+  after-repair:
+    workflow: report-probe:workflow/round
+    between: {from: repair, to: fixed}
+    input_bindings: {carrier: $stages.repair.carrier}
+    consumers:
+      repeated: {stage: fixed, output: carrier}
+    routes:
+      step:
+        on: {pass: fixed, needs_revision: stopped, blocked: stopped, fail: stopped, no_work: stopped}
+      call:
+        on: {succeeded: fixed, partial: stopped, rejected: stopped}
+        on_error: stopped

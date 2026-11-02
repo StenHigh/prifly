@@ -1,0 +1,16 @@
+# What a step hands over when it could not do its work. Every field is the
+# workflow author's; the engine validates the shape and reads nothing else.
+id: example:schema/obstacle
+version: 1.0.0
+type: object
+additionalProperties: false
+required: [reason_code, summary, condition_ref, observations, remaining_work]
+properties:
+  reason_code: {type: string, minLength: 1, maxLength: 100}
+  summary: {type: string, minLength: 1, maxLength: 2000}
+  condition_ref: {type: string, minLength: 1, maxLength: 1000}
+  observations:
+    type: array
+    maxItems: 50
+    items: {type: string, maxLength: 2000}
+  remaining_work: {type: string, minLength: 1, maxLength: 2000}

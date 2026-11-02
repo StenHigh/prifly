@@ -1,0 +1,18 @@
+id: report-probe:schema/carrier
+version: 1.0.0
+type: object
+additionalProperties: false
+required: [candidate, reports]
+properties:
+  candidate: {type: string}
+  reports:
+    type: array
+    maxItems: 8
+    items:
+      type: object
+      additionalProperties: false
+      required: [artifact_id, revision, digest]
+      properties:
+        artifact_id: {type: string, minLength: 1}
+        revision: {type: integer, minimum: 1}
+        digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}

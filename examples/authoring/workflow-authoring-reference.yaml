@@ -142,6 +142,13 @@ stages:
   start:
     kind: step
     step_ref: worker_step
+    # technical_retries: 2 # Optional; WorkflowRevision 5+, budget 1..8 additional technical attempts.
+    # Use only when the referenced step declares effects.retry_class pure or
+    # idempotent. pure also requires effects.class none. never, deduplicated
+    # and reconcile_required refuse unsupported_retries. A business verdict
+    # does not consume this budget or ask for a retry. Omit the field for no
+    # technical retries; do not put it on a control stage. This reference stays
+    # revision 4, so the field is commented out.
     # checkpoint: result # Revision 7: this output reports the workflow's checkpoint.
     input_bindings:
       request:

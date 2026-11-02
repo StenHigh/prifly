@@ -1,0 +1,31 @@
+authoring: prifly-project-workflow/1
+package:
+  id: example:package/named-worktree
+  version: 1.0.0
+  description: Explicit task metadata and a claimed named worktree.
+  requires_core_protocol: "1"
+  references:
+    assisted_adapter: core:adapter/assisted-session@1.0.0
+    local_policy: core:policy/local@3.0.0
+    step_result_schema: core:schema/step-result@1.0.0
+id: example:workflow/named-worktree
+version: 1.0.0
+refs:
+  task: "{{schema_task}}"
+  work: "{{step_work}}"
+  local_policy: "{{local_policy}}"
+inputs:
+  task: {schema_ref: task, required: true}
+resumable: {from_outcomes: [partial]}
+entry: work
+limits: {max_step_instances: 1, max_control_transitions: 2}
+policy_ref: local_policy
+stages:
+  work:
+    kind: step
+    step_ref: work
+    input_bindings: {task: $inputs.task}
+    on: {pass: done, no_work: partial}
+    impossible_verdicts: [fail, needs_revision, blocked]
+  done: {kind: finish, outcome: succeeded}
+  partial: {kind: finish, outcome: partial}

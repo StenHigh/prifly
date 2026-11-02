@@ -1,0 +1,153 @@
+# yaml-language-server: schema ref unavailable in this development build; use prifly schema for the installed contract
+# Complete reference for the optional extend.yaml beside one project workflow.
+# Copy only the sections your project needs. Values are validated by the named
+# workflow input schema during `prifly project compile`.
+
+# Select one package profile declared in workflow.yaml. A profile supplies only
+# that package's sealed YAML substitutions; it is not a Core runtime profile.
+profile: standard
+
+# Standing answers to the package's declared decisions: what the owner settled
+# for this project and does not choose again at every launch. Each is validated
+# against the decision catalog exactly as a flag is, sealed into the Run's
+# decision sheet as project_default, and overridden by the matching flag
+# (--decision-policy, --preflight-answer, --runtime-answer) for one Run without
+# touching this file. A long text answer is a YAML block scalar.
+answers:
+  decision_policy: autonomous
+  preflight:
+    plan_tests: true
+    gate_checks: |
+      composer test -- --group=product
+  runtime:
+    improve_apply: all
+
+# Logical refs for the components this project adds under project/, resolved
+# from the inventory at compile exactly as the package's own and reachable as
+# {{name}} in project/steps etc.; a name the package already declares is refused.
+references:
+  process: core:adapter/local-process@2.0.0
+
+# Exclusive resources (state 42, Pri-Fly 0.13.71+). Two Runs of the project run
+# side by side, but not both through the stages that hold the same resource
+# beyond its limit: a second Run reaching such a stage is refused
+# `resource_busy`, naming the Run that holds it, runs nothing, and is admitted
+# on its next `run drive` once the holder settles. `limit` (default 1) is how
+# many attempts of the whole authority may hold the resource at once; `stages`
+# are root stages of THIS workflow, and a `call` stage holds it for every
+# attempt inside the workflow it calls. A machine may give its own limit in
+# .prifly/local.yaml (`resources: {heavy: {limit: 2}}`); the stages stay here.
+# The name is the project's -- Pri-Fly reads nothing into it.
+resources:
+  heavy:
+    limit: 1
+    stages: [tests, verify]
+
+# Programs for the steps this file's extensions insert (keyed by the extension's
+# short step name). Same form, allowed executable (`project local set
+# --allow-executable shell=/bin/sh`) and `--allow-execution` as a package
+# binding; only the place of declaration is the project's. A package's own
+# program stays bound in its workflow.yaml and cannot be overridden here.
+execution_bindings:
+  steps:
+    lint:
+      executable: shell
+      args: [lint.sh]
+      files: {lint.sh: project/workers/lint.sh}
+      timeout_ms: 600000
+      grace_ms: 1000
+      max_output_bytes: 1048576
+      # Optional: open this program's stdout/stderr to readers of the Run
+      # (monitor, `run output`), and how much it may print per stream (absent:
+      # 64 KiB). Same fields as a package binding; sealed at state 43.
+      live_output: true
+      output_limit_bytes: 4194304
+
+# Set defaults for already declared project-scoped configuration inputs.
+# The key is the workflow's SHORT NAME: everything after the last `/` of the
+# `id:` written inside the workflow file -- `aif:workflow/improve-batch` is
+# `improve-batch`. It is not the file name, so renaming the file changes
+# nothing here and renaming the tail of the id breaks every key that used it
+# with `project_option_unknown_workflow`. Changing only the namespace before
+# the `/` is safe: `aif-profiled:workflow/improve-batch` keeps the same key.
+settings:
+  build-or-pass:
+    build_batch_limit: 2
+
+# Turn off only named optional features declared in a workflow's `features` map.
+# Named by the same short name as `settings` above: the tail of the `id:`.
+# The workflow itself owns the enabled and bypass routes; this list never deletes
+# a stage or rewrites bindings.
+exclude: [improve, verify, review]
+
+# Insert a project step into one exact direct route. `workflow` and `step` are
+# short component names: the tail of the `id:` written inside those files,
+# after the last `/`. Not the file name -- one function derives this name for
+# `settings`, `exclude`, `features` and insertions alike, and it reads the id. The insertion names the route it replaces
+# rather than a point after a stage, so the tail of the graph cannot be silently
+# detached: `from` keeps its route to the new step and the new step routes on to
+# `to`. The inserted step may bind one input; a step that requires more than one
+# belongs in a workflow graph you write yourself.
+extensions:
+  - id: lint-after-build
+    workflow: build
+    between: {from: build, to: commit}
+    step: lint
+    # Hand the inserted step one artifact a stage that already ran on this path
+    # produced, instead of retyping it into the prompt. Written exactly as a
+    # workflow stage writes it, `$stages.STAGE.PORT`, and checked exactly as an
+    # authored binding is: compilation refuses a producer that has not run, an
+    # output that stage does not have, and a schema the input cannot accept.
+    # Every other input the step declares must be optional.
+    input_bindings: {sources: $stages.build.artifact}
+    on: {pass: commit}
+    # Every verdict the inserted step can return is routed above or named here.
+    # Sealing refuses an insertion that stays silent about one of them.
+    impossible_verdicts: [fail, needs_revision, no_work]
+
+# Native Call (project_call_extensions, Pri-Fly 0.13.78+; unsupported by
+# v0.13.77): select authoring: prifly-extension/2 at document root and Project
+# profile /3. Unmarked v1 bytes keep their old step-only meaning. Explicit editor
+# selection also works with extension-v1.schema.json or extension-v2.schema.json.
+# Exactly one step/call per entry; call stage ID is extension id, never callee id.
+# call resolves the tail authored ID of ONE local workflow in workflows/ or
+# project/workflows/ of this folder. Install alone does not import another bundle.
+# Minimum native Call: WorkflowRevision 1, core state/read 2; additional fields
+# (resources, resumable, session limits) keep their own minimum contracts.
+# Example replaces the extensions section above; root stages and all schemas,
+# child definitions/ports/exports already exist. Nothing is generated by name.
+# authoring: prifly-extension/2
+# extensions:
+#   - id: product-acceptance
+#     workflow: consumer
+#     call: project-product-quality
+#     between: {from: prepare-product, to: commit}
+#     input_bindings:
+#       configuration: $stages.prepare-product.configuration
+#       ui: $stages.prepare-product.ui
+#       ux: $stages.prepare-product.ux
+#     on: {succeeded: commit, partial: stopped, rejected: stopped}
+#     on_error: stopped
+# Bind every required input with EXACT schema refs. Project-scoped configuration
+# cannot be overridden; the name configuration alone does not make it scoped.
+# Omit input_bindings or use {} for a child with no required inputs (max 256).
+# on covers every declared allowed_outcome; impossible_verdicts is step-only.
+# Later stages read $stages.product-acceptance.gate only on paths guaranteeing it.
+# Error/cancel do not invent exports. A second extension can consume the call's
+# success route; extensions are applied in written order, only to this root.
+# Marked execution_bindings.steps may bind reachable owned PROGRAM leaf steps
+# of the inserted call closure. Existing package bindings cannot be overridden;
+# supporting files, allowlists and execution consent use the normal contract.
+# project extend is step-only; calls require project compile's folder inventory.
+# Reusable synthetic one/three-input examples: test/fixtures/project-call-extensions.
+
+# Nested opt-in project_extension_points: see extension-points-authoring-reference.yaml
+# and examples/nested-extension-points for package-declared anchors and consumers.
+# authoring: prifly-extension/4
+# extensions:
+#   - id: measure-after-repair
+#     point: after-repair
+#     call: measure-child
+#     output_bindings: {repeated: carrier}
+# The point owns workflow/anchor/inputs/routes; project entries cannot replace them.
+# enabled: false keeps passthrough. New output is required on its native route.

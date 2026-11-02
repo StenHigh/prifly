@@ -1,0 +1,639 @@
+{
+  "schema_version": "handbook-forward-evaluation/1",
+  "scope": {
+    "root": "/tmp/prifly-handbook-qa",
+    "core_source_read": false,
+    "implementation_worktree_read": false,
+    "external_services_contacted": false,
+    "system_binary_updated": false,
+    "agents_spawned": false
+  },
+  "tasks": [
+    {
+      "task": "previous_issued_attempt_mismatch_control",
+      "run_id": "run:f588bab53418eacfd695a54e20cb327316a0b3f6c597812005a6d9c19f305a57",
+      "commands": [
+        "/tmp/prifly-handbook-qa/bin/prifly session task --project /tmp/prifly-handbook-qa/authority --run run:f588bab53418eacfd695a54e20cb327316a0b3f6c597812005a6d9c19f305a57 --all",
+        "/tmp/prifly-handbook-qa/bin/prifly session take --project /tmp/prifly-handbook-qa/authority --run run:f588bab53418eacfd695a54e20cb327316a0b3f6c597812005a6d9c19f305a57 --attempt attempt:6d89d0a62b06e466993b2c9a8756a8b0",
+        "rg --files /tmp/prifly-handbook-qa/authority/.prifly/work/6d89d0a62b06e466993b2c9a8756a8b0",
+        "cat /tmp/prifly-handbook-qa/authority/.prifly/work/6d89d0a62b06e466993b2c9a8756a8b0/context/skills/example-context-work-* /tmp/prifly-handbook-qa/authority/.prifly/work/6d89d0a62b06e466993b2c9a8756a8b0/inputs/task /tmp/prifly-handbook-qa/authority/.prifly/work/6d89d0a62b06e466993b2c9a8756a8b0/context.json",
+        "/tmp/prifly-handbook-qa/bin/prifly session --help",
+        "/tmp/prifly-handbook-qa/bin/prifly session submit --project /tmp/prifly-handbook-qa/authority --template --run run:f588bab53418eacfd695a54e20cb327316a0b3f6c597812005a6d9c19f305a57 --attempt attempt:6d89d0a62b06e466993b2c9a8756a8b0",
+        "/tmp/prifly-handbook-qa/bin/prifly session submit --project /tmp/prifly-handbook-qa/authority --file /tmp/prifly-handbook-qa/previous-report.json",
+        "/tmp/prifly-handbook-qa/bin/prifly run next --project /tmp/prifly-handbook-qa/authority run:f588bab53418eacfd695a54e20cb327316a0b3f6c597812005a6d9c19f305a57",
+        "/tmp/prifly-handbook-qa/bin/prifly run drive --project /tmp/prifly-handbook-qa/authority run:f588bab53418eacfd695a54e20cb327316a0b3f6c597812005a6d9c19f305a57",
+        "/tmp/prifly-handbook-qa/bin/prifly run next --project /tmp/prifly-handbook-qa/authority run:f588bab53418eacfd695a54e20cb327316a0b3f6c597812005a6d9c19f305a57"
+      ],
+      "local_report_file": "/tmp/prifly-handbook-qa/previous-report.json",
+      "outcome": {
+        "status": "completed",
+        "outcome": "partial",
+        "accepted_verdict": "no_work",
+        "file_created": false
+      },
+      "reason": "Pinned instructions require input.title; sealed input is {source:trucker,id:default-123} and contains no title. No title was fabricated.",
+      "full_file_reads": [
+        {
+          "path": "/tmp/prifly-handbook-qa/previous-SKILL.md",
+          "bytes": 20673
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/authority/.prifly/work/6d89d0a62b06e466993b2c9a8756a8b0/inputs/task",
+          "bytes": 40
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/authority/.prifly/work/6d89d0a62b06e466993b2c9a8756a8b0/context.json",
+          "bytes": 4143
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/authority/.prifly/work/6d89d0a62b06e466993b2c9a8756a8b0/context/skills/example-context-work-0.0.0-b1.4tazqu5fdw57gkavajwufbrbe3jv27uquoz4xckw5ceuodklpmua",
+          "bytes": 196
+        }
+      ],
+      "full_read_document_bytes": 20673,
+      "full_read_pinned_context_bytes": 4379,
+      "executed_public_cli_calls": 8,
+      "documentation_gaps": [
+        "Previous skill provides no exact submission skeleton command; public session --help was needed."
+      ],
+      "fixture_limitation": "This exercises truthful partial routing, not successful title output."
+    },
+    {
+      "task": "handbook_issued_attempt_mismatch_control",
+      "run_id": "run:28b1989511b0ae0b17856f1405a5028a81f84b6d7bc2c838ed000bf0990ccd16",
+      "commands": [
+        "/tmp/prifly-handbook-qa/bin/prifly session task --project /tmp/prifly-handbook-qa/authority --run run:28b1989511b0ae0b17856f1405a5028a81f84b6d7bc2c838ed000bf0990ccd16 --all",
+        "/tmp/prifly-handbook-qa/bin/prifly session take --project /tmp/prifly-handbook-qa/authority --run run:28b1989511b0ae0b17856f1405a5028a81f84b6d7bc2c838ed000bf0990ccd16 --attempt attempt:e79b185bc6afde8aaebe26870a12872d",
+        "cat /tmp/prifly-handbook-qa/authority/.prifly/work/e79b185bc6afde8aaebe26870a12872d/context/skills/example-context-work-* /tmp/prifly-handbook-qa/authority/.prifly/work/e79b185bc6afde8aaebe26870a12872d/inputs/task /tmp/prifly-handbook-qa/authority/.prifly/work/e79b185bc6afde8aaebe26870a12872d/context.json",
+        "/tmp/prifly-handbook-qa/bin/prifly session submit --project /tmp/prifly-handbook-qa/authority --template --run run:28b1989511b0ae0b17856f1405a5028a81f84b6d7bc2c838ed000bf0990ccd16 --attempt attempt:e79b185bc6afde8aaebe26870a12872d --json > /tmp/prifly-handbook-qa/handbook-report.json",
+        "/tmp/prifly-handbook-qa/bin/prifly session submit --project /tmp/prifly-handbook-qa/authority --file /tmp/prifly-handbook-qa/handbook-report.json",
+        "/tmp/prifly-handbook-qa/bin/prifly run next --project /tmp/prifly-handbook-qa/authority run:28b1989511b0ae0b17856f1405a5028a81f84b6d7bc2c838ed000bf0990ccd16",
+        "/tmp/prifly-handbook-qa/bin/prifly run drive --project /tmp/prifly-handbook-qa/authority run:28b1989511b0ae0b17856f1405a5028a81f84b6d7bc2c838ed000bf0990ccd16",
+        "/tmp/prifly-handbook-qa/bin/prifly run next --project /tmp/prifly-handbook-qa/authority run:28b1989511b0ae0b17856f1405a5028a81f84b6d7bc2c838ed000bf0990ccd16"
+      ],
+      "local_report_file": "/tmp/prifly-handbook-qa/handbook-report.json",
+      "outcome": {
+        "status": "completed",
+        "outcome": "partial",
+        "accepted_verdict": "no_work",
+        "file_created": false
+      },
+      "reason": "Pinned instructions require input.title; sealed input is {source:trucker,id:default-123} and contains no title. No title was fabricated.",
+      "full_file_reads": [
+        {
+          "path": "/tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/SKILL.md",
+          "bytes": 9812
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references/manual/index.md",
+          "bytes": 2843
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references/manual/hosting.md",
+          "bytes": 10412
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/authority/.prifly/work/e79b185bc6afde8aaebe26870a12872d/inputs/task",
+          "bytes": 40
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/authority/.prifly/work/e79b185bc6afde8aaebe26870a12872d/context.json",
+          "bytes": 4143
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/authority/.prifly/work/e79b185bc6afde8aaebe26870a12872d/context/skills/example-context-work-0.0.0-b1.4tazqu5fdw57gkavajwufbrbe3jv27uquoz4xckw5ceuodklpmua",
+          "bytes": 196
+        }
+      ],
+      "full_read_document_bytes": 23067,
+      "full_read_pinned_context_bytes": 4379,
+      "executed_public_cli_calls": 7,
+      "documentation_gaps": [],
+      "fixture_limitation": "This exercises truthful partial routing, not successful title output."
+    },
+    {
+      "task": "csv-report_new_launch",
+      "request": "Start declared csv-report using provided sample.csv",
+      "commands": [
+        "cat /tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references/manual/installation.md",
+        "/tmp/prifly-handbook-qa/bin/prifly --version",
+        "/tmp/prifly-handbook-qa/bin/prifly update --json",
+        "/tmp/prifly-handbook-qa/bin/prifly run --help",
+        "/tmp/prifly-handbook-qa/bin/prifly run list --project /tmp/prifly-handbook-qa/authority --limit 1000 --json",
+        "/tmp/prifly-handbook-qa/bin/prifly update --help"
+      ],
+      "outcome": "Stopped before mandatory update executed; no prepare/start call occurred.",
+      "version": "0.2.0-dev.5",
+      "approval_review": {
+        "rejected": true,
+        "command_executed": false,
+        "reason": "Updater may contact external services or mutate installed binary, conflicting with fixture no-GitHub/no-system-update scope.",
+        "cli_problem_code": null
+      },
+      "authority_after": {
+        "total": 2,
+        "run_ids": [
+          "run:f588bab53418eacfd695a54e20cb327316a0b3f6c597812005a6d9c19f305a57",
+          "run:28b1989511b0ae0b17856f1405a5028a81f84b6d7bc2c838ed000bf0990ccd16"
+        ],
+        "new_run_created": false
+      },
+      "full_file_reads": [
+        {
+          "path": "/tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references/manual/installation.md",
+          "bytes": 10721
+        }
+      ],
+      "documentation_gaps": [],
+      "limitation": "Observed automatic approval-review stop, not a CLI update refusal. No external effect or update bypass was attempted."
+    },
+    {
+      "task": "reference_lookup",
+      "commands": [
+        "rg -n 'technical_retries|workspace_trees' /tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references/manual/authoring.md /tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references/manual/capabilities.md",
+        "sed -n '1,125p' /tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references/manual/authoring.md",
+        "rg -n -A 18 -B 10 'technical_retries' /tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references/examples/authoring/workflow-authoring-reference.yaml",
+        "/tmp/prifly-handbook-qa/bin/prifly capabilities --json",
+        "/tmp/prifly-handbook-qa/bin/prifly schema WorkspaceTreeLocation --def runtime_WorkspaceTreeLocation --json",
+        "rg -n -A 12 -B 6 'technical_retries' /tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references",
+        "/tmp/prifly-handbook-qa/bin/prifly schema --help",
+        "/tmp/prifly-handbook-qa/bin/prifly schema --json > /tmp/prifly-handbook-qa/schema-index.json",
+        "/tmp/prifly-handbook-qa/bin/prifly schema WorkflowRevisionV5 --json > /tmp/prifly-handbook-qa/retry-schema.json"
+      ],
+      "answers": {
+        "technical_retries": "Set technical_retries: N on a step stage, WorkflowRevision 5 or later, integer 1..8. Step effects.retry_class must be pure or idempotent; pure requires effects.class none. This retries technical failures, not accepted business verdicts.",
+        "workspace_tree_locations": "Use top-level workspace_trees: [{output_port: PORT, path: WORKSPACE_RELATIVE_PATH}] in the session submission. Do not put engine-owned workspace-tree ArtifactRefs into result.outputs. Direct-child capture requires location; exact_file can omit it."
+      },
+      "verified_public_schema": {
+        "definition": "StepStage",
+        "technical_retries": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "workspace_tree_location_required_fields": [
+          "output_port",
+          "path"
+        ]
+      },
+      "documentation_gaps": [
+        "Installed examples/README.md promises technical_retries in workflow-authoring-reference.yaml, but rg found no occurrence there (exit 1). Exact bounds and retry-class requirements were recovered from installed examples/troubleshooting.md:561-570."
+      ],
+      "full_file_reads": [
+        {
+          "path": "/tmp/prifly-handbook-qa/operator/.agents/skills/prifly-run/references/manual/authoring.md",
+          "bytes": 9124
+        }
+      ],
+      "partial_search_files": [
+        "references/manual/capabilities.md",
+        "references/manual/commands.md",
+        "references/examples/README.md",
+        "references/examples/troubleshooting.md",
+        "references/examples/authoring/workflow-authoring-reference.yaml",
+        "references/examples/authoring/step-authoring-reference.yaml",
+        "references/examples/authoring/blocked-guide.md"
+      ],
+      "partial_search_actual_read_bytes": null,
+      "partial_search_metric_note": "rg searched installed references. Actual scanned/read I/O bytes and emitted tool-output bytes were not captured."
+    },
+    {
+      "task": "previous_issued_attempt_success",
+      "run_id": "run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac",
+      "actual_outcome": "succeeded",
+      "terminal_action": "terminal",
+      "accepted_verdict": "pass",
+      "output_file": "/tmp/prifly-handbook-qa/success/authority/.prifly/work/claims/a360e3ccf307c41b9a8935ec4f34bd5926dc2cfd7268e550158eb7259e6f4014/handbook-result.txt",
+      "output_bytes": 12,
+      "output_text": "default-123\n",
+      "effect_scope": [
+        "write_inside_claimed_workspace",
+        "local_git_commit_on_claimed_workspace"
+      ],
+      "pinned_instructions": "Create handbook-result.txt containing input.id. Do not move or rename claimed tree or branch.",
+      "commands": [
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "session",
+            "task",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "--run",
+            "run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac",
+            "--all"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly session task --project /tmp/prifly-handbook-qa/success/authority --run run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac --all",
+          "exit_code": 0,
+          "stdout_bytes": 8028,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.435
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "session",
+            "take",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "--run",
+            "run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac",
+            "--attempt",
+            "attempt:5353261ba5a2012e3695816e57435276"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly session take --project /tmp/prifly-handbook-qa/success/authority --run run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac --attempt attempt:5353261ba5a2012e3695816e57435276",
+          "exit_code": 0,
+          "stdout_bytes": 618,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.4554
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "session",
+            "submit",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "--template",
+            "--run",
+            "run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac",
+            "--attempt",
+            "attempt:5353261ba5a2012e3695816e57435276"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly session submit --project /tmp/prifly-handbook-qa/success/authority --template --run run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac --attempt attempt:5353261ba5a2012e3695816e57435276",
+          "exit_code": 0,
+          "stdout_bytes": 754,
+          "stderr_bytes": 186,
+          "wall_seconds": 0.2684
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "session",
+            "submit",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "--file",
+            "/tmp/prifly-handbook-qa/success/previous-report.json"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly session submit --project /tmp/prifly-handbook-qa/success/authority --file /tmp/prifly-handbook-qa/success/previous-report.json",
+          "exit_code": 0,
+          "stdout_bytes": 618,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.5091
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "run",
+            "next",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly run next --project /tmp/prifly-handbook-qa/success/authority run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac",
+          "exit_code": 0,
+          "stdout_bytes": 916,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.2364
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "run",
+            "drive",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly run drive --project /tmp/prifly-handbook-qa/success/authority run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac",
+          "exit_code": 0,
+          "stdout_bytes": 1614,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.5146
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "run",
+            "next",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly run next --project /tmp/prifly-handbook-qa/success/authority run:a7878a3b995ccc468e952eb93594c484c29c601e6351d0f589775599b3fd08ac",
+          "exit_code": 0,
+          "stdout_bytes": 961,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.5325
+        }
+      ],
+      "write_command": "printf 'default-123\\n' > /tmp/prifly-handbook-qa/success/authority/.prifly/work/claims/a360e3ccf307c41b9a8935ec4f34bd5926dc2cfd7268e550158eb7259e6f4014/handbook-result.txt",
+      "report_edit": "Fill captured session submit template: result.verdict=pass; actual summary; top-level answered_questions=[]; preserve all task identities.",
+      "full_file_reads": [
+        {
+          "path": "/tmp/prifly-handbook-qa/previous-SKILL.md",
+          "bytes": 20673
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/success/authority/.prifly/work/5353261ba5a2012e3695816e57435276/context.json",
+          "bytes": 4143
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/success/authority/.prifly/work/5353261ba5a2012e3695816e57435276/inputs/task",
+          "bytes": 40
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/success/authority/.prifly/work/5353261ba5a2012e3695816e57435276/context/skills/example-context-work-0.0.0-b1.iivhow5y54erm77sa4asina2i5jmao5tnnmzkmxthgga4okjxn5q",
+          "bytes": 193
+        }
+      ],
+      "document_read_bytes": 20673,
+      "pinned_context_read_bytes": 4376,
+      "executed_public_cli_calls": 7,
+      "public_cli_stdout_bytes": 13509,
+      "public_cli_stderr_bytes": 186,
+      "documentation_pages_needed": [],
+      "documentation_gaps": []
+    },
+    {
+      "task": "handbook_issued_attempt_success",
+      "run_id": "run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d",
+      "actual_outcome": "succeeded",
+      "terminal_action": "terminal",
+      "accepted_verdict": "pass",
+      "output_file": "/tmp/prifly-handbook-qa/success/authority/.prifly/work/claims/c942567f4eedfa6fae809f8c156e2de3cb72bffd038158512fa71844bad36643/handbook-result.txt",
+      "output_bytes": 12,
+      "output_text": "default-123\n",
+      "effect_scope": [
+        "write_inside_claimed_workspace",
+        "local_git_commit_on_claimed_workspace"
+      ],
+      "pinned_instructions": "Create handbook-result.txt containing input.id. Do not move or rename claimed tree or branch.",
+      "commands": [
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "session",
+            "task",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "--run",
+            "run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d",
+            "--all"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly session task --project /tmp/prifly-handbook-qa/success/authority --run run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d --all",
+          "exit_code": 0,
+          "stdout_bytes": 8029,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.4522
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "session",
+            "take",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "--run",
+            "run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d",
+            "--attempt",
+            "attempt:67c60a1f06e4e9f9818da515c6cfccee"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly session take --project /tmp/prifly-handbook-qa/success/authority --run run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d --attempt attempt:67c60a1f06e4e9f9818da515c6cfccee",
+          "exit_code": 0,
+          "stdout_bytes": 618,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.5523
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "session",
+            "submit",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "--template",
+            "--run",
+            "run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d",
+            "--attempt",
+            "attempt:67c60a1f06e4e9f9818da515c6cfccee"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly session submit --project /tmp/prifly-handbook-qa/success/authority --template --run run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d --attempt attempt:67c60a1f06e4e9f9818da515c6cfccee",
+          "exit_code": 0,
+          "stdout_bytes": 754,
+          "stderr_bytes": 186,
+          "wall_seconds": 0.5672
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "session",
+            "submit",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "--file",
+            "/tmp/prifly-handbook-qa/success/handbook-report.json"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly session submit --project /tmp/prifly-handbook-qa/success/authority --file /tmp/prifly-handbook-qa/success/handbook-report.json",
+          "exit_code": 0,
+          "stdout_bytes": 618,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.6151
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "run",
+            "next",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly run next --project /tmp/prifly-handbook-qa/success/authority run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d",
+          "exit_code": 0,
+          "stdout_bytes": 916,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.3988
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "run",
+            "drive",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly run drive --project /tmp/prifly-handbook-qa/success/authority run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d",
+          "exit_code": 0,
+          "stdout_bytes": 1620,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.5165
+        },
+        {
+          "argv": [
+            "/tmp/prifly-handbook-qa/bin/prifly",
+            "run",
+            "next",
+            "--project",
+            "/tmp/prifly-handbook-qa/success/authority",
+            "run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d"
+          ],
+          "command": "/tmp/prifly-handbook-qa/bin/prifly run next --project /tmp/prifly-handbook-qa/success/authority run:f9716cedc44410208a59fb219db7aebd9d6f13cb0053e81cf640b8a24baaab1d",
+          "exit_code": 0,
+          "stdout_bytes": 961,
+          "stderr_bytes": 0,
+          "wall_seconds": 0.6581
+        }
+      ],
+      "write_command": "printf 'default-123\\n' > /tmp/prifly-handbook-qa/success/authority/.prifly/work/claims/c942567f4eedfa6fae809f8c156e2de3cb72bffd038158512fa71844bad36643/handbook-result.txt",
+      "report_edit": "Fill captured session submit template: result.verdict=pass; actual summary; top-level answered_questions=[]; preserve all task identities.",
+      "full_file_reads": [
+        {
+          "path": "/tmp/prifly-handbook-qa/success/operator/.agents/skills/prifly-run/SKILL.md",
+          "bytes": 9812
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/success/operator/.agents/skills/prifly-run/references/manual/index.md",
+          "bytes": 2843
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/success/authority/.prifly/work/67c60a1f06e4e9f9818da515c6cfccee/context.json",
+          "bytes": 4143
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/success/authority/.prifly/work/67c60a1f06e4e9f9818da515c6cfccee/inputs/task",
+          "bytes": 40
+        },
+        {
+          "path": "/tmp/prifly-handbook-qa/success/authority/.prifly/work/67c60a1f06e4e9f9818da515c6cfccee/context/skills/example-context-work-0.0.0-b1.iivhow5y54erm77sa4asina2i5jmao5tnnmzkmxthgga4okjxn5q",
+          "bytes": 193
+        }
+      ],
+      "document_read_bytes": 12655,
+      "pinned_context_read_bytes": 4376,
+      "executed_public_cli_calls": 7,
+      "public_cli_stdout_bytes": 13516,
+      "public_cli_stderr_bytes": 186,
+      "documentation_pages_needed": [],
+      "documentation_gaps": []
+    }
+  ],
+  "metrics": {
+    "full_read_skill_bytes": {
+      "previous": 20673,
+      "new": 9812
+    },
+    "issued_attempt_document_bytes": {
+      "previous": 20673,
+      "handbook_with_index_and_full_hosting_page": 23067
+    },
+    "issued_attempt_public_cli_calls": {
+      "previous": 8,
+      "handbook": 7
+    },
+    "metric_limits": "These are measured file byte sizes and observed CLI call counts for the mismatch controls. The handbook page was fully read although the index recommends reading relevant sections. This is not a blinded or successful-output performance benchmark.",
+    "actual_model_input_tokens": null,
+    "actual_model_output_tokens": null,
+    "actual_model_cost": null,
+    "independent_token_or_cost_savings_claimed": false
+  },
+  "successful_fixture_comparison": {
+    "status": "completed",
+    "both_succeeded": true,
+    "same_task_schema_instructions_and_settings": true,
+    "metrics": [
+      {
+        "task": "previous_issued_attempt_success",
+        "document_read_bytes": 20673,
+        "pinned_context_read_bytes": 4376,
+        "executed_public_cli_calls": 7,
+        "public_cli_stdout_bytes": 13509,
+        "public_cli_stderr_bytes": 186
+      },
+      {
+        "task": "handbook_issued_attempt_success",
+        "document_read_bytes": 12655,
+        "pinned_context_read_bytes": 4376,
+        "executed_public_cli_calls": 7,
+        "public_cli_stdout_bytes": 13516,
+        "public_cli_stderr_bytes": 186
+      }
+    ],
+    "command_measurements": "/tmp/prifly-handbook-qa/success/commands.jsonl",
+    "measured_files_scope": "File byte sizes reflect exact documents read by cat; CLI output byte counts are measured by subprocess before tool rendering. Raw start responses were also read once as shared fixture setup. Their tool output was truncated and is excluded from per-task documentation totals.",
+    "shared_setup_read_files": [
+      {
+        "path": "/tmp/prifly-handbook-qa/success/fixture.json",
+        "bytes": 512
+      },
+      {
+        "path": "/tmp/prifly-handbook-qa/success/previous-start.json",
+        "bytes": 91814
+      },
+      {
+        "path": "/tmp/prifly-handbook-qa/success/handbook-start.json",
+        "bytes": 91832
+      },
+      {
+        "path": "/tmp/prifly-handbook-qa/success/operator/.prifly/local.yaml",
+        "bytes": 307
+      }
+    ],
+    "model_token_and_cost_metrics": "Unknown. Tool rendering/truncation and shared conversation make byte counts different from actual model input tokens. No token or cost saving is inferred.",
+    "experiment_limits": "Same agent/session tested previous before handbook and retained learned CLI knowledge. This is an independent source-free forward test, not a blinded cost experiment. On mismatch controls full hosting page was read; on successful basic loop the new skill plus index sufficed, as the index permits.",
+    "extra_prelaunch_update_attempted": false
+  },
+  "final_bundle_followup": {
+    "bundle": "/tmp/prifly-handbook-qa/final-bundle/.agents/skills/prifly-run",
+    "read_only": true,
+    "runs_repeated": false,
+    "updater_repeated": false,
+    "core_source_read": false,
+    "commands": [
+      "cat /tmp/prifly-handbook-qa/final-bundle/.agents/skills/prifly-run/SKILL.md /tmp/prifly-handbook-qa/final-bundle/.agents/skills/prifly-run/references/manual/index.md",
+      "rg -n -A 12 -B 8 'technical_retries|WorkflowRevision 5|workflow-authoring' /tmp/prifly-handbook-qa/final-bundle/.agents/skills/prifly-run/references/manual/authoring.md",
+      "rg -n -A 20 -B 18 'technical_retries|workflow_revision' /tmp/prifly-handbook-qa/final-bundle/.agents/skills/prifly-run/references/examples/authoring/workflow-authoring-reference.yaml"
+    ],
+    "full_read_files": [
+      {
+        "path": "/tmp/prifly-handbook-qa/final-bundle/.agents/skills/prifly-run/SKILL.md",
+        "bytes": 10007
+      },
+      {
+        "path": "/tmp/prifly-handbook-qa/final-bundle/.agents/skills/prifly-run/references/manual/index.md",
+        "bytes": 2842
+      }
+    ],
+    "final_skill_bytes": 10007,
+    "lookup_route": [
+      "references/manual/index.md authoring route",
+      "references/manual/authoring.md field-reference table and technical_retries section",
+      "references/examples/authoring/workflow-authoring-reference.yaml stages.start"
+    ],
+    "technical_retries": {
+      "form": "stages.start.technical_retries: 2 (under kind: step)",
+      "minimum_workflow_revision": 5,
+      "bound": "1..8 additional technical attempts",
+      "required_retry_class": [
+        "pure",
+        "idempotent"
+      ],
+      "pure_requires": "effects.class: none",
+      "nonmatching_retry_class_refusal": "unsupported_retries",
+      "business_verdict_retried": false,
+      "example_commented": true,
+      "comment_reason": "Reference stays revision 4; field must be enabled only with WorkflowRevision 5+."
+    },
+    "prior_gap_status": "Resolved in final bundle: workflow reference now shows field, exact bound, required classes, and minimum revision. Earlier evaluation remains as historical evidence.",
+    "ordinary_existing_attempt": {
+      "core_skill_sufficient": true,
+      "hosting_full_read_required": false,
+      "basis": "Local handbook explicitly directs ordinary existing Attempts to section 2. Section 2 includes task/next/take, pinned context, permitted_effects, exact session submit template, routed verdict, answered_questions, model profile, and next/drive. Prior valid basic-loop test succeeded with skill plus index and no hosting page.",
+      "detail_lookup_when_needed": "Read exact hosting heading/field for direct-child workspace-tree locations or other uncommon details; pinned task/context still must be read.",
+      "no_claim_of_fresh_execution": "Final bundle received a documentation follow-up only; no successful Run or updater was repeated."
+    },
+    "model_tokens_and_cost": "Unknown; final skill bytes are a filesystem measurement, not token or cost metrics."
+  }
+}

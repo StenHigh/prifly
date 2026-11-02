@@ -1,0 +1,15 @@
+# Work done once, before the condition matters: it turns the request into the
+# work item the attempts act on. A Run resumed after it stopped carries this
+# accepted result and does not run the step again.
+authoring: prifly-step/1
+id: example:step/prepare-work
+version: 1.0.0
+title: Prepare the work
+kind: worker
+inputs:
+  request: {schema_ref: "{{schema_blocked-request}}"}
+outputs:
+  work: {schema_ref: "{{schema_blocked-request}}", required_for: [pass]}
+executor: {adapter_ref: "{{adapter}}", operation: process}
+effects: {class: none, retry_class: never}
+result_schema_ref: "{{result}}"
