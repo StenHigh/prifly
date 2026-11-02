@@ -118,5 +118,5 @@ boundaries и baseline active changes до своего archive/sync. Ownership 
 `2026-11-01-unify-workflow-composition-and-extension-points`. Приёмка downstream
 остаётся отдельной; historical evidence не переписывается.
 
-Пока `add-agent-operations-handbook` активен, его deltas уточняют доставку эксплуатационного справочника и обязательные updates host runner для `release-documentation-layout` и `cli-protocol`.
-Нормативное владение не переносится. Прямые CLI-команды сохраняют явное обновление; saved Runs и published schemas не меняются.
+Доставка эксплуатационного справочника и обязательные updates host runner включены в main source sets `release-documentation-layout` и `cli-protocol`.
+История реализации сохранена в archived `2026-11-02-add-agent-operations-handbook`. Нормативное владение не переносится. Прямые CLI-команды сохраняют явное обновление; saved Runs и published schemas не меняются.
