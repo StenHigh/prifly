@@ -1,12 +1,12 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/improve-series
-version: 1.5.0
+version: 1.6.0
 title: Continue only developer-approved improvement batches
 refs:
   schema_plan_manifest: "{{workspace_tree_manifest}}"
-  schema_warmup-handoff: "{{schema_warmup-handoff}}"
-  schema_round-limit: "{{schema_round-limit}}"
+  schema_warmup-handoff: "{{contract_schema_warmup-handoff}}"
+  schema_round-limit: "{{contract_schema_round-limit}}"
   workflow_improve-batch: "{{workflow_improve-batch}}"
   local_policy: "{{local_policy}}"
 inputs:

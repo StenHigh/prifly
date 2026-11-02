@@ -1,5 +1,5 @@
 id: aif:schema/implementation
-version: 1.1.0
+version: 1.2.0
 $schema: https://json-schema.org/draft/2020-12/schema
 type: object
 required: [base_commit, head_commit, changed_files]
@@ -14,3 +14,16 @@ properties:
     # report command, and the gates judge the tree, not this list.
     maxItems: 10000
     items: {type: string, minLength: 1}
+  reports:
+    description: Original project report refs. A ref does not attest applicability or success.
+    type: array
+    maxItems: 80
+    uniqueItems: true
+    items:
+      type: object
+      additionalProperties: false
+      required: [artifact_id, revision, digest]
+      properties:
+        artifact_id: {type: string, pattern: '^[A-Za-z][A-Za-z0-9._:/-]{0,127}$'}
+        revision: {type: integer, minimum: 1, maximum: 9007199254740991}
+        digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}

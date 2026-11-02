@@ -1,0 +1,93 @@
+{
+  "authoring": "prifly-extension-points/1",
+  "points": {
+    "before-verify": {
+      "workflow": "aif:workflow/verify-once",
+      "entry": "verify",
+      "input_bindings": {
+        "implementation": "$inputs.implementation",
+        "task": "$inputs.task"
+      },
+      "consumers": {
+        "verify-implementation": {
+          "stage": "verify",
+          "input": "implementation"
+        },
+        "fix-implementation": {
+          "stage": "fix",
+          "input": "implementation"
+        },
+        "clean-implementation": {
+          "stage": "clean",
+          "output": "implementation"
+        }
+      },
+      "routes": {
+        "step": {
+          "on": {
+            "pass": "verify",
+            "needs_revision": "stopped",
+            "blocked": "stopped",
+            "fail": "stopped",
+            "no_work": "stopped"
+          },
+          "on_error": "stopped"
+        },
+        "call": {
+          "on": {
+            "succeeded": "verify",
+            "partial": "stopped",
+            "rejected": "stopped"
+          },
+          "on_error": "stopped"
+        }
+      }
+    },
+    "before-review": {
+      "workflow": "aif:workflow/review-once",
+      "entry": "challenge",
+      "input_bindings": {
+        "implementation": "$inputs.implementation",
+        "task": "$inputs.task"
+      },
+      "consumers": {
+        "challenge-implementation": {
+          "stage": "challenge",
+          "input": "implementation"
+        },
+        "review-implementation": {
+          "stage": "review",
+          "input": "implementation"
+        },
+        "fix-implementation": {
+          "stage": "fix",
+          "input": "implementation"
+        },
+        "clean-implementation": {
+          "stage": "clean",
+          "output": "implementation"
+        }
+      },
+      "routes": {
+        "step": {
+          "on": {
+            "pass": "challenge",
+            "needs_revision": "stopped",
+            "blocked": "stopped",
+            "fail": "stopped",
+            "no_work": "stopped"
+          },
+          "on_error": "stopped"
+        },
+        "call": {
+          "on": {
+            "succeeded": "challenge",
+            "partial": "stopped",
+            "rejected": "stopped"
+          },
+          "on_error": "stopped"
+        }
+      }
+    }
+  }
+}

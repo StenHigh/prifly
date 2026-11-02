@@ -1,19 +1,35 @@
-authoring: prifly-project-workflow/1
+authoring: prifly-project-workflow/3
 package:
   id: aif:package/classic
-  version: 1.47.0
+  version: 2.0.0
   description: Canonical AI Factory development workflow with bounded plan improvement.
   requires_core_protocol: "1"
   profiles:
     default: fast
     values:
       fast:
-        plan_capture: {kind: exact_file, path: .ai-factory/PLAN.md}
+        plan_capture:
+          kind: exact_file
+          path: .ai-factory/PLAN.md
       full:
-        plan_capture: {kind: direct_child_file, path: .ai-factory/plans}
+        plan_capture:
+          kind: direct_child_file
+          path: .ai-factory/plans
       ultra:
-        plan_capture: {kind: direct_child_tree, path: .ai-factory/plans, entrypoint: index.md}
+        plan_capture:
+          kind: direct_child_tree
+          path: .ai-factory/plans
+          entrypoint: index.md
+  dependencies: [aif:package/composition-contracts@1.2.0]
   references:
+    contract_schema_challenge-findings: aif:schema/challenge-findings@1.0.0
+    contract_schema_continue: aif:schema/continue@1.0.0
+    contract_schema_feature-enabled: aif:schema/feature-enabled@1.0.0
+    contract_schema_gate-result: aif:schema/gate-result@1.2.0
+    contract_schema_implementation: aif:schema/implementation@1.2.0
+    contract_schema_round-limit: aif:schema/round-limit@1.1.0
+    contract_schema_task: aif:schema/task@1.1.0
+    contract_schema_warmup-handoff: aif:schema/warmup-handoff@1.0.0
     assisted_adapter: core:adapter/assisted-session@1.0.0
     # 4.0.0 admits external_write beside none and workspace_write, with the same
     # limits. None of this package's steps writes outside; a project step
@@ -25,15 +41,15 @@ package:
     workspace_tree_manifest: core:schema/workspace-tree-manifest@1.0.0
 id: aif:workflow/classic
 schema_version: "8"
-version: 1.47.0
+version: 2.0.0
 title: AI Factory classic development workflow
 refs:
-  schema_task: "{{schema_task}}"
-  schema_warmup-handoff: "{{schema_warmup-handoff}}"
+  schema_task: "{{contract_schema_task}}"
+  schema_warmup-handoff: "{{contract_schema_warmup-handoff}}"
   schema_plan_manifest: "{{workspace_tree_manifest}}"
-  schema_implementation: "{{schema_implementation}}"
-  schema_gate-result: "{{schema_gate-result}}"
-  schema_feature-enabled: "{{schema_feature-enabled}}"
+  schema_implementation: "{{contract_schema_implementation}}"
+  schema_gate-result: "{{contract_schema_gate-result}}"
+  schema_feature-enabled: "{{contract_schema_feature-enabled}}"
   step_warmup: "{{step_warmup}}"
   step_plan: "{{step_plan}}"
   workflow_improve-or-pass: "{{workflow_improve-or-pass}}"
@@ -46,11 +62,14 @@ refs:
   step_commit: "{{step_commit}}"
   local_policy: "{{local_policy}}"
 inputs:
-  task: {schema_ref: schema_task}
+  task:
+    schema_ref: schema_task
   security_enabled:
     schema_ref: schema_feature-enabled
     required: false
-    configuration: {scope: project, default: true}
+    configuration:
+      scope: project
+      default: true
 decision_catalog:
   - .prifly/workflows/aif-classic/decisions/plan/profile.yaml
   - .prifly/workflows/aif-classic/decisions/plan/tests.yaml
@@ -63,13 +82,24 @@ decision_catalog:
   - .prifly/workflows/aif-classic/decisions/gates/checks.yaml
   - .prifly/workflows/aif-classic/decisions/gates/warnings.yaml
 outputs:
-  implementation: {schema_ref: schema_implementation, required_for: [succeeded]}
-  plan: {schema_ref: schema_plan_manifest, required_for: [succeeded]}
-  gate: {schema_ref: schema_gate-result, required_for: [partial]}
-limits: {max_step_instances: 200, max_control_transitions: 1000, max_parallelism: 1, max_child_depth: 4}
+  implementation:
+    schema_ref: schema_implementation
+    required_for: [succeeded]
+  plan:
+    schema_ref: schema_plan_manifest
+    required_for: [succeeded]
+  gate:
+    schema_ref: schema_gate-result
+    required_for: [partial]
+limits:
+  max_step_instances: 256
+  max_control_transitions: 1024
+  max_parallelism: 1
+  max_child_depth: 6
 policy_ref: local_policy
 features:
-  security: {input: security_enabled}
+  security:
+    input: security_enabled
 # A Run that stopped — ended partial or rejected, or was cancelled — resumes
 # with this same workflow where it stopped: `prifly project continue --launch
 # <this launch> --source-run RUN`. The stages accepted before that point carry
@@ -82,24 +112,44 @@ stages:
   warmup:
     kind: step
     step_ref: step_warmup
-    on: {pass: plan, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+    on:
+      pass: plan
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
     impossible_verdicts: [blocked]
   plan:
     kind: step
     step_ref: step_plan
-    input_bindings: {task: $inputs.task, handoff: $stages.warmup.handoff}
-    on: {pass: improve, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+    input_bindings:
+      task: $inputs.task
+      handoff: $stages.warmup.handoff
+    on:
+      pass: improve
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
     impossible_verdicts: [blocked]
   improve:
     kind: call
     workflow_ref: workflow_improve-or-pass
-    input_bindings: {plan: $stages.plan.plan, handoff: $stages.warmup.handoff}
-    on: {succeeded: implement, rejected: abandoned}
+    input_bindings:
+      plan: $stages.plan.plan
+      handoff: $stages.warmup.handoff
+    on:
+      succeeded: implement
+      rejected: abandoned
   implement:
     kind: step
     step_ref: step_implement
-    input_bindings: {plan: $stages.improve.plan, handoff: $stages.warmup.handoff}
-    on: {pass: verify, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+    input_bindings:
+      plan: $stages.improve.plan
+      handoff: $stages.warmup.handoff
+    on:
+      pass: verify
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
     impossible_verdicts: [blocked]
   # Every stage after a gate reads the implementation the gate returned, not the
   # one the implement step produced: a fix round commits, and the artifact that
@@ -110,70 +160,105 @@ stages:
     kind: call
     workflow_ref: workflow_verify-batch
     input_bindings:
+      task: $inputs.task
       implementation: $stages.implement.implementation
       handoff: $stages.warmup.handoff
       plan: $stages.implement.plan
-    on: {succeeded: choose-security, partial: fix-after-verify}
+    on:
+      succeeded: choose-security
+      partial: fix-after-verify
+      # The round could not establish a result, so no gate is guaranteed.
+      # Reject normally; project continue repeats this whole call.
+      no_work: abandoned
   choose-security:
     kind: choice
     selection: exclusive
     branches:
       - id: enabled
-        predicate: {op: eq, left: $inputs.security_enabled, right: true}
+        predicate:
+          op: eq
+          left: $inputs.security_enabled
+          right: true
         next: security
     default: review
   security:
     kind: step
     step_ref: step_security
-    input_bindings: {implementation: $stages.verify.implementation}
-    on: {pass: security-decision, needs_revision: fix-after-security, fail: abandoned, no_work: abandoned, blocked: security-blocked}
+    input_bindings:
+      implementation: $stages.verify.implementation
+    on:
+      pass: security-decision
+      needs_revision: fix-after-security
+      fail: abandoned
+      no_work: abandoned
+      blocked: security-blocked
   security-decision:
     kind: choice
     selection: exclusive
     branches:
       - id: blockers
-        predicate: {op: eq, left: $stages.security.gate#/blocking, right: true}
+        predicate:
+          op: eq
+          left: $stages.security.gate#/blocking
+          right: true
         next: fix-after-security
     default: review
   review:
     kind: call
     workflow_ref: workflow_review-batch
     input_bindings:
+      task: $inputs.task
       implementation: $stages.verify.implementation
       handoff: $stages.warmup.handoff
       plan: $stages.implement.plan
-    on: {succeeded: commit, partial: fix-after-review}
+    on:
+      succeeded: commit
+      partial: fix-after-review
   commit:
     kind: step
     step_ref: step_commit
-    input_bindings: {implementation: $stages.review.implementation}
-    on: {pass: done, needs_revision: abandoned, fail: abandoned, no_work: abandoned}
+    input_bindings:
+      implementation: $stages.review.implementation
+    on:
+      pass: done
+      needs_revision: abandoned
+      fail: abandoned
+      no_work: abandoned
     impossible_verdicts: [blocked]
   done:
     kind: finish
     outcome: succeeded
-    output_bindings: {implementation: $stages.commit.implementation, plan: $stages.implement.plan}
+    output_bindings:
+      implementation: $stages.commit.implementation
+      plan: $stages.implement.plan
   fix-after-verify:
     kind: finish
     outcome: partial
-    output_bindings: {gate: $stages.verify.gate}
+    output_bindings:
+      gate: $stages.verify.gate
     description: Verify rounds ended with blockers still open; the findings are reported unchanged.
   fix-after-security:
     kind: finish
     outcome: partial
-    output_bindings: {gate: $stages.security.gate}
+    output_bindings:
+      gate: $stages.security.gate
     description: The gate proposes /aif-fix; Pri-Fly does not run it automatically.
   security-blocked:
     kind: finish
     outcome: partial
-    output_bindings: {gate: $stages.security.gate}
+    output_bindings:
+      gate: $stages.security.gate
     description: A dependency the security checks need was unavailable, so the work was not judged; repeat with project continue once it is back.
   fix-after-review:
     kind: finish
     outcome: partial
-    output_bindings: {gate: $stages.review.gate}
+    output_bindings:
+      gate: $stages.review.gate
     description: Review rounds ended with blockers still open; the findings are reported unchanged.
   # A step that cannot finish its work has nowhere to go on this route: there
   # is no revision loop outside the gates. Ending here reports that plainly,
   # where an undeclared verdict would end the Run as an engine failure.
-  abandoned: {kind: finish, outcome: rejected}
+  abandoned:
+    kind: finish
+    outcome: rejected
+exports: {"workflows": {"verify": "{{workflow_verify-once}}", "review": "{{workflow_review-once}}"}, "points": {"before-verify": {"workflow": "verify", "point": "before-verify"}, "before-review": {"workflow": "review", "point": "before-review"}}}

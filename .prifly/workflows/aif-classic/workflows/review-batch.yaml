@@ -1,18 +1,20 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/review-batch
-version: 1.11.0
+version: 1.12.0
 title: Review and fix until nothing blocks or the declared limit is reached
 refs:
-  schema_implementation: "{{schema_implementation}}"
-  schema_gate-result: "{{schema_gate-result}}"
-  schema_warmup-handoff: "{{schema_warmup-handoff}}"
+  schema_task: "{{contract_schema_task}}"
+  schema_implementation: "{{contract_schema_implementation}}"
+  schema_gate-result: "{{contract_schema_gate-result}}"
+  schema_warmup-handoff: "{{contract_schema_warmup-handoff}}"
   schema_plan_manifest: "{{workspace_tree_manifest}}"
-  schema_round-limit: "{{schema_round-limit}}"
-  schema_feature-enabled: "{{schema_feature-enabled}}"
+  schema_round-limit: "{{contract_schema_round-limit}}"
+  schema_feature-enabled: "{{contract_schema_feature-enabled}}"
   workflow_review-once: "{{workflow_review-once}}"
   local_policy: "{{local_policy}}"
 inputs:
+  task: schema_task
   implementation: schema_implementation
   handoff: schema_warmup-handoff
   plan: schema_plan_manifest
@@ -29,7 +31,7 @@ outputs:
   gate: {schema_ref: schema_gate-result, required_for: [partial]}
 # Eight rounds of three steps — the second reviewer, the review, a fix — is
 # what the repeat below may reach, and the limit has to cover every path it permits.
-limits: {max_step_instances: 24, max_control_transitions: 160, max_parallelism: 1, max_child_depth: 2}
+limits: {max_step_instances: 128, max_control_transitions: 1024, max_parallelism: 1, max_child_depth: 5}
 policy_ref: local_policy
 features: {review: {input: review_enabled}}
 # The switch lives here rather than in the root graph on purpose. When the root
@@ -58,8 +60,8 @@ stages:
   round:
     kind: repeat
     body_workflow_ref: workflow_review-once
-    initial_bindings: {implementation: $inputs.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
-    next_bindings: {implementation: $iteration.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
+    initial_bindings: {task: $inputs.task, implementation: $inputs.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
+    next_bindings: {task: $inputs.task, implementation: $iteration.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
     continue_on: [partial]
     until: false
     max_iterations: 8

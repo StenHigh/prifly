@@ -1,4 +1,4 @@
-# yaml-language-server: schema ref unavailable in this development build; use prifly schema for the installed contract
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.87/schemas/authoring/run-decision-v1.schema.json
 # One declared choice for a single Run. The compiler seals it with the package;
 # it cannot add a stage, route, capability or permission.
 authoring: prifly-run-decision/1

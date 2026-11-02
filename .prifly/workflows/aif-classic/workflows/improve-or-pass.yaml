@@ -1,12 +1,12 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/improve-or-pass
-version: 1.5.0
+version: 1.6.0
 title: Improve the plan only when this project enables improvement
 refs:
   schema_plan_manifest: "{{workspace_tree_manifest}}"
-  schema_warmup-handoff: "{{schema_warmup-handoff}}"
-  schema_feature-enabled: "{{schema_feature-enabled}}"
+  schema_warmup-handoff: "{{contract_schema_warmup-handoff}}"
+  schema_feature-enabled: "{{contract_schema_feature-enabled}}"
   workflow_improve-series: "{{workflow_improve-series}}"
   local_policy: "{{local_policy}}"
 inputs:

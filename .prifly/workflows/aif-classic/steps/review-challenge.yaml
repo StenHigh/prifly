@@ -1,13 +1,13 @@
 authoring: prifly-step/2
 id: aif:step/review-challenge
-version: 1.1.0
+version: 1.2.0
 title: Read the change again as a second reviewer, in a session of its own
 kind: worker
 inputs:
-  implementation: {schema_ref: "{{schema_implementation}}"}
+  implementation: {schema_ref: "{{contract_schema_implementation}}"}
   plan: {schema_ref: "{{workspace_tree_manifest}}"}
 outputs:
-  challenge: {schema_ref: "{{schema_challenge-findings}}", required_for: [pass, needs_revision]}
+  challenge: {schema_ref: "{{contract_schema_challenge-findings}}", required_for: [pass, needs_revision]}
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
 instructions_ref: "{{context_aif-review-challenge-bridge}}"
 context_refs: ["{{context_aif-review}}"]

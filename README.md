@@ -196,6 +196,11 @@ verify/qualify jobs и шаги на том же SHA, а не display name ил�
 `make` использует локально настроенный Go toolchain. Если он расположен не в
 `.tools/go`, передайте свой путь: `make check GO=/path/to/go`.
 
+В этом репозитории установлен `aif-classic v1.57.0` (package `2.0.0`).
+Для новой authority после `project init` отдельно установите `composition-contracts 1.2.0`
+по [инструкции выбранного релиза](https://github.com/StenHigh/prifly-aif-workflows/blob/v1.57.0/contracts/README.md).
+Импорт схем не выполняется автоматически при compile или start и не меняет закреплённые Runs.
+
 ## Готовые сценарии из Git-репозиториев
 
 Проект с `.prifly/` может получить Project workflow folder из любого
