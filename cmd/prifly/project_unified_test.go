@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -1244,5 +1245,195 @@ extensions:
 	binding := w.Definition.Stages["profile-review"].InputBindings["carrier"]
 	if binding.From != "literal" || !strings.Contains(string(binding.Value), "from-profile") || strings.Contains(string(binding.Value), "{{") {
 		t.Fatalf("profile binding: %+v", binding)
+	}
+}
+
+func writeUnifiedNamedLaunchFixture(t *testing.T) (string, string, []string) {
+	t.Helper()
+	root, authority := writeUnifiedImportFixture(t)
+	unifiedRewriteFixture(t, filepath.Join(root, ".prifly/workflows/transport/workflow.yaml"), func(v map[string]any) {
+		v["inputs"].(map[string]any)["carrier"].(map[string]any)["configuration"].(map[string]any)["scope"] = "run"
+	})
+	unifiedRewriteFixture(t, filepath.Join(root, ".prifly/project.yaml"), func(v map[string]any) {
+		v["schema_version"] = "prifly-project-profile/4"
+		v["hosts"] = map[string]any{"codex-app": ".agents/skills"}
+		v["launches"] = map[string]any{"transport": map[string]any{"title": "Named unified transport", "description": "Named imported point fixture", "kind": "workflow", "workflow": ".prifly/workflows/transport/workflow.yaml"}}
+		v["worktree_naming"] = map[string]any{"template": "{project}-{candidate}", "bindings": map[string]any{"project": map[string]any{"value": "prifly"}, "candidate": map[string]any{"input": "carrier", "pointer": "/candidate"}}}
+	})
+	writeFixtureFile(t, root, ".agents/skills/.keep", "")
+	gitFixture(t, root, "init", "-q")
+	gitFixture(t, root, "add", ".")
+	gitFixture(t, root, "commit", "-qm", "Named unified fixture")
+	return root, authority, []string{"--project", authority, "--repository", root, "--launch", "transport", "--host", "codex-app", "--workspace", "worktree"}
+}
+
+func unifiedNamedPrepare(t *testing.T, args []string) projectLaunchSummary {
+	t.Helper()
+	code, stdout, stderr := runCLI(t, append([]string{"project", "questionnaire", "--prepare"}, args...)...)
+	if code != 0 {
+		t.Fatalf("prepare: exit=%d %s", code, stderr)
+	}
+	validateUnifiedView(t, "ProjectLaunchSummaryV7", []byte(stdout))
+	var summary projectLaunchSummary
+	if err := json.Unmarshal([]byte(stdout), &summary); err != nil {
+		t.Fatal(err)
+	}
+	return summary
+}
+
+func assertUnifiedLaunchHasNoEffects(t *testing.T, root, authority string) {
+	t.Helper()
+	engine, err := prifly.Open(authority, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+	claims, err := engine.Claims(context.Background())
+	if err != nil || len(claims.Claims) != 0 {
+		t.Fatalf("unexpected claims: %+v %v", claims, err)
+	}
+	runs, err := engine.Runs(context.Background())
+	if err != nil || len(runs) != 0 {
+		t.Fatalf("unexpected Runs: %+v %v", runs, err)
+	}
+	entries, err := os.ReadDir(filepath.Join(authority, prifly.ClaimRoot))
+	if err != nil && !os.IsNotExist(err) || len(entries) != 0 {
+		t.Fatalf("unexpected claim directories: %v %v", entries, err)
+	}
+	if trees := gitFixture(t, root, "worktree", "list", "--porcelain"); strings.Count(trees, "worktree ") != 1 {
+		t.Fatalf("unexpected Git worktrees: %s", trees)
+	}
+}
+
+func TestProjectUnifiedNamedWorktreePrepareAndStart(t *testing.T) {
+	t.Parallel()
+	root, authority, args := writeUnifiedNamedLaunchFixture(t)
+	first := unifiedNamedPrepare(t, args)
+	second := unifiedNamedPrepare(t, args)
+	if first.ReviewDigest != second.ReviewDigest || first.WorktreeNaming == nil || first.WorktreeNaming.Base != "prifly-original" || first.WorktreeNamePreview == nil || first.WorktreeNamePreview.Reserved {
+		t.Fatalf("unstable or incomplete named review: %+v %+v", first, second)
+	}
+	assertUnifiedLaunchHasNoEffects(t, root, authority)
+	start := func(id string) projectStartResult {
+		t.Helper()
+		code, stdout, stderr := runCLI(t, append(append([]string{"project", "start"}, args...), "--command-id", id, "--expected-launch-digest", first.ReviewDigest)...)
+		if code != 0 {
+			t.Fatalf("unchanged named unified start: exit=%d %s", code, stderr)
+		}
+		validateUnifiedView(t, "ProjectStartV7", []byte(stdout))
+		var result projectStartResult
+		if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	started := start("command:unified-named")
+	claim := started.Workspace
+	if claim == nil || claim.Path != first.WorktreeNamePreview.Path || claim.Branch != "prifly/prifly-original" || claim.Naming == nil || claim.Naming.Base != "prifly-original" || claim.Naming.Ordinal != 1 || claim.Naming.Policy != prifly.WorktreeNamingPolicy {
+		t.Fatalf("named claim: %+v", claim)
+	}
+	if info, err := os.Stat(started.WorkspacePath); err != nil || !info.IsDir() {
+		t.Fatalf("missing named worktree: %v", err)
+	}
+	if branch := strings.TrimSpace(gitFixture(t, started.WorkspacePath, "branch", "--show-current")); branch != claim.Branch {
+		t.Fatalf("worktree branch: %q, claim: %q", branch, claim.Branch)
+	}
+	repeated := start("command:unified-named")
+	if repeated.RunID != started.RunID || repeated.Workspace == nil || repeated.Workspace.ID != claim.ID || repeated.Workspace.Path != claim.Path || repeated.Workspace.Branch != claim.Branch {
+		t.Fatalf("duplicate start changed Run or claim: %+v", repeated)
+	}
+	third := unifiedNamedPrepare(t, args)
+	if third.ReviewDigest != first.ReviewDigest || third.WorktreeNamePreview == nil || !strings.HasSuffix(third.WorktreeNamePreview.Path, "prifly-original-02") {
+		t.Fatalf("availability changed agreement or consumed suffix: %+v", third)
+	}
+	// Another command uses the original review while the first name is occupied.
+	other := start("command:unified-named-other")
+	if other.Workspace == nil || other.Workspace.ID == claim.ID || !strings.HasSuffix(other.Workspace.Path, "prifly-original-02") || other.Workspace.Branch != "prifly/prifly-original-02" || other.Workspace.Naming == nil || other.Workspace.Naming.Ordinal != 2 {
+		t.Fatalf("collision did not select the next suffix: %+v", other.Workspace)
+	}
+	for _, run := range []string{started.RunID, other.RunID} {
+		if code, _, stderr := runCLI(t, "--project", authority, "run", "cancel", run, "--reason", "Close named unified fixture"); code != 0 {
+			t.Fatal(stderr)
+		}
+	}
+}
+
+func TestProjectUnifiedNamedWorktreeRejectsDrift(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name, phase   string
+		withoutNaming bool
+		mutate        func(*testing.T, string, string)
+	}{
+		{"template", "after_prepare", false, func(t *testing.T, root, input string) {
+			unifiedRewriteFixture(t, filepath.Join(root, ".prifly/project.yaml"), func(v map[string]any) {
+				v["worktree_naming"].(map[string]any)["template"] = "{candidate}-{project}"
+			})
+		}},
+		{"binding", "after_prepare", false, func(t *testing.T, root, input string) {
+			unifiedRewriteFixture(t, filepath.Join(root, ".prifly/project.yaml"), func(v map[string]any) {
+				v["worktree_naming"].(map[string]any)["bindings"].(map[string]any)["project"] = map[string]any{"value": "changed"}
+			})
+		}},
+		{"input", "after_prepare", false, func(t *testing.T, root, input string) {
+			writeFixtureFile(t, filepath.Dir(input), filepath.Base(input), `{"candidate":"changed","reports":[]}`)
+		}},
+		{"naming_added", "after_publication", true, func(t *testing.T, root, input string) {
+			unifiedRewriteFixture(t, filepath.Join(root, ".prifly/project.yaml"), func(v map[string]any) {
+				v["worktree_naming"] = map[string]any{"template": "{project}", "bindings": map[string]any{"project": map[string]any{"value": "added"}}}
+			})
+		}},
+		{"naming_changed", "after_publication", false, func(t *testing.T, root, input string) {
+			unifiedRewriteFixture(t, filepath.Join(root, ".prifly/project.yaml"), func(v map[string]any) {
+				v["worktree_naming"].(map[string]any)["bindings"].(map[string]any)["project"] = map[string]any{"value": "changed"}
+			})
+		}},
+		{"naming_removed", "after_publication", false, func(t *testing.T, root, input string) {
+			unifiedRewriteFixture(t, filepath.Join(root, ".prifly/project.yaml"), func(v map[string]any) {
+				delete(v, "worktree_naming")
+			})
+		}},
+		{"local_model_configuration", "after_publication", false, func(t *testing.T, root, input string) {
+			unifiedRewriteFixture(t, filepath.Join(root, ".prifly/local.yaml"), func(v map[string]any) {
+				v["model_profiles"] = map[string]any{"codex-app": map[string]any{"review": map[string]any{"model": "changed"}}}
+			})
+		}},
+	} {
+		t.Run(test.phase+"/"+test.name, func(t *testing.T) {
+			t.Parallel()
+			root, authority, args := writeUnifiedNamedLaunchFixture(t)
+			if test.withoutNaming {
+				unifiedRewriteFixture(t, filepath.Join(root, ".prifly/project.yaml"), func(v map[string]any) {
+					delete(v, "worktree_naming")
+				})
+			}
+			input := filepath.Join(t.TempDir(), "carrier.json")
+			writeFixtureFile(t, filepath.Dir(input), filepath.Base(input), `{"candidate":"original","reports":[]}`)
+			args = append(args, "--input", "carrier="+input)
+			reviewed := unifiedNamedPrepare(t, args)
+			assertUnifiedLaunchHasNoEffects(t, root, authority)
+			start := append(append([]string{"project", "start"}, args...), "--command-id", "command:unified-drift", "--expected-launch-digest", reviewed.ReviewDigest)
+			if test.phase == "after_prepare" {
+				test.mutate(t, root, input)
+				if code, _, stderr := runCLI(t, start...); code == 0 || !strings.Contains(stderr, "project_start_stale_launch") {
+					t.Fatalf("%s mutation accepted stale review: exit=%d %s", test.name, code, stderr)
+				}
+			} else {
+				writes := 0
+				var out, stderr bytes.Buffer
+				writer := projectSummaryWriter(func(data []byte) (int, error) {
+					if bytes.Contains(data, []byte(`"schema_version":"project-launch-summary/7"`)) {
+						writes++
+						assertUnifiedLaunchHasNoEffects(t, root, authority)
+						test.mutate(t, root, input)
+					}
+					return stderr.Write(data)
+				})
+				if code := execute(context.Background(), append(start, "--json"), &out, writer); code == 0 || writes != 1 || !strings.Contains(stderr.String(), "project_start_stale_launch") {
+					t.Fatalf("%s post-publication mutation accepted: exit=%d summaries=%d %s", test.name, code, writes, stderr.String())
+				}
+			}
+			assertUnifiedLaunchHasNoEffects(t, root, authority)
+		})
 	}
 }

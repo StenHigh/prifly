@@ -761,9 +761,6 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			if err != nil {
 				return err
 			}
-			if currentSummary.WorktreeNaming != nil {
-				currentSummary.SchemaVersion = "project-launch-summary/5"
-			}
 		}
 		currentDigest, err := projectCallExtensionReview(currentSummary, compiled.CallExtensions, stageResources, resourceLimits)
 		if err != nil {
