@@ -1,5 +1,5 @@
 # Copy to <repository>/.prifly/project.yaml after project init.
-# yaml-language-server: schema ref unavailable in this development build; use prifly schema for the installed contract
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.87/schemas/authoring/project-profile-v4.schema.json
 schema_version: prifly-project-profile/4
 title: SMS Place
 hosts: {codex-cli: .codex/skills}

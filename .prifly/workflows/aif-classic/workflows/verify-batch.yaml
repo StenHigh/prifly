@@ -1,35 +1,51 @@
 authoring: prifly-workflow/1
 schema_version: "4"
 id: aif:workflow/verify-batch
-version: 1.10.0
+version: 1.12.0
 title: Verify and fix until nothing blocks or the declared limit is reached
 refs:
-  schema_implementation: "{{schema_implementation}}"
-  schema_gate-result: "{{schema_gate-result}}"
-  schema_warmup-handoff: "{{schema_warmup-handoff}}"
+  schema_task: "{{contract_schema_task}}"
+  schema_implementation: "{{contract_schema_implementation}}"
+  schema_gate-result: "{{contract_schema_gate-result}}"
+  schema_warmup-handoff: "{{contract_schema_warmup-handoff}}"
   schema_plan_manifest: "{{workspace_tree_manifest}}"
-  schema_round-limit: "{{schema_round-limit}}"
-  schema_feature-enabled: "{{schema_feature-enabled}}"
+  schema_round-limit: "{{contract_schema_round-limit}}"
+  schema_feature-enabled: "{{contract_schema_feature-enabled}}"
   workflow_verify-once: "{{workflow_verify-once}}"
   local_policy: "{{local_policy}}"
 inputs:
+  task: schema_task
   implementation: schema_implementation
   handoff: schema_warmup-handoff
   plan: schema_plan_manifest
   verify_round_limit:
     schema_ref: schema_round-limit
     required: false
-    configuration: {scope: project, default: 3}
+    configuration:
+      scope: project
+      default: 3
   verify_enabled:
     schema_ref: schema_feature-enabled
     required: false
-    configuration: {scope: project, default: true}
+    configuration:
+      scope: project
+      default: true
 outputs:
-  implementation: {schema_ref: schema_implementation, required_for: [succeeded]}
-  gate: {schema_ref: schema_gate-result, required_for: [partial]}
-limits: {max_step_instances: 20, max_control_transitions: 160, max_parallelism: 1, max_child_depth: 2}
+  implementation:
+    schema_ref: schema_implementation
+    required_for: [succeeded]
+  gate:
+    schema_ref: schema_gate-result
+    required_for: [partial]
+limits:
+  max_step_instances: 120
+  max_control_transitions: 1024
+  max_parallelism: 1
+  max_child_depth: 5
 policy_ref: local_policy
-features: {verify: {input: verify_enabled}}
+features:
+  verify:
+    input: verify_enabled
 # The switch lives here rather than in the root graph on purpose. When the root
 # chose whether to call this workflow, the stage after it could not bind to its
 # output — on the path that skipped it there was nothing to bind — so every
@@ -45,38 +61,56 @@ stages:
     selection: exclusive
     branches:
       - id: enabled
-        predicate: {op: eq, left: $inputs.verify_enabled, right: true}
+        predicate:
+          op: eq
+          left: $inputs.verify_enabled
+          right: true
         next: round
     default: unchanged
   unchanged:
     kind: finish
     outcome: succeeded
-    output_bindings: {implementation: $inputs.implementation}
+    output_bindings:
+      implementation: $inputs.implementation
     description: The verify gate is switched off for this project; the implementation passes through untouched.
   round:
     kind: repeat
     body_workflow_ref: workflow_verify-once
-    initial_bindings: {implementation: $inputs.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
-    next_bindings: {implementation: $iteration.implementation, handoff: $inputs.handoff, plan: $inputs.plan}
+    initial_bindings:
+      task: $inputs.task
+      implementation: $inputs.implementation
+      handoff: $inputs.handoff
+      plan: $inputs.plan
+    next_bindings:
+      task: $inputs.task
+      implementation: $iteration.implementation
+      handoff: $inputs.handoff
+      plan: $inputs.plan
     continue_on: [partial]
     until: false
     max_iterations: 8
     limit_configuration: verify_round_limit
-    on_complete: {succeeded: passed, rejected: standing, no_work: unstarted}
+    on_complete:
+      succeeded: passed
+      rejected: standing
+      no_work: unstarted
     on_limit: exhausted
   passed:
     kind: finish
     outcome: succeeded
-    output_bindings: {implementation: $stages.round.implementation}
+    output_bindings:
+      implementation: $stages.round.implementation
   exhausted:
     kind: finish
     outcome: partial
-    output_bindings: {gate: $stages.round.gate}
+    output_bindings:
+      gate: $stages.round.gate
     description: The declared number of verify rounds ran out with blockers still open.
   standing:
     kind: finish
     outcome: partial
-    output_bindings: {gate: $stages.round.gate}
+    output_bindings:
+      gate: $stages.round.gate
     description: A round stopped with its findings standing — no safe fix, the developer's call, or a dependency the checks need was unavailable, which the gate marks as blocked.
   unstarted:
     kind: finish

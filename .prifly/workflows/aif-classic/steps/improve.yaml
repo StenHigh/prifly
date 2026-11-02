@@ -1,11 +1,11 @@
 authoring: prifly-step/2
 id: aif:step/improve
-version: 1.4.0
+version: 1.5.0
 title: Run aif-improve and apply the developer's accepted plan changes
 kind: worker
 inputs:
   plan: {schema_ref: "{{workspace_tree_manifest}}"}
-  handoff: {schema_ref: "{{schema_warmup-handoff}}"}
+  handoff: {schema_ref: "{{contract_schema_warmup-handoff}}"}
 outputs:
   plan: {schema_ref: "{{workspace_tree_manifest}}", required_for: [pass, needs_revision]}
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}

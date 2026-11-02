@@ -1,26 +1,28 @@
 authoring: prifly-workflow/1
 schema_version: "6"
 id: aif:workflow/review-once
-version: 1.14.0
+version: 1.15.0
 title: Review the implementation once and fix what blocks it
 refs:
-  schema_implementation: "{{schema_implementation}}"
-  schema_gate-result: "{{schema_gate-result}}"
-  schema_warmup-handoff: "{{schema_warmup-handoff}}"
+  schema_task: "{{contract_schema_task}}"
+  schema_implementation: "{{contract_schema_implementation}}"
+  schema_gate-result: "{{contract_schema_gate-result}}"
+  schema_warmup-handoff: "{{contract_schema_warmup-handoff}}"
   schema_plan_manifest: "{{workspace_tree_manifest}}"
-  schema_challenge-findings: "{{schema_challenge-findings}}"
+  schema_challenge-findings: "{{contract_schema_challenge-findings}}"
   step_review-challenge: "{{step_review-challenge}}"
   step_review: "{{step_review}}"
   step_fix: "{{step_fix}}"
   local_policy: "{{local_policy}}"
 inputs:
+  task: schema_task
   implementation: schema_implementation
   handoff: schema_warmup-handoff
   plan: schema_plan_manifest
 outputs:
   implementation: {schema_ref: schema_implementation, required_for: [succeeded, partial]}
   gate: {schema_ref: schema_gate-result, required_for: [partial, rejected]}
-limits: {max_step_instances: 3, max_control_transitions: 16, max_parallelism: 1, max_child_depth: 1}
+limits: {max_step_instances: 16, max_control_transitions: 112, max_parallelism: 1, max_child_depth: 4}
 policy_ref: local_policy
 entry: challenge
 stages:

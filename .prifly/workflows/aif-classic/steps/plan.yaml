@@ -1,11 +1,11 @@
 authoring: prifly-step/2
 id: aif:step/plan
-version: 1.5.0
+version: 1.6.0
 title: Run aif-plan for the declared task
 kind: worker
 inputs:
-  task: {schema_ref: "{{schema_task}}"}
-  handoff: {schema_ref: "{{schema_warmup-handoff}}"}
+  task: {schema_ref: "{{contract_schema_task}}"}
+  handoff: {schema_ref: "{{contract_schema_warmup-handoff}}"}
 outputs:
   plan: {schema_ref: "{{workspace_tree_manifest}}", required_for: [pass]}
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}

@@ -35,9 +35,24 @@ func TestAIFClassicAndRunnerDescribeOneControlLoop(t *testing.T) {
 		t.Fatal("test source path unavailable")
 	}
 	root := filepath.Dir(filepath.Dir(filepath.Dir(file)))
-	bridge, err := os.ReadFile(filepath.Join(root, ".prifly", "workflows", "aif-classic", "contexts", "aif-verify-bridge.yaml"))
+	raw, err := projectYAMLDocument(filepath.Join(root, ".prifly", "workflows", "aif-classic", "contexts", "aif-verify-bridge.yaml"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	context, ok := raw.(map[string]any)
+	if !ok {
+		t.Fatal("verify context is not an object")
+	}
+	source, ok := context["source"].(string)
+	if !ok || source == "" {
+		t.Fatal("verify context does not name its instruction source")
+	}
+	bridge, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(source)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(bridge), "The graph, not this verdict, selects remediation.") {
+		t.Fatal("verify bridge does not describe graph-owned remediation")
 	}
 	if strings.Contains(string(bridge), "`needs_revision` skips") {
 		t.Fatal("verify bridge still documents the terminal repair bypass")

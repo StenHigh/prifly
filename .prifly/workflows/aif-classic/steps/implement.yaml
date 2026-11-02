@@ -1,13 +1,13 @@
 authoring: prifly-step/2
 id: aif:step/implement
-version: 1.7.0
+version: 1.8.0
 title: Run aif-implement against the accepted plan
 kind: worker
 inputs:
   plan: {schema_ref: "{{workspace_tree_manifest}}"}
-  handoff: {schema_ref: "{{schema_warmup-handoff}}"}
+  handoff: {schema_ref: "{{contract_schema_warmup-handoff}}"}
 outputs:
-  implementation: {schema_ref: "{{schema_implementation}}", required_for: [pass]}
+  implementation: {schema_ref: "{{contract_schema_implementation}}", required_for: [pass]}
   plan: {schema_ref: "{{workspace_tree_manifest}}", required_for: [pass]}
 executor: {adapter_ref: "{{assisted_adapter}}", operation: session}
 instructions_ref: "{{context_aif-implement-bridge}}"
