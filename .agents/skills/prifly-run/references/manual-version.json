@@ -77,7 +77,7 @@
     "references/examples/workflows/named-worktree/task.json": "sha256:b9cf29bf6efe98b891048c30ca4e9aa1c1dc48dedbcccdccac3f783cf2063e02",
     "references/examples/workflows/named-worktree/workflow.yaml": "sha256:b54f0c0aac3e5747a23ff8cef977a5c452af552aa63375e233fcfc8dce43de70",
     "references/manual/artifacts.md": "sha256:17f014704d46b831622fc0c9bee4f00e2082c5e44da6f3424c069107ca223ef6",
-    "references/manual/authoring.md": "sha256:e1a95037fe0ef185dc629301ea6738efad90a911e8f8c6964b764e45ffef42dd",
+    "references/manual/authoring.md": "sha256:c88f83e60767229eb1e648ca03ab1a3d6fe0a84066d68bbb00c01711ba37eec0",
     "references/manual/basics.md": "sha256:6b2ebf9c2ac29e6cd976786aac0745883f6e9b414da4dd9ee5ff898325d67550",
     "references/manual/capabilities.md": "sha256:d3500755129c47651c268f2ae5f9d05bdfbabb2064ff5bd7c483ebbbd62c0704",
     "references/manual/commands.md": "sha256:8d5b49c936299f9208752d328bea9654a0426943b543480571fd384266bd65e5",

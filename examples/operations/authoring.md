@@ -43,9 +43,14 @@ Inspect результата показывает exact compiled refs и build p
 
 ```sh
 "$PRIFLY_BIN" project extend --workflow FILE --workflow-id ID --extensions EXTEND.yaml \
-  --output COMPILED.json --step-ref NAME=REF.json --json
-# Локальный step source можно передать через --step-source NAME=FILE.
+  --output COMPILED.json --step-ref "NAME=$STEP_REF_JSON" \
+  --step-source NAME=FILE --json
 ```
+
+`STEP_REF_JSON` содержит inline JSON ImmutableRef с точными `id`, `version` и `digest`.
+Правая часть `--step-ref` не является путём к JSON-файлу.
+Для каждой вставки передайте обязательную пару `--step-ref NAME=JSON` и `--step-source NAME=FILE` с одинаковым NAME.
+Step source объявляет ports вставленного шага; его файл должен соответствовать переданному exact ref.
 
 Project extend работает с declared root stages и routes. Вставка не получает inputs предыдущего шага автоматически.
 Нужные input bindings объявляются явно; native call получает typed callee inputs/outputs.
