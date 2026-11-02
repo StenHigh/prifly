@@ -1,0 +1,19 @@
+authoring: prifly-step/2
+id: report-probe:step/measure
+version: 1.0.0
+title: Project measurement before the readers
+kind: worker
+repository_workspace: read_only
+inputs: {carrier: {schema_ref: "{{schema_carrier}}"}}
+outputs:
+  carrier: {schema_ref: "{{schema_carrier}}", required_for: [pass]}
+  report: {schema_ref: "{{schema_report}}", required_for: [pass]}
+  log: {format: blob, media_types: [text/plain], required_for: [pass]}
+executor: {adapter_ref: "{{adapter}}", operation: session}
+instructions_ref: "{{context_measure}}"
+effects: {class: external_write, retry_class: never}
+external_write:
+  system: report-probe-environment
+  operations: [measure]
+  target: Only this fixture's temporary synthetic environment; no service is provisioned.
+result_schema_ref: "{{result}}"

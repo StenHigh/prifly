@@ -1,0 +1,295 @@
+# yaml-language-server: schema ref unavailable in this development build; use prifly schema for the installed contract
+# Complete reference for one prifly-step/2 assisted source -- session steps only:
+# a program step (executor operation: process) is written as authoring:
+# prifly-step/1, with the same ports, effects, external_write and
+# result_schema_ref and no session_limits. Copy only the fields that
+# describe this step; the compiler inserts the documented safe defaults before
+# it seals StepDefinition v6 or v7. This file is intentionally verbose, not a ready
+# executable package: replace the illustrative exact refs with real definitions.
+# Managed steps keep prifly-step/1 and their executor configuration limits.
+# A program step declares nothing to report its progress: the program may
+# write program-progress/1 lines to fd 4 (PRIFLY_PROGRESS_FD), e.g.
+#   {"schema_version":"program-progress/1","phase":"product","current":4200,"total":6994}
+# phase is a name (letters, digits, . _ -, at most 64 bytes), message at most
+# 200 characters, total only with a current not above it. It is read by
+# `run progress` and the monitor; it is never the result (fd 3) or a verdict.
+authoring: prifly-step/2 # Required marker; explicitly opts into separate work/wait time.
+schema_version: "10" # Optional; the tool picks the lowest contract that carries what
+# you declared: v6 by default, v7 for active_timeout_ms: null, v8 for a
+# materialize-only tree, v9 for model_profile. Pinning it wins over that choice,
+# so a pin below what you declared is refused rather than silently upgraded --
+# which is why this reference, declaring everything, pins the newest.
+id: example:step/full-reference # Required stable identity.
+version: 1.0.0 # Required; increase when sealed bytes change.
+title: Full step authoring reference # Optional: defaults to id.
+
+# Optional names for exact immutable references used below.
+refs:
+  input_schema: {id: example:schema/input, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  output_schema: {id: example:schema/output, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  plan_manifest: {id: core:schema/workspace-tree-manifest, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  check: {id: example:check/content, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  adapter: {id: core:adapter/assisted-session, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  instructions: {id: example:context/instructions, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  context: {id: example:context/supporting, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  result_schema: {id: example:schema/step-result, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  hook_schema: {id: example:schema/progress, version: 1.0.0, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+
+kind: worker # Required: worker, check or command.
+inputs: # Optional: defaults to {}.
+  document:
+    schema_ref: input_schema # JSON also defaults format=json.
+    content_check_refs: [check] # Optional checks for this input's content.
+    description: Work item supplied by the preceding stage.
+    required: false # Optional; true is the default.
+  attachment:
+    format: blob # Use blob together with media_types instead of schema_ref.
+    media_types: [text/plain]
+    description: Optional supporting file.
+    required: true
+  plan_manifest:
+    schema_ref: plan_manifest # Required compatible JSON input for workspace_trees.
+    required: true
+# A declared port is filled by whoever is named here. The worker writes the
+# bytes to the slot path its context manifest gives that port, then reports the
+# port under `outputs` with the artifact_id and revision from that same manifest
+# and a digest of the bytes it wrote; the runtime seals them. A port bound below
+# under `workspace_trees` is the exception: the runtime captures and seals it,
+# and a worker that reports such a port is refused.
+outputs: # Optional: defaults to {}.
+  report:
+    schema_ref: output_schema # JSON also defaults format=json.
+    content_check_refs: [check] # Optional checks before this output is accepted.
+    description: Typed result for later stages.
+    required_for: [pass, fail, needs_revision, no_work, skipped, waived, blocked]
+  log:
+    format: blob
+    media_types: [text/plain]
+    description: Human-readable execution log.
+    required_for: [] # Optional: no verdict requires this output by default.
+  plan_manifest:
+    schema_ref: plan_manifest # The same builtin schema is required for tree output.
+    required_for: [pass]
+
+executor:
+  adapter_ref: adapter # Required exact execution adapter.
+  operation: session # Required adapter operation.
+# Optional for prifly-step/2; both defaults are sealed even when this block is absent.
+# Each step pins its own values. Editing YAML creates a new revision, not new time
+# for an existing Run. These limits do not bound the whole workflow's lifetime.
+session_limits:
+  # Конечное время разрешённой работы host, в миллисекундах.
+  # Только принятый объявленный runtime-вопрос приостанавливает расход остатка.
+  # Ответ и restart не дают новый полный час. Это не измерение CPU чужого процесса.
+  # Допустимо целое 1..9223372036854; 7200000 задаёт два часа активной работы.
+  # Отсутствие поля запечатывает default 3600000 = 1 час и остаётся v6: молчание
+  # автора никогда не означает «без ограничения». Ограничение снимается только
+  # явным null, и такой шаг запечатывается как StepDefinition v7. Придумывать
+  # большое число (30 суток) вместо null больше не нужно.
+  active_timeout_ms: null
+  # Срок одного ожидания ответа, в миллисекундах. Default null = без ограничения
+  # времени; например, 86400000 = сутки. Допустимо null либо целое 1..9223372036854.
+  # 0 не означает бесконечность и отвергается. Обычный вопрос в чате, не переданный
+  # через declared DecisionRequest, не создаёт эту паузу. Фонового wakeup нет.
+  decision_wait_timeout_ms: null
+instructions_ref: instructions # Optional primary instruction context.
+context_refs: [context] # Optional supporting contexts; defaults to [].
+required_capabilities: [network] # Optional extra capabilities; defaults to [].
+# The declared class is measured where the authority can look: a step with no
+# workspace right has its claimed trees compared when it reports, and a
+# difference is refused by name. Where it cannot look, the class stays a
+# declaration -- the program runs with the user's rights, so a network write it
+# makes is neither refused nor receipted, and a green report is not evidence
+# that none happened. A step that changes something outside its tree declares
+# class external_write with the block below instead of class none: a step
+# declared none that still writes outside leaves a Run record claiming nothing
+# changed, which is the first thing wrong when someone reads it after a failure.
+effects:
+  class: workspace_write # Required: none, workspace_write, or external_write.
+  retry_class: never # Required retry contract; it is never inferred.
+# retry_class is what the authority does when an attempt is interrupted. For an
+# external write it is the decision that matters, so choose it deliberately:
+#
+#   retry_class         after a program ended without an accepted result
+#   ------------------  -------------------------------------------------------
+#   idempotent          attempt fails as usual; project continue (or recover)
+#                       runs the step again with nobody asked. technical_retries
+#                       are allowed. Choose it when running again brings the
+#                       external state to what it should be by itself -- an
+#                       "ensure" (up an environment that may already be up,
+#                       set a value) rather than a "create" (append a record,
+#                       send a message). Nothing checks this: it is your word.
+#   deduplicated        Run turns uncertain (external_write_unreconciled) and
+#   reconcile_required  waits: run next offers run.resolve, project continue is
+#   never               refused. The owner looks at the external system and
+#                       attests `run resolve RUN --attempt ID --outcome
+#                       applied|not_applied --reason TEXT`; the Run then fails
+#                       and project continue runs the step again. For a program
+#                       the three behave alike -- the name is your statement of
+#                       why a repeat needs a person, recorded with the Run.
+#   pure                refused with external_write: it means no effects.
+#
+# A result the authority accepted is never held: the program said what it did,
+# and its verdict routes. A program that never started is not held either. An
+# assisted step differs: a lost session is uncertain for ANY class but none,
+# idempotent included, because nothing proves the session stopped working.
+#
+# Required when, and only when, class is external_write: the step says it
+# changes a system this authority cannot observe, and bounds what it may change.
+# The values are opaque here: nothing reads meaning from them, reaches the
+# named system or checks what was changed. For an assisted step (prifly-step/2)
+# they travel to the host as the permission it acts under; for a program
+# (prifly-step/1, executor operation process) they are sealed in the Run's plan
+# as your statement -- the program runs with the user's rights and the boundary
+# confines nothing it does. operations names CHANGES only: reading the same
+# system is not a change, needs no permission from here, and its absence forbids
+# nothing. The class gives no workspace right: the claimed tree is still
+# compared as for class none. Nothing here is evidence the change happened; a
+# mandatory output on pass is how a verified result arrives. To see what a Run's
+# steps declared, read `run status RUN` (an `effect` line per step) or
+# `step_effects` in `run next --json`.
+# external_write:
+#   system: example-system
+#   operations: [record.create]
+#   target: example/target
+# Declaring this block selects the contract that carries it: StepDefinition v11
+# under prifly-step/2 (an explicit schema_version below 11 is refused), v14
+# under prifly-step/1 (only for executor operation process; pin 14 or leave
+# schema_version out). An assisted step under prifly-step/1 is refused and sent
+# to prifly-step/2. A program with a tree read without capture cannot declare
+# it: that binding lives only in the assisted v8.
+# The same declaration on a program, as a project writes it:
+#   authoring: prifly-step/1
+#   id: example:step/integration-tests
+#   version: 1.0.0
+#   kind: worker
+#   executor: {adapter_ref: local_process, operation: process}
+#   effects: {class: external_write, retry_class: idempotent}
+#   external_write:
+#     system: example-container-runtime
+#     operations: [environment.ensure, environment.remove]
+#     target: example-environment
+#   result_schema_ref: result_schema
+# idempotent is right here only because the program ensures the environment
+# (brings it up if absent, reuses it if present) and removes it at the end; a
+# program that created a fresh one on every run would declare
+# reconcile_required and accept that an interruption waits for the owner.
+# Optional, independent of external_write: ask for the Run's claimed Git tree
+# to read without workspace-write permission. The launch must select worktree
+# or checkout; no claim is created for a task that omits this field. Declaring
+# it selects StepDefinition v13, so an older explicit schema_version is refused.
+# repository_workspace: read_only
+# Optional result checks; defaults to []. A workspace-tree step must keep this
+# empty because its native output is sealed atomically by runtime.
+result_check_refs: []
+# An output may be promised for `blocked`: a gate that could not judge still
+# has findings, and a stage on that edge can only bind what the step promised
+# there. Promise it in required_for, or the binding is refused as unguaranteed
+# and the reason reaches only the journal. The assisted form (prifly-step/2)
+# lowers to step contract v10, a program (prifly-step/1) to v12 -- both are
+# derived from the promise itself. See authoring/blocked-guide.md.
+# core:schema/step-result 1.0.0 carries pass, fail, needs_revision and no_work.
+# Version 2.0.0 adds `blocked`, for a step that could not judge the work at all
+# rather than judging it bad. Reference the version your step actually needs:
+# nothing upgrades a saved reference, and a step declaring 1.0.0 that returns
+# `blocked` is refused by the contract it chose, naming that contract.
+result_schema_ref: result_schema # Required schema of the worker-reported result.
+
+# Optional state/event hooks. A state hook additionally requires freshness_ms;
+# an event hook must omit it. Both forms list every Hook field.
+hooks:
+  progress:
+    kind: state
+    schema_ref: hook_schema
+    description: Current progress published by this attempt.
+    classification: internal # public, internal or confidential.
+    read_policy: owner
+    max_payload_bytes: 4096
+    max_count: 1
+    max_per_minute: 60
+    allow_during_stop: false
+    freshness_ms: 1000
+  notice:
+    kind: event
+    schema_ref: hook_schema
+    description: One notable execution event.
+    classification: internal
+    read_policy: owner
+    max_payload_bytes: 4096
+    max_count: 100
+    max_per_minute: 60
+    allow_during_stop: false
+
+# Optional telemetry mappings. Non-diagnostic mappings need field and unit;
+# diagnostic mappings instead need severity, code and message.
+telemetry:
+  - name: progress_percent
+    revision: 1.0.0
+    description: Most recent reported completion percentage.
+    hook: progress
+    kind: gauge # gauge, counter, distribution or diagnostic.
+    field: /percent
+    unit: percent
+    aggregation: last # last, min, max, delta, observations or occurrences.
+    reset: attempt # none or attempt.
+    minimum: 0
+    maximum: 100
+    dimensions: {component: /component}
+  - name: validation_notice
+    revision: 1.0.0
+    description: A structured validation notice.
+    hook: notice
+    kind: diagnostic
+    aggregation: occurrences
+    reset: none
+    dimensions: {}
+    severity: warn # trace, debug, info, warn, error, fatal or unknown.
+    code: validation.notice
+    message: Validation produced a noteworthy result.
+
+# Optional v5/v6 binding for one manifest-backed file or shallow bundle in the
+# claimed Workspace. `path` is exact_file's file path or the parent for a
+# direct-child policy. The host never sends artifact refs; runtime captures and
+# seals the resulting manifest itself. Omit this whole field when no tree is needed.
+# A step with `effects: {class: none}` may instead declare a materialize-only
+# binding: `input_port` and `capture` with no `output_port`. The runtime places
+# the manifest's entries in the claimed Workspace before the handoff, takes the
+# step's effect mark after that, captures nothing, and removes what it placed
+# once the attempt settles. That form lowers to StepDefinition v8; the host
+# reads the tree at the declared path and reports no port for it.
+# Host submission: report a direct-child selection at the top level, beside result:
+# workspace_trees: [{output_port: plan_manifest, path: plans/actual-plan}]
+# This example uses direct_child_tree; direct_child_file selects e.g. actual-plan.md.
+# For exact_file the fixed path may be omitted. The engine owns ArtifactRefs;
+# never add a workspace-tree output to result.outputs yourself. Read the narrow
+# form with: prifly schema WorkspaceTreeLocation --def runtime_WorkspaceTreeLocation.
+workspace_trees:
+  - input_port: plan_manifest # Optional manifest input; omit when creating a tree.
+    output_port: plan_manifest # Required compatible manifest output (absent only on a read-only v8 binding).
+    capture:
+      kind: direct_child_tree # exact_file, direct_child_file, direct_child_tree.
+      path: plans # Workspace-relative fixed file or declared parent; no AI-specific path.
+      entrypoint: index.md # Required only for direct_child_tree.
+
+# What this step wants from the model that executes it. A profile of work, not a
+# provider or a product: `deep-reasoning` survives a change of platform,
+# `claude-opus-5` is a detail of one and goes stale inside a sealed plan that
+# outlives it. The host names the concrete model in its report, where a fact of
+# one execution belongs.
+#
+# Pri-Fly selects nothing here, and will not: an assisted session exists before
+# the Run and this authority holds no channel to it. What the declaration buys
+# is that the host stops guessing what the author wanted, and that a report
+# which says nothing about it is refused. Three answers are accepted —
+# `honoured` with the model that was used, `unavailable` when the platform does
+# not let the host choose, `declined` with why it chose otherwise — and none of
+# them is verified. A host that cannot choose says so; that is not a violation.
+#
+# `reason` is required beside `requested`: a profile without one reads as a
+# preference, and the next author cannot tell whether it may be dropped. This
+# field lowers to StepDefinition v9 and belongs to `prifly-step/2`; a program
+# step has no model to ask about. Omit the whole field when the step does not
+# care.
+model_profile:
+  requested: deep-reasoning # ^[a-z][a-z0-9-]{1,63}$
+  reason: this step judges work it did not do, and a confident wrong answer costs a round

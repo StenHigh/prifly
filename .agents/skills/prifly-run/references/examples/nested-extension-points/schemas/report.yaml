@@ -1,0 +1,22 @@
+id: report-probe:schema/report
+version: 1.0.0
+type: object
+additionalProperties: false
+required: [subject, basis, method, exit, status, logs]
+properties:
+  subject: {type: string}
+  basis: {type: string}
+  method: {type: string}
+  exit: {type: integer}
+  status: {type: string, enum: [passed, failed, unavailable, unknown]}
+  logs:
+    type: array
+    maxItems: 8
+    items:
+      type: object
+      additionalProperties: false
+      required: [artifact_id, revision, digest]
+      properties:
+        artifact_id: {type: string, minLength: 1}
+        revision: {type: integer, minimum: 1}
+        digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}

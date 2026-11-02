@@ -378,6 +378,7 @@ config-каталоге. Срез добавлен в исходники; это
 
 | Нужно узнать | Где смотреть |
 |---|---|
+| Запускать и обслуживать Pri-Fly без поиска по исходникам | [Эксплуатационный справочник](examples/operations/index.md) |
 | Какое правило менять | [Карта источников](openspec/SOURCE-OF-TRUTH.md) |
 | Модель продукта и поведение сценариев | [OpenSpec capabilities](openspec/specs/) |
 | Текущий объём и порядок работы | [Delivery roadmap](openspec/specs/delivery-roadmap/spec.md) |

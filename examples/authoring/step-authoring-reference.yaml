@@ -257,6 +257,12 @@ telemetry:
 # step's effect mark after that, captures nothing, and removes what it placed
 # once the attempt settles. That form lowers to StepDefinition v8; the host
 # reads the tree at the declared path and reports no port for it.
+# Host submission: report a direct-child selection at the top level, beside result:
+# workspace_trees: [{output_port: plan_manifest, path: plans/actual-plan}]
+# This example uses direct_child_tree; direct_child_file selects e.g. actual-plan.md.
+# For exact_file the fixed path may be omitted. The engine owns ArtifactRefs;
+# never add a workspace-tree output to result.outputs yourself. Read the narrow
+# form with: prifly schema WorkspaceTreeLocation --def runtime_WorkspaceTreeLocation.
 workspace_trees:
   - input_port: plan_manifest # Optional manifest input; omit when creating a tree.
     output_port: plan_manifest # Required compatible manifest output (absent only on a read-only v8 binding).

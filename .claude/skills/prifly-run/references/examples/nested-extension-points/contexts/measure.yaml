@@ -1,0 +1,7 @@
+id: report-probe:context/measure
+version: 1.0.0
+media_type: text/plain
+text: |
+  Synthetic project measurement. Publish a fresh report/log and carrier with
+  their exact refs. Preserve earlier report refs. This fixture does not
+  provision an environment or qualify an application or release.

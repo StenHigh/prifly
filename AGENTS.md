@@ -55,3 +55,17 @@ AI-контекст: `AGENTS.md` (этот файл, Codex) и `CLAUDE.md` (Clau
 его), `.ai-factory/**` (AI Factory), `.claude/skills/prifly-run/PROJECT.md` и
 `.agents/skills/prifly-run/PROJECT.md` (правила репозитория для runner'а).
 Сценарий разработки — `prifly-run` → launch `aif-classic`.
+
+## Эксплуатационная документация
+
+| Материал | Путь | Назначение |
+|---|---|---|
+| Product entry | `README.md` | Установка и вход в документацию |
+| Справочник оператора | `examples/operations/index.md` | Задача, симптом или команда |
+| Полная CLI-поверхность | `examples/operations/commands.md` | Команды, flags и defaults |
+| Authoring references | `examples/authoring/` | Канонические поля и примеры YAML |
+| Нормативный источник | `openspec/SOURCE-OF-TRUTH.md` | Владение действующими правилами |
+
+Обычные операции Core сначала ищи в эксплуатационном справочнике и public CLI.
+Новая публичная команда, flag или capability обновляет соответствующую страницу в том же изменении.
+Runner доставляет совместимую копию из embedded assets; `PROJECT.md` остаётся пользовательским.

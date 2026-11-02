@@ -1,0 +1,17 @@
+{
+  "source_commit": "2060fc9286cff2924e198b0294ba9a2814ad0e90",
+  "plan_commit": "709791df955c0f4ea6ed34ad5044b09c493f121c",
+  "protected_files": 789,
+  "flag_declarations": 220,
+  "baseline_tests": {
+    "command": "go test ./cmd/prifly -run TestProjectRunner(TextIsPinned|UpdateReplacesEveryReleasedRunner|FrozenRunnerTextIsPinned)$ -count=1",
+    "result": "pass"
+  },
+  "baseline_read_bytes": {
+    "codex-app": 20673,
+    "claude-code": 20595
+  },
+  "token_measurement": "unavailable; byte measurements are not token or cost measurements",
+  "unique_flag_names": 116,
+  "dispatch_entries": 119
+}
