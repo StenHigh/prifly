@@ -640,3 +640,89 @@ func TestProjectOwnedNamingRepeatIgnoresFlagOrder(t *testing.T) {
 		t.Fatal("flag order changed semantic retry")
 	}
 }
+
+func TestProjectOwnedNamingSourceSnapshotAfterHandover(t *testing.T) {
+	t.Parallel()
+	for _, released := range []bool{false, true} {
+		t.Run(fmt.Sprintf("released-%t", released), func(t *testing.T) {
+			t.Parallel()
+			f := continuationCLIFixtureWithOptions(t, "  from_outcomes: [partial]\n", false, false, []string{"--naming-input", "identity=naming.json"}, func(root string) {
+				configureOwnedNaming(t, root)
+				writeFixtureFile(t, root, "naming.json", `{"id":"issue-19"}`)
+			})
+			f.submit(map[string]string{"handoff": "{}\n"}, nil)
+			writeFixtureFile(t, f.source.WorkspacePath, "plans/plan.md", "# Plan\n")
+			f.submit(map[string]string{"draft": "{}\n"}, []prifly.WorkspaceTreeLocation{{OutputPort: "plan", Path: "plans/plan.md"}})
+			f.submit(map[string]string{}, nil)
+			args := []string{"--repository", f.root, "--launch", "tail", "--host", "codex-cli", "--source-run", f.source.RunID}
+			var review projectLaunchSummary
+			json.Unmarshal([]byte(f.command(append([]string{"project", "continue", "--prepare"}, args...)...)), &review)
+			var handed projectStartResult
+			json.Unmarshal([]byte(f.command(append(append([]string{"project", "continue"}, args...), "--command-id", "command:owned-handover", "--expected-launch-digest", review.ReviewDigest)...)), &handed)
+			submitResumeChain(t, f, handed.RunID, "pass")
+			if released {
+				f.command("--project", f.authority, "claim", "release", "--id", handed.Workspace.ID, "--generation", fmt.Sprint(handed.Workspace.Generation))
+			}
+			profile, err := os.ReadFile(filepath.Join(f.root, ".prifly/project.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFixtureFile(t, f.root, ".prifly/project.yaml", strings.Split(string(profile), "worktree_naming:")[0])
+			for _, path := range []string{"naming.json", ".prifly/naming/identity.schema.json"} {
+				if err := os.Remove(filepath.Join(f.root, path)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args = append(args, "--workspace-commit", f.base)
+			json.Unmarshal([]byte(f.command(append([]string{"project", "continue", "--prepare"}, args...)...)), &review)
+			raw := f.command(append(append([]string{"project", "continue"}, args...), "--command-id", "command:owned-after-handover", "--expected-launch-digest", review.ReviewDigest)...)
+			var result projectStartResult
+			json.Unmarshal([]byte(raw), &result)
+			if result.Workspace.ID == handed.Workspace.ID || result.Workspace.BaseCommit != f.base || !prifly.EqualWorktreeNamingSnapshot(result.Workspace.NamingSnapshot, f.source.Workspace.NamingSnapshot) || result.Workspace.Naming == nil || result.Workspace.Naming.Base != f.source.Workspace.Naming.Base {
+				t.Fatal("new claim lost source naming after handover", raw)
+			}
+			var claims prifly.ClaimRecord
+			json.Unmarshal([]byte(f.command("--project", f.authority, "claim", "list")), &claims)
+			for _, claim := range claims.Claims {
+				if claim.ID == handed.Workspace.ID && (claim.RunID != handed.RunID || claim.Generation != handed.Workspace.Generation || claim.Path != handed.Workspace.Path || claim.Branch != handed.Workspace.Branch) {
+					t.Fatal("historical claim was taken over", claim)
+				}
+			}
+		})
+	}
+}
+
+func TestProjectOwnedNamingLegacySourceIgnoresNewPolicy(t *testing.T) {
+	t.Parallel()
+	for _, named := range []bool{false, true} {
+		t.Run(fmt.Sprintf("named-%t", named), func(t *testing.T) {
+			t.Parallel()
+			f := continuationCLIFixtureWithOptions(t, "  from_outcomes: [partial]\n", false, false, nil, func(root string) {
+				if named {
+					data, err := os.ReadFile(filepath.Join(root, ".prifly/project.yaml"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					writeFixtureFile(t, root, ".prifly/project.yaml", strings.Replace(string(data), "prifly-project-profile/3", "prifly-project-profile/4", 1)+"worktree_naming:\n  template: '{project}'\n  bindings: {project: {value: legacy-demo}}\n")
+				}
+			})
+			f.submit(map[string]string{"handoff": "{}\n"}, nil)
+			writeFixtureFile(t, f.source.WorkspacePath, "plans/plan.md", "# Plan\n")
+			f.submit(map[string]string{"draft": "{}\n"}, []prifly.WorkspaceTreeLocation{{OutputPort: "plan", Path: "plans/plan.md"}})
+			f.submit(map[string]string{}, nil)
+			configureOwnedNaming(t, f.root)
+			if err := os.Remove(filepath.Join(f.root, ".prifly/naming/identity.schema.json")); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"--repository", f.root, "--launch", "tail", "--host", "codex-cli", "--source-run", f.source.RunID, "--workspace-commit", f.base}
+			var review projectLaunchSummary
+			json.Unmarshal([]byte(f.command(append([]string{"project", "continue", "--prepare"}, args...)...)), &review)
+			raw := f.command(append(append([]string{"project", "continue"}, args...), "--command-id", "command:legacy-new-policy", "--expected-launch-digest", review.ReviewDigest)...)
+			var result projectStartResult
+			json.Unmarshal([]byte(raw), &result)
+			if result.Workspace.ID == f.source.Workspace.ID || result.Workspace.BaseCommit != f.base || result.Workspace.NamingSnapshot != nil || result.Workspace.Naming != nil {
+				t.Fatal("legacy source acquired new naming metadata", raw)
+			}
+		})
+	}
+}

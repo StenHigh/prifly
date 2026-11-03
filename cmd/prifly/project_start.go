@@ -523,18 +523,17 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
-		if plannedHandover != nil || *sourceRun != "" {
+		if plannedHandover != nil {
 			record, readErr := reader.Claims(ctx)
 			err = readErr
 			for _, held := range record.Claims {
-				if (plannedHandover != nil && held.ID == plannedHandover.ID || held.RunID == *sourceRun) && held.Naming != nil {
+				if held.ID == plannedHandover.ID && held.Naming != nil {
 					heldCopy := held
-					if plannedHandover != nil {
-						handedNaming = &heldCopy
-					}
-					sourceNaming = &heldCopy
+					handedNaming, sourceNaming = &heldCopy, &heldCopy
 				}
 			}
+		} else if *sourceRun != "" {
+			sourceNaming, err = reader.SourceWorktreeNaming(ctx, *sourceRun)
 		} else {
 			snapshot, readErr := projectReadNamingSnapshot(root, profile.WorktreeNaming, namingFiles)
 			err = readErr
@@ -542,7 +541,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				naming, err = projectResolveNaming(profile.WorktreeNaming, reader, requirements.plan, inputValues, refs, snapshot)
 			}
 		}
-		if err == nil && plannedHandover == nil && *sourceRun != "" && (sourceNaming == nil || sourceNaming.NamingSnapshot == nil) {
+		if err == nil && plannedHandover == nil && *sourceRun != "" && (sourceNaming == nil || sourceNaming.NamingSnapshot == nil) && !profile.WorktreeNaming.owned() {
 			snapshot, readErr := projectReadNamingSnapshot(root, profile.WorktreeNaming, namingFiles)
 			err = readErr
 			if err == nil {
@@ -851,7 +850,11 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			if readErr != nil {
 				return readErr
 			}
-			currentSummary.WorktreeNaming, err = projectResolveWorktreeNaming(currentProfile.WorktreeNaming, engine, requirements.plan, inputValues, refs)
+			// A legacy source does not acquire newly declared owned inputs.
+			currentSummary.WorktreeNaming = nil
+			if *sourceRun == "" || !currentProfile.WorktreeNaming.owned() {
+				currentSummary.WorktreeNaming, err = projectResolveWorktreeNaming(currentProfile.WorktreeNaming, engine, requirements.plan, inputValues, refs)
+			}
 			if err != nil {
 				return err
 			}
