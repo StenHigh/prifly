@@ -219,7 +219,7 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersion, profile.ReadVersion = CoreQueueStateVersion, CoreQueueReadVersion
 	profile.StateVersions = append(profile.StateVersions, CoreQueueStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreQueueReadVersion)
-	profile.Capabilities = append(profile.Capabilities, "project_task_queue", "project_worktree_naming", "light_task_board")
+	profile.Capabilities = append(profile.Capabilities, "project_task_queue", "project_worktree_naming", "project_owned_naming_inputs", "light_task_board")
 
 	return manifest
 }

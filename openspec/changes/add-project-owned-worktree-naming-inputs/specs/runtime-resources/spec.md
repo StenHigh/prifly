@@ -2,7 +2,7 @@
 
 ### Requirement: Claim preserves the original project naming snapshot
 
-Новый claim с project-owned naming inputs SHALL сохранять immutable snapshot declaration, JSON schemas, canonical values и digests вместе с naming allocation evidence. Snapshot SHALL поступать проверенным payload до durable reservation. Transform MUST NOT читать naming files, schemas или blobs внутри write-транзакции.
+Новый claim с project-owned naming inputs SHALL сохранять immutable snapshot declaration, JSON schemas, canonical values и digests вместе с naming allocation evidence. Snapshot SHALL поступать проверенным payload до durable reservation. Его общий canonical UTF-8 JSON размер MUST NOT превышать 128 KiB. Existing command/result ceilings MUST сохраняться; serialized carriers с повторным snapshot MUST проверяться до effects. Новый claims record SHALL иметь bounded strict reader с existing state ceiling 16 MiB. Prospective record MUST проверяться до reservation, в том числе повторно внутри pure transform до mutation. Transform MUST NOT читать naming files, schemas или blobs внутри write-транзакции.
 
 Idempotency SHALL учитывать полный naming snapshot. Повтор принятой команды SHALL возвращать исходный результат; изменённый snapshot под тем же command ID MUST давать idempotency conflict. Existing allocation, ownership, generation, cleanup и collision semantics SHALL сохраняться.
 

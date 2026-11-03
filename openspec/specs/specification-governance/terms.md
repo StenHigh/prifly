@@ -969,6 +969,23 @@ Named claim сохраняет `claim:<64 hex>` и фактические path/b
 handover меняет generation, сохраняя path/branch. Release проверяет directory
 identity и creation evidence ref; неизвестные effects не дают права удалять объект.
 
+<a id="project-naming-input"></a>
+### Project naming input — Вход именования проекта
+
+Типизированное JSON value потребителя для имени нового worktree.
+Profile `/5` объявляет его в `worktree_naming.inputs.NAME.schema`.
+Binding `naming_input` выбирает значение из этого namespace через JSON Pointer.
+Binding `input` сохраняет прежний смысл: workflow input.
+CLI принимает отдельный `--naming-input NAME=FILE`.
+Go mapping CLI: `projectWorktreeBinding.NamingInput` → JSON `naming_input`.
+
+Claim хранит неизменяемый snapshot: declaration, самодостаточные schemas,
+полные canonical values, источники и digests. Общий предел — 128 KiB
+canonical UTF-8 JSON. Это metadata claim, не workflow port, task identity,
+queue item, новый Artifact или универсальный объект бизнес-данных.
+`authority-claims/5` и `foundation-claims/4` несут `naming_snapshot`.
+Summary/start `/8` показывают snapshot; продолжение сохраняет его без чтения файлов.
+
 <a id="assisted-session"></a>
 ### AssistedSession / SessionHandoff — Ассистируемое исполнение и передача работы хосту
 
@@ -1748,6 +1765,10 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Mode` | `mode` |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.RunID` | `run_id` |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Naming` | `naming` |
+| [Project naming input](#project-naming-input) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.NamingSnapshot` | `naming_snapshot` |
+| [Project naming input](#project-naming-input) | `internal/runtime/worktree_naming_snapshot.go` | `runtime.WorktreeNamingSnapshot` | — |
+| [Project naming input](#project-naming-input) | `internal/runtime/worktree_naming_snapshot.go` | `runtime.WorktreeNamingInput` | — |
+| [Project naming input](#project-naming-input) | `internal/projectwire/queue.go` | `projectwire.WorktreeNamingReview.Snapshot` | `snapshot` |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktree_names.go` | `runtime.WorktreeNameAllocation` | — |
 | [Generation](#generation) | `internal/runtime/worktrees.go` | `runtime.WorktreeClaim.Generation` | `generation` |
 | [WorktreeClaim](#worktree-claim) | `internal/runtime/worktrees.go` | `runtime.RepositoryIdentity` | — |

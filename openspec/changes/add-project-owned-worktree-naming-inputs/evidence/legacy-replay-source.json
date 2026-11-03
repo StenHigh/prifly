@@ -1,0 +1,24 @@
+{
+  "base_commit": "3d8fd301bccddd18a5c2be752570918439eb1c5d",
+  "baseline_binary_digest": "sha256:58417f4a8280f9221a8a976d75048e8c2efa40f252b2eaab5ec8a338b1749ffb",
+  "candidate_binary_digest": "sha256:43577cc3db733e76597ed921567a488f640bfbf2f0ea3251d810e0cce96c6919",
+  "legacy_profile": "prifly-project-profile/4",
+  "result_schema": "project-start/5",
+  "same_command_same_response": true,
+  "replay_arguments": [
+    "project",
+    "start",
+    "--repository",
+    "/tmp/prifly-naming-legacy-ss5m1f3v/repository",
+    "--launch",
+    "named",
+    "--host",
+    "codex-cli",
+    "--input",
+    "task=/tmp/prifly-naming-legacy-ss5m1f3v/repository/.prifly/workflows/named/task.json",
+    "--command-id",
+    "legacy:repeat",
+    "--expected-launch-digest",
+    "sha256:df8f89b131f25cfe7653e6e21adc566fc5950483a1423c2258a8d91f025fb29b"
+  ]
+}

@@ -120,3 +120,7 @@ boundaries и baseline active changes до своего archive/sync. Ownership 
 
 Доставка эксплуатационного справочника и обязательные updates host runner включены в main source sets `release-documentation-layout` и `cli-protocol`.
 История реализации сохранена в archived `2026-11-02-add-agent-operations-handbook`. Нормативное владение не переносится. Прямые CLI-команды сохраняют явное обновление; saved Runs и published schemas не меняются.
+
+До archive `add-project-owned-worktree-naming-inputs` его deltas задают opt-in
+profile `/5`, naming namespace, summary/start `/8` и claim snapshot `/5`.
+Ownership существующих source sets не переносится. Released-Core приёмка остаётся отдельным gate.

@@ -85,10 +85,11 @@ type RepositoryIdentity struct {
 }
 
 type WorktreeClaim struct {
-	Naming     *WorktreeNameAllocation `json:"naming,omitempty"`
-	ID         string                  `json:"id"`
-	Repository RepositoryIdentity      `json:"repository"`
-	Path       string                  `json:"path"`
+	NamingSnapshot *WorktreeNamingSnapshot `json:"naming_snapshot,omitempty"`
+	Naming         *WorktreeNameAllocation `json:"naming,omitempty"`
+	ID             string                  `json:"id"`
+	Repository     RepositoryIdentity      `json:"repository"`
+	Path           string                  `json:"path"`
 	// Mode distinguishes a disposable authority-owned worktree from the
 	// repository checkout selected explicitly by the developer. A missing mode
 	// in a historical record is always the old worktree behavior.
@@ -457,13 +458,26 @@ func decodeClaimRecord(s local.AuthoritySnapshot, authorityID string) (ClaimReco
 	if s.Version == 0 {
 		return record, nil
 	}
-	if err := decode(s.Data, &record); err != nil {
+	if len(s.Data) > local.MaxSnapshotBytes {
+		return ClaimRecord{}, fault("unsupported_claim_contract", "claim record exceeds storage budget")
+	}
+	var header struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	if err := json.Unmarshal(s.Data, &header); err != nil {
 		return ClaimRecord{}, err
 	}
-	if (record.SchemaVersion != NamedAuthorityClaimsVersion && record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != authorityClaimsModeVersion && record.SchemaVersion != authorityClaimsLegacyVersion) || record.AuthorityID != authorityID {
+	decoder := decode
+	if header.SchemaVersion == SnapshotAuthorityClaimsVersion {
+		decoder = decodeState
+	}
+	if err := decoder(s.Data, &record); err != nil {
+		return ClaimRecord{}, err
+	}
+	if (record.SchemaVersion != SnapshotAuthorityClaimsVersion && record.SchemaVersion != NamedAuthorityClaimsVersion && record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != authorityClaimsModeVersion && record.SchemaVersion != authorityClaimsLegacyVersion) || record.AuthorityID != authorityID {
 		return ClaimRecord{}, fault("unsupported_claim_contract", "unsupported or foreign claim record")
 	}
-	if record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != NamedAuthorityClaimsVersion {
+	if record.SchemaVersion != SnapshotAuthorityClaimsVersion && record.SchemaVersion != AuthorityClaimsVersion && record.SchemaVersion != NamedAuthorityClaimsVersion {
 		var wire struct {
 			Claims []map[string]json.RawMessage `json:"claims"`
 		}
@@ -476,11 +490,32 @@ func decodeClaimRecord(s local.AuthoritySnapshot, authorityID string) (ClaimReco
 			}
 		}
 	}
+	if record.SchemaVersion != SnapshotAuthorityClaimsVersion {
+		var wire struct {
+			Claims []map[string]json.RawMessage `json:"claims"`
+		}
+		if err := json.Unmarshal(s.Data, &wire); err != nil {
+			return ClaimRecord{}, err
+		}
+		for _, claim := range wire.Claims {
+			if _, present := claim["naming_snapshot"]; present {
+				return ClaimRecord{}, fault("unsupported_claim_contract", "naming_snapshot requires authority-claims/5")
+			}
+		}
+	}
 	for _, claim := range record.Claims {
+		if claim.NamingSnapshot != nil {
+			if record.SchemaVersion != SnapshotAuthorityClaimsVersion || claim.Naming == nil {
+				return ClaimRecord{}, fault("unsupported_claim_contract", "snapshot requires authority-claims/5 and naming")
+			}
+			if err := ValidateWorktreeNamingSnapshot(claim.NamingSnapshot); err != nil {
+				return ClaimRecord{}, err
+			}
+		}
 		if claim.Naming == nil {
 			continue
 		}
-		if record.SchemaVersion != NamedAuthorityClaimsVersion {
+		if record.SchemaVersion != NamedAuthorityClaimsVersion && record.SchemaVersion != SnapshotAuthorityClaimsVersion {
 			return ClaimRecord{}, fault("unsupported_claim_contract", "naming metadata requires authority-claims/4")
 		}
 		path, branch := worktreeCandidate(claim.Naming.Base, claim.Naming.Ordinal)
@@ -493,7 +528,7 @@ func decodeClaimRecord(s local.AuthoritySnapshot, authorityID string) (ClaimReco
 			return ClaimRecord{}, local.ErrIntegrity
 		}
 	}
-	if record.SchemaVersion != NamedAuthorityClaimsVersion {
+	if record.SchemaVersion != NamedAuthorityClaimsVersion && record.SchemaVersion != SnapshotAuthorityClaimsVersion {
 		record.SchemaVersion = AuthorityClaimsVersion
 	}
 	return record, nil
@@ -1035,6 +1070,9 @@ func ClaimView(record ClaimRecord) map[string]any {
 	version := "foundation-claims/2"
 	if record.SchemaVersion == NamedAuthorityClaimsVersion {
 		version = "foundation-claims/3"
+	}
+	if record.SchemaVersion == SnapshotAuthorityClaimsVersion {
+		version = "foundation-claims/4"
 	}
 	return map[string]any{"schema_version": version, "claims": claims}
 }

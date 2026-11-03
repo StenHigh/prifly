@@ -26,8 +26,9 @@ const (
 var worktreeNamePattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 type WorktreeNamingRequest struct {
-	Base   string `json:"base"`
-	Policy string `json:"policy"`
+	Snapshot *WorktreeNamingSnapshot `json:"snapshot,omitempty"`
+	Base     string                  `json:"base"`
+	Policy   string                  `json:"policy"`
 }
 
 // Allocation evidence is authority metadata, never the identity of a Run.
@@ -139,6 +140,7 @@ func allocateWorktreeName(record ClaimRecord, claim WorktreeClaim, naming Worktr
 		if conflict {
 			continue
 		}
+		claim.NamingSnapshot = CloneWorktreeNamingSnapshot(naming.Snapshot)
 		claim.Naming = &WorktreeNameAllocation{Base: naming.Base, Policy: naming.Policy, Ordinal: ordinal, Phase: "reserved"}
 		claim.Device, claim.Inode = 0, 0
 		return claim, nil
@@ -174,6 +176,9 @@ func (e *Engine) PreviewWorktreeName(ctx context.Context, repository string, nam
 }
 
 func validateWorktreeNamingRequest(naming WorktreeNamingRequest) error {
+	if err := ValidateWorktreeNamingSnapshot(naming.Snapshot); err != nil {
+		return err
+	}
 	if err := ValidateWorktreeName(naming.Base); err != nil {
 		return err
 	}
@@ -224,6 +229,9 @@ func (e *Engine) claimNamedWorktree(ctx context.Context, request ClaimRequest) (
 	if err != nil {
 		return WorktreeClaim{}, false, err
 	}
+	if len(payload) > local.MaxCommandBytes {
+		return WorktreeClaim{}, false, fault("project_worktree_snapshot_too_large", "serialized claim command exceeds authority budget")
+	}
 	command := local.AuthorityCommand{ID: request.CommandID, Actor: e.owner, Key: AuthorityClaimsKey, Payload: payload}
 	if receipt, err := e.Store.LookupAuthorityReceipt(ctx, command); err == nil {
 		if receipt.Rejection != nil {
@@ -235,6 +243,16 @@ func (e *Engine) claimNamedWorktree(ctx context.Context, request ClaimRequest) (
 		}
 		return claim, false, err
 	} else if !errors.Is(err, local.ErrNotFound) {
+		return WorktreeClaim{}, false, err
+	}
+	// Account for caller-controlled scalar fields before any control or cleanup mutation.
+	prospective, _, err := e.readClaims(ctx)
+	if err != nil {
+		return WorktreeClaim{}, false, err
+	}
+	path, branch := worktreeCandidate(request.Naming.Base, MaxWorktreeNames)
+	candidate := WorktreeClaim{ID: id, Repository: identity, OwnerID: request.OwnerID, Actor: e.owner, Path: path, Branch: branch, NamingSnapshot: request.Naming.Snapshot}
+	if err := checkNamingRecordCapacity(prospective, candidate); err != nil {
 		return WorktreeClaim{}, false, err
 	}
 	control, _, err := e.ensureControl(ctx)
@@ -285,7 +303,15 @@ func (e *Engine) claimNamedWorktree(ctx context.Context, request ClaimRequest) (
 				selected.Generation = old.Generation + 1
 			}
 		}
-		record.SchemaVersion = NamedAuthorityClaimsVersion
+		if record.SchemaVersion != SnapshotAuthorityClaimsVersion {
+			record.SchemaVersion = NamedAuthorityClaimsVersion
+		}
+		if selected.NamingSnapshot != nil {
+			record.SchemaVersion = SnapshotAuthorityClaimsVersion
+		}
+		if err := checkNamingRecordCapacity(record, selected); err != nil {
+			return local.AuthorityChange{}, err
+		}
 		record.Claims = append(record.Claims, selected)
 		data, err := canonicalState(record)
 		return local.AuthorityChange{Data: data, Result: json.RawMessage(`{"status":"preparing"}`)}, err
@@ -321,6 +347,9 @@ func (e *Engine) updateNamedClaim(ctx context.Context, before, after WorktreeCla
 	if err != nil {
 		return before, err
 	}
+	if len(payload) > local.MaxCommandBytes {
+		return before, fault("project_worktree_snapshot_too_large", "serialized claim phase command exceeds authority budget")
+	}
 	result, err := e.Store.ApplyAuthority(ctx, local.AuthorityCommand{ID: derivedID("command", before.ID, strconv.Itoa(before.Naming.Ordinal), after.Naming.Phase, strconv.Itoa(after.Naming.Ordinal)), Actor: e.owner, Key: AuthorityClaimsKey, Payload: payload}, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		record, err := e.decodeClaims(s)
 		if err != nil {
@@ -330,7 +359,7 @@ func (e *Engine) updateNamedClaim(ctx context.Context, before, after WorktreeCla
 			if current.ID != before.ID {
 				continue
 			}
-			if current.Status != "preparing" || current.Generation != before.Generation || current.Naming == nil || *current.Naming != *before.Naming {
+			if current.Status != "preparing" || current.Generation != before.Generation || current.Naming == nil || *current.Naming != *before.Naming || !EqualWorktreeNamingSnapshot(current.NamingSnapshot, before.NamingSnapshot) || !EqualWorktreeNamingSnapshot(before.NamingSnapshot, after.NamingSnapshot) {
 				return local.AuthorityChange{}, fault("claim_generation_conflict", "preparation changed before phase commit")
 			}
 			for _, other := range record.Claims {
@@ -450,7 +479,7 @@ func (e *Engine) prepareNamedWorktree(ctx context.Context, claim WorktreeClaim) 
 			if err != nil {
 				return claim, err
 			}
-			after, err := allocateWorktreeName(record, claim, WorktreeNamingRequest{Base: claim.Naming.Base, Policy: claim.Naming.Policy}, busy, claim.Naming.Ordinal)
+			after, err := allocateWorktreeName(record, claim, WorktreeNamingRequest{Base: claim.Naming.Base, Policy: claim.Naming.Policy, Snapshot: claim.NamingSnapshot}, busy, claim.Naming.Ordinal)
 			if err != nil {
 				return claim, err
 			}

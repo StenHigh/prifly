@@ -83,6 +83,7 @@ def check(args, generator):
 		("questions", ["--questions"], ("internal/runtime/questions.schema.json", "schemas/core/questions.schema.json")),
 		("resources", ["--resources"], ("internal/runtime/resources.schema.json", "schemas/core/resources.schema.json")),
 		("live-output", ["--live-output"], ("internal/runtime/live-output.schema.json", "schemas/core/live-output.schema.json")),
+        ("project-owned-naming", ["--project-owned-naming"], ("internal/runtime/project-owned-naming.schema.json", "schemas/core/project-owned-naming.schema.json")),
         ("worktree-naming", ["--worktree-naming"], ("internal/runtime/worktree-naming.schema.json", "schemas/core/worktree-naming.schema.json")),
         ("workflow-composition", ["--workflow-composition"], ("internal/runtime/workflow-composition.schema.json", "schemas/core/workflow-composition.schema.json")),
         ("workflow-composition-points", ["--workflow-composition-points"], ("internal/runtime/workflow-composition-points.schema.json", "schemas/core/workflow-composition-points.schema.json")),

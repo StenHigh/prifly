@@ -89,3 +89,8 @@ Root выбирает extension `/5` либо folder `/3` явно. Провер
 export и изоляцию compiled variants. Старый `/4` остаётся на прежнем пути.
 Группа в точке с consumers получает отказ; explicit typed Call передаёт carrier.
 Source candidate и опубликованный replay имеют отдельное evidence.
+
+Project naming input — отдельное типизированное value потребителя для имени worktree.
+Используй profile `/5` и `--naming-input`; не расширяй task schema upstream ради naming.
+Snapshot до 128 KiB сохраняется в claim `/5`; workflow inputs остаются независимыми.
+Продолжение использует сохранённый snapshot. Summary/start `/8` показывает новые данные.

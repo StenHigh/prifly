@@ -4,11 +4,11 @@
 
 Questionnaire SHALL показывать объявления naming inputs отдельно от inputs workflow и обозначать применимость к созданию worktree. `project questionnaire --prepare` и `project start` SHALL принимать повторяемый `--naming-input NAME=FILE`. Значения MUST быть JSON, проходить объявленную schema и поступать из явно названного файла. Повтор одного NAME и неизвестный NAME MUST отказываться. Неявные значения из task, environment или queue MUST NOT подставляться.
 
-Prepare SHALL показывать naming declaration, schema paths/digests, полные JSON values с canonical digests, sources, bindings и разрешённую основу. `review_digest` MUST закреплять полные canonical values, schemas и declaration, включая поля вне выбранных pointers. Start MUST перечитывать файлы и проверять тот же snapshot до preflight program, claim, import, Run и dispatch. Валидное изменение snapshot после prepare SHALL давать `project_start_stale_launch`; malformed/invalid inputs SHALL давать предметный typed отказ до effects.
+Prepare SHALL показывать naming declaration, schema paths/digests, полные JSON values с canonical digests, sources, bindings и разрешённую основу. `review_digest` MUST закреплять полные canonical values, schemas и declaration, включая поля вне выбранных pointers. Start MUST перечитывать файлы и проверять тот же snapshot до preflight program, queue reservation/dispatch, claim, import и Run. Валидное изменение snapshot после prepare SHALL давать `project_start_stale_launch`; malformed/invalid inputs SHALL давать предметный typed отказ до effects.
 
 Prepare MUST оставаться read-only. Candidate availability SHALL сохраняться вне review digest. Конкурентный allocation SHALL использовать существующий bounded suffix policy. Start result SHALL показывать фактические path/branch и принятый naming snapshot.
 
-Missing/invalid schema или value SHALL называть naming input и schema field/pointer без маскировки под workflow input. `--input` и `--input-ref` SHALL сохранять прежнее назначение. Первая редакция MUST NOT вводить `--naming-input-ref` или автоматическую загрузку metadata.
+Missing/invalid schema или value SHALL называть naming input и schema field/pointer без маскировки под workflow input. Snapshot свыше 128 KiB canonical UTF-8 JSON SHALL давать `project_worktree_snapshot_too_large` до effects; prepare и author reference SHALL показывать общий предел. `--input` и `--input-ref` SHALL сохранять прежнее назначение. Первая редакция MUST NOT вводить `--naming-input-ref` или автоматическую загрузку metadata.
 
 Source set остаётся `openspec/specs/cli-protocol/spec.md`; ownership не переносится. Новые поля выдаются только в новых closed output versions.
 
@@ -23,6 +23,10 @@ Source set остаётся `openspec/specs/cli-protocol/spec.md`; ownership н�
 #### Scenario: The naming schema changes after prepare
 - **WHEN** project-owned schema изменилась при прежних допустимых values и старом review digest
 - **THEN** start возвращает `project_start_stale_launch` до создания worktree или Run
+
+#### Scenario: Snapshot exceeds its aggregate limit
+- **WHEN** полное canonical JSON представление snapshot занимает 131073 bytes при допустимых отдельных schemas и values
+- **THEN** prepare/start возвращает `project_worktree_snapshot_too_large` до preflight, queue reservation, claim, import или Run
 
 #### Scenario: Prepare leaves authority untouched
 - **WHEN** caller готовит запуск с naming inputs

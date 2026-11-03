@@ -2,7 +2,7 @@
 
 ### Requirement: Project-owned naming inputs have additive closed versions
 
-Новые declarations SHALL публиковаться в `prifly-project-profile/5`, questionnaire fields — в `project-questionnaire/5`, review/result — в `project-launch-summary/8` и `project-start/8`. Persisted naming snapshot SHALL использовать `authority-claims/5` и новую closed claims read форму. Изменения nested claim views, continuation/recovery outputs и DTO MUST сопровождаться новыми closed versions во всех местах, где появляются новые поля.
+Новые declarations SHALL публиковаться в `prifly-project-profile/5`, questionnaire fields — в `project-questionnaire/5`, review/result — в `project-launch-summary/8` и `project-start/8`. Persisted naming snapshot SHALL использовать `authority-claims/5` и новую closed claims read форму. Его версия SHALL закреплять общий canonical UTF-8 JSON limit 128 KiB; новые author/CLI references MUST публиковать предел и typed overflow refusal. Это MUST NOT повышать существующие command/result/storage ceilings. Изменения nested claim views, continuation/recovery outputs и DTO MUST сопровождаться новыми closed versions во всех местах, где появляются новые поля.
 
 Новые формы SHALL поддерживать совместное использование queue association и unified composition. Старые schemas, profiles `/2`–`/4`, Project DTO и claim contracts MUST сохранять bytes и meaning. Fresh init MUST NOT автоматически переводить existing profile на `/5`. Пути без новых данных SHALL сохранять прежний применимый wire version; source claim со snapshot SHALL выбирать новую форму даже после удаления policy.
 

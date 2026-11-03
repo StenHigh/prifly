@@ -93,7 +93,7 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if field.PkgPath != "" {
 						continue
 					}
-					if worktreeNamingField(t, field.Name) || t == reflect.TypeFor[projectwire.LaunchSummary]() && field.Name == "Composition" {
+					if ownedNamingField(t, field.Name) || worktreeNamingField(t, field.Name) || t == reflect.TypeFor[projectwire.LaunchSummary]() && field.Name == "Composition" {
 						continue
 					}
 					// Skip before recursion: removing the property afterwards would
@@ -378,6 +378,7 @@ var documentContracts = []struct {
 	build             func() ([]byte, error)
 }{
 	{"light", "generate read-only Light contracts", lightSchema},
+	{"project-owned-naming", "generate project-owned naming inputs contracts", projectOwnedNamingSchema},
 	{"worktree-naming", "generate opt-in Project worktree naming contracts", worktreeNamingSchema},
 	{"workflow-composition", "generate opt-in workflow composition contracts", workflowCompositionSchema},
 	{"workflow-composition-points", "generate unified composition and points contracts", workflowCompositionPointsSchema},

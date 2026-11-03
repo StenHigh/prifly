@@ -8,7 +8,7 @@ Issue [#19](https://github.com/StenHigh/prifly/issues/19) обнаружил о�
 - Передавать значения отдельным `--naming-input NAME=FILE`. Существующий `--input` сохраняет назначение входов workflow.
 - Добавить binding `naming_input` с JSON Pointer. Существующие `value` и `input` сохраняют значение.
 - Показывать схемы, значения и источники naming inputs в questionnaire/prepare. Закреплять их digests в reviewed launch до claim effects.
-- Сохранять исходные naming inputs вместе с metadata claim. Continue/resume используют сохранённые данные без новых defaults.
+- Сохранять исходные naming inputs вместе с metadata claim. Полный canonical snapshot ограничен 128 KiB; Continue/resume используют сохранённые данные без новых defaults.
 - Добавить executable пример install/update/prepare/start и native probe без LLM. Проверку на released Core учитывать отдельно от source tests.
 
 Изменение затрагивает продукт: Project CLI, profile reader, review и metadata claim. Native workflow operators и task schemas остаются прежними.

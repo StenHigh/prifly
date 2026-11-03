@@ -174,6 +174,9 @@ var recoveryPublicContracts []byte
 // publicBundles is the ordered set PublicSchema searches. Listing and lookup
 // read the same set, so a listed name always resolves.
 //
+//go:embed project-owned-naming.schema.json
+var projectOwnedNamingContracts []byte
+
 //go:embed worktree-naming.schema.json
 var worktreeNamingContracts []byte
 
@@ -187,7 +190,7 @@ var workflowCompositionPointsContracts []byte
 var lightContracts []byte
 
 func publicBundles() [][]byte {
-	return append(historicalPublicBundles(), workflowCompositionContracts, workflowCompositionPointsContracts)
+	return append(historicalPublicBundles(), workflowCompositionContracts, workflowCompositionPointsContracts, projectOwnedNamingContracts)
 }
 
 func historicalPublicBundles() [][]byte {

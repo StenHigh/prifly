@@ -20,9 +20,10 @@ import (
 
 const projectVariantProfileVersion = "prifly-project-profile/3"
 const projectNamingProfileVersion = "prifly-project-profile/4"
+const projectOwnedNamingProfileVersion = "prifly-project-profile/5"
 
 func projectNeutralProfile(version string) bool {
-	return version == projectVariantProfileVersion || version == projectNamingProfileVersion
+	return version == projectVariantProfileVersion || version == projectNamingProfileVersion || version == projectOwnedNamingProfileVersion
 }
 
 const projectBuildFile = "build-provenance.json"

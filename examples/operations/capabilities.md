@@ -89,6 +89,7 @@ Capability без public handler описывается как contract boundary
 | `next_handoff` | [Процедура](recovery.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `workflow_continuation` | [Процедура](recovery.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `project_worktree_naming` | [Процедура](workspace.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
+| `project_owned_naming_inputs` | [Процедура](launch.md) | [Author reference](../authoring/project-profile-authoring-reference.yaml) |
 | `workflow_resume` | [Процедура](recovery.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `next_awaiting_host` | [Процедура](hosting.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `program_external_write` | [Процедура](authoring.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |

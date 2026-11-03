@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/flow"
+	"github.com/stenhigh/prifly/internal/projectwire"
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
@@ -1070,29 +1071,8 @@ type projectLaunchInput struct {
 	Configured  bool   `json:"-"`
 }
 
-type projectQuestionnaireProfile struct {
-	ID      string `json:"id"`
-	Default bool   `json:"default"`
-}
-
-// projectQuestionnaire is a read-only preflight description. Its decisions
-// remain source declarations until project start seals an exact Run choice.
-type projectQuestionnaire struct {
-	ProjectProfileVersion string                        `json:"project_profile_version"`
-	SchemaVersion         string                        `json:"schema_version"`
-	Repository            string                        `json:"repository"`
-	Package               flow.Ref                      `json:"package"`
-	Profiles              []projectQuestionnaireProfile `json:"profiles"`
-	Preflight             []prifly.DecisionDefinition   `json:"preflight"`
-	CatalogDigest         string                        `json:"catalog_digest"`
-	Runtime               []prifly.DecisionDefinition   `json:"runtime"`
-	DecisionSheet         prifly.DecisionSheet          `json:"decision_sheet"`
-	DecisionStates        []projectDecisionState        `json:"decision_states"`
-	KnownQuestionsOnly    bool                          `json:"known_questions_only"`
-	// Workspace is the launch's standing worktree-or-checkout choice when the
-	// profile declares one, so a host reads it here instead of asking.
-	Workspace string `json:"workspace,omitempty"`
-}
+type projectQuestionnaireProfile = projectwire.QuestionnaireProfile
+type projectQuestionnaire = projectwire.Questionnaire
 
 func (c *cli) projectCommand(ctx context.Context, args []string) error {
 	if len(args) == 0 {
@@ -1379,6 +1359,13 @@ func (c *cli) projectQuestionnaire(ctx context.Context, args []string) error {
 	result := projectQuestionnaire{SchemaVersion: "project-questionnaire/4", Repository: root, Package: flow.Ref{ID: source.ID, Version: source.Version}, Profiles: profiles, Preflight: []prifly.DecisionDefinition{}, Runtime: []prifly.DecisionDefinition{}, CatalogDigest: selection.Sheet.CatalogDigest, DecisionSheet: selection.Sheet, DecisionStates: projectDecisionStates(selection), KnownQuestionsOnly: true}
 	if *launchID != "" {
 		result.Workspace = profile.Launches[*launchID].Workspace
+	}
+	if profile.SchemaVersion == projectOwnedNamingProfileVersion && profile.WorktreeNaming.owned() {
+		result.SchemaVersion = "project-questionnaire/5"
+		result.NamingInputs = map[string]projectwire.NamingInputRequirement{}
+		for name, input := range profile.WorktreeNaming.Inputs {
+			result.NamingInputs[name] = projectwire.NamingInputRequirement{SchemaPath: input.Schema, RequiredWhen: "git_workspace_worktree"}
+		}
 	}
 	result.ProjectProfileVersion = profile.SchemaVersion
 	for index, state := range result.DecisionStates {
@@ -2361,13 +2348,13 @@ func readProjectProfile(root string) (projectProfile, error) {
 	}
 	schema, _ := object["schema_version"].(string)
 	if schema != "prifly-project-profile/2" && !projectNeutralProfile(schema) {
-		return projectProfile{}, refusal("project_profile_invalid", "schema_version must be prifly-project-profile/2, /3 or /4")
+		return projectProfile{}, refusal("project_profile_invalid", "schema_version must be prifly-project-profile/2, /3, /4 or /5")
 	}
 	for key := range object {
 		switch key {
 		case "schema_version", "title", "hosts", "packages", "launches":
 		case "worktree_naming":
-			if schema != projectNamingProfileVersion {
+			if schema != projectNamingProfileVersion && schema != projectOwnedNamingProfileVersion {
 				return projectProfile{}, refusal("project_profile_invalid", "worktree_naming requires explicit prifly-project-profile/4")
 			}
 		default:
@@ -2391,7 +2378,26 @@ func readProjectProfile(root string) (projectProfile, error) {
 		profile.Title = strings.TrimSpace(title)
 	}
 	if raw, present := object["worktree_naming"]; present {
+		if schema != projectOwnedNamingProfileVersion {
+			if object, ok := raw.(map[string]any); ok {
+				if _, present := object["inputs"]; present {
+					return projectProfile{}, refusal("project_profile_invalid", "naming inputs require prifly-project-profile/5")
+				}
+				if bindings, ok := object["bindings"].(map[string]any); ok {
+					for _, rawBinding := range bindings {
+						if binding, ok := rawBinding.(map[string]any); ok {
+							if _, present := binding["naming_input"]; present {
+								return projectProfile{}, refusal("project_profile_invalid", "naming_input requires prifly-project-profile/5")
+							}
+						}
+					}
+				}
+			}
+		}
 		profile.WorktreeNaming, err = projectParseWorktreeNaming(raw)
+		if err == nil && schema != projectOwnedNamingProfileVersion && profile.WorktreeNaming.owned() {
+			return projectProfile{}, refusal("project_profile_invalid", "separate naming inputs require prifly-project-profile/5")
+		}
 		if err != nil {
 			return projectProfile{}, err
 		}

@@ -69,14 +69,15 @@ type LaunchSummary struct {
 }
 
 type WorktreeNamingReview struct {
-	Template      string                     `json:"template"`
-	Bindings      map[string]json.RawMessage `json:"bindings"`
-	Values        map[string]string          `json:"values"`
-	Base          string                     `json:"base"`
-	Root          string                     `json:"root"`
-	BranchPrefix  string                     `json:"branch_prefix"`
-	Policy        string                     `json:"policy"`
-	MaxCandidates int                        `json:"max_candidates"`
+	Snapshot      *prifly.WorktreeNamingSnapshot `json:"snapshot,omitempty"`
+	Template      string                         `json:"template"`
+	Bindings      map[string]json.RawMessage     `json:"bindings"`
+	Values        map[string]string              `json:"values"`
+	Base          string                         `json:"base"`
+	Root          string                         `json:"root"`
+	BranchPrefix  string                         `json:"branch_prefix"`
+	Policy        string                         `json:"policy"`
+	MaxCandidates int                            `json:"max_candidates"`
 }
 
 type AdmissionPreview struct {
@@ -169,4 +170,35 @@ type QueueCommand struct {
 	Operation     string          `json:"operation"`
 	Duplicate     bool            `json:"duplicate"`
 	Result        json.RawMessage `json:"result"`
+}
+
+// NamingInputRequirement is conditional on a workflow needing a Git worktree.
+type NamingInputRequirement struct {
+	SchemaPath   string `json:"schema_path"`
+	RequiredWhen string `json:"required_when"`
+}
+
+type QuestionnaireProfile struct {
+	ID      string `json:"id"`
+	Default bool   `json:"default"`
+}
+
+// projectQuestionnaire is a read-only preflight description. Its decisions
+// remain source declarations until project start seals an exact Run choice.
+type Questionnaire struct {
+	NamingInputs          map[string]NamingInputRequirement `json:"naming_inputs,omitempty"`
+	ProjectProfileVersion string                            `json:"project_profile_version"`
+	SchemaVersion         string                            `json:"schema_version"`
+	Repository            string                            `json:"repository"`
+	Package               flow.Ref                          `json:"package"`
+	Profiles              []QuestionnaireProfile            `json:"profiles"`
+	Preflight             []prifly.DecisionDefinition       `json:"preflight"`
+	CatalogDigest         string                            `json:"catalog_digest"`
+	Runtime               []prifly.DecisionDefinition       `json:"runtime"`
+	DecisionSheet         prifly.DecisionSheet              `json:"decision_sheet"`
+	DecisionStates        []DecisionState                   `json:"decision_states"`
+	KnownQuestionsOnly    bool                              `json:"known_questions_only"`
+	// Workspace is the launch's standing worktree-or-checkout choice when the
+	// profile declares one, so a host reads it here instead of asking.
+	Workspace string `json:"workspace,omitempty"`
 }

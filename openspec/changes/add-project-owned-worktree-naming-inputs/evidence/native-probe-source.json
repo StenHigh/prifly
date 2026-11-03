@@ -1,0 +1,770 @@
+{
+  "binary": "/tmp/prifly-issue19-fl8egp1o/prifly-candidate",
+  "binary_digest": "sha256:43577cc3db733e76597ed921567a488f640bfbf2f0ea3251d810e0cce96c6919",
+  "released_acceptance": false,
+  "generic": {
+    "upstream": {
+      "project.yaml": "sha256:8d6d6cb89ff2450812fa88183c1092fea70301224347bf1e018fc4aa5f60c114",
+      "workflow.yaml": "sha256:3119b0b5f1d2e9a630476714dc2bb96d735135407b37a2b9ad39f84b1fffd4db",
+      "README.md": "sha256:cbc035b86bbbcb967c8cb8b4e777403a6f2e80db71c655f4807d2f91f5b8127c",
+      "task.json": "sha256:b9cf29bf6efe98b891048c30ca4e9aa1c1dc48dedbcccdccac3f783cf2063e02",
+      "steps/work.yaml": "sha256:1d5ae39a3bd62f24eeb5cb4937db71ef822094bbded42e0fadac31ce7cb50228",
+      "schemas/task.yaml": "sha256:53d52dd53d231e2f7f334d8a44d119bc6b51f5bef3643a0c9c759bc1e5537332",
+      "contexts/work.yaml": "sha256:a21fc02673714e14205b82e26522d5655dd983a70ad610e5ae2cd476e1497bb0"
+    },
+    "claim": ".prifly/work/claims/demo-tracker-issue-19",
+    "resumed_claim": ".prifly/work/claims/demo-tracker-issue-19",
+    "snapshot_preserved": true,
+    "commands": [
+      {
+        "arguments": [
+          "project",
+          "init",
+          "--repository",
+          "/tmp/prifly-naming-19-t6ns_gyu/repository",
+          "--state-root",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "--host",
+          "codex-cli"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "claim",
+          "list"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "questionnaire",
+          "--prepare",
+          "--repository",
+          "/tmp/prifly-naming-19-t6ns_gyu/repository",
+          "--launch",
+          "named",
+          "--host",
+          "codex-cli",
+          "--workspace",
+          "worktree",
+          "--input",
+          "task=/tmp/prifly-naming-19-t6ns_gyu/repository/task.json"
+        ],
+        "exit": 2
+      },
+      {
+        "arguments": [
+          "project",
+          "questionnaire",
+          "--prepare",
+          "--repository",
+          "/tmp/prifly-naming-19-t6ns_gyu/repository",
+          "--launch",
+          "named",
+          "--host",
+          "codex-cli",
+          "--workspace",
+          "worktree",
+          "--input",
+          "task=/tmp/prifly-naming-19-t6ns_gyu/repository/task.json",
+          "--naming-input",
+          "identity=/tmp/prifly-naming-19-t6ns_gyu/repository/identity.json"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "start",
+          "--repository",
+          "/tmp/prifly-naming-19-t6ns_gyu/repository",
+          "--launch",
+          "named",
+          "--host",
+          "codex-cli",
+          "--workspace",
+          "worktree",
+          "--input",
+          "task=/tmp/prifly-naming-19-t6ns_gyu/repository/task.json",
+          "--naming-input",
+          "identity=/tmp/prifly-naming-19-t6ns_gyu/repository/identity.json",
+          "--expected-launch-digest",
+          "sha256:a9ec3237041f590b4ec24eaf9d5594a6b94630caa1e1d49e18feed5fb9c4a70c"
+        ],
+        "exit": 2
+      },
+      {
+        "arguments": [
+          "project",
+          "questionnaire",
+          "--prepare",
+          "--repository",
+          "/tmp/prifly-naming-19-t6ns_gyu/repository",
+          "--launch",
+          "named",
+          "--host",
+          "codex-cli",
+          "--workspace",
+          "worktree",
+          "--input",
+          "task=/tmp/prifly-naming-19-t6ns_gyu/repository/task.json",
+          "--naming-input",
+          "identity=/tmp/prifly-naming-19-t6ns_gyu/repository/identity.json"
+        ],
+        "exit": 2
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "claim",
+          "list"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "questionnaire",
+          "--prepare",
+          "--repository",
+          "/tmp/prifly-naming-19-t6ns_gyu/repository",
+          "--launch",
+          "named",
+          "--host",
+          "codex-cli",
+          "--workspace",
+          "worktree",
+          "--input",
+          "task=/tmp/prifly-naming-19-t6ns_gyu/repository/task.json",
+          "--naming-input",
+          "identity=/tmp/prifly-naming-19-t6ns_gyu/repository/identity.json"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "start",
+          "--repository",
+          "/tmp/prifly-naming-19-t6ns_gyu/repository",
+          "--launch",
+          "named",
+          "--host",
+          "codex-cli",
+          "--workspace",
+          "worktree",
+          "--input",
+          "task=/tmp/prifly-naming-19-t6ns_gyu/repository/task.json",
+          "--naming-input",
+          "identity=/tmp/prifly-naming-19-t6ns_gyu/repository/identity.json",
+          "--expected-launch-digest",
+          "sha256:a9ec3237041f590b4ec24eaf9d5594a6b94630caa1e1d49e18feed5fb9c4a70c",
+          "--command-id",
+          "probe:start"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "session",
+          "task",
+          "--run",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "session",
+          "take",
+          "--run",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5",
+          "--attempt",
+          "attempt:e4965f8eef64e8c6ead72a2d13f0f790"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "session",
+          "submit",
+          "--file",
+          "/tmp/prifly-naming-19-t6ns_gyu/submission.json"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "run",
+          "next",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "run",
+          "drive",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "session",
+          "task",
+          "--run",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "session",
+          "take",
+          "--run",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5",
+          "--attempt",
+          "attempt:5cdde6abe4d2954a9bd2bc0e8413ff83"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "session",
+          "submit",
+          "--file",
+          "/tmp/prifly-naming-19-t6ns_gyu/submission.json"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "run",
+          "next",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "run",
+          "drive",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "continue",
+          "--prepare",
+          "--repository",
+          "/tmp/prifly-naming-19-t6ns_gyu/repository",
+          "--launch",
+          "named",
+          "--host",
+          "codex-cli",
+          "--source-run",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "continue",
+          "--repository",
+          "/tmp/prifly-naming-19-t6ns_gyu/repository",
+          "--launch",
+          "named",
+          "--host",
+          "codex-cli",
+          "--source-run",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5",
+          "--expected-launch-digest",
+          "sha256:f95820091801045586cde316d1a944f4a99b7f74c0c53311d25f043d69ee4c38",
+          "--command-id",
+          "probe:resume"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "session",
+          "task",
+          "--run",
+          "run:07212aebacac0abb3e386c887a2e24a76c503c2468062d695f9e60668bf34e30"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "session",
+          "take",
+          "--run",
+          "run:07212aebacac0abb3e386c887a2e24a76c503c2468062d695f9e60668bf34e30",
+          "--attempt",
+          "attempt:9123fe90cb2b77a569e897ac709412b0"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "session",
+          "submit",
+          "--file",
+          "/tmp/prifly-naming-19-t6ns_gyu/submission.json"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "run",
+          "next",
+          "run:07212aebacac0abb3e386c887a2e24a76c503c2468062d695f9e60668bf34e30"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "run",
+          "drive",
+          "run:07212aebacac0abb3e386c887a2e24a76c503c2468062d695f9e60668bf34e30"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "run",
+          "status",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "run",
+          "status",
+          "run:07212aebacac0abb3e386c887a2e24a76c503c2468062d695f9e60668bf34e30"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "claim",
+          "list"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-t6ns_gyu/authority",
+          "claim",
+          "release",
+          "--id",
+          "claim:3b52772fdf0f6f179a2fe8d61552d6475db68db58f25450fef3b96e061a1778d",
+          "--generation",
+          "2",
+          "--command-id",
+          "cleanup:claim:3b52772fdf0f6f179a2fe8d61552d6475db68db58f25450fef3b96e061a1778d"
+        ],
+        "exit": 0
+      }
+    ]
+  },
+  "official": {
+    "dependency": {
+      "package": {
+        "digest": "sha256:36c5f25d2bebb8c5cd9d77967ec5a2c8f2d6cec71f04b0b864c339bd8ef8eb6d",
+        "id": "aif:package/composition-contracts",
+        "version": "1.2.0"
+      },
+      "receipt": {
+        "duplicate": false,
+        "receipt": {
+          "command_id": "command:1dcdc3780498ac315f8528370d5c6abc",
+          "actor": "local:uid:1001",
+          "key": "packages",
+          "request_digest": "sha256:03e486a6737b1be4a30c8d51f294d059d2f243f28ac5c32166bf9c996a50ddd5",
+          "version": 2,
+          "cut": 4,
+          "result": {
+            "admitted_at": "2026-11-03T00:43:15.814804137Z",
+            "approval_refs": [],
+            "command_id": "command:1dcdc3780498ac315f8528370d5c6abc",
+            "control_epoch": 0,
+            "id": "control-admission:c42c91194698fefd7ddb5ef89ac918a3f190fb22653cf13152b5423e977f1e8e",
+            "intent_digest": "sha256:1b817902d28ef5f50919296e1d677a5f804e1671d5f1a3cbe51d2ff44ff5f50d",
+            "schema_version": "1",
+            "scope": "project",
+            "scope_id": "project:94890d2af311640b2bd24049d8f47a03"
+          }
+        },
+        "schema_version": "foundation-control-command/1"
+      }
+    },
+    "source_commit": "ee76702dec0d8e0958ef068ef58074ecf2db37e9",
+    "install": {
+      "schema_version": "project-workflow-add/1",
+      "repository": "/tmp/prifly-naming-19-xw6ymizm/repository",
+      "name": "aif-classic",
+      "folder": ".prifly/workflows/aif-classic",
+      "package": {
+        "id": "aif:package/classic",
+        "version": "2.0.0",
+        "title": "AI Factory classic development workflow",
+        "description": "Canonical AI Factory development workflow with bounded plan improvement.",
+        "requires_core_protocol": "1",
+        "references": {
+          "assisted_adapter": "core:adapter/assisted-session@1.0.0",
+          "contract_schema_challenge-findings": "aif:schema/challenge-findings@1.0.0",
+          "contract_schema_continue": "aif:schema/continue@1.0.0",
+          "contract_schema_feature-enabled": "aif:schema/feature-enabled@1.0.0",
+          "contract_schema_gate-result": "aif:schema/gate-result@1.2.0",
+          "contract_schema_implementation": "aif:schema/implementation@1.2.0",
+          "contract_schema_round-limit": "aif:schema/round-limit@1.1.0",
+          "contract_schema_task": "aif:schema/task@1.1.0",
+          "contract_schema_warmup-handoff": "aif:schema/warmup-handoff@1.0.0",
+          "local_policy": "core:policy/local@4.0.0",
+          "step_result_schema": "core:schema/step-result@1.0.0",
+          "step_result_schema_v2": "core:schema/step-result@2.0.0",
+          "workspace_tree_manifest": "core:schema/workspace-tree-manifest@1.0.0"
+        }
+      },
+      "origin": {
+        "repository": "https://github.com/StenHigh/prifly-aif-workflows.git",
+        "path": "aif-classic",
+        "ref": "v1.57.0",
+        "commit": "ee76702dec0d8e0958ef068ef58074ecf2db37e9",
+        "digest": "sha256:e4da845ad76594b5b0e633280783725db6dd24b04b07d927182374d5f6cedd3e",
+        "extend_digest": "sha256:1617df193b233b080e54403b5a90945e50f51b49cbb56bc80875a9eb0cd70455"
+      },
+      "launch": "aif-classic",
+      "next": [
+        "Review .prifly/workflows/aif-classic and commit the .prifly changes; nothing was sealed, imported or executed.",
+        "Run prifly project compile --repository DIR --package aif-classic --host HOST --output DIR to check it against this repository's host skills.",
+        "Trust is decided only when project start seals and imports the package."
+      ]
+    },
+    "update": {
+      "schema_version": "project-workflow-update/1",
+      "repository": "/tmp/prifly-naming-19-xw6ymizm/repository",
+      "name": "aif-classic",
+      "folder": ".prifly/workflows/aif-classic",
+      "up_to_date": true,
+      "previous": {
+        "commit": "ee76702dec0d8e0958ef068ef58074ecf2db37e9",
+        "digest": "sha256:e4da845ad76594b5b0e633280783725db6dd24b04b07d927182374d5f6cedd3e"
+      },
+      "current": {
+        "commit": "ee76702dec0d8e0958ef068ef58074ecf2db37e9",
+        "digest": "sha256:e4da845ad76594b5b0e633280783725db6dd24b04b07d927182374d5f6cedd3e"
+      },
+      "origin": {
+        "repository": "https://github.com/StenHigh/prifly-aif-workflows.git",
+        "path": "aif-classic",
+        "ref": "v1.57.0",
+        "commit": "ee76702dec0d8e0958ef068ef58074ecf2db37e9",
+        "digest": "sha256:e4da845ad76594b5b0e633280783725db6dd24b04b07d927182374d5f6cedd3e",
+        "extend_digest": "sha256:1617df193b233b080e54403b5a90945e50f51b49cbb56bc80875a9eb0cd70455"
+      },
+      "package": {
+        "id": "aif:package/classic",
+        "version": "2.0.0",
+        "title": "AI Factory classic development workflow",
+        "description": "Canonical AI Factory development workflow with bounded plan improvement.",
+        "requires_core_protocol": "1",
+        "references": {
+          "assisted_adapter": "core:adapter/assisted-session@1.0.0",
+          "contract_schema_challenge-findings": "aif:schema/challenge-findings@1.0.0",
+          "contract_schema_continue": "aif:schema/continue@1.0.0",
+          "contract_schema_feature-enabled": "aif:schema/feature-enabled@1.0.0",
+          "contract_schema_gate-result": "aif:schema/gate-result@1.2.0",
+          "contract_schema_implementation": "aif:schema/implementation@1.2.0",
+          "contract_schema_round-limit": "aif:schema/round-limit@1.1.0",
+          "contract_schema_task": "aif:schema/task@1.1.0",
+          "contract_schema_warmup-handoff": "aif:schema/warmup-handoff@1.0.0",
+          "local_policy": "core:policy/local@4.0.0",
+          "step_result_schema": "core:schema/step-result@1.0.0",
+          "step_result_schema_v2": "core:schema/step-result@2.0.0",
+          "workspace_tree_manifest": "core:schema/workspace-tree-manifest@1.0.0"
+        }
+      },
+      "extend_upstream_changed": false,
+      "package_version_unchanged": false
+    },
+    "upstream": {
+      "workflow.yaml": "sha256:c5e55836452e125ade644a857062de788c2e8b58edc8d7d120d7e514799cc556",
+      "README.md": "sha256:4fd61b9da96f8050b2a2f53ae24f55bb020b98d563370b5396c4a423a4123edd",
+      "extension-points.yaml": "sha256:b3c1e9d5341d7bbc5485748017232d2eadceecdf5b49aee168511b2373995473",
+      "steps/review-challenge.yaml": "sha256:7e7f44b5c00220d40ffe5ebebfc278f28935a6098f2265b83bd7d1a3eaa212e1",
+      "steps/warmup.yaml": "sha256:b54acc28f77c94dfb4933ce0010fcc4040ccee081441c4b4d47eca9759215693",
+      "steps/security.yaml": "sha256:9c9899b6d393139719371c512d9a1e6afe0ab837adf332620413a7050413263b",
+      "steps/improve.yaml": "sha256:c2a41e3e49b34e49768c5bacca1ee74ae1c2b38e5f5ad69b1fa345f3a602ccfb",
+      "steps/verify.yaml": "sha256:509887404f90fcc2a0ecbe476178ed0dc0d4744ec681ff8a98b5c2404c1fdc96",
+      "steps/implement.yaml": "sha256:571560aa9c0c5b68529b75695c0524f29041f278c527d8b88dbc5bd51bf29794",
+      "steps/commit.yaml": "sha256:144b4f151102f45e08fec148edf466018e725b2ef0909c6dec5d31e00ecb99de",
+      "steps/fix.yaml": "sha256:2090f0c345a3da00e94ebf599c7dcd5d703022f2453384bfe8d5ea1b489d7479",
+      "steps/review.yaml": "sha256:42f055b6b15d4cafdaf50c97edef4f4cad7c43d6468d661bffe11431e13ccce6",
+      "steps/plan.yaml": "sha256:ef9662ee5f273be66ff641609901ba91c6ab36d76842ca30d164af35a22d02af",
+      "steps/continue-improve.yaml": "sha256:32a1eee386fe5b8dd249446240b9244e1eb270ccae9401b91bee2350e4a17b7b",
+      "workflows/verify-batch.yaml": "sha256:a376e8897991e1b54954bfd634df3f59637422d9d3b137323337235b64fda314",
+      "workflows/improve-series.yaml": "sha256:36e42d77667ca1ecea705ba629c078d1cf9763f55f53168f7315356f26ae0ecf",
+      "workflows/improve-or-pass.yaml": "sha256:d3bfd0df4c57283171fe60913c57b59b55ad60e95ee578a56306e565738ae062",
+      "workflows/improve-once.yaml": "sha256:0f57324ac8a959be2a877cd10beeebe4b0be0634b9bf630737b62e546f647540",
+      "workflows/improve-batch.yaml": "sha256:4049657860d592760e9df533718b0fecca4b14539204df16b84321a153105138",
+      "workflows/review-once.yaml": "sha256:7b2c759035805973fe84e0d05e4c3777002f110d199b7b6bbef4b6b5e05bf2ae",
+      "workflows/review-batch.yaml": "sha256:7fba6af1de42e87d5dfcfc8a372e7ed6891e73d8f3c2d8e1770e63539d619df5",
+      "workflows/verify-once.yaml": "sha256:77cf068a7bf66235954aece9540f27e3662004e9bbff6c76769afef27c4fa546",
+      "instructions/aif-verify-bridge.md": "sha256:84d5042917144d42e304759a9be6c1188990d9eadb10fc2d0b57e61a84abf061",
+      "schemas/gate-result.yaml": "sha256:cc4df6b79b230b3b73fcd4c44e4a9a78617b033fc13b2f47d730871a10269795",
+      "schemas/implementation.yaml": "sha256:54505dbc84b71f7877ca277fd0525360ef56f8cda1edb07b6ef0bfc302b095a2",
+      "schemas/warmup-handoff.yaml": "sha256:0b61ec978ff8dd481742cb03fb15b45ae22e8275cbbe76b3559768fef9a90fad",
+      "schemas/round-limit.yaml": "sha256:0ae70898492967329cbe8709a3e910634e4d04b96cfcd9879fa7c2dca3e342ed",
+      "schemas/continue.yaml": "sha256:2eb7710bd01b4c10f45d85d8730763f1f2ba15d826ba47c88f0c906b966db9f0",
+      "schemas/task.yaml": "sha256:755ac938be0a49d4be93594b7d998f4f083f239f841f07fd35d9d841336f8567",
+      "schemas/feature-enabled.yaml": "sha256:1ed5844b870208cb8786322ce60571314551cb5d787b1191fd8ff6e7dc1f9ff6",
+      "schemas/challenge-findings.yaml": "sha256:6fb370f0eed1b829742c62e17a93730b6a5f92cbb840fa221d77fbe8c74e2b05",
+      "decisions/INVENTORY.md": "sha256:57475cc860e4ac6df846ebf5b92bc1261132d0ba8cb080de311c7c878c3fbfd8",
+      "contexts/aif-implement.yaml": "sha256:4321e319d9e688fc5e9993ac8b53fd97484a07448474dd3efcef2570ccba24f5",
+      "contexts/aif-warmup-bridge.yaml": "sha256:e96c09ebbf8fdfee5326a3da52cc49257d4cd776d7458006415893229d1e7705",
+      "contexts/aif-improve-check-mode.yaml": "sha256:22b6724ce6738433170b15760a9048e203ac17e781f33240698ca410411aca23",
+      "contexts/aif-review-bridge.yaml": "sha256:3aa3c153af9f392d193095d293fbd30c0f9f131f426abe8fb2f365d3104fda4b",
+      "contexts/aif-plan-bridge.yaml": "sha256:8c93b2f2f767f4e527b7d899a4a62e8162828deaeb9e974bdef40ba4efc86579",
+      "contexts/aif-verify-bridge.yaml": "sha256:e9f4f30253a43d01bc1ed86b3e4698e2b1adc20229d431368049347f058ef930",
+      "contexts/aif-improve-bridge.yaml": "sha256:dafeafc14947421ecc2e939b1b1343525c1dfc8f337f49c8732e95b26272d3fd",
+      "contexts/aif-security.yaml": "sha256:ccb6e296c8ad16dce429914e6e71d0f3b804962c3cc6fca56704770a2a2ffb40",
+      "contexts/aif-warmup.yaml": "sha256:9342a86b2bbbd5c2fb0f9fa74f7804c1c826952616699efe71023f271b5c11b8",
+      "contexts/aif-review.yaml": "sha256:4628fbfa310990c2521b0cedcef1826a0dd022a3edd221046580dfe7a1c2b6e1",
+      "contexts/aif-improve-list-mode.yaml": "sha256:b8d7d0eaa13134945ddbc820dfbd918f35f2d99961a879324e463b23adff7ded",
+      "contexts/aif-plan.yaml": "sha256:4578ebc759a62082806e5736d0ebc9b1d8752439939b6ef03de426deae33d92d",
+      "contexts/aif-improve.yaml": "sha256:c7ba7f388572469ad6fa2d6efec103fae2aaa5e2065e030d34202963e3d4e8f6",
+      "contexts/aif-implement-bridge.yaml": "sha256:35d70c790eb5e8f9a7898af0188e79b90f87334362e865f39216b6d94aa5b7cf",
+      "contexts/aif-improve-validator.yaml": "sha256:65aba50dd47d0736dfc8f201560bc0c2329a811c07657459f514f755976a7f37",
+      "contexts/aif-verify.yaml": "sha256:959b6666c7a9746ca4d10588e88050fce70dab0a0a76b3d2cf64ea837f6dd03b",
+      "contexts/aif-security-bridge.yaml": "sha256:97311cb41178eaa3a21905802b560b3754b7329cacfe32ad0a843c63c5b36c0b",
+      "contexts/aif-improve-examples.yaml": "sha256:78e0027eb28034fa9c5f76e64a20a45a7a2e0ba64a695b4a4422db9baa34410a",
+      "contexts/aif-review-challenge-bridge.yaml": "sha256:e850bd5ecb1eb17f135d14c70707eaa7f73fb8b981cd79c44720b1c701ddc957",
+      "contexts/aif-commit.yaml": "sha256:0f602e81a858d055520b512e4ba920a9678ec0115e190d90c113b5b26f6c0b8e",
+      "contexts/aif-commit-bridge.yaml": "sha256:cc3eb573ad28b7be1a4ca2bc4de37953e2ed1a86e554e8d51d7a530dcbb86d4e",
+      "contexts/aif-fix-bridge.yaml": "sha256:5bcbe6d36c235a125355048bacd0db85765279b3a91c2bcaabe137907f726880",
+      "contexts/continue-improve.yaml": "sha256:0cf2b911ea5a5715250dc479388dfc396a8ba505587ff85962a671485f99dcee",
+      "contexts/aif-fix.yaml": "sha256:d88ac9e5ff6edd684b749de77b6dfc2e13eb5c7fb94ad52ce1d44856648768d2",
+      "decisions/gates/checks.yaml": "sha256:c0166074a41edb650af05e51e7a070437ddfd9aa071f9d018d5bce62074ac2c3",
+      "decisions/gates/warnings.yaml": "sha256:50afae11b81e4af353e24efa4c09162d1b696dea62b81662eb85a647b5ab2dec",
+      "decisions/improve/apply.yaml": "sha256:2b7c740c8c181e522ddff58ceb34c091834aa686171c6d5385ddf5e6cb14d03d",
+      "decisions/plan/roadmap-milestone.yaml": "sha256:ed09173df961834534ac07d93239462428a44822de9122564447a0645e2f549f",
+      "decisions/plan/roadmap-linkage.yaml": "sha256:110738e925a857cc5da58ef438cdc4df38b32bb9bef616722e875e7c89ca4990",
+      "decisions/plan/logging.yaml": "sha256:ee190623e4d3494dc991d25bb44730ea6a3f5c020022636bb15dc6faef1e25f3",
+      "decisions/plan/profile.yaml": "sha256:c7ea4dac956bfa1572c68e28ca9298cf5951637e22e922ec762dfc438de9a74e",
+      "decisions/plan/tests.yaml": "sha256:e9d7035db4c14fa0be8958654a837ba76300f9dbaed2b369db476d16b5d383f5",
+      "decisions/plan/constraints.yaml": "sha256:ebd78992eaba6bc66d5089a60ae1a830f1adf1a662fef9142f9f589945a86694",
+      "decisions/plan/docs.yaml": "sha256:a4a929dfd1710a7a247039ab05e6fda9e28906df682459dc4da33eafc94752db"
+    },
+    "claim": ".prifly/work/claims/demo-tracker-issue-19",
+    "commands": [
+      {
+        "arguments": [
+          "project",
+          "init",
+          "--repository",
+          "/tmp/prifly-naming-19-xw6ymizm/repository",
+          "--state-root",
+          "/tmp/prifly-naming-19-xw6ymizm/authority",
+          "--host",
+          "codex-cli"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "workflows",
+          "add",
+          "https://github.com/StenHigh/prifly-aif-workflows.git",
+          "--path",
+          "aif-classic",
+          "--name",
+          "aif-classic",
+          "--ref",
+          "v1.57.0",
+          "--repository",
+          "/tmp/prifly-naming-19-xw6ymizm/repository"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "workflows",
+          "--repository",
+          "/tmp/prifly-naming-19-xw6ymizm/repository"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "workflows",
+          "update",
+          "aif-classic",
+          "--repository",
+          "/tmp/prifly-naming-19-xw6ymizm/repository"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "questionnaire",
+          "--prepare",
+          "--repository",
+          "/tmp/prifly-naming-19-xw6ymizm/repository",
+          "--launch",
+          "aif-classic",
+          "--host",
+          "codex-cli",
+          "--workspace",
+          "worktree",
+          "--input",
+          "task=/tmp/prifly-naming-19-xw6ymizm/repository/task.json",
+          "--naming-input",
+          "identity=/tmp/prifly-naming-19-xw6ymizm/repository/identity.json"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "project",
+          "start",
+          "--repository",
+          "/tmp/prifly-naming-19-xw6ymizm/repository",
+          "--launch",
+          "aif-classic",
+          "--host",
+          "codex-cli",
+          "--workspace",
+          "worktree",
+          "--input",
+          "task=/tmp/prifly-naming-19-xw6ymizm/repository/task.json",
+          "--naming-input",
+          "identity=/tmp/prifly-naming-19-xw6ymizm/repository/identity.json",
+          "--expected-launch-digest",
+          "sha256:b1253fed29cbea4ce18e8b019ac5be5bdd3d18cf01a7b2bb9d5df3995b80a1f2",
+          "--command-id",
+          "probe:start"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-xw6ymizm/authority",
+          "run",
+          "status",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-xw6ymizm/authority",
+          "run",
+          "cancel",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5",
+          "--reason",
+          "Naming probe cleanup",
+          "--command-id",
+          "cleanup:run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-xw6ymizm/authority",
+          "run",
+          "drive",
+          "run:8667f96b7e77de3fe5fbea79633915497458ebce6b176a6328ccf73a2574fda5"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-xw6ymizm/authority",
+          "claim",
+          "list"
+        ],
+        "exit": 0
+      },
+      {
+        "arguments": [
+          "--project",
+          "/tmp/prifly-naming-19-xw6ymizm/authority",
+          "claim",
+          "release",
+          "--id",
+          "claim:4635335c29dc6ef79ba5c704da0844cf4c823c96f0d38fdcde1d9154079f4a87",
+          "--generation",
+          "1",
+          "--command-id",
+          "cleanup:claim:4635335c29dc6ef79ba5c704da0844cf4c823c96f0d38fdcde1d9154079f4a87"
+        ],
+        "exit": 0
+      }
+    ]
+  },
+  "version": {
+    "arch": "amd64",
+    "go": "go1.27.3",
+    "os": "linux",
+    "schema_version": "foundation-version/1",
+    "semantics_profile": "foundation-sequence/1",
+    "version": "0.2.0-dev.5"
+  }
+}

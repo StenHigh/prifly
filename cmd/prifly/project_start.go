@@ -67,15 +67,26 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	fromStage := f.String("from-stage", "", "accepted root stage of the source Run to start again from, before the one it stopped at (resuming project continue, project recover)")
 	command := f.String("command-id", "", "stable command identity for an explicit retry")
 	inputs := bindings{}
+	namingFiles := projectNamingFiles{}
+	var namingFlags stringsFlag
 	refFiles := bindings{}
 	answers := stringsFlag{}
 	runtimeAnswers := stringsFlag{}
+	f.Var(&namingFlags, "naming-input", "project-owned naming NAME=FILE")
 	f.Var(inputs, "input", "declared input PORT=FILE")
 	f.Var(refFiles, "input-ref", "declared input PORT=ARTIFACT_REF.json")
 	f.Var(&answers, "preflight-answer", "declared preflight decision ID=JSON")
 	f.Var(&runtimeAnswers, "runtime-answer", "declared runtime decision ID=JSON, sealed before the Run starts")
 	if err := parse(f, args); err != nil {
 		return err
+	}
+	for _, argument := range namingFlags {
+		if err := namingFiles.Set(argument); err != nil {
+			return err
+		}
+	}
+	if (continuation || recovering) && len(namingFiles) > 0 {
+		return refusal("project_worktree_input_override", "continuation and recovery preserve source naming inputs")
 	}
 	if err := queueFlags.validate(); err != nil {
 		return err
@@ -108,8 +119,12 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		*command = commandID()
 	}
 	fingerprintFields := map[string]any{"continuation": continuation, "recovering": recovering, "inputs": inputs, "input_refs": refFiles, "preflight_answers": answers, "runtime_answers": runtimeAnswers}
+	// Preserve legacy request bytes when the new namespace is unused.
+	if len(namingFiles) > 0 {
+		fingerprintFields["naming_inputs"] = namingFiles
+	}
 	f.VisitAll(func(option *flag.Flag) {
-		if option.Name != "input" && option.Name != "input-ref" && option.Name != "preflight-answer" && option.Name != "runtime-answer" {
+		if option.Name != "naming-input" && option.Name != "input" && option.Name != "input-ref" && option.Name != "preflight-answer" && option.Name != "runtime-answer" {
 			fingerprintFields[option.Name] = option.Value.String()
 		}
 	})
@@ -209,7 +224,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 	// The project's preflight runs before the tree is read for compilation
 	// and before anything is taken; the read-only review does not run it.
-	if !prepare && queueSelection == nil {
+	if !prepare && queueSelection == nil && profile.SchemaVersion != projectOwnedNamingProfileVersion {
 		if err := runProjectLaunchPreflight(ctx, root, *launchID, launch.Preflight); err != nil {
 			return err
 		}
@@ -494,6 +509,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 	}
 	var naming *projectwire.WorktreeNamingReview
+	var sourceNaming *prifly.WorktreeClaim
 	var handedNaming *prifly.WorktreeClaim
 	var plannedHandover *prifly.ContinuationClaim
 	if recovering && recoveryPlan != nil {
@@ -507,22 +523,44 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if err != nil {
 			return err
 		}
-		if plannedHandover != nil {
+		if plannedHandover != nil || *sourceRun != "" {
 			record, readErr := reader.Claims(ctx)
 			err = readErr
 			for _, held := range record.Claims {
-				if held.ID == plannedHandover.ID && held.Naming != nil {
+				if (plannedHandover != nil && held.ID == plannedHandover.ID || held.RunID == *sourceRun) && held.Naming != nil {
 					heldCopy := held
-					handedNaming = &heldCopy
+					if plannedHandover != nil {
+						handedNaming = &heldCopy
+					}
+					sourceNaming = &heldCopy
 				}
 			}
 		} else {
-			naming, err = projectResolveWorktreeNaming(profile.WorktreeNaming, reader, requirements.plan, inputValues, refs)
+			snapshot, readErr := projectReadNamingSnapshot(root, profile.WorktreeNaming, namingFiles)
+			err = readErr
+			if err == nil {
+				naming, err = projectResolveNaming(profile.WorktreeNaming, reader, requirements.plan, inputValues, refs, snapshot)
+			}
+		}
+		if err == nil && plannedHandover == nil && *sourceRun != "" && (sourceNaming == nil || sourceNaming.NamingSnapshot == nil) {
+			snapshot, readErr := projectReadNamingSnapshot(root, profile.WorktreeNaming, namingFiles)
+			err = readErr
+			if err == nil {
+				naming, err = projectResolveNaming(profile.WorktreeNaming, reader, requirements.plan, inputValues, refs, snapshot)
+			}
+		}
+		if err == nil && plannedHandover == nil && sourceNaming != nil && sourceNaming.NamingSnapshot != nil {
+			naming, err = projectNamingFromClaim(sourceNaming)
+		}
+		if err == nil && naming != nil {
+			err = reader.CheckWorktreeNamingCapacity(ctx, prifly.WorktreeNamingRequest{Base: naming.Base, Policy: naming.Policy, Snapshot: naming.Snapshot})
 		}
 		reader.Close()
 		if err != nil {
 			return err
 		}
+	} else if len(namingFiles) > 0 {
+		return refusal("project_worktree_input_inapplicable", "naming inputs require a worktree workspace")
 	}
 	var summary projectLaunchSummary
 	var retirement *prifly.RegistryRetirement
@@ -542,6 +580,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				summary.SchemaVersion = "project-launch-summary/7"
 			}
 			summary.Composition = compiled.Composition
+		}
+		if naming != nil && naming.Snapshot != nil || handedNaming != nil && handedNaming.NamingSnapshot != nil {
+			summary.SchemaVersion = "project-launch-summary/8"
 		}
 		summary.Continuation = continuationReview
 		summary.AllowDuplicateContinuation = *allowDuplicateContinuation
@@ -581,7 +622,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			if openErr != nil {
 				return openErr
 			}
-			namePreview, previewErr := nameReader.PreviewWorktreeName(ctx, root, prifly.WorktreeNamingRequest{Base: naming.Base, Policy: naming.Policy})
+			namePreview, previewErr := nameReader.PreviewWorktreeName(ctx, root, prifly.WorktreeNamingRequest{Base: naming.Base, Policy: naming.Policy, Snapshot: naming.Snapshot})
 			nameReader.Close()
 			if previewErr != nil {
 				return previewErr
@@ -656,6 +697,43 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 	}
 
+	checkNamingFreshness := func(engine *prifly.Engine) error {
+		if summary.SchemaVersion != "project-launch-summary/8" || sourceNaming != nil {
+			return nil
+		}
+		current, readErr := readProjectProfile(root)
+		if readErr != nil {
+			return refusal("project_start_stale_launch", readErr.Error())
+		}
+		snapshot, readErr := projectReadNamingSnapshot(root, current.WorktreeNaming, namingFiles)
+		if readErr != nil {
+			return refusal("project_start_stale_launch", readErr.Error())
+		}
+		resolved, readErr := projectResolveNaming(current.WorktreeNaming, engine, requirements.plan, inputValues, refs, snapshot)
+		if readErr != nil {
+			return refusal("project_start_stale_launch", readErr.Error())
+		}
+		a, _ := projectReviewDigest(resolved)
+		b, _ := projectReviewDigest(summary.WorktreeNaming)
+		if a != b {
+			return refusal("project_start_stale_launch", "naming declaration, schemas or values changed after review")
+		}
+		return nil
+	}
+	if summary.SchemaVersion == "project-launch-summary/8" {
+		reader, openErr := prifly.Open(c.project, true)
+		if openErr != nil {
+			return openErr
+		}
+		checkErr := checkNamingFreshness(reader)
+		reader.Close()
+		if checkErr != nil {
+			return checkErr
+		}
+		if err := projectNamingLaunchBudget(summary); err != nil {
+			return err
+		}
+	}
 	engine, err := c.openWithMonitor(c.project, false)
 	if err != nil {
 		return err
@@ -673,6 +751,19 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 		if len(previous) != 0 {
 			return c.emit(previous)
+		}
+	}
+	if err := checkNamingFreshness(engine); err != nil {
+		return err
+	}
+	if summary.SchemaVersion == "project-launch-summary/8" {
+		if err := projectNamingLaunchBudget(summary); err != nil {
+			return err
+		}
+	}
+	if !prepare && queueSelection == nil && profile.SchemaVersion == projectOwnedNamingProfileVersion {
+		if err := runProjectLaunchPreflight(ctx, root, *launchID, launch.Preflight); err != nil {
+			return err
 		}
 	}
 	var queueBinding *prifly.QueueTaskBinding
@@ -696,6 +787,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return err
 		}
 		queueBinding = &prifly.QueueTaskBinding{Selection: *queueSelection, IntentID: intent.ID}
+		if err := checkNamingFreshness(engine); err != nil {
+			return err
+		}
 		dispatched, err := engine.QueueDispatch(ctx, *queueBinding)
 		if err != nil {
 			return err
@@ -752,7 +846,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				return err
 			}
 		}
-		if needsWorkspace && *workspace == "worktree" && plannedHandover == nil {
+		if needsWorkspace && *workspace == "worktree" && plannedHandover == nil && summary.SchemaVersion != "project-launch-summary/8" {
 			currentProfile, readErr := readProjectProfile(root)
 			if readErr != nil {
 				return readErr
@@ -774,6 +868,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		for index := range execution.Bindings {
 			execution.Bindings[index].Config.Executable = summary.Execution[index].Executable
 		}
+	}
+	if err := checkNamingFreshness(engine); err != nil {
+		return err
 	}
 	if (continuation || resuming) && !*allowDuplicateContinuation {
 		if err := projectCheckActiveContinuation(ctx, engine, *sourceRun); err != nil {
@@ -817,7 +914,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	} else if needsWorkspace {
 		claimRequest := prifly.ClaimRequest{CommandID: *command + ":workspace", Repository: root, OwnerID: "project-launch:" + *command, WorkspaceMode: *workspace}
 		if naming != nil {
-			claimRequest.Naming = &prifly.WorktreeNamingRequest{Base: naming.Base, Policy: naming.Policy}
+			claimRequest.Naming = &prifly.WorktreeNamingRequest{Base: naming.Base, Policy: naming.Policy, Snapshot: naming.Snapshot}
 		}
 		if continuation {
 			claimRequest.BaseRef = continuationReview.WorkspaceCommit
@@ -1020,6 +1117,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				result.SchemaVersion = "project-start/7"
 			}
 		}
+		if summary.SchemaVersion == "project-launch-summary/8" {
+			result.SchemaVersion = "project-start/8"
+		}
 		resultBytes, err := json.Marshal(result)
 		if err != nil {
 			return err
@@ -1037,6 +1137,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		if compiled.SchemaVersion == "project-compile/4" {
 			result.SchemaVersion = "project-start/7"
 		}
+	}
+	if summary.SchemaVersion == "project-launch-summary/8" {
+		result.SchemaVersion = "project-start/8"
 	}
 	if claim != nil && claim.Naming != nil {
 		response, err := json.Marshal(result)

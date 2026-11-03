@@ -127,6 +127,10 @@ func newQueueContinuationCLI(t *testing.T, tailContinuation string, configure ..
 }
 
 func continuationCLIFixture(t *testing.T, tailContinuation string, resumable, queue bool, configure ...func(string)) continuationCLI {
+	return continuationCLIFixtureWithOptions(t, tailContinuation, resumable, queue, nil, configure...)
+}
+
+func continuationCLIFixtureWithOptions(t *testing.T, tailContinuation string, resumable, queue bool, startOptions []string, configure ...func(string)) continuationCLI {
 	t.Helper()
 	root, authority := newProjectFixture(t)
 	writeFixtureFile(t, root, ".prifly/project.yaml", `schema_version: prifly-project-profile/3
@@ -308,6 +312,7 @@ stages:
 		return stderr
 	}
 	startArgs := []string{"--repository", root, "--launch", "source", "--host", "codex-cli", "--workspace", "worktree", "--input", "task=" + filepath.Join(root, "task.json")}
+	startArgs = append(startArgs, startOptions...)
 	if queue {
 		input := queueCLIRequest(t, root, "preserve this original Task")
 		queueCLISummary(t, command("project", "queue", "add", "--repository", root, "--input", input, "--command-id", "command:source-task"))

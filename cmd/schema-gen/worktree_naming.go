@@ -12,6 +12,10 @@ import (
 	prifly "github.com/stenhigh/prifly/internal/runtime"
 )
 
+func ownedNamingField(t reflect.Type, field string) bool {
+	return t == reflect.TypeFor[prifly.WorktreeClaim]() && field == "NamingSnapshot" || t == reflect.TypeFor[projectwire.WorktreeNamingReview]() && field == "Snapshot"
+}
+
 // Skip before recursion: historical bundles must not acquire even unreachable
 // definitions merely because a current Go type gained opt-in metadata.
 func worktreeNamingField(t reflect.Type, field string) bool {

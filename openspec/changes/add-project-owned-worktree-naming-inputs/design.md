@@ -40,7 +40,7 @@ Schema — обычный самодостаточный JSON Schema 2020-12. Р
 
 Добавляем повторяемый `--naming-input NAME=FILE` для questionnaire prepare/start. Обычный questionnaire показывает schema и условную применимость, не требует значения. Compile не требует runtime values.
 
-JSON reader и validator используют существующие механизмы и ограничения размера JSON inputs. Схема ограничена тем же file budget. Reader не следует symlinks и не разрешает network references. Неизвестный/повторный NAME, отсутствие обязательного value, schema mismatch и invalid pointer получают типизированные `runtime.Fault` в существующем naming семействе. Новые коды добавляются только при отдельном значении отказа.
+JSON reader и validator используют существующие механизмы и ограничения размера JSON inputs. Дополнительно весь persisted snapshot ограничен 128 KiB canonical UTF-8 JSON (131072 bytes), включая declaration, schemas, values, digests и остальные поля snapshot. Это общий предел, а не предел одного input. Reader не следует symlinks и не разрешает network references. Неизвестный/повторный NAME, отсутствие обязательного value, schema mismatch и invalid pointer получают типизированные `runtime.Fault` в существующем naming семействе. Новые коды добавляются только при отдельном значении отказа.
 
 При checkout или отсутствии Workspace Core не требует naming values. Если caller всё-таки передал их, CLI отказывает как неприменимому аргументу. Так CLI не создаёт видимость сохранённой metadata.
 
@@ -65,15 +65,19 @@ project profile + schema files + --naming-input files
            durable claim -> worktree -> Run
 ```
 
-Summary `/8` показывает schema paths/digests, value sources, canonical values/digests и обычный naming review. Источники и snapshot входят в review digest; availability preview не входит. Проверка freshness располагается до preflight и любых start effects. Повторное чтение перед reservation закрывает изменение файлов во время подготовки start.
+Summary `/8` показывает schema paths/digests, value sources, canonical values/digests и обычный naming review. Источники и snapshot входят в review digest; availability preview не входит. Проверка freshness располагается до preflight и любых start effects, включая QueueReserve/QueueDispatch. Сейчас non-queue preflight выполняется раньше compilation; новый `/5` путь переносит snapshot validation/freshness перед этим effect. Повторное чтение перед reservation закрывает изменение файлов во время подготовки start. Legacy порядок сохраняется.
 
 Данные reservation берутся из проверенного snapshot, а не перечитываются внутри transform. Read-only prepare не импортирует schemas/values как artifacts. Naming declaration не входит в compiled workflow closure, поэтому не меняет refs upstream.
 
 ### 4. Persist snapshot in claim metadata
 
-Добавляем snapshot в новые Go/JSON claim types и `authority-claims/5`. Snapshot содержит declaration, самодостаточные schemas и полные canonical values с digests. Он мал и ограничен input budgets; отдельный registry/blob lifecycle не нужен.
+Добавляем snapshot в новые Go/JSON claim types и `authority-claims/5`. Snapshot содержит declaration, самодостаточные schemas и полные canonical values с digests. Его общий предел 128 KiB согласован владельцем 2026-11-03. Отдельный registry/blob lifecycle не нужен.
 
-Новая запись идёт через обычный typed claim command payload. Snapshot участвует в semantic idempotency digest. Старые claims читаются без синтеза snapshot. Изменение старого allocation struct под прежним wire version запрещено.
+Новая запись идёт через обычный typed claim command payload. Snapshot участвует в semantic idempotency digest. Старые claims читаются без синтеза snapshot. Snapshot хранится отдельным полем claim, чтобы allocation сохранил сравнимость; копирование и сравнение snapshot проверяют содержимое. Изменение старого allocation struct под прежним wire version запрещено.
+
+Authority command/result ограничен 1 MiB. Payload phase update содержит before/after; start result повторяет snapshot, а queue использует base64 для summary/result. До effects проверяем общий snapshot limit и фактические либо консервативно ограниченные serialized payload/result carriers. Переполнение snapshot даёт typed `project_worktree_snapshot_too_large`. Global command/result limits не повышаются.
+
+Новый `/5` claims record читается bounded state decoder с existing ceiling 16 MiB и strict unknown-field checks. Legacy readers/versions сохраняют прежнюю границу. Полный prospective record проверяется перед reservation; transform повторяет проверку текущего snapshot до mutation. Это закрывает скрытую прежнюю границу `decode → flow.Parse` в 2 MiB без увеличения storage budget.
 
 Handover копирует snapshot без чтения текущих schema/value files. Continue/resume/recover используют source claim при штатной проверке ancestry/ownership. Если текущий continuation требует новый claim от commit, allocator использует сохранённую основу и прежний snapshot. Naming override в continuation отказывается. Независимый `project start` создаёт новый snapshot по явным значениям.
 
@@ -97,7 +101,7 @@ Probe получает exact executable path. Source-built binary и офици�
 
 ## Risks / Trade-offs
 
-- Хранение полного JSON увеличивает claim record → сохранить существующие input budgets и добавить проверку bounded record size.
+- Хранение полного JSON увеличивает claim record → общий snapshot limit 128 KiB, bounded full record и предварительная проверка serialized command/result carriers.
 - Новые поля могут протечь в старые nested views → inventory carriers, closed schema tests и legacy output regression.
 - Проверка только выбранных pointers пропустит изменение metadata → digest покрывает полный JSON и schema.
 - Текущий profile может утратить naming files → продолжение использует сохранённый snapshot, а не filesystem.
