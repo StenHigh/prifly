@@ -1,0 +1,79 @@
+{
+  "status": "passed",
+  "released_acceptance": true,
+  "release": {
+    "tagName": "v0.13.88",
+    "url": "https://github.com/StenHigh/prifly/releases/tag/v0.13.88",
+    "publishedAt": "2026-11-03T10:07:08Z"
+  },
+  "release_commit": "e1f714157e0b9932e0657100b66bd0a4d7282cd8",
+  "release_workflow": {
+    "run_id": 41615945726,
+    "url": "https://github.com/StenHigh/prifly/actions/runs/41615945726",
+    "conclusion": "success"
+  },
+  "ci": {
+    "qualify": {
+      "attempt": 1,
+      "finished": 1793700043.0,
+      "reason": "direct full batch on exact SHA",
+      "run_id": 41613148340,
+      "state": "success",
+      "url": "https://github.com/StenHigh/prifly/actions/runs/41613148340"
+    },
+    "verify": {
+      "attempt": 1,
+      "finished": 1793699112.0,
+      "reason": "direct full batch on exact SHA",
+      "run_id": 41613077967,
+      "state": "success",
+      "url": "https://github.com/StenHigh/prifly/actions/runs/41613077967"
+    }
+  },
+  "asset_verification": {
+    "version": {
+      "arch": "amd64",
+      "go": "go1.27.3",
+      "os": "linux",
+      "schema_version": "foundation-version/1",
+      "semantics_profile": "foundation-sequence/1",
+      "version": "0.13.88"
+    },
+    "manifest_digest": "sha256:1f24a5b63016d20e884ccd0bb42d00e75a56fc85de098c6872eccb2b15ba8cdf",
+    "signature_verification": {
+      "legacy_ed25519": true,
+      "jcs_ed25519": true
+    },
+    "public_key_digest": "sha256:316be5b2d0d2c3fe882b994aed9acde84d90fcaed3b784374af4dba51ad2f1c8",
+    "archives": {
+      "darwin/arm64": "sha256:56376d1f0fd678cc5ea1a9b310e84c10621af9215a0e5d4472f758533708214b",
+      "linux/amd64": "sha256:6b0cc548a3f27b56c56ea4eb9ad01b1f0e83b60784b29b994e77c80ed498c30e"
+    },
+    "binary": "/tmp/prifly-issue19-fl8egp1o/release-v0.13.88/assets/verified-linux-amd64/prifly",
+    "binary_digest": "sha256:43bb756b7c44fe4c858496678d67b9eac48fb420bc99920f7a59a9209f7a3e85",
+    "verified_at": "2026-11-03T10:08:13.756034+00:00"
+  },
+  "probe": {
+    "file": "native-probe-released-v0.13.88.json",
+    "digest": "sha256:aca385ed3905c7ad15790977109c86a8aba356179edef3af8c27a932cb07b95d",
+    "script_commit": "e1f714157e0b9932e0657100b66bd0a4d7282cd8",
+    "script_digest": "sha256:ad5296020b31d9613882fd67693752c3892dd0683a54e539b366a02e78018232",
+    "command": "python3 examples/workflows/project-owned-naming/probe.py /tmp/prifly-issue19-fl8egp1o/release-v0.13.88/assets/verified-linux-amd64/prifly --official --evidence /tmp/prifly-issue19-fl8egp1o/release-v0.13.88/native-probe-released.json",
+    "platform": "linux/amd64",
+    "expected_claim": ".prifly/work/claims/demo-tracker-issue-19",
+    "generic_actual_claim": ".prifly/work/claims/demo-tracker-issue-19",
+    "official_actual_claim": ".prifly/work/claims/demo-tracker-issue-19",
+    "generic_command_count": 30,
+    "official_command_count": 11,
+    "official_source_commit": "ee76702dec0d8e0958ef068ef58074ecf2db37e9",
+    "raw_released_acceptance": false
+  },
+  "superseded_candidate": {
+    "commit": "84b4bd618e1a6f0cf1dc5c2658679dbf01bf1876",
+    "qualify_run": "https://github.com/StenHigh/prifly/actions/runs/41611744969",
+    "result": "cancelled after e2e inventory mismatch; unfinished race was not a pass",
+    "fix_commit": "e1f714157e0b9932e0657100b66bd0a4d7282cd8",
+    "fix": "Update editor inventory and reference modeline for project-profile-v5"
+  },
+  "accepted_at": "2026-11-03T10:15:13.151873+00:00"
+}

@@ -121,6 +121,10 @@ boundaries и baseline active changes до своего archive/sync. Ownership 
 Доставка эксплуатационного справочника и обязательные updates host runner включены в main source sets `release-documentation-layout` и `cli-protocol`.
 История реализации сохранена в archived `2026-11-02-add-agent-operations-handbook`. Нормативное владение не переносится. Прямые CLI-команды сохраняют явное обновление; saved Runs и published schemas не меняются.
 
-До archive `add-project-owned-worktree-naming-inputs` его deltas задают opt-in
-profile `/5`, naming namespace, summary/start `/8` и claim snapshot `/5`.
-Ownership существующих source sets не переносится. Released-Core приёмка остаётся отдельным gate.
+Входы именования проекта включены в main source sets `workflow-and-context`,
+`cli-protocol`, `runtime-resources`, `published-contracts` и `specification-governance`.
+История сохранена в archived `2026-11-03-add-project-owned-worktree-naming-inputs`.
+Opt-in profile `/5`, naming namespace, summary/start `/8` и claim snapshot `/5`
+сохраняют прежние version boundaries. Ownership не переносится.
+Released-Core приёмка issue №19 выполнена на `v0.13.88`; evidence —
+`changes/archive/2026-11-03-add-project-owned-worktree-naming-inputs/evidence/released-acceptance.md`.

@@ -32,4 +32,9 @@
 - [x] 5.1 Выполнить итоговые source checks из явного claim worktree: `make ci-check-once CHECK_CONTEXT=codex-app-escalated CHECK_FOR_COMMIT=1` для staged bytes, `openspec validate add-project-owned-worktree-naming-inputs --strict`, `git diff --check`. Проверка: evidence относится к тому же snapshot и фактическому permission profile.
 - [x] 5.2 Проверить сохранность истории относительно commit из 1.1: `git diff --exit-code BASE -- openspec/changes/archive` и отсутствие modified/deleted старых published schemas/release evidence. Проверка: новые schema files допустимы, прежние bytes совпадают с inventory.
 - [x] 5.3 Подготовить release handoff с exact candidate SHA и probe command. Проверка: названы обязательные verify/qualify gates и owner actions; локальные tests не объявляются разрешением push/tag/release.
-- [ ] 5.4 После публикации владельцем совместимого Core выполнить native probe и official package journey на exact released executable. Проверка: evidence содержит version/digest, commands, expected/actual claim и upstream integrity; до этого пункт и released критерий issue остаются открытыми.
+- [x] 5.4 После публикации владельцем совместимого Core выполнить native probe и official package journey на exact released executable. Проверка: evidence содержит version/digest, commands, expected/actual claim и upstream integrity; до этого пункт и released критерий issue остаются открытыми.
+
+## Приёмка опубликованного Core
+
+Task 5.4 выполнена на `v0.13.88`, commit `e1f714157e0b9932e0657100b66bd0a4d7282cd8`.
+Evidence: [released acceptance](evidence/released-acceptance.md) и [binding JSON](evidence/released-core-v0.13.88.json).
