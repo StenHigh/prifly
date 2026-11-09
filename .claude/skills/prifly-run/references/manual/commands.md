@@ -512,6 +512,7 @@ Default в таблице — значение parser до применения 
 | `--command-id` | строка | `""` | stable command identity for an explicit retry |
 | `--input` | повторяемое значение | `[]` | declared input PORT=FILE |
 | `--input-ref` | повторяемое значение | `[]` | declared input PORT=ARTIFACT_REF.json |
+| `--naming-input` | повторяемое значение | `[]` | project-owned naming NAME=FILE; profile /5, только новый Git worktree; общий snapshot до 128 KiB |
 | `--preflight-answer` | повторяемое значение | `[]` | declared preflight decision ID=JSON |
 | `--runtime-answer` | повторяемое значение | `[]` | declared runtime decision ID=JSON, sealed before the Run starts |
 
@@ -1003,3 +1004,13 @@ Default в таблице — значение parser до применения 
 | `telemetry query` |
 
 Строка help об automatic retry относится к общей автоматической оркестрации. Declared technical_retries — отдельная поддержанная возможность с явным bound.
+
+### Project naming inputs, profile /5
+
+`project questionnaire --prepare` и `project start` принимают повторяемый `--naming-input NAME=FILE`.
+NAME объявлен в `worktree_naming.inputs`; FILE содержит JSON value для project-owned schema.
+Этот flag не заменяет `--input` и не имеет варианта `--naming-input-ref` или default.
+Общий snapshot ограничен 131072 bytes canonical UTF-8 JSON.
+Questionnaire `/5` показывает условную потребность; summary/start `/8` показывает полный snapshot.
+Continue/resume/recover отказывают override и используют source claim.
+См. [поля и команды](launch.md#project-owned-naming-inputs).

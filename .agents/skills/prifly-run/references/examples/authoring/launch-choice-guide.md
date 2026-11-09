@@ -57,7 +57,7 @@ Runner читает ID, `title`, `description` и объявленные вхо�
 Поэтому в профиле нет `hosts`, а в командах не нужен `--host`.
 Для использования `prifly-run` в ИИ-хосте явно установите нужный runner через
 `project runners add --host HOST`, как показано в
-[основном README](https://github.com/StenHigh/prifly/blob/v0.13.87/README.md#быстрый-старт).
+[основном README](https://github.com/StenHigh/prifly/blob/v0.13.88/README.md#быстрый-старт).
 Наличие хоста само по себе не делает его обязательным для программного workflow.
 
 ## 2. При необходимости задайте критерии совета
@@ -184,8 +184,8 @@ Runner ждёт требуемый ответ и следует `run next`.
 
 Наличие инструкции для native question tool не доказывает живую работу интерфейса.
 Статус отдельных Claude UI-проверок — `DEFERRED` в
-[verify-claude-launch-choice-ui](https://github.com/StenHigh/prifly/blob/v0.13.87/openspec/changes/verify-claude-launch-choice-ui/proposal.md).
+[verify-claude-launch-choice-ui](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/changes/verify-claude-launch-choice-ui/proposal.md).
 Этот справочник не закрывает эти проверки и не меняет настройки провайдера.
 
 Нормативное поведение описывает
-[CLI protocol](https://github.com/StenHigh/prifly/blob/v0.13.87/openspec/specs/cli-protocol/spec.md#requirement-host-runner-условно-советует-объявленный-launch-перед-выбором).
+[CLI protocol](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/specs/cli-protocol/spec.md#requirement-host-runner-условно-советует-объявленный-launch-перед-выбором).

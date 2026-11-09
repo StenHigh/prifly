@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.87/schemas/authoring/project-profile-v4.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/project-profile-v5.schema.json
 # Optional local queue is authority state, never an extra YAML key here.
 # Requires queue-bound core-state/44, core-read/44 and Project profile /3;
 # questionnaire --prepare: project-launch-summary/4; start: project-start/4.
@@ -31,21 +31,31 @@
 # /3 keeps authored IDs/versions; compile/start report author_package alongside
 # the exact compiled build. Program machine paths belong in ignored local.yaml,
 # never here. execution_bindings belongs in a package's root workflow.yaml.
-schema_version: prifly-project-profile/4
+schema_version: prifly-project-profile/5
 title: Example project # Optional human-facing name, sealed into new Runs.
-# Optional shared naming for NEW worktree claims only (profile /4).
-# Example workflow must declare a JSON input task with source/id string fields.
-# Full executable fixture and --input / --input-ref commands:
-# ../workflows/named-worktree/README.md
-# prepare summary /5: policy is reviewed; worktree_name_preview reserved=false.
-# start /5 records actual suffix; repeat command ID returns the same result.
-# Handover keeps the recorded name; checkout/no Workspace ignore input bindings.
+# Project-owned naming inputs require profile /5, summary/start /8,
+# authority-claims/5 and foundation-claims/4. Legacy profile /4 stays closed.
+# schema is a confined project-owned JSON Schema 2020-12 file, no symlinks.
+# Only fragment $ref is allowed. Every declaration needs a naming_input binding.
+# Read a separate JSON file: --naming-input identity=.prifly/naming/identity.json
+# Example schema: {"$schema":"https://json-schema.org/draft/2020-12/schema",
+#   "type":"object","required":["source","id"],"additionalProperties":false,
+#   "properties":{"source":{"type":"string"},"id":{"type":"string"}}}
+# Example value: {"source":"tracker","id":"issue-19"}
+# Complete snapshot (declaration, schemas, values, digests) <= 128 KiB canonical
+# UTF-8 JSON. Values never become workflow inputs or change compiled refs.
+# Naming requirements apply only to a new Git worktree. No defaults or prose ID
+# extraction. Checkout/no Workspace ignores naming unless values were supplied.
+# Continue/resume/recover reject overrides and use the saved source snapshot.
+# Legacy binding {input: task, pointer: /id} still addresses workflow input.
 worktree_naming:
   template: "{project_name}-{task_source}-{task_id}"
+  inputs:
+    identity: {schema: .prifly/naming/identity.schema.json}
   bindings:
     project_name: {value: example}
-    task_source: {input: task, pointer: /source}
-    task_id: {input: task, pointer: /id}
+    task_source: {naming_input: identity, pointer: /source}
+    task_id: {naming_input: identity, pointer: /id}
 
 hosts:
   codex-cli: .codex/skills # The `prifly-run` skill installed for Codex CLI.

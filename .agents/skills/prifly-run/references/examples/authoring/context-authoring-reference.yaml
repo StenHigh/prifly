@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.87/schemas/authoring/context-v1.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/context-v1.schema.json
 # A context seals exact instructions. Use text for repository-owned instructions,
 # or host_skills for the current host's AI Factory skill.
 id: example:context/host-skill

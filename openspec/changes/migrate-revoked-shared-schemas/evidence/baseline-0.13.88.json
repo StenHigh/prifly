@@ -1,0 +1,111 @@
+{
+  "prifly": "0.13.88",
+  "binary_sha256": "43bb756b7c44fe4c858496678d67b9eac48fb420bc99920f7a59a9209f7a3e85",
+  "boundary": "Synthetic schema-only legacy package; no application or live authority modified.",
+  "cases": [
+    {
+      "mode": "clean",
+      "schema_ref": {
+        "digest": "sha256:29bce348352ac8e11f65737dc77e990bc8f7687ad896e8757802ab1cd52557ee",
+        "id": "aif:schema/feature-enabled",
+        "version": "1.0.0"
+      },
+      "suppliers": [
+        {
+          "ref": {
+            "id": "aif:package/composition-contracts",
+            "version": "1.0.0",
+            "digest": "sha256:977cf8944d6a5b16312e77086b89b8df9acf7097bb65997906197ee1aa680d88"
+          },
+          "status": "trusted",
+          "resolvable": true
+        }
+      ],
+      "trusted_schema_inspect_passed": true,
+      "prepare_passed": true,
+      "start_outcome": "succeeded",
+      "runs_created": 1,
+      "registry_entries_removed": 1,
+      "temporary_authority_removed": true
+    },
+    {
+      "mode": "remove",
+      "schema_ref": {
+        "digest": "sha256:29bce348352ac8e11f65737dc77e990bc8f7687ad896e8757802ab1cd52557ee",
+        "id": "aif:schema/feature-enabled",
+        "version": "1.0.0"
+      },
+      "suppliers": [
+        {
+          "ref": {
+            "id": "aif:package/classic",
+            "version": "1.15.1",
+            "digest": "sha256:22531de498c58c19aede85330ddb00f30c3775a4f7bcef89dbcad08f77449026"
+          },
+          "status": "removed",
+          "resolvable": false
+        },
+        {
+          "ref": {
+            "id": "aif:package/composition-contracts",
+            "version": "1.0.0",
+            "digest": "sha256:977cf8944d6a5b16312e77086b89b8df9acf7097bb65997906197ee1aa680d88"
+          },
+          "status": "trusted",
+          "resolvable": true
+        }
+      ],
+      "trusted_schema_inspect_passed": true,
+      "prepare_passed": true,
+      "start_outcome": "succeeded",
+      "runs_created": 1,
+      "registry_entries_removed": 1,
+      "temporary_authority_removed": true
+    },
+    {
+      "mode": "revoke",
+      "schema_ref": {
+        "digest": "sha256:29bce348352ac8e11f65737dc77e990bc8f7687ad896e8757802ab1cd52557ee",
+        "id": "aif:schema/feature-enabled",
+        "version": "1.0.0"
+      },
+      "suppliers": [
+        {
+          "ref": {
+            "id": "aif:package/classic",
+            "version": "1.15.1",
+            "digest": "sha256:22531de498c58c19aede85330ddb00f30c3775a4f7bcef89dbcad08f77449026"
+          },
+          "status": "revoked",
+          "resolvable": false
+        },
+        {
+          "ref": {
+            "id": "aif:package/composition-contracts",
+            "version": "1.0.0",
+            "digest": "sha256:977cf8944d6a5b16312e77086b89b8df9acf7097bb65997906197ee1aa680d88"
+          },
+          "status": "trusted",
+          "resolvable": true
+        }
+      ],
+      "trusted_schema_inspect_passed": true,
+      "prepare_passed": true,
+      "start_refusal": {
+        "schema_version": "1",
+        "code": "package_not_resolvable",
+        "message": "a package no longer trusted supplied aif:schema/feature-enabled from aif:package/classic; start failed before Run admission",
+        "retryable": false,
+        "correlation_id": "correlation:fef06899dbd497a0cb107f65617ccc35",
+        "violations": [],
+        "safe_next_actions": [
+          "doctor"
+        ]
+      },
+      "runs_created": 0,
+      "registry_entries_removed": 1,
+      "temporary_authority_removed": true
+    }
+  ],
+  "complete": true
+}

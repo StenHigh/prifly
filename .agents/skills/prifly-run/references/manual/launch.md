@@ -119,3 +119,48 @@ Summary `/4` может нести queue task, `/5` добавляет naming. U
 Выполнение продолжается через [host protocol](hosting.md). Исход Run проверяйте отдельно от exit команды.
 
 См. также [решения](decisions.md), [workspace](workspace.md), [launch-choice guide](../examples/authoring/launch-choice-guide.md).
+
+<a id="project-owned-naming-inputs"></a>
+## Project-owned naming inputs
+
+Profile `/5` объявляет `worktree_naming.inputs.NAME.schema` отдельно от workflow inputs.
+Questionnaire `/5` показывает `naming_inputs` и условие `required_when: git_workspace_worktree`.
+Передайте JSON value через `--naming-input NAME=FILE` в prepare и start.
+Binding `{naming_input: NAME, pointer: /id}` выбирает строку; `{input: PORT, pointer: /id}` по-прежнему читает workflow input.
+
+```sh
+"$PRIFLY_BIN" project questionnaire --prepare --repository "$repository" --launch "$LAUNCH" \
+  --host codex-app --workspace worktree --input task=task.json --naming-input identity=identity.json --json
+"$PRIFLY_BIN" project start --repository "$repository" --launch "$LAUNCH" \
+  --host codex-app --workspace worktree --input task=task.json --naming-input identity=identity.json \
+  --expected-launch-digest DIGEST --command-id issue19:first --json
+```
+
+Schema — project-owned JSON Schema 2020-12 без внешних `$ref` и symlinks.
+Snapshot содержит declaration, schemas, полные canonical values, sources и digests.
+Его общий предел — 128 KiB canonical UTF-8 JSON, включая все служебные поля.
+Core не ищет ID в task description и не передаёт naming values шагам.
+Изменение любого поля value, schema или declaration делает review устаревшим.
+Whitespace JSON не меняет canonical value. Preview не резервирует имя.
+
+```
+profile + schema + value
+          |
+       validate
+          |
+       review /8
+          |
+    freshness check
+          |
+    claim /5 + snapshot
+```
+
+Summary/start `/8` показывают snapshot и фактический claim.
+`claim list` использует `foundation-claims/4`; persisted record — `authority-claims/5`.
+Continue/resume/recover сохраняют source snapshot и отказывают `--naming-input` override.
+При новом claim от commit сохраняются исходная основа и snapshot; allocator выбирает свободный suffix.
+Checkout и запуск без Git workspace не требуют naming values. Явные неприменимые values получают отказ.
+Прежние profiles `/2–/4` и сохранённые Runs сохраняют свои контракты.
+
+[Author reference](../examples/authoring/project-profile-authoring-reference.yaml) показывает сами поля.
+[Native probe](../examples/workflows/project-owned-naming/README.md) проверяет контракт без AI host.

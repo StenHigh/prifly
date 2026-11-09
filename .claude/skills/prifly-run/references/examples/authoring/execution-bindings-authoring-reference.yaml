@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.87/schemas/authoring/project-workflow-folder-v1.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/project-workflow-folder-v1.schema.json
 # Reference for one package root workflow.yaml, not a ready-to-run package.
 # The named step/check and supporting files must actually exist in its folder.
 # The graph stays in YAML; this section only binds existing executors.
