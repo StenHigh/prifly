@@ -41,3 +41,10 @@ Wire: новые authoring sidecars `/1`; Project profile `/3`–`/5`; суще�
 Сводка запуска связывает effective contract через exact package ref и build key. Отдельных полей в прежние closed DTO изменение не добавляет.
 
 Проверки подтверждают source implementation. Released-binary qualification и downstream classic/profiled A1–A10 не заявляются. Workflows issue #3 сохраняет отдельный статус.
+
+## Итог публикации
+
+Реализация опубликована в [bb2dbad5](https://github.com/StenHigh/prifly/commit/bb2dbad52e18cf614ad6d4efb967161ef77f280a).
+Полные локальные ворота с Go 1.27.3 в PATH завершились exit 0 на staged bytes этой реализации; все modules verified.
+[Issue #22](https://github.com/StenHigh/prifly/issues/22) закрыт как completed после публикации решения.
+[Комментарий с evidence](https://github.com/StenHigh/prifly/issues/22#issuecomment-6753001335) сохраняет границу source acceptance и downstream qualification.

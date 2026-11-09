@@ -14,5 +14,5 @@
 
 - [x] 3.1 Добавить closed authoring schemas, capability, authoring reference, operations guide и термин; выполнить schema/capability/glossary checks.
 - [x] 3.2 Выполнить `make test-changed`, `openspec validate add-project-owned-compile-parameters --strict` и `git diff --check`; проверить отсутствие изменений historical evidence и old bundles.
-- [ ] 3.3 Выполнить `make ci-check-once CHECK_CONTEXT=codex-app-authorized`; проверить итоговый diff и сохранить готовый commit.
-- [ ] 3.4 Сохранить evidence C1–C8 и закрыть issue #22 с доступной ссылкой на готовое решение; downstream issue #3 остаётся самостоятельной приёмкой.
+- [x] 3.3 Выполнить `make ci-check-once CHECK_CONTEXT=codex-app-authorized`; проверить итоговый diff и сохранить готовый commit.
+- [x] 3.4 Сохранить evidence C1–C8 и закрыть issue #22 с доступной ссылкой на готовое решение; downstream issue #3 остаётся самостоятельной приёмкой.
