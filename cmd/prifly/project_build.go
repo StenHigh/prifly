@@ -331,6 +331,9 @@ func projectBuildVariant(source projectPackageSource, components []projectCompil
 		"decision_catalog": source.DecisionCatalog, "package_profile": profile, "values": values,
 		"settings": options.Settings, "exclude": options.Exclude, "extensions": options.Extensions, "documents": inputDocuments,
 	}
+	if len(source.CompileParameters) != 0 {
+		input["compile_parameters"] = source.CompileParameters
+	}
 	if source.ExtensionPoints != nil {
 		input["extension_points"] = source.ExtensionPoints
 	}

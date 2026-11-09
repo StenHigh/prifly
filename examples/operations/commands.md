@@ -451,6 +451,9 @@ Default в таблице — значение parser до применения 
 | `--explain` | boolean | `false` | show source composition and effective settings; output directory is optional |
 | `--value` | повторяемое значение | `[]` | explicit YAML value NAME=JSON |
 
+Объявленные параметры сборки задаются в `project/compile-values.yaml` по [процедуре](launch.md#compile-parameters).
+Compile, prepare и start читают этот файл. `--value` не переопределяет declared compile parameter.
+
 <!-- cli-flags:projectExtend -->
 
 ### project extend

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "authoring",
+    "values"
+  ],
+  "$id": "urn:prifly:yaml-authoring:compile-values:1",
+  "properties": {
+    "authoring": {
+      "const": "prifly-compile-values/1"
+    },
+    "values": {
+      "type": "object",
+      "minProperties": 0,
+      "maxProperties": 256,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+      }
+    }
+  }
+}

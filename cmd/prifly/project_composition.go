@@ -134,6 +134,9 @@ func projectReadComposedFolder(root, folder string) (projectPackageSource, error
 		}
 	}
 	if !marked {
+		if err := projectReadCompileParameters(root, &source); err != nil {
+			return source, err
+		}
 		return source, nil
 	}
 	profile, err := readProjectProfile(root)
@@ -173,19 +176,29 @@ func (r *projectCompositionReader) read(path string) ([]byte, error) {
 	if err != nil {
 		return nil, &prifly.Fault{Code: "project_composition_source_invalid", Message: path + ": cannot read a confined regular source", Cause: err}
 	}
+	if err := r.recordBytes(path, data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (r *projectCompositionReader) recordBytes(path string, data []byte) error {
+	if _, known := r.files[path]; !known && len(r.files) >= prifly.MaxPackagePayloadFiles {
+		return refusal("project_composition_limit", "source file count exceeds package payload limit")
+	}
 	if len(data) > flow.MaxDocumentBytes {
-		return nil, refusal("project_composition_limit", path+": source exceeds document byte limit")
+		return refusal("project_composition_limit", path+": source exceeds document byte limit")
 	}
 	if r.sizes == nil {
 		r.sizes = map[string]int{}
 	}
 	r.bytes += len(data) - r.sizes[path]
 	if r.bytes > prifly.MaxPackageArchiveBytes {
-		return nil, refusal("project_composition_limit", "source bytes exceed package archive limit")
+		return refusal("project_composition_limit", "source bytes exceed package archive limit")
 	}
 	r.sizes[path] = len(data)
 	r.files[path] = fmt.Sprintf("sha256:%x", sha256.Sum256(data))
-	return data, nil
+	return nil
 }
 
 func (r *projectCompositionReader) document(path string) (any, error) {
@@ -265,6 +278,17 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 	if err != nil {
 		return nil, err
 	}
+	if err := projectReadCompileParameters(r.root, &source); err != nil {
+		return nil, err
+	}
+	for _, path := range source.ReadPaths {
+		data, frozen := source.CompileSources[path]
+		if frozen && (strings.HasSuffix(path, "/"+projectCompileParametersFile) || strings.HasSuffix(path, "/"+projectCompileValuesFile)) {
+			if err := r.recordBytes(path, data); err != nil {
+				return nil, err
+			}
+		}
+	}
 	object := source.RootValue.(map[string]any)
 	relativeFolder, err := projectRelativePath(r.root, folder)
 	if err != nil {
@@ -290,9 +314,17 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 	}
 	for i := range n.source.Documents {
 		doc := &n.source.Documents[i]
-		value, err := r.document(doc.Source)
-		if err != nil {
-			return nil, err
+		var value any
+		if data, frozen := source.CompileSources[doc.Source]; frozen {
+			if err := r.recordBytes(doc.Source, data); err != nil {
+				return nil, err
+			}
+			value = projectCompositionClone(doc.Value)
+		} else {
+			value, err = r.document(doc.Source)
+			if err != nil {
+				return nil, err
+			}
 		}
 		component, ok := value.(map[string]any)
 		if !ok {
@@ -454,6 +486,9 @@ func (r *projectCompositionReader) load(name, folder string, effective bool, dep
 			declared[document.Extensions] = true
 		}
 		for _, path := range source.ReadPaths {
+			if _, frozen := source.CompileSources[path]; frozen {
+				continue
+			}
 			if !declared[path] {
 				if err := r.record(path); err != nil {
 					return nil, err
@@ -1187,6 +1222,12 @@ func (r *projectCompositionReader) finish(n *projectCompositionNode) (projectPac
 		return -1
 	})
 	n.source.RootValue = rootDoc.Value
+	compileParameters, compileNames := map[string]any{}, map[string]bool{}
+	for _, node := range r.nodes {
+		maps.Copy(compileParameters, node.source.CompileParameters)
+		maps.Copy(compileNames, node.source.CompileParameterNames)
+	}
+	n.source.CompileParameters, n.source.CompileParameterNames = compileParameters, compileNames
 	n.source.ReadPaths = slices.Sorted(maps.Keys(r.files))
 	n.source.Composition = composition
 	return n.source, nil

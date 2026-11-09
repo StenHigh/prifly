@@ -340,6 +340,12 @@ func (r *projectCompositionReader) finishUnified(n *projectCompositionNode) (pro
 	source.ExtensionPoints = nil
 	source.Unified = unified
 	source.Composition = composition
+	compileParameters, compileNames := map[string]any{}, map[string]bool{}
+	for _, node := range r.nodes {
+		maps.Copy(compileParameters, node.source.CompileParameters)
+		maps.Copy(compileNames, node.source.CompileParameterNames)
+	}
+	source.CompileParameters, source.CompileParameterNames = compileParameters, compileNames
 	source.ReadPaths = slices.Sorted(maps.Keys(r.files))
 	source.Dependencies = slices.Compact(slices.Sorted(slices.Values(source.Dependencies)))
 	source.RequestedCapabilities = append([]string{}, slices.Compact(slices.Sorted(slices.Values(source.RequestedCapabilities)))...)

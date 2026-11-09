@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=../../schemas/authoring/compile-parameters-v1.schema.json
+# File: .prifly/workflows/NAME/compile-parameters.yaml (package-owned).
+# Requires Project profile /3 or newer. Sidecar contract: /1.
+# The schema source contains a whole scalar placeholder:
+# properties:
+#   description: {type: string, maxLength: "{{task_description_limit}}"}
+# Root, child and worker ports refer to that same local schema.
+authoring: prifly-compile-parameters/1
+parameters:
+  task_description_limit:
+    type: integer
+    minimum: 1
+    maximum: 1000000
+    default: 12000
+    bindings:
+      - schema: schema_task # Owned schema alias, never an external exact ref.
+        pointer: /properties/description/maxLength # Existing string-schema keyword.

@@ -137,3 +137,9 @@ Opt-in profile `/5`, naming namespace, summary/start `/8` и claim snapshot `/5`
 сохраняют прежние version boundaries. Ownership не переносится.
 Released-Core приёмка issue №19 выполнена на `v0.13.88`; evidence —
 `changes/archive/2026-11-03-add-project-owned-worktree-naming-inputs/evidence/released-acceptance.md`.
+
+Пока `add-project-owned-compile-parameters` активен, его deltas уточняют
+объявленные параметры сборки и project-owned values для `workflow-and-context`,
+`cli-protocol`, `published-contracts` и `specification-governance`.
+Новые sidecars `/1` используют текущие compiled variants профилей `/3`–`/5`.
+Ownership остаётся прежним; old bundles и saved Run contracts сохраняются.

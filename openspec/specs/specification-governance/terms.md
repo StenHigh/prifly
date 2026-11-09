@@ -1,6 +1,6 @@
 # Словарь Pri-Fly
 
-Редакция 1.39. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
+Редакция 1.40. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
 
 Используем привычный отраслевой термин, когда его смысл подходит. Собственные понятия Pri-Fly определяем явно; сходство названий не означает совместимости с Temporal, Argo, OpenTelemetry или другим продуктом. Английское название закрепляет понятие, русский текст объясняет его. Краткие имена существующего Go-кода перечислены как соответствия, а не как новые сущности.
 
@@ -193,6 +193,19 @@ workflow folder в legacy forms. Формат `/3` также допускает
 workflow export через qualified target. Значение проверяется исходной schema input и становится
 default новой WorkflowRevision до sealing; это не environment variable,
 runtime override или неограниченный patch definition.
+
+<a id="compile-parameter"></a>
+### Compile parameter — Параметр сборки
+
+Package-declared значение compiler с типом integer, положительным диапазоном, default и точными schema bindings.
+`compile-parameters.yaml` (`prifly-compile-parameters/1`) разрешает whole-scalar substitution только в объявленных `maxLength` строковых schemas.
+Binding называет локальный owned schema alias и JSON Pointer существующего поля.
+Go-форма compiler: `projectCompileParameter`, binding: `projectCompileParameterBinding` в `cmd/prifly/project_compile_parameters.go`.
+
+**Project-owned compile value — Значение параметра сборки проекта.** Сохранённый выбор проекта в `project/compile-values.yaml` (`prifly-compile-values/1`).
+Compiler применяет его до task validation и sealing; без выбора использует declared default.
+Это значение меняет новый compiled contract. Project workflow setting меняет default configuration input и сохраняет свой прежний смысл.
+Compile, prepare и start читают одинаковое значение; существующий Run сохраняет свой контракт.
 
 <a id="optional-feature"></a>
 ### Optional feature — Необязательная часть сценария

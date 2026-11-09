@@ -159,6 +159,9 @@ func projectBuildUnifiedVariant(source projectPackageSource, components []projec
 		}
 		input["execution_bindings"] = v
 	}
+	if len(source.CompileParameters) != 0 {
+		input["compile_parameters"] = source.CompileParameters
+	}
 	provenance := &projectBuildProvenance{SchemaVersion: "prifly-build-provenance/3", Algorithm: "b2", AuthorPackage: projectBuildIdentity{ID: source.ID, Version: source.Version}, BuildKey: projectUnifiedHash(input), PackageProfile: profile, Values: values, Settings: options.Settings, Exclude: options.Exclude, Composition: &source.Composition.CompositionReview, Inputs: input, Components: []projectBuildMapping{}}
 	result := make([]projectCompileComponent, len(components))
 	done := map[int]bool{}

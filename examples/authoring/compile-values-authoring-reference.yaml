@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=../../schemas/authoring/compile-values-v1.schema.json
+# File: .prifly/workflows/NAME/project/compile-values.yaml (project-owned).
+# Requires Project profile /3 or newer and compile-parameters.yaml contract /1.
+# Update preserves project/. Compile, prepare and start read the same value.
+# Omit a parameter to use its package-declared default.
+authoring: prifly-compile-values/1
+values:
+  task_description_limit: 32000 # Integer within the package-declared range.

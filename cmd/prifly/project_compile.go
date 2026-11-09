@@ -30,6 +30,9 @@ var projectValueName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 var projectValueReference = regexp.MustCompile(`^\{\{([a-z][a-z0-9_-]*)\}\}$`)
 
 type projectPackageSource struct {
+	CompileSources        map[string][]byte
+	CompileParameters     map[string]any
+	CompileParameterNames map[string]bool
 	ID                    string
 	Version               string
 	Description           string
@@ -214,6 +217,11 @@ func (c *cli) projectCompile(ctx context.Context, args []string) error {
 	source, err := readProjectWorkflowFolder(root, sourcePath)
 	if err != nil {
 		return err
+	}
+	for name := range compiledValues {
+		if source.CompileParameterNames[name] {
+			return refusal("project_compile_parameter_invalid", name+": use project/compile-values.yaml for a declared compile parameter")
+		}
 	}
 	options, err := projectReadWorkflowOptions(root, source, compiledValues)
 	if err != nil {
