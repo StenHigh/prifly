@@ -426,7 +426,10 @@ func (e *Engine) AdmitSessionAction(ctx context.Context, command AdmitActionComm
 		if intent, exists := run.ActionIntents[command.Payload.IntentID]; exists {
 			admitted, contractErr = e.proposalStepContract(run, intent.Intent)
 			var packageBlocked error
-			packagePin, packageBlocked, err = e.packageAdmissionGate(ctx, []flow.Ref{intent.Tool.Ref}, false)
+			// Check the Run and the tool against one package snapshot. The
+			// tool itself never receives a schema migration exception.
+			refs := append(runPackageRefs(run), intent.Tool.Ref)
+			packagePin, packageBlocked, err = e.packageAdmissionGateWithMigration(ctx, refs, false, run.SchemaMigration, intent.Tool.Ref)
 			if err != nil {
 				return local.ApplyResult{}, err
 			}

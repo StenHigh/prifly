@@ -518,7 +518,7 @@ func (e *Engine) packageAdmissionGate(ctx context.Context, refs []flow.Ref, requ
 	return e.packageAdmissionGateWithMigration(ctx, refs, requireResolvable, nil)
 }
 
-func (e *Engine) packageAdmissionGateWithMigration(ctx context.Context, refs []flow.Ref, requireResolvable bool, binding *SchemaMigrationBinding) (*local.ControlPin, error, error) {
+func (e *Engine) packageAdmissionGateWithMigration(ctx context.Context, refs []flow.Ref, requireResolvable bool, binding *SchemaMigrationBinding, unmigratedRefs ...flow.Ref) (*local.ControlPin, error, error) {
 	record, version, err := e.readPackages(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -529,7 +529,11 @@ func (e *Engine) packageAdmissionGateWithMigration(ctx context.Context, refs []f
 	selected := map[flow.Ref]flow.Ref{}
 	if binding != nil {
 		for _, s := range binding.Selections {
-			selected[s.SchemaRef] = s.SupplierRef
+			// An executable operation keeps its ordinary gate even if a
+			// package also declares that exact ref as a schema.
+			if !slices.Contains(unmigratedRefs, s.SchemaRef) {
+				selected[s.SchemaRef] = s.SupplierRef
+			}
 		}
 	}
 	wanted := map[flow.Ref]bool{}

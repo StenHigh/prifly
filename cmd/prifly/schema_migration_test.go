@@ -245,3 +245,49 @@ func TestCLIProjectSchemaMigrationIsExplicitReviewedAndSerializedAtNine(t *testi
 		})
 	}
 }
+
+func TestCLIProjectSchemaMigrationRejectsLegacyProfileBeforeEffects(t *testing.T) {
+	t.Parallel()
+	root, authority := singleLaunchFixture(t)
+	profilePath := filepath.Join(root, ".prifly/project.yaml")
+	profile, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, root, ".prifly/project.yaml", strings.Replace(string(profile), "prifly-project-profile/3", "prifly-project-profile/2", 1))
+	e, err := prifly.Open(authority, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, cut, err := e.Store.ReadAll(context.Background(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := e.Claims(context.Background())
+	e.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, root, "brief.json", `{"schema_version":"1","id":"test:brief/legacy-migration","subject":"Legacy migration refusal","desired_outcome":"Refuse before launch","in_scope":["profile boundary"],"out_of_scope":[],"completion_criteria":["no authority changes"],"source_refs":[],"assumptions":[],"confirmation":"explicit"}`)
+	code, out, stderr := runCLI(t, "--project", authority, "project", "start", "--repository", root, "--launch", "single", "--host", "codex-cli", "--brief", filepath.Join(root, "brief.json"), "--input", "task="+filepath.Join(root, "task.json"), "--schema-migration", "schema-migration:explicit-selection")
+	var problem prifly.Problem
+	if code != 2 || out != "" || json.Unmarshal([]byte(stderr), &problem) != nil || problem.Code != "project_questionnaire_prepare_requires_profile_3" {
+		t.Fatalf("legacy migration did not refuse before launch: exit=%d out=%s stderr=%s", code, out, stderr)
+	}
+	e, err = prifly.Open(authority, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	_, afterCut, err := e.Store.ReadAll(context.Background(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterClaims, err := e.Claims(context.Background())
+	claimsJSON, _ := json.Marshal(claims)
+	afterClaimsJSON, _ := json.Marshal(afterClaims)
+	if err != nil || cut != afterCut || !bytes.Equal(claimsJSON, afterClaimsJSON) {
+		t.Fatal("legacy refusal changed authority or claims", err)
+	}
+	t.Log("[FIX:21] legacy profile refusal leaves authority cut and claims unchanged")
+}

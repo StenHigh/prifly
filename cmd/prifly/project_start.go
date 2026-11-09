@@ -142,6 +142,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		return err
 	}
 	neutral := projectNeutralProfile(profile.SchemaVersion)
+	if !neutral && *schemaMigration != "" {
+		return refusal("project_questionnaire_prepare_requires_profile_3", "schema migration selection requires reviewed Project profile /3 or later; legacy start without selection remains supported")
+	}
 	if (continuation || recovering) && !neutral {
 		return refusal("project_continue_requires_profile_3", "continuation and recovery require Project profile /3")
 	}

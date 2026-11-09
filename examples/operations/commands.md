@@ -501,7 +501,7 @@ Default в таблице — значение parser до применения 
 
 | Flag | Тип | Default | Значение/источник |
 |---|---|---|---|
-| `--schema-migration` | строка | `""` | Явный ID записанного решения schema migration; пустое значение сохраняет прежний admission. |
+| `--schema-migration` | строка | `""` | Явный ID решения schema migration; нужен Project profile `/3+`; пустое значение сохраняет прежний admission. |
 | `--repository` | строка | `"."` | directory that owns the shared Pri-Fly profile |
 | `--launch` | строка | `""` | declared launch ID from project.yaml |
 | `--host` | строка | `""` | host entry point that selects project skills |

@@ -49,6 +49,7 @@ prifly --project AUTHORITY project start --repository REPOSITORY --launch LAUNCH
 ```
 
 Дополните Start обычными inputs и подтверждениями выбранного launch.
+Project требует профиль `/3` или новее для выбора миграции. Legacy `/2` отказывает до import, claim и Run.
 Project summary/start `/9` сохраняет выбранный ID. Review digest меняется при изменении выбора.
 Start проверяет exact consumer и принадлежность workflow. Run связывает только schemas своего настоящего workflow closure.
 Первый успешный apply атомарно переводит package authority `/1` в `/2`. Старый binary должен отказать на новом state.

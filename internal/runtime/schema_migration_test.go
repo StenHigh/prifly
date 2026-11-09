@@ -1124,3 +1124,151 @@ func TestSchemaMigrationStaleProblemAlwaysUsesTheConflictExit(t *testing.T) {
 		}
 	}
 }
+
+func TestSchemaMigrationActionAdmissionChecksTheCurrentDecision(t *testing.T) {
+	t.Parallel()
+	for _, change := range []string{"none", "repeat-revoke", "supplier-quarantine"} {
+		t.Run(change, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			e, _, _ := assistedFixture(t)
+			var registry RegistryFile
+			registryPath := filepath.Join(e.Root, e.Config.Configuration.RegistryFile)
+			data, err := os.ReadFile(registryPath)
+			if err != nil || json.Unmarshal(data, &registry) != nil {
+				t.Fatal(err)
+			}
+			var schema, tool flow.Ref
+			for _, def := range registry.Entries {
+				if def.Kind == "schema" {
+					schema = def.Ref
+				}
+				if def.Kind == "tool" {
+					tool = def.Ref
+				}
+			}
+			registry.Entries = slices.DeleteFunc(registry.Entries, func(d Definition) bool { return d.Ref == schema })
+			writeRuntimeJSON(t, registryPath, registry)
+			schemaBytes, err := os.ReadFile(filepath.Join(e.Root, "schemas/plan.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			importSource := func(id string, files map[string]string, components []map[string]any, deps []flow.Ref) PackageEntry {
+				t.Helper()
+				source := packageSource(t, files, components, func(m map[string]any) { m["id"] = id; m["dependencies"] = deps })
+				result, err := e.ImportPackage(ctx, PackageImportRequest{CommandID: newID("command"), Directory: source, Reason: "reviewed assisted migration fixture"})
+				if err != nil || result.Receipt.Rejection != nil {
+					t.Fatal(err, result.Receipt.Rejection)
+				}
+				record, err := e.Packages(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, entry := range record.Packages {
+					if entry.Ref.ID == id {
+						return entry
+					}
+				}
+				t.Fatal("missing imported fixture")
+				return PackageEntry{}
+			}
+			components := []map[string]any{{"kind": "schema", "ref": schema, "path": "plan.json"}}
+			legacy := importSource("test:package/action-legacy", map[string]string{"plan.json": string(schemaBytes)}, components, []flow.Ref{})
+			setStatus := func(pkg PackageEntry, status string) {
+				t.Helper()
+				result, err := e.SetPackageStatus(ctx, PackageLifecycleRequest{CommandID: newID("command"), ID: pkg.Ref.ID, Version: pkg.Ref.Version, Status: status, Reason: "reviewed lifecycle decision"})
+				if err != nil || result.Receipt.Rejection != nil {
+					t.Fatal(err, result.Receipt.Rejection)
+				}
+			}
+			setStatus(legacy, PackageRevoked)
+			supplier := importSource("test:package/action-supplier", map[string]string{"plan.json": string(schemaBytes)}, components, []flow.Ref{})
+			workflowBytes, err := os.ReadFile(filepath.Join(e.Root, "workflows/pilot.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var workflow flow.WorkflowRevision
+			if err := json.Unmarshal(workflowBytes, &workflow); err != nil {
+				t.Fatal(err)
+			}
+			workflowDigest, err := flow.Digest(workflowBytes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			workflowRef := flow.Ref{ID: workflow.ID, Version: workflow.Version, Digest: workflowDigest}
+			consumer := importSource("test:package/action-consumer", map[string]string{"workflow.json": string(workflowBytes)}, []map[string]any{{"kind": "workflow", "ref": workflowRef, "path": "workflow.json"}}, []flow.Ref{supplier.Ref})
+			plan, err := e.PrepareSchemaMigration(ctx, SchemaMigrationRequest{SchemaVersion: "schema-migration-request/1", ConsumerRef: consumer.Ref, Selections: []SchemaMigrationSelection{{SchemaRef: schema, SupplierRef: supplier.Ref}}})
+			if err != nil || !plan.Applicable {
+				t.Fatal(err, plan.Reasons)
+			}
+			migration, err := e.ApplySchemaMigration(ctx, SchemaMigrationApplyRequest{CommandID: newID("command"), Plan: plan, ExpectedReviewDigest: plan.ReviewDigest, Reason: "reviewed assisted schema"})
+			if err != nil || migration.Receipt.Rejection != nil {
+				t.Fatal(err, migration.Receipt.Rejection)
+			}
+			started, err := e.Start(ctx, StartOptions{CommandID: newID("command"), WorkflowFile: "workflows/pilot.json", BriefFile: "brief.json", Inputs: map[string]string{}, SchemaMigrationID: migration.Decision.ID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			task := handOver(t, e, started.Receipt.RunID)
+			run, view, err := e.load(ctx, task.RunID)
+			if err != nil || run.SchemaVersion != CoreSchemaMigrationStateVersion || run.SchemaMigration == nil {
+				t.Fatal("missing real migration state", err)
+			}
+			resource := ResourceIdentity{ProviderRef: tool, CanonicalID: "git:claimed-worktree", Scope: "project"}
+			intent := ActionIntent{SchemaVersion: "1", ID: "intent:migration", RunID: task.RunID, StepInstanceID: task.StepInstanceID, OriginatingAttempt: task.AttemptID, OperationID: "operation:migration", ToolRef: tool, Operation: "commit", ArgumentsSchemaRef: schema, Arguments: json.RawMessage(`{"summary":"reviewed action"}`), Targets: []ResourceIdentity{resource}, InputArtifacts: []ArtifactRef{}, ExpectedOutputs: map[string]ActionExpectedOutput{}, EffectClass: "workspace_write", RetryClass: "never", Preconditions: []ActionPrecondition{{Resource: resource, ExpectedVersion: "HEAD"}}, DispatchNotAfter: "2030-01-01T00:00:00Z"}
+			if _, err := e.ProposeSessionAction(ctx, ProposeActionCommand{SchemaVersion: "1", CommandID: newID("command"), RunID: task.RunID, ExpectedRunVersion: view.Snapshot.Version, Payload: intent}); err != nil {
+				t.Fatal(err)
+			}
+			run, view, err = e.load(ctx, task.RunID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.SetControlApprovalPolicy(ctx, ControlApprovalPolicyRequest{CommandID: newID("command"), Operations: []string{"action.admit"}, Quorum: 1, Independence: "none", Reason: "review action"}); err != nil {
+				t.Fatal(err)
+			}
+			digest := run.ActionIntents[intent.ID].Digest
+			if _, err := e.RequestControlApproval(ctx, ApprovalRequest{CommandID: newID("command"), Operation: "action.admit", IntentDigest: digest, Reason: "review exact intent"}); err != nil {
+				t.Fatal(err)
+			}
+			control, _, err := e.Control(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			approval := control.Approvals[len(control.Approvals)-1]
+			if _, err := e.DecideControlApproval(ctx, ApprovalDecision{CommandID: newID("command"), ApprovalID: approval.ID, Decision: "approve", Reason: "approved exact intent"}); err != nil {
+				t.Fatal(err)
+			}
+			if change == "repeat-revoke" {
+				setStatus(legacy, PackageRevoked)
+			}
+			if change == "supplier-quarantine" {
+				setStatus(supplier, PackageQuarantined)
+			}
+			t.Logf("[FIX:21] action admission: %s, Run %s", change, task.RunID)
+			_, err = e.AdmitSessionAction(ctx, AdmitActionCommand{SchemaVersion: "1", CommandID: newID("command"), RunID: task.RunID, ExpectedRunVersion: view.Snapshot.Version, Payload: AdmitActionPayload{IntentID: intent.ID, IntentDigest: digest, ApprovalRefs: []string{approval.ID}, GrantRefs: []string{}}})
+			if change == "none" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				migrationRefusalCode(t, err, "schema_migration_decision_invalid")
+			}
+			after, afterView, loadErr := e.load(ctx, task.RunID)
+			if loadErr != nil {
+				t.Fatal(loadErr)
+			}
+			control, _, err = e.Control(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if change == "none" {
+				if len(after.ActionAdmissions) != 1 || len(after.ActionDeliveries) != 1 || control.approval(approval.ID).Status != "consumed" {
+					t.Fatal("valid migration did not admit exactly one approved action")
+				}
+			} else if len(after.ActionAdmissions) != 0 || len(after.ActionDeliveries) != 0 || afterView.Snapshot.Version != view.Snapshot.Version || control.approval(approval.ID).Status != "approved" {
+				t.Fatal("invalid migration changed Run or consumed approval")
+			}
+			t.Log("[FIX:21] admission and approval outcome verified")
+		})
+	}
+}
