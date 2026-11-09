@@ -94,7 +94,7 @@ func schemaBytes(value any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(data, '\n'), nil
+	return data, nil
 }
 
 // Keep only new public roots and their reachable definitions. Inheriting a
