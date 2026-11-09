@@ -149,6 +149,8 @@ class EditorContractTest(unittest.TestCase):
             "check-v1",
             "context-v1",
             "workflow-catalog-v1",
+            "compile-parameters-v1",
+            "compile-values-v1",
         }
         # Require composition schemas together when the engine publishes them;
         # the same check also covers releases without composition support.
@@ -213,6 +215,14 @@ class EditorContractTest(unittest.TestCase):
         self.assertEqual(
             (EXAMPLES / "authoring" / "workflow-catalog-authoring-reference.yaml").read_text().splitlines()[0],
             "# yaml-language-server: $schema=../../schemas/authoring/workflow-catalog-v1.schema.json",
+        )
+        self.assertEqual(
+            (EXAMPLES / "authoring" / "compile-parameters-authoring-reference.yaml").read_text().splitlines()[0],
+            "# yaml-language-server: $schema=../../schemas/authoring/compile-parameters-v1.schema.json",
+        )
+        self.assertEqual(
+            (EXAMPLES / "authoring" / "compile-values-authoring-reference.yaml").read_text().splitlines()[0],
+            "# yaml-language-server: $schema=../../schemas/authoring/compile-values-v1.schema.json",
         )
 
 
