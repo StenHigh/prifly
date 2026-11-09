@@ -1,6 +1,6 @@
 # Словарь Pri-Fly
 
-Редакция 1.38. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
+Редакция 1.39. Канонические названия, определения и соответствия текущему коду. Словарь охватывает основу F1 и расширения F2; наличие термина **не означает, что возможность уже реализована или принята**. Фактический статус — в [delivery roadmap](../delivery-roadmap/spec.md).
 
 Используем привычный отраслевой термин, когда его смысл подходит. Собственные понятия Pri-Fly определяем явно; сходство названий не означает совместимости с Temporal, Argo, OpenTelemetry или другим продуктом. Английское название закрепляет понятие, русский текст объясняет его. Краткие имена существующего Go-кода перечислены как соответствия, а не как новые сущности.
 
@@ -1053,9 +1053,29 @@ bytes определяют текущий `envelope_digest` в SessionTask и о
 
 **Removed** закрывает пакет для нового разрешения и отклоняется, пока незавершённый Run его держит: uninstall не ломает работу в полёте. **Quarantined** так же прекращает разрешение, но обратим. **Revoked** дополнительно блокирует новые admissions там, где Run уже закрепил его bytes: в этом и состоит смысл security revocation, поэтому он допускается и при живых держателях.
 
-Ни один из статусов не удаляет bytes: они остаются для прогонов, которые их закрепили, и для evidence. Отзыв терминален — ни смена статуса, ни повторный импорт тех же bytes не возвращают доверие, иначе отзыв был бы предложением, а не решением. Факты уже выполненных внешних действий не стираются.
+Ни один из статусов не удаляет bytes: они остаются для прогонов, которые их закрепили, и для evidence. Отзыв терминален — ни смена статуса, ни повторный импорт тех же bytes не возвращают доверие, иначе отзыв был бы предложением, а не решением. Факты уже выполненных внешних действий не стираются. SchemaMigrationDecision допускает точные проверенные schemas только в явно выбранном новом Run с SchemaMigrationBinding. Package остаётся revoked; old Runs, code и trusted reuse сохраняют запреты.
 
 `package verify` перечитывает каждый запечатанный байт и **сообщает** расхождение, никогда его не исправляя: починка заменила бы доказательство догадкой. Две одновременно разрешаемые версии допустимы; два разрешаемых пакета, экспортирующих одну component identity, — нет.
+
+<a id="schema-migration-plan"></a>
+### SchemaMigrationPlan — План ограниченного допуска схем
+
+Read-only снимок точного consumer, schema suppliers, всех покрытых revocations и влияющих Runs. Plan хранит preconditions authority и review digest. Неполный выбор либо scan не даёт применимого plan.
+
+<a id="schema-migration-decision"></a>
+### SchemaMigrationDecision — Решение владельца о допуске схем
+
+Записанное атомарной authority командой решение owner по точному SchemaMigrationPlan. Decision хранит actor, reason, command identity и commit cut. Оно не восстанавливает revoked package и не разрешает executable content.
+
+<a id="schema-migration-binding"></a>
+### SchemaMigrationBinding — Закреплённое происхождение допуска схем
+
+Provenance ограниченного допуска schemas, закреплённое новым Run после явного выбора decision. Binding содержит exact consumer и только нужные workflow schemas с выбранными suppliers. Каждый admission повторно проверяет текущие lifecycle facts. Старый Run без binding сохраняет прежний запрет.
+
+<a id="package-lifecycle-generation"></a>
+### Lifecycle generation — Версия lifecycle решения одного package
+
+Положительное целое в `authority-packages/2`. Новая принятая lifecycle command увеличивает generation, включая повторный revoke. Retry прежней command identity не увеличивает generation. Exact reimport trusted bytes сохраняет generation и исходное trust decision. Первый migration apply присваивает прежним entries generation 1 без изменения их trust/status facts.
 
 <a id="trust-root"></a>
 ### TrustRoot / PackageSignature — Корень доверия и открепляемая подпись
@@ -1755,6 +1775,12 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [PackageStatus](#package-lifecycle) | `internal/runtime/packages.go` | `runtime.PackageEntry.Status` | `status` |
 | [PackageStatus](#package-lifecycle) | `internal/runtime/packages.go` | `runtime.PackageEntry.StatusReason` | `status_reason` |
 | [PackageStatus](#package-lifecycle) | `internal/runtime/package_lifecycle.go` | `runtime.PackageVerification` | — |
+| [SchemaMigrationPlan](#schema-migration-plan) | `internal/runtime/schema_migration.go` | `runtime.SchemaMigrationPlan` | — |
+| [SchemaMigrationDecision](#schema-migration-decision) | `internal/runtime/schema_migration.go` | `runtime.SchemaMigrationDecision` | — |
+| [SchemaMigrationBinding](#schema-migration-binding) | `internal/runtime/schema_migration.go` | `runtime.SchemaMigrationBinding` | — |
+| [SchemaMigrationBinding](#schema-migration-binding) | `internal/runtime/model.go` | `runtime.Run.SchemaMigration` | `schema_migration` |
+| [SchemaMigrationDecision](#schema-migration-decision) | `internal/runtime/packages.go` | `runtime.PackageRecord.SchemaMigrations` | `schema_migrations` |
+| [Lifecycle generation](#package-lifecycle-generation) | `internal/runtime/packages.go` | `runtime.PackageEntry.LifecycleGeneration` | `lifecycle_generation` |
 | [TrustRoot](#trust-root) | `internal/runtime/package_archive.go` | `runtime.TrustRoot` | — |
 | [PackageSignature](#trust-root) | `internal/runtime/package_archive.go` | `runtime.PackageSignature` | — |
 | [PackageSignature](#trust-root) | `internal/runtime/package_archive.go` | `runtime.PackageSignature.ManifestDigest` | `manifest_digest` |

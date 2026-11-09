@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/stenhigh/prifly/internal/projectwire"
@@ -79,6 +80,15 @@ func worktreeNamingSchema() ([]byte, error) {
 		if !strings.HasPrefix(name, "CoreRunView") {
 			continue
 		}
+		// This published naming bundle closes over the read contracts that existed
+		// at its release. Later Run boundaries belong to a new Project bundle.
+		if strings.HasPrefix(name, "CoreRunViewV") {
+			version, err := strconv.Atoi(strings.TrimPrefix(name, "CoreRunViewV"))
+			if err != nil || version > 44 {
+				continue
+			}
+		}
+
 		raw, err := prifly.PublicSchema(name)
 		if err != nil {
 			return nil, err

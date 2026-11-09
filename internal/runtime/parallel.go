@@ -127,7 +127,7 @@ func (e *Engine) enterParallel(ctx context.Context, loaded Run, view local.ReadV
 		opened = append(opened, declared.ID)
 	}
 	payload := map[string]any{"stage_activation_id": activation.ID, "branch_ids": opened, "input_refs": inputs}
-	_, err := e.apply(ctx, e.owner, commandID, loaded.ID, "stage.parallel_entered", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	_, err := e.applyPackageAdmission(ctx, loaded, e.owner, commandID, loaded.ID, "stage.parallel_entered", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		a := r.Activations[activation.ID]
 		if err := checkFanOutActivation(*r, p, a, "ready"); err != nil {
 			return local.Change{}, err

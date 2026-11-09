@@ -101,10 +101,24 @@ func decodeState(data []byte, value any) error {
 		if err := json.Unmarshal(data, &fields); err != nil {
 			return err
 		}
+		if _, present := fields["schema_migration"]; present && r.SchemaVersion != CoreSchemaMigrationStateVersion {
+			return errors.New("older state cannot contain schema migration")
+		}
+		if err := schemaMigrationDefinitionsInvariant(*r); err != nil {
+			return err
+		}
+		if err := schemaMigrationBindingInvariant(*r); err != nil {
+			return err
+		}
 		_, queueBindingPresent := fields["queue_task"]
 		_, queueRequestPresent := fields["queue_request_bytes"]
 		if (queueBindingPresent || queueRequestPresent) && !atLeast(r.SchemaVersion, CoreQueueStateVersion) {
 			return errors.New("older state cannot contain a queue task binding")
+		}
+		if r.SchemaVersion == CoreSchemaMigrationStateVersion {
+			if queueBindingPresent != queueRequestPresent || queueBindingPresent && (r.QueueTask == nil || len(r.QueueRequestBytes) == 0) {
+				return local.ErrIntegrity
+			}
 		}
 		if err := queueBindingInvariant(*r); err != nil {
 			return err

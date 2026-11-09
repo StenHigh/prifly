@@ -93,3 +93,5 @@ Capability без public handler описывается как contract boundary
 | `workflow_resume` | [Процедура](recovery.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `next_awaiting_host` | [Процедура](hosting.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `program_external_write` | [Процедура](authoring.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
+
+| `shared_schema_migration` | [Процедура](schema-migration.md) | Explicit schemas; Run/read 45, authority-packages/2; development change |

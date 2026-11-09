@@ -125,6 +125,10 @@ type AuthoritySnapshot struct {
 }
 
 type AuthorityCommand struct {
+	// StaleRejectionCode names a runtime-owned precondition refusal before its
+	// receipt is saved. It is excluded from command identity; ordinary callers
+	// retain their existing conflict codes.
+	StaleRejectionCode string
 	// ExpectedCut is a runtime proof guard, excluded from command identity.
 	ExpectedCut     *int64
 	ID              string
@@ -1610,6 +1614,12 @@ func (s *Store) ApplyAuthority(ctx context.Context, cmd AuthorityCommand, transf
 		change, err = applyAuthorityTransform(transform, state)
 		if err != nil && !errors.As(err, &rejection) {
 			return out, err
+		}
+	}
+	if rejection != nil && cmd.StaleRejectionCode != "" {
+		switch rejection.Code {
+		case "version_conflict", "runs_changed", "claim_ownership_conflict":
+			rejection = &Rejection{Code: cmd.StaleRejectionCode, Message: "authority preconditions changed; prepare the reviewed operation again"}
 		}
 	}
 	if rejection == nil && (len(change.Data) == 0 || len(change.Data) > MaxSnapshotBytes || !json.Valid(change.Data) || change.Result != nil && (len(change.Result) > MaxCommandBytes || !json.Valid(change.Result))) {

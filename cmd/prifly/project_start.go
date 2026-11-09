@@ -51,6 +51,7 @@ func (c *cli) projectRecover(ctx context.Context, args []string) error {
 func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare, continuation, recovering bool) error {
 	f := flags("project start")
 	queueFlags := projectQueueFlags(f)
+	schemaMigration := f.String("schema-migration", "", "explicit recorded schema migration decision")
 	repository := f.String("repository", ".", "directory that owns the shared Pri-Fly profile")
 	launchID := f.String("launch", "", "declared launch ID from project.yaml")
 	host := f.String("host", "", "host entry point that selects project skills")
@@ -124,6 +125,9 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		fingerprintFields["naming_inputs"] = namingFiles
 	}
 	f.VisitAll(func(option *flag.Flag) {
+		if option.Name == "schema-migration" && *schemaMigration == "" {
+			return
+		}
 		if option.Name != "naming-input" && option.Name != "input" && option.Name != "input-ref" && option.Name != "preflight-answer" && option.Name != "runtime-answer" {
 			fingerprintFields[option.Name] = option.Value.String()
 		}
@@ -628,6 +632,25 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			}
 			summary.WorktreeNamePreview = &namePreview
 		}
+		if *schemaMigration != "" {
+			reader, err := prifly.Open(c.project, true)
+			if err != nil {
+				return err
+			}
+			inspection, err := reader.InspectSchemaMigration(ctx, *schemaMigration)
+			reader.Close()
+			if err != nil {
+				return err
+			}
+			if !inspection.Valid {
+				return refusal("schema_migration_decision_invalid", strings.Join(inspection.Reasons, "; "))
+			}
+			if inspection.Decision.Plan.Request.ConsumerRef != compiled.Package {
+				return refusal("schema_migration_scope_mismatch", "selected decision belongs to another exact consumer package")
+			}
+			summary.SchemaVersion = "project-launch-summary/9"
+			summary.SchemaMigrationID = *schemaMigration
+		}
 		summary.ReviewDigest, err = projectCallExtensionReview(summary, compiled.CallExtensions, stageResources, resourceLimits)
 		if err != nil {
 			return err
@@ -697,7 +720,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	}
 
 	checkNamingFreshness := func(engine *prifly.Engine) error {
-		if summary.SchemaVersion != "project-launch-summary/8" || sourceNaming != nil {
+		if !projectSummaryHasOwnedNaming(summary) || sourceNaming != nil {
 			return nil
 		}
 		current, readErr := readProjectProfile(root)
@@ -719,7 +742,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		}
 		return nil
 	}
-	if summary.SchemaVersion == "project-launch-summary/8" {
+	if projectSummaryHasOwnedNaming(summary) {
 		reader, openErr := prifly.Open(c.project, true)
 		if openErr != nil {
 			return openErr
@@ -755,7 +778,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	if err := checkNamingFreshness(engine); err != nil {
 		return err
 	}
-	if summary.SchemaVersion == "project-launch-summary/8" {
+	if projectSummaryHasOwnedNaming(summary) {
 		if err := projectNamingLaunchBudget(summary); err != nil {
 			return err
 		}
@@ -845,7 +868,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				return err
 			}
 		}
-		if needsWorkspace && *workspace == "worktree" && plannedHandover == nil && summary.SchemaVersion != "project-launch-summary/8" {
+		if needsWorkspace && *workspace == "worktree" && plannedHandover == nil && !projectSummaryHasOwnedNaming(summary) {
 			currentProfile, readErr := readProjectProfile(root)
 			if readErr != nil {
 				return readErr
@@ -972,7 +995,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		// never became a Run, and the next start was refused by it.
 		return cleanupStart(err)
 	}
-	startOptions := prifly.StartOptions{CommandID: *command, ProjectTitle: profile.Title, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
+	startOptions := prifly.StartOptions{SchemaMigrationID: *schemaMigration, CommandID: *command, ProjectTitle: profile.Title, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
 	startOptions.WorkspaceClaim = claim
 	startOptions.QueueTask = queueBinding
 	if neutral {
@@ -1120,8 +1143,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 				result.SchemaVersion = "project-start/7"
 			}
 		}
-		if summary.SchemaVersion == "project-launch-summary/8" {
+		if projectSummaryHasOwnedNaming(summary) {
 			result.SchemaVersion = "project-start/8"
+		}
+		if *schemaMigration != "" {
+			result.SchemaVersion = "project-start/9"
+			result.SchemaMigrationID = *schemaMigration
+			result.LaunchSummary = &summary
 		}
 		resultBytes, err := json.Marshal(result)
 		if err != nil {
@@ -1141,8 +1169,13 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			result.SchemaVersion = "project-start/7"
 		}
 	}
-	if summary.SchemaVersion == "project-launch-summary/8" {
+	if projectSummaryHasOwnedNaming(summary) {
 		result.SchemaVersion = "project-start/8"
+	}
+	if *schemaMigration != "" {
+		result.SchemaVersion = "project-start/9"
+		result.SchemaMigrationID = *schemaMigration
+		result.LaunchSummary = &summary
 	}
 	if claim != nil && claim.Naming != nil {
 		response, err := json.Marshal(result)

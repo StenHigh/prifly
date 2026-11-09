@@ -221,6 +221,10 @@ func Capabilities() CapabilityManifest {
 	profile.ReadVersions = append(profile.ReadVersions, CoreQueueReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "project_task_queue", "project_worktree_naming", "project_owned_naming_inputs", "light_task_board")
 
+	profile.StateVersion, profile.ReadVersion = CoreSchemaMigrationStateVersion, CoreSchemaMigrationReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreSchemaMigrationStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreSchemaMigrationReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "shared_schema_migration")
 	return manifest
 }
 

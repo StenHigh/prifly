@@ -817,6 +817,7 @@ type PublishCommand struct {
 	ItemKeys             []string        `json:"item_keys,omitempty"`
 }
 type Run struct {
+	SchemaMigration        *SchemaMigrationBinding   `json:"schema_migration,omitempty"`
 	QueueRequestBytes      []byte                    `json:"queue_request_bytes,omitempty"`
 	QueueTask              *QueueTaskBinding         `json:"queue_task,omitempty"`
 	SchemaVersion          string                    `json:"schema_version"`

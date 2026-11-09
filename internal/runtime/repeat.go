@@ -80,7 +80,7 @@ func (e *Engine) enterRepeat(ctx context.Context, loaded Run, view local.ReadVie
 		return e.failPreparation(ctx, loaded, view, p, activation, err, "repeat_input_binding_failed")
 	}
 	payload := map[string]any{"stage_activation_id": activation.ID, "input_refs": inputs}
-	_, err = e.apply(ctx, e.owner, commandID, loaded.ID, "stage.repeat_entered", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	_, err = e.applyPackageAdmission(ctx, loaded, e.owner, commandID, loaded.ID, "stage.repeat_entered", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		a := r.Activations[activation.ID]
 		if err := checkRepeatActivation(*r, p, a, "ready"); err != nil {
 			return local.Change{}, err
@@ -193,7 +193,7 @@ func (e *Engine) decideRepeat(ctx context.Context, r Run, view local.ReadView, p
 
 func (e *Engine) commitRepeat(ctx context.Context, loaded Run, view local.ReadView, p *flow.Plan, activation *Activation, commandID string, decision RepeatDecision, nextInputs map[string]ArtifactRef) (local.ApplyResult, error) {
 	payload := map[string]any{"decision": decision, "next_input_refs": nextInputs}
-	return e.apply(ctx, e.owner, commandID, loaded.ID, "stage.repeat_decided", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	return e.applyPackageAdmission(ctx, loaded, e.owner, commandID, loaded.ID, "stage.repeat_decided", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		if activation == nil {
 			return local.Change{}, local.ErrIntegrity
 		}

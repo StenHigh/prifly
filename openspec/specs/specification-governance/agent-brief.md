@@ -94,3 +94,5 @@ Project naming input — отдельное типизированное value �
 Используй profile `/5` и `--naming-input`; не расширяй task schema upstream ради naming.
 Snapshot до 128 KiB сохраняется в claim `/5`; workflow inputs остаются независимыми.
 Продолжение использует сохранённый snapshot. Summary/start `/8` показывает новые данные.
+
+Явная schema migration хранит отдельные Plan, Decision и Binding. Новый Run выбирает decision через `--schema-migration`. Package authority `/2` сохраняет lifecycle generations и decisions; migration Run/read использует `/45`. Terminal revoke, old Runs и code сохраняют запреты. Новый revoke инвалидирует прежнее покрытие. Источник активного изменения — `migrate-revoked-shared-schemas`; release/private acceptance остаётся отдельной.

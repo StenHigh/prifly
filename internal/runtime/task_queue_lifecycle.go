@@ -17,7 +17,7 @@ func queueBindingInvariant(r Run) error {
 		if len(r.QueueRequestBytes) > 0 {
 			return local.ErrIntegrity
 		}
-		if atLeast(r.SchemaVersion, CoreQueueStateVersion) {
+		if r.SchemaVersion == CoreQueueStateVersion {
 			return local.ErrIntegrity
 		}
 		return nil

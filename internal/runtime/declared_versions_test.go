@@ -130,12 +130,10 @@ func TestTheDocumentDeclaresEveryStepContractThisBuildCompiles(t *testing.T) {
 // as newer, with what to do about it.
 func TestAStateFromANewerBuildIsNamedAsSuch(t *testing.T) {
 	t.Parallel()
-	current := versionContracts[len(versionContracts)-1].State
-	data, err := json.Marshal(Run{SchemaVersion: current, ContextResources: []PinnedResource{}})
+	data, err := json.Marshal(map[string]any{"schema_version": "core-state/9999", "context_resources": []any{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = []byte(strings.Replace(string(data), `"schema_version":"`+current+`"`, `"schema_version":"core-state/9999"`, 1))
 	var r Run
 	if err := decodeState(data, &r); err == nil || !strings.Contains(err.Error(), "core-state/9999 is newer than this build") {
 		t.Fatalf("a newer state was not named as newer: %v", err)

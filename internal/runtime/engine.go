@@ -109,6 +109,31 @@ func (e *Engine) apply(ctx context.Context, actor, id, runID, eventType string, 
 // applyControlled pins a command that grants new work to the authority control
 // version its caller checked. Only admissions carry a pin: a stop committed in
 // the meantime rejects them instead of being overtaken.
+// applyPackageAdmission fences native nested work with the same package facts
+// that admit an executor. Revocation between review and commit cannot create
+// a child invocation under a stale binding.
+func (e *Engine) applyPackageAdmission(ctx context.Context, run Run, actor, id, runID, eventType string, payload any, expected *int64, mode local.CommandMode, fn mutation) (local.ApplyResult, error) {
+	control, blocked, err := e.admissionGate(ctx)
+	if err != nil {
+		return local.ApplyResult{}, err
+	}
+	pin, packageBlocked, err := e.revokedPin(ctx, run)
+	if err != nil {
+		return local.ApplyResult{}, err
+	}
+	if blocked != nil {
+		return local.ApplyResult{}, blocked
+	}
+	if packageBlocked != nil {
+		return local.ApplyResult{}, packageBlocked
+	}
+	pins := []local.ControlPin{}
+	if pin != nil {
+		pins = append(pins, *pin)
+	}
+	return e.applyControlledWithPins(ctx, control, pins, actor, id, runID, eventType, payload, expected, mode, fn)
+}
+
 func (e *Engine) applyControlled(ctx context.Context, control *local.ControlPin, actor, id, runID, eventType string, payload any, expected *int64, mode local.CommandMode, fn mutation) (local.ApplyResult, error) {
 	return e.applyControlledWithPins(ctx, control, nil, actor, id, runID, eventType, payload, expected, mode, fn)
 }
@@ -180,6 +205,12 @@ func (e *Engine) applyWithReadCut(ctx context.Context, expectedCut *int64, contr
 			copy := *r.QueueTask
 			queueBefore = &copy
 		}
+		var migrationBefore *SchemaMigrationBinding
+		if r.SchemaMigration != nil {
+			copy := *r.SchemaMigration
+			copy.Selections = append([]SchemaMigrationSelection{}, copy.Selections...)
+			migrationBefore = &copy
+		}
 		queueRequestBefore := append([]byte(nil), r.QueueRequestBytes...)
 		before := states(r)
 		previousAcceptance := ""
@@ -192,8 +223,17 @@ func (e *Engine) applyWithReadCut(ctx context.Context, expectedCut *int64, contr
 		if err != nil {
 			return local.Change{}, err
 		}
+		if err := schemaMigrationDefinitionsInvariant(r); err != nil {
+			return local.Change{}, err
+		}
+		if err := schemaMigrationBindingInvariant(r); err != nil {
+			return local.Change{}, err
+		}
 		if err := queueBindingInvariant(r); err != nil {
 			return local.Change{}, err
+		}
+		if len(s.Data) != 0 && !reflect.DeepEqual(migrationBefore, r.SchemaMigration) {
+			return local.Change{}, local.ErrIntegrity
 		}
 		if len(s.Data) != 0 && (!reflect.DeepEqual(queueBefore, r.QueueTask) || !bytes.Equal(queueRequestBefore, r.QueueRequestBytes)) {
 			return local.Change{}, local.ErrIntegrity

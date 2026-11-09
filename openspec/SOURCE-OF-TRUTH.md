@@ -43,6 +43,8 @@ Git и archived OpenSpec changes; они не являются current source se
 definitions остаются product artifacts рядом с кодом, а не Markdown-копиями в
 OpenSpec.
 
+До archive `migrate-revoked-shared-schemas` его deltas уточняют explicit schema migration в `workflow-and-context`, `control-security-ux`, `cli-protocol`, `published-contracts` и `specification-governance`. Остальные правила сохраняют main source sets выше. Machine shapes находятся рядом с Go types и в новых schema bundles. Source implementation, released-binary acceptance и private authority acceptance имеют отдельные результаты.
+
 ## Как вести изменение
 
 До archive `add-workflow-component-imports-and-layers` его deltas задают opt-in

@@ -186,6 +186,9 @@ func retireEditions(record *PackageRecord, plan *RegistryRetirement, obs Observa
 			if pkg.withdrawn() || len(dependents(*record, pkg.Ref)) != 0 {
 				return local.Reject("registry_plan_stale", "edition "+pkg.Ref.Version+" of "+pkg.Ref.ID+" changed after the plan; prepare the launch again")
 			}
+			if record.SchemaVersion == AuthorityPackagesMigrationVersion {
+				pkg.LifecycleGeneration = packageLifecycleGeneration(*pkg) + 1
+			}
 			pkg.Status = PackageRemoved
 			pkg.StatusReason = "withdrawn to fit the registry for " + plan.Edition.ID + "@" + plan.Edition.Version + "; package restore --id " + pkg.Ref.ID + " --version " + pkg.Ref.Version + " --reason TEXT undoes it"
 			observed := obs

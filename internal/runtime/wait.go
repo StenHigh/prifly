@@ -111,7 +111,7 @@ func (e *Engine) enterWait(ctx context.Context, loaded Run, view local.ReadView,
 	if held != nil {
 		payload["held_event_id"] = held.Envelope.EventID
 	}
-	_, err := e.apply(ctx, e.owner, commandID, loaded.ID, "stage.wait_entered", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	_, err := e.applyPackageAdmission(ctx, loaded, e.owner, commandID, loaded.ID, "stage.wait_entered", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		a := r.Activations[activation.ID]
 		if err := checkWaitActivation(*r, p, a, "ready"); err != nil {
 			return local.Change{}, err
