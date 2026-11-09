@@ -4,7 +4,9 @@
 Она не добавляет YAML-поле workflow или шага.
 Project требует профиль `/3` или новее для выбора миграции. Legacy `/2` отказывает до import, claim и Run.
 Минимальные контракты: migration `/1`, authority-packages `/2`, `core-state/45`, `core-read/45`; Project summary/start `/9` при явном выборе.
-Текущий статус — development change `migrate-revoked-shared-schemas`; release acceptance проверяется отдельно.
+Минимальная версия Core — `0.13.89`.
+[Released acceptance](../../openspec/changes/archive/2026-11-09-migrate-revoked-shared-schemas/evidence/released-v0.13.89/README.md)
+подтверждает generic scope. Private authority acceptance выполняется отдельно.
 
 Request передаётся в `package schema-migration prepare --request request.json`.
 Ниже показана полная форма. Замените refs точными установленными refs из своей authority.

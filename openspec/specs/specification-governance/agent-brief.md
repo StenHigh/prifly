@@ -95,4 +95,12 @@ Project naming input — отдельное типизированное value �
 Snapshot до 128 KiB сохраняется в claim `/5`; workflow inputs остаются независимыми.
 Продолжение использует сохранённый snapshot. Summary/start `/8` показывает новые данные.
 
-Явная schema migration хранит отдельные Plan, Decision и Binding. Новый Run выбирает decision через `--schema-migration`. Package authority `/2` сохраняет lifecycle generations и decisions; migration Run/read использует `/45`. Terminal revoke, old Runs и code сохраняют запреты. Новый revoke инвалидирует прежнее покрытие. Источник активного изменения — `migrate-revoked-shared-schemas`; release/private acceptance остаётся отдельной.
+Явная schema migration хранит отдельные Plan, Decision и Binding.
+Новый Run выбирает decision через `--schema-migration`.
+Package authority `/2` сохраняет lifecycle generations и decisions; migration Run/read использует `/45`.
+Terminal revoke, old Runs и code сохраняют запреты. Новый revoke инвалидирует прежнее покрытие.
+
+Правила включены в main source sets `workflow-and-context`, `control-security-ux`,
+`cli-protocol`, `published-contracts` и `specification-governance`.
+История и baseline сохранены в archived `2026-11-09-migrate-revoked-shared-schemas`.
+Generic acceptance Core `v0.13.89` прошла; private authority acceptance не выполнялась.

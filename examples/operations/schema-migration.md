@@ -4,7 +4,9 @@
 
 Используйте миграцию, если прежний package отозвали ради обычного обновления, а его schemas проверены и безопасны.
 Возможность `shared_schema_migration` требует контрактов migration `/1`, package authority `/2` и Run/read `45`.
-Это development capability change `migrate-revoked-shared-schemas`. Source tests не подтверждают приёмку выпущенного binary.
+Минимальная версия Core — `0.13.89`.
+[Released acceptance](../../openspec/changes/archive/2026-11-09-migrate-revoked-shared-schemas/evidence/released-v0.13.89/README.md)
+подтверждает generic scope. Private authority acceptance не выполнялась и требует отдельной проверки владельца.
 
 Для обычного вывода edition используйте `package remove`. Команда отказывает при живых holders и dependents.
 `package quarantine` временно прекращает resolution; `package restore` возвращает доверие после проверки.

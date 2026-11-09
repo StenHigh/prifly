@@ -43,7 +43,14 @@ Git и archived OpenSpec changes; они не являются current source se
 definitions остаются product artifacts рядом с кодом, а не Markdown-копиями в
 OpenSpec.
 
-До archive `migrate-revoked-shared-schemas` его deltas уточняют explicit schema migration в `workflow-and-context`, `control-security-ux`, `cli-protocol`, `published-contracts` и `specification-governance`. Остальные правила сохраняют main source sets выше. Machine shapes находятся рядом с Go types и в новых schema bundles. Source implementation, released-binary acceptance и private authority acceptance имеют отдельные результаты.
+Explicit schema migration включена в main source sets `workflow-and-context`,
+`control-security-ux`, `cli-protocol`, `published-contracts` и
+`specification-governance`; ownership не меняется. Machine shapes находятся
+рядом с Go types и в опубликованных schema bundles. История и baseline сохранены
+в archived `2026-11-09-migrate-revoked-shared-schemas`.
+Generic released-binary acceptance выполнена на Core `v0.13.89`;
+evidence — `changes/archive/2026-11-09-migrate-revoked-shared-schemas/evidence/released-v0.13.89/README.md`.
+Private authority acceptance не выполнялась и сохраняет отдельный статус.
 
 ## Как вести изменение
 
