@@ -1,0 +1,1 @@
+{"schema_version":"1","code":"schema_migration_plan_stale","message":"authority preconditions changed; prepare the reviewed operation again; recorded as command \"command:stale-apply\"","retryable":false,"correlation_id":"correlation:134c40f56b0a83967369ffa304403187","violations":[],"safe_next_actions":["package.schema-migration.prepare"]}

@@ -36,5 +36,7 @@
 ## 6. Итоговая проверка и release acceptance
 
 - [x] 6.1 Выполнить focused native tests, `make test-changed`, `make schemas-check`, `make refusal-check`, `make vet`, `openspec validate migrate-revoked-shared-schemas --strict --no-interactive` и `git diff --check`. Для итогового implementation snapshot выполнить один `make ci-check-once CHECK_CONTEXT=issue-21-schema-migration`. Зафиксировать результаты и проверить отсутствие правок `openspec/changes/archive/**`, прежних schema bundles и historical release evidence.
-- [ ] 6.2 После release gates на фиксированном SHA выполнить generic public-CLI acceptance released binary. Сохранить version/digest, исходный отказ, несколько schemas, apply, новый Run с последующей работой, old Run refusal, restart и cleanup всех временных authority/monitor registrations. Source tests не закрывают эту задачу.
+- [x] 6.2 После release gates на фиксированном SHA выполнить generic public-CLI acceptance released binary. Сохранить version/digest, исходный отказ, несколько schemas, apply, новый Run с последующей работой, old Run refusal, restart и cleanup всех временных authority/monitor registrations. Source tests не закрывают эту задачу.
 - [x] 6.3 Подготовить owner handoff для private authority acceptance со списком точных команд и проверок. Отдельно указать её фактический статус; без отдельного участия владельца не выполнять её и не заявлять ремонт живой установки. Проверка завершения — документированный handoff и граница generic/private результатов.
+
+Фактический результат 6.2: [released acceptance v0.13.89](evidence/released-v0.13.89/README.md), fixed SHA `30c3635081f8f012aef3953072dcd45d0807d618`. Generic PASS; private acceptance не выполнялась.

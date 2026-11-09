@@ -1,0 +1,1 @@
+{"schema_version":"1","code":"package_not_resolvable","message":"a package no longer trusted supplied acceptance:schema/left from acceptance:package/migration-legacy-one","retryable":false,"correlation_id":"correlation:9f7478eb52a03794e362909a4bd963b1","violations":[],"safe_next_actions":["doctor","run.status"]}

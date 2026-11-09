@@ -1,0 +1,1 @@
+{"schema_version":"1","code":"package_revoked","message":"a revoked package supplied acceptance:schema/left from acceptance:package/migration-legacy-one","retryable":false,"correlation_id":"correlation:a8c17d166b269db8b4bcc298c981e8d7","violations":[],"safe_next_actions":["doctor","run.status"]}

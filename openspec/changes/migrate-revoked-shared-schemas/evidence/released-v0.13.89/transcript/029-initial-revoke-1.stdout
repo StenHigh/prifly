@@ -1,0 +1,1 @@
+{"duplicate":false,"receipt":{"command_id":"command:initial-revoke-1","actor":"local:uid:1001","key":"packages","request_digest":"sha256:790926b249e09ac5d392921a2aa53aea83d138fbc2f944c3dd465f12883b9a34","version":4,"cut":6,"result":{"status":"revoked"}},"schema_version":"foundation-control-command/1"}

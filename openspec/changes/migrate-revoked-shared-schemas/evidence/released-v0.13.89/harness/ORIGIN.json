@@ -1,0 +1,16 @@
+{
+  "source_repository": "https://github.com/StenHigh/prifly",
+  "source_commit": "30c3635081f8f012aef3953072dcd45d0807d618",
+  "copied_files": [
+    {
+      "path": "release_checks.py",
+      "source_path": "scripts/release_checks.py",
+      "sha256": "cc11d522bada77106afebe9d68131b5f006b2d43c564e844f57ee433739c3271",
+      "modified": false
+    }
+  ],
+  "prepared_for": "openspec/changes/migrate-revoked-shared-schemas/tasks.md#6.2",
+  "release_acceptance": "not_performed",
+  "private_acceptance": "not_performed",
+  "development_validation": "development-validation/evidence.json"
+}

@@ -1,0 +1,33 @@
+{
+  "checks": {
+    "qualify": {
+      "attempt": 1,
+      "finished": 1794255107.0,
+      "reason": "direct full batch on exact SHA",
+      "run_id": 42686698890,
+      "state": "success",
+      "url": "https://github.com/StenHigh/prifly/actions/runs/42686698890"
+    },
+    "verify": {
+      "attempt": 1,
+      "finished": 1794253857.0,
+      "reason": "direct full batch on exact SHA",
+      "run_id": 42686688249,
+      "state": "success",
+      "url": "https://github.com/StenHigh/prifly/actions/runs/42686688249"
+    }
+  },
+  "collected_at_epoch": 1794255328.7298825,
+  "read_only": true,
+  "release": {
+    "id": 439593152,
+    "prerelease": false,
+    "published_at": "2026-11-09T20:15:03Z",
+    "url": "https://github.com/StenHigh/prifly/releases/tag/v0.13.89"
+  },
+  "release_tag": "v0.13.89",
+  "repository": "StenHigh/prifly",
+  "schema_version": "schema-migration-release-gates/1",
+  "sha": "30c3635081f8f012aef3953072dcd45d0807d618",
+  "status": "passed"
+}
