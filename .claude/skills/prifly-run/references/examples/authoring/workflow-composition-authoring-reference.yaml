@@ -1,7 +1,7 @@
 # Совместимость с v0.13.83: /3 не применяет extension points /4.
 # Composition отказывает на sidecar любого source package, effective /4 и point entries.
 # Library import без sidecar игнорирует standalone extend.yaml, включая /4.
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/project-workflow-folder-v2.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.90/schemas/authoring/project-workflow-folder-v2.schema.json
 # Requires capability workflow_composition and Project profile /3 or /4.
 # Folder /2 is opt-in. Legacy folder /1 and extension /2 keep their contracts.
 # This is one derived root. Registered parents supply its graph and ports.

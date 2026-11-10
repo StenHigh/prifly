@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/workflow-catalog-v1.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.90/schemas/authoring/workflow-catalog-v1.schema.json
 # Complete reference for catalog.yaml at the root of a workflow catalog repository.
 # A catalog is discovery only: it points at workflow repositories, never carries
 # workflow bytes, keys or trust. `prifly project workflows search` reads it and

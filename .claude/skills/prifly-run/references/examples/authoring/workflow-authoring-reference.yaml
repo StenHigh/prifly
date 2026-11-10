@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/workflow-v1.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.90/schemas/authoring/workflow-v1.schema.json
 # Complete reference for one prifly-workflow/1 source. It documents every
 # authoring field and every currently supported stage kind. The zero digests
 # deliberately make this a reference, not an executable package: copy only
