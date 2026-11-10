@@ -147,6 +147,9 @@ Sidecars `/1` используют compiled variants профилей `/3`–`/5
 Точный release SHA, signed assets и Linux probe записаны в `evidence/released-v0.13.90/README.md` этого archive.
 Consumer workflows #3 сохраняет отдельную приёмку; old bundles и saved Run contracts сохраняются.
 
-Пока `remember-launch-schema-migration` активен, его deltas уточняют сохранённый owner выбор migration Decision для exact project launch/build.
-Source sets `workflow-and-context`, `control-security-ux`, `cli-protocol`, `published-contracts` и `specification-governance` сохраняют ownership.
-Choice `/1` и новые Project DTO `/10` не меняют прежний Run Binding или terminal revoke.
+Сохранённый owner выбор migration Decision для exact project launch/build включён
+в main source sets `workflow-and-context`, `control-security-ux`, `cli-protocol`,
+`published-contracts` и `specification-governance`. Ownership не меняется.
+История сохранена в archived `2026-11-10-remember-launch-schema-migration`.
+Choice `/1` и Project DTO `/10` сохраняют прежний Run Binding и terminal revoke.
+Source verification не означает выпуск Core или private authority acceptance.
