@@ -2686,6 +2686,10 @@ Global: --project DIR  --json  --format text|json|csv
                                    Read applicable/conditional decisions and optional typed preanswers without creating a Run
   project questionnaire --prepare --launch ID [the same arguments as project start]
                                    Profile /3: validate and show the exact launch summary read-only; pass its review_digest to start
+  project schema-migration inspect --repository DIR --launch ID [--host HOST] [--package-profile NAME] [--id ID]
+  project schema-migration set --repository DIR --launch ID --host HOST --id ID --expected-build-key KEY --expected-generation N --reason TEXT [--command-id ID]
+  project schema-migration clear --repository DIR --launch ID --expected-generation N --reason TEXT [--command-id ID]
+                                   Save an existing owner decision for one exact launch build; inspect never writes, explicit --schema-migration overrides once
   project runners update [--repository DIR]
                                    Replace only exact known generated host runners; customized files are refused,
                                    a declared host without a runner in this clone is listed as missing_hosts

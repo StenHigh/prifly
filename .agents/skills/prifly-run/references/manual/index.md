@@ -16,6 +16,7 @@
 | Worktree/checkout, claims, дерево входа/выхода, permitted effects | [Рабочее дерево](workspace.md) |
 | Написать или изменить YAML, extension, composition, программу | [Авторинг](authoring.md) |
 | ArtifactRef, schema, task/source import, package trust | [Данные и пакеты](artifacts.md) |
+| Shared schemas после ошибочного terminal revoke | [Миграция схем](schema-migration.md) |
 | Pause/cancel/stops, approvals/grants, lost response, action admission | [Управление](control.md) |
 | Monitor/Light, events/timing, stdout/stderr, progress, telemetry | [Наблюдение](observability.md) |
 | Queue, capacity, exclusive resource, storage budget, cleanup | [Обслуживание](operations.md) |

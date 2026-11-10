@@ -113,4 +113,4 @@ Unified composition: [пример](../examples/unified-composition/README.md).
 Низкоуровневая capability без публичного CLI handler описывается как contract boundary, а не выдуманная команда.
 Например, наличие `schedule` в capabilities не доказывает наличие top-level `prifly schedule`.
 
-См. также [индекс capabilities](capabilities.md), [команды](commands.md), [нормативный workflow contract](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/specs/workflow-and-context/spec.md).
+См. также [индекс capabilities](capabilities.md), [команды](commands.md), [нормативный workflow contract](https://github.com/StenHigh/prifly/blob/v0.13.90/openspec/specs/workflow-and-context/spec.md).

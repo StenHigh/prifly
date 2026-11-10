@@ -93,3 +93,7 @@ Subscriptions связывают producer и consumer через contract. Once/
 Точные формы requests получайте через schema index; inputs/outputs/hook IDs берите из pinned task/step.
 
 См. также [host outputs](hosting.md), [effects и trust](control.md), [авторинг](authoring.md).
+
+## Ошибочный revoke при обычном обновлении
+
+Для ordinary retirement используйте remove с проверкой holders и dependents. Revoke остаётся terminal security withdrawal. Проверенные shared schemas имеют отдельный reviewed путь: [миграция схем](schema-migration.md). Старый package и old Runs сохраняют запреты.
