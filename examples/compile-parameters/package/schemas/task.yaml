@@ -1,0 +1,7 @@
+id: example:schema/task
+version: 1.0.0
+type: object
+required: [description]
+additionalProperties: false
+properties:
+  description: {type: string, maxLength: "{{task_description_limit}}"}

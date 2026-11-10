@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=../../../schemas/authoring/compile-parameters-v1.schema.json
+authoring: prifly-compile-parameters/1
+parameters:
+  task_description_limit:
+    type: integer
+    minimum: 1
+    maximum: 1000000
+    default: 12000
+    bindings:
+      - {schema: schema_task, pointer: /properties/description/maxLength}

@@ -94,3 +94,23 @@ Project naming input — отдельное типизированное value �
 Используй profile `/5` и `--naming-input`; не расширяй task schema upstream ради naming.
 Snapshot до 128 KiB сохраняется в claim `/5`; workflow inputs остаются независимыми.
 Продолжение использует сохранённый snapshot. Summary/start `/8` показывает новые данные.
+
+Явная schema migration хранит отдельные Plan, Decision и Binding.
+Новый Run выбирает decision через `--schema-migration`.
+Package authority `/2` сохраняет lifecycle generations и decisions; migration Run/read использует `/45`.
+Terminal revoke, old Runs и code сохраняют запреты. Новый revoke инвалидирует прежнее покрытие.
+
+Правила включены в main source sets `workflow-and-context`, `control-security-ux`,
+`cli-protocol`, `published-contracts` и `specification-governance`.
+История и baseline сохранены в archived `2026-11-09-migrate-revoked-shared-schemas`.
+Generic acceptance Core `v0.13.89` прошла; private authority acceptance не выполнялась.
+
+Параметр сборки объявляет пакет в `compile-parameters.yaml` `/1`.
+Проект сохраняет свой выбор в `project/compile-values.yaml` `/1` до compile/prepare/start.
+Нужны Core `0.13.90+`, capability `project_compile_parameters` и Project profile `/3`–`/5`.
+Binding разрешает собственный строковый `maxLength` с совпадающей whole-scalar подстановкой.
+Значение входит в build identity и review; прежний Run сохраняет definitions и task.
+Правила включены в main source sets `workflow-and-context`, `cli-protocol`,
+`published-contracts` и `specification-governance`.
+Evidence Core #22 сохранено в archived `2026-11-10-add-project-owned-compile-parameters`;
+приёмка consumer workflows #3 остаётся отдельной.

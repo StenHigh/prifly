@@ -4,7 +4,7 @@
 
 ## Первая установка и clone
 
-Поддержанный способ первой установки находится в [README](https://github.com/StenHigh/prifly/blob/v0.13.87/README.md).
+Поддержанный способ первой установки находится в [README](https://github.com/StenHigh/prifly/blob/v0.13.88/README.md).
 Bootstrap скачивает assets официального GitHub Release и устанавливает binary в каталог пользователя без `sudo`.
 Первая установка доверяет GitHub HTTPS и digest manifest. Работающий updater затем проверяет встроенным ключом подпись manifest.
 Source build и скопированный binary без installation receipt не поддерживают self-update.
@@ -133,4 +133,4 @@ Network/signature failure, missing receipt, unsupported installation, modified w
 Не заменяйте source build скачанным installer, не reset-ите дерево и не продолжайте на старой версии молча.
 Проверка updates не создаёт Run, claim или trusted package и не выполняет программу workflow.
 
-Далее: [выбор и prepare](launch.md), [конфликты](troubleshooting.md), [контракт поставки](https://github.com/StenHigh/prifly/blob/v0.13.87/openspec/specs/release-distribution/spec.md).
+Далее: [выбор и prepare](launch.md), [конфликты](troubleshooting.md), [контракт поставки](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/specs/release-distribution/spec.md).

@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=../../schemas/authoring/project-profile-v3.schema.json
+schema_version: prifly-project-profile/3
+hosts: {codex-cli: .codex/skills}
+packages: {limits: {source: .prifly/workflows/limits}}
+launches:
+  limits:
+    title: Предел описания
+    description: Синтетический пример предела описания.
+    kind: workflow
+    workflow: .prifly/workflows/limits/workflow.yaml

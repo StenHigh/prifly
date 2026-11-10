@@ -104,4 +104,4 @@ Intent proposal, admission, delivery и observed effect — отдельные �
 Waiver допустим только по policy для exact check ref. Он не является pass: итог сохраняет `completed_with_waivers`.
 Открытое неизвестное effect obligation закрывается owner resolve после inspection; waiver его не устраняет.
 
-См. также [восстановление](recovery.md), [решения](decisions.md), [нормативное управление](https://github.com/StenHigh/prifly/blob/v0.13.87/openspec/specs/control-security-ux/spec.md).
+См. также [восстановление](recovery.md), [решения](decisions.md), [нормативное управление](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/specs/control-security-ux/spec.md).

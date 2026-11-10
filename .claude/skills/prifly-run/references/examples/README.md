@@ -2,7 +2,7 @@
 
 Здесь находятся материалы для автора YAML-сценария и указатель по симптомам для
 того, кто чужой сценарий запускает. Legacy Python/shell fixtures, F1 demo и
-проверки runtime находятся в [`test/`](https://github.com/StenHigh/prifly/blob/v0.13.87/test/README.md).
+проверки runtime находятся в [`test/`](https://github.com/StenHigh/prifly/blob/v0.13.88/test/README.md).
 
 Справочники ниже проиндексированы по полю: ответ находится, если заранее знать
 имя поля. Если известен только симптом — отказ, диагностика или поведение
@@ -114,6 +114,7 @@
 | `next_handoff` | поведение чтения: `arrived_from`, `checkpoint`, `repeats`, `continuations` в `run next` | blocked-guide |
 | `workflow_continuation` | `checkpoint` в корне и у шаговой стадии, `continuation` в корне — **ревизия 7**; `prifly project continue` | workflow, continuation-guide |
 | `project_worktree_naming` | `worktree_naming.template/bindings` — **Project profile /4**; summary/start `/5`, authority claims `/4`, claim view `/3`; [полный пример](workflows/named-worktree/README.md) | project-profile |
+| `project_owned_naming_inputs` | `worktree_naming.inputs.NAME.schema` и binding `naming_input`; **Project profile /5**, summary/start `/8`, authority claims `/5`, claim view `/4`; snapshot до 128 KiB; [CLI probe](workflows/project-owned-naming/README.md) | project-profile |
 | `workflow_resume` | `resumable` в корне — **ревизия 8**; `prifly project continue` тем же launch возобновляет Run с точки остановки; повторный перенос и inherited `--from-stage` — в continuation-guide, статус исправляющего релиза и маршрут writer cancel/resolve указаны там | workflow, continuation-guide |
 | `next_awaiting_host` | поведение чтения, `core-next/42`: `run next` отвечает `awaiting_host` и `next_command`, когда выданное задание ждёт хоста (раньше — `idle`); `step_effects` и `effects` называют объявленный эффект шагов; текстовый `run status` печатает строки `effect` | troubleshooting |
 | `program_external_write` | `effects.class: external_write` и блок `external_write` у программы (`prifly-step/1`, `operation: process`) — **контракт 14**. `retry_class` решает судьбу прерванной программы: `idempotent` — `project continue` запускает шаг снова; `deduplicated`, `reconcile_required`, `never` — Run `uncertain` (`external_write_unreconciled`) до `run resolve`; `pure` отказывается | step, continuation-guide, troubleshooting |
@@ -148,7 +149,7 @@ prifly capabilities --json | jq -c '{caps:.profiles[1].capabilities, unsupported
   критерии `PROJECT.md`, точный ID и текстовый fallback. Отдельно показаны
   выбор запуска, объявленные решения и подтверждение подготовленного старта.
   Живая приёмка Claude остаётся `DEFERRED` в
-  [отдельном follow-up](https://github.com/StenHigh/prifly/blob/v0.13.87/openspec/changes/verify-claude-launch-choice-ui/proposal.md).
+  [отдельном follow-up](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/changes/verify-claude-launch-choice-ui/proposal.md).
 - [`authoring/run-decision-authoring-reference.yaml`](authoring/run-decision-authoring-reference.yaml) —
   объявленные решения Run: `phase: preflight` до старта и `phase: runtime`
   во время исполнения; варианты, recommendation, условия и destination.
@@ -203,7 +204,7 @@ prifly project workflows add aif-classic
 ```
 
 Локальные JSON Schema для подсказок и диагностики редактора лежат в
-[`schemas/authoring/`](https://github.com/StenHigh/prifly/blob/v0.13.87/schemas/authoring/README.md). Они не становятся
+[`schemas/authoring/`](https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/README.md). Они не становятся
 частью YAML или sealed package: сложную проверку по-прежнему выполняет
 `prifly project compile`.
 
@@ -211,7 +212,7 @@ prifly project workflows add aif-classic
 нулевые digest и ссылки на несуществующие иллюстративные components.
 Копируй из них только нужную форму и замени refs на exact значения из
 `prifly inventory`. Обычный новый проект не обязан перечислять все поля —
-безопасные defaults описаны в [workflow and context](https://github.com/StenHigh/prifly/blob/v0.13.87/openspec/specs/workflow-and-context/spec.md).
+безопасные defaults описаны в [workflow and context](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/specs/workflow-and-context/spec.md).
 
 ## Проект с Pri-Fly: обычные программы и optional ИИ
 
@@ -436,7 +437,7 @@ input workflow; launch не запускает Python recipe и не угады�
 
 ## Проверки для maintainers
 
-Сами проверочные скрипты находятся в [`test/`](https://github.com/StenHigh/prifly/blob/v0.13.87/test/README.md), отдельно от
+Сами проверочные скрипты находятся в [`test/`](https://github.com/StenHigh/prifly/blob/v0.13.88/test/README.md), отдельно от
 пользовательских примеров. Ниже оставлены только их назначение и команды.
 
 ```sh
@@ -468,7 +469,7 @@ make build
 python3 -B test/e2e/verify-core.py --binary bin/prifly
 ```
 
-[verify-core.py](https://github.com/StenHigh/prifly/blob/v0.13.87/test/e2e/verify-core.py) создаёт отдельный проект с явным `init --profile core-workflow/1` и выполняет его через настоящий CLI. Нужны Python stdlib для проверки и JSON-шагов, а также `/bin/sh` для шага с известным отказом. Скрипт проверяет:
+[verify-core.py](https://github.com/StenHigh/prifly/blob/v0.13.88/test/e2e/verify-core.py) создаёт отдельный проект с явным `init --profile core-workflow/1` и выполняет его через настоящий CLI. Нужны Python stdlib для проверки и JSON-шагов, а также `/bin/sh` для шага с известным отказом. Скрипт проверяет:
 
 - Значение из закреплённого WorkflowRevision, project override и разрешённый run override; ранее принятые Runs не меняются вместе с текущим `prifly.json`.
 - JSON Pointer projections в отдельные артефакты с exact schema refs, source provenance и sealed `JSONProjection`; отсутствие значения отличается от `null`.
@@ -495,7 +496,7 @@ python3 -B test/e2e/verify-core.py --binary bin/prifly
 `workflows/repeat-worker.json` показывает цикл с явным изменением input следующей итерации. `repeat-limit.json`, `repeat-noncontinuing.json` и `repeat-unknown-at-limit.json` показывают остальные пути без workers. Тело задаётся exact ref или локальным alias до lock; `stage.repeat_decided` содержит RepeatDecision с exact body ID и фактически прочитанными refs. Старые body остаются в истории; их отсутствующие outputs не подставляются вместо результата текущего body.
 
 `make e2e` запускает проверку установщика, проверки обёртки, F1, Core и
-полного контекста с checks. Точный статус capability и границы квалификации — в [delivery roadmap](https://github.com/StenHigh/prifly/blob/v0.13.87/openspec/specs/delivery-roadmap/spec.md).
+полного контекста с checks. Точный статус capability и границы квалификации — в [delivery roadmap](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/specs/delivery-roadmap/spec.md).
 
 Новые Core projects выбирают exact `core:policy/local@2.0.0`, разрешающую глубину до 8 при одном worker, 256 StepInstances и 1024 control transitions. Прежняя policy `1.0.0` остаётся неизменной и не разрешает child depth. Генераторы берут `default_policy_ref` из ProjectConfig; inventory может содержать несколько версий одного ID. Workflows со scoped calls без repeat используют state/read v2; repeat в любом месте закреплённого closure требует v3. Прежние Runs сохраняют свои версии.
 
@@ -506,7 +507,7 @@ make build
 python3 -B test/e2e/verify-context.py --binary bin/prifly
 ```
 
-[verify-context.py](https://github.com/StenHigh/prifly/blob/v0.13.87/test/e2e/verify-context.py) создаёт независимый проект с явными `core-configuration/2`, Registry3 и local adapter v2. [context-worker.py](https://github.com/StenHigh/prifly/blob/v0.13.87/test/fixtures/context-worker.py) — обычный механический Step; [content-checker.py](https://github.com/StenHigh/prifly/blob/v0.13.87/test/fixtures/content-checker.py) — отдельный исполнитель `check-request/1`, без StepInstance и publication credentials. Оба используют только Python stdlib, без AI или сети. Прежняя F1-обёртка не меняет протокол.
+[verify-context.py](https://github.com/StenHigh/prifly/blob/v0.13.88/test/e2e/verify-context.py) создаёт независимый проект с явными `core-configuration/2`, Registry3 и local adapter v2. [context-worker.py](https://github.com/StenHigh/prifly/blob/v0.13.88/test/fixtures/context-worker.py) — обычный механический Step; [content-checker.py](https://github.com/StenHigh/prifly/blob/v0.13.88/test/fixtures/content-checker.py) — отдельный исполнитель `check-request/1`, без StepInstance и publication credentials. Оба используют только Python stdlib, без AI или сети. Прежняя F1-обёртка не меняет протокол.
 
 Сценарии проверяют SourceSnapshot без фиктивного Run, неизменность полученных bytes после изменения source file, instructions/data roles, все пять check boundaries, отрицательные и inconclusive reports, explicit on_error, обязательную инструкцию при overflow и отдельную check telemetry. Проверенный input не получает изменённую metadata. Повторный Drive не запускает завершённые checks. Успешный process и `pass` производителя не заменяют обязательное положительное свидетельство.
 
@@ -516,7 +517,7 @@ PDF fixture имеет корректный descriptor, но заведомо н
 
 ## Совместимость настоящих бинарников
 
-[verify-upgrade.py](https://github.com/StenHigh/prifly/blob/v0.13.87/scripts/verify-upgrade.py) проверяет F1 → новый Core. Отдельный [verify-choice-upgrade.py](https://github.com/StenHigh/prifly/blob/v0.13.87/scripts/verify-choice-upgrade.py) проверяет сохранённый P2-01 → Core с `choice`:
+[verify-upgrade.py](https://github.com/StenHigh/prifly/blob/v0.13.88/scripts/verify-upgrade.py) проверяет F1 → новый Core. Отдельный [verify-choice-upgrade.py](https://github.com/StenHigh/prifly/blob/v0.13.88/scripts/verify-choice-upgrade.py) проверяет сохранённый P2-01 → Core с `choice`:
 
 ```sh
 python3 -B scripts/verify-choice-upgrade.py \

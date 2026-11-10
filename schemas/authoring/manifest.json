@@ -22,6 +22,8 @@
     {"document": "project-workflow-folder-v2", "id": "urn:prifly:yaml-authoring:project-workflow-folder:2", "path": "project-workflow-folder-v2.schema.json", "patterns": []},
     {"document": "extension-v3", "id": "urn:prifly:yaml-authoring:extension:3", "path": "extension-v3.schema.json", "patterns": []},
     {"document": "extension-v5", "id": "urn:prifly:yaml-authoring:extension:5", "path": "extension-v5.schema.json", "patterns": []},
-    {"document": "project-workflow-folder-v3", "id": "urn:prifly:yaml-authoring:project-workflow-folder:3", "path": "project-workflow-folder-v3.schema.json", "patterns": []}
+    {"document": "project-workflow-folder-v3", "id": "urn:prifly:yaml-authoring:project-workflow-folder:3", "path": "project-workflow-folder-v3.schema.json", "patterns": []},
+    {"document": "compile-parameters-v1", "id": "urn:prifly:yaml-authoring:compile-parameters:1", "path": "compile-parameters-v1.schema.json", "patterns": [".prifly/workflows/*/compile-parameters.yaml"]},
+    {"document": "compile-values-v1", "id": "urn:prifly:yaml-authoring:compile-values:1", "path": "compile-values-v1.schema.json", "patterns": [".prifly/workflows/*/project/compile-values.yaml"]}
   ]
 }

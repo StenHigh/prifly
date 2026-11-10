@@ -14,6 +14,19 @@
 
 ## Прогон
 
+### `schema_invalid`: `/description` длиннее разрешённого `maxLength`
+
+Сравните effective limit и фактическое число Unicode code points в Problem.
+Пакет может объявить [параметр сборки](authoring/compile-parameters-guide.md) для `maxLength` своей строковой схемы.
+Core `0.13.90+` с capability `project_compile_parameters` применяет owner value до prepare/start на Project profile `/3`–`/5`.
+Установленный пакет должен содержать декларацию `compile-parameters.yaml` и совпадающую подстановку в schema.
+
+Сохраните целое число, например `32000`, в `project/compile-values.yaml` по [примеру](authoring/compile-values-authoring-reference.yaml).
+Повторите prepare и review, затем start с новым `review_digest`.
+Изменение после review получает `project_start_stale_launch`.
+`project_compile_parameter_invalid`, `project_compile_parameter_unknown` и `project_compile_parameter_binding` требуют исправления значения, имени или привязки по справочнику.
+Полный воспроизводимый пакет находится в [примере](compile-parameters/README.md).
+
 ### `ambiguous_branch`, StageActivation failed, переход в `on_error`, ни одной Attempt
 
 **Причина.** `choice` с `selection: exclusive` вычисляет **все** ветви и

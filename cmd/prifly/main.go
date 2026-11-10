@@ -352,6 +352,9 @@ var readingCommands = map[string][]string{
 
 // mutates reports whether a command needs an authority opened for writing.
 func mutates(args []string) bool {
+	if len(args) >= 3 && args[0] == "package" && args[1] == "schema-migration" {
+		return args[2] == "apply"
+	}
 	if len(args) >= 3 && args[0] == "storage" {
 		return args[1] == "budget" && args[2] == "set" && !slices.Contains(args[3:], "--prepare")
 	}
@@ -824,6 +827,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 		brief := f.String("brief", "", "")
 		id := f.String("command-id", "", "")
 		drive := f.Bool("drive", false, "")
+		schemaMigration := f.String("schema-migration", "", "explicit recorded schema migration decision for this new Run")
 		grant := f.String("grant", "", "control grant that authorises a brief recording confirmation as standing_grant; starting spends one of its operations")
 		inputs := bindings{}
 		f.Var(inputs, "input", "")
@@ -846,7 +850,7 @@ func (c *cli) runCommand(ctx context.Context, e *prifly.Engine, args []string) e
 			}
 			refs[port] = ref
 		}
-		result, err := e.Start(ctx, prifly.StartOptions{CommandID: *id, WorkflowFile: *workflow, BriefFile: *brief, Inputs: inputs, InputRefs: refs, GrantID: *grant})
+		result, err := e.Start(ctx, prifly.StartOptions{CommandID: *id, WorkflowFile: *workflow, BriefFile: *brief, Inputs: inputs, InputRefs: refs, GrantID: *grant, SchemaMigrationID: *schemaMigration})
 		if err != nil {
 			return err
 		}
@@ -1766,6 +1770,9 @@ func (c *cli) claims(ctx context.Context, e *prifly.Engine, args []string) error
 func (c *cli) packages(ctx context.Context, e *prifly.Engine, args []string) error {
 	if len(args) == 0 {
 		return operationError("package", args)
+	}
+	if args[0] == "schema-migration" {
+		return c.schemaMigration(ctx, e, args[1:])
 	}
 	f := flags("package " + args[0])
 	switch args[0] {
@@ -2742,7 +2749,7 @@ Global: --project DIR  --json  --format text|json|csv
                                    extension-authoring-reference.yaml shows a complete extend.yaml, extensions included
   validate --workflow FILE          Shape, refs, graph and profile validation; FILE is resolved from the authority root, not the working directory
   preview --workflow FILE [--brief FILE] [--input-ref PORT=REF.json]
-  run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive] [--grant ID]
+  run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive] [--grant ID] [--schema-migration ID]
 
   run fork --file REQUEST.json      Create a linked Run from exact sealed refs; old Run is unchanged
   run list [--limit N]              This authority's Runs, newest first: id, workflow, status, outcome, created,
@@ -2795,6 +2802,12 @@ Global: --project DIR  --json  --format text|json|csv
                                    Authority-side stops; they forbid new admissions, not running work
   package import --dir DIR --reason TEXT [--command-id ID]
                                    Seal, verify and trust a local package; nothing in it is executed
+  package schema-migration prepare --request FILE
+                                   Read-only exact consumer/schema/supplier review; incomplete choices are diagnostic
+  package schema-migration apply --plan FILE --expected-review-digest DIGEST --reason TEXT [--command-id ID]
+                                   Owner-scoped exception for verified shared schemas; preserves terminal revoke and old Runs
+  package schema-migration inspect --id ID
+                                   Recorded decision and its current validity; later lifecycle decisions invalidate it
   package list                      Trusted packages, their origin and recorded trust decision
                                    author_package names the edition an author wrote; it is shown, never accepted by --package, since two builds of it are one version
   package inspect --ref REF.json | --component ID [--package ID@VERSION]

@@ -16,6 +16,7 @@
 |---|---|
 | Запустить обычную программу без Git и ИИ | [CSV → проверка → отчёт](workflows/csv-report/README.md) |
 | Описать несколько запусков и выбрать один | [Руководство выбора запуска](authoring/launch-choice-guide.md) |
+| Задать свой предел описания до prepare/start | [Параметры сборки](authoring/compile-parameters-guide.md), [полный пример](compile-parameters/README.md) |
 | Объявить вопросы до старта или во время Run | [Решения Run](authoring/run-decision-authoring-reference.yaml), [ответы проекта](authoring/extension-authoring-reference.yaml) |
 | Продолжить другим workflow или возобновить тем же | [Руководство продолжения](authoring/continuation-guide.md): `checkpoint`/`continuation` — ревизия 7; `resumable` — ревизия 8 |
 | Показать прогресс программы | [Диагностика прогресса](troubleshooting.md#монитор-пишет-прогресс-не-сообщается-у-долгой-программы) |
@@ -46,6 +47,7 @@
 | `project_extension_points` | Project `/3`, `prifly-extension/4`, points `/1`; native Call v1, Repeat v3, blocked v6, resumable v8; session external_write: StepDefinition v11 | [Точки подключения](authoring/extension-points-authoring-reference.yaml), [native example](nested-extension-points/README.md) |
 | `workflow_composition` | Folder `/2`, extension `/3`, Project `/3` или `/4`; lowering в native Call/Choice/Parallel, fields children требуют своих native ревизий; нужен build с этой capability | [Imports, parents, layers, groups](authoring/workflow-composition-authoring-reference.yaml), [пример](workflow-composition/README.md) |
 | `workflow_composition_with_points` | Extension `/5`, folder `/3`, sidecar `/1`, Project `/3` или `/4`; native Call v1, Parallel v2, projection v5, blocked v6, resumable v8; отдельный opt-in, b2 | [Единый контракт](authoring/unified-composition-authoring-reference.yaml), [запускаемый пример](unified-composition/README.md) |
+| `project_compile_parameters` | Core `0.13.90+`, Project `/3`–`/5`, `prifly-compile-parameters/1`, `prifly-compile-values/1`; существующие Call и StepDefinition contracts | [Руководство](authoring/compile-parameters-guide.md), [объявление](authoring/compile-parameters-authoring-reference.yaml), [значение проекта](authoring/compile-values-authoring-reference.yaml), [полный пример](compile-parameters/README.md) |
 | `storage_budget_management` | CLI `storage budget show`, reviewed `set`, storage 10; YAML quota field отсутствует | [Восстановление storage](authoring/storage-recovery-guide.md) |
 | `on_error` | `on_error` у стадии | workflow |
 | `json_projection` | `pointer` и `projected_schema_ref` в binding | workflow |
@@ -89,6 +91,7 @@
 | `assisted_session_timing` | `session_limits.active_timeout_ms` | step |
 | `exclusive_resources` | `resources` в `extend.yaml`: имя, `limit` и корневые стадии, которые его держат (`call` — со всеми попытками внутри); лимит машины — в `local.yaml`; **состояние 42**. Второй Run на такой стадии получает `resource_busy` с держателем и допускается на следующем `run drive`; `capacity show` и монитор называют держателей | extension, troubleshooting |
 | `light_task_board` | — `monitor --ui light`; отдельные read/mapping contracts **Light /1**, без нового YAML поля; настройка, поля mapping и границы приёмки в [Light guide](authoring/light-guide.md) | — |
+| `shared_schema_migration` | `run.schema_migration` в [справочнике](authoring/schema-migration-guide.md); migration `/1`, Run/read `45`, authority `/2`; development change, release acceptance отдельно | schema-migration-guide |
 | `project_task_queue` | Явная локальная `project queue`, TaskInput revision/owner/generation, selection flags questionnaire/prepare/start; queue-bound **state/read 44**, summary/start **/4**. Claim не запускает работу; пример selection и reconcile в project-profile reference | project-profile |
 | `program_live_output` | `live_output: true` и `output_limit_bytes` у программы в `execution_bindings` (`extend.yaml` проекта или `workflow.yaml` пакета); **состояние 43**. Монитор и `run output RUN --attempt ID` показывают последние 64 КиБ stdout и stderr, пока программа работает; без флага вывод не раскрывается. `output_limit_bytes` (до 16 МиБ) — сколько программа может напечатать в каждый поток, иначе 64 КиБ; `--prepare` показывает оба | extension, troubleshooting |
 | `program_progress` | ничего не объявляется: программа шага пишет строки `program-progress/1` в fd 4 (`PRIFLY_PROGRESS_FD`) — фаза, пояснение, `current/total`; `run progress RUN` и карточка шага в мониторе показывают последнюю с давностью; это диагностика, не результат (fd 3) и не вердикт; контракт `schemas/core/program-progress.schema.json` | step, troubleshooting |
@@ -127,6 +130,11 @@ prifly capabilities --json | jq -c '{caps:.profiles[1].capabilities, unsupported
 
 ## Справочники YAML для авторов сценариев
 
+- [Руководство параметров сборки](authoring/compile-parameters-guide.md),
+  [объявление пакета](authoring/compile-parameters-authoring-reference.yaml) и
+  [значение проекта](authoring/compile-values-authoring-reference.yaml) показывают
+  предел схемы до prepare/start; [полный пример](compile-parameters/README.md)
+  передаёт task через root, child и project-owned worker на Core `0.13.90+`.
 - [`authoring/workflow-authoring-reference.yaml`](authoring/workflow-authoring-reference.yaml) — все
   поля `prifly-workflow/1`, восемь видов stages, bindings, limits и comments, а
   также что открывают ревизии 4–8: `impossible_verdicts`,

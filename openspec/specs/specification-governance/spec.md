@@ -236,3 +236,30 @@ Source set остаётся `openspec/specs/specification-governance/{spec,terms
 #### Scenario: An author adds naming metadata to a consumer
 - **WHEN** проект объявляет naming input независимо от закрытой task schema upstream workflow
 - **THEN** документация и outputs называют его входом именования проекта, не новым workflow port или task schema field
+
+### Requirement: Термины schema migration сохраняют различие доверия и отзыва
+Словарь SHALL определять SchemaMigrationPlan как read-only снимок проверяемого
+scope и preconditions. SchemaMigrationDecision SHALL обозначать записанное
+решение владельца по точному плану. SchemaMigrationBinding SHALL обозначать
+закреплённое новым Run происхождение ограниченного допуска schemas.
+Эти понятия MUST NOT означать restore пакета, изменение старого trust decision,
+новый schema Ref либо право на executable content.
+Lifecycle generation SHALL обозначать версию решения для одного package;
+новое принятое lifecycle решение меняет её даже при повторном status.
+Словарь MUST обновить PackageStatus, точные Go/JSON bindings и agent brief
+вместе с реализацией. Планируемые типы MUST NOT объявляться существующими до этого.
+
+#### Scenario: Автор ищет смысл миграции
+- **WHEN** reader открывает словарь после реализации
+- **THEN** он отличает план, решение и binding от PackageStatus, package trust и сохранённого schema Ref
+
+#### Scenario: Владелец снова отзывает тот же package
+- **WHEN** новая команда принимает повторный revoke того же exact Ref
+- **THEN** новая lifecycle generation отличает этот отзыв от покрытого прежним решением; повтор прежнего command id остаётся идемпотентным
+
+### Requirement: Параметр сборки отличается от настройки входа
+Словарь SHALL определять Compile parameter как package-declared типизированное значение compiler с default, диапазоном и точными schema bindings. Project-owned compile value SHALL означать сохранённый выбор проекта для такого параметра. Эти понятия MUST отличаться от Project workflow setting, который меняет default configuration input. Новая терминология MUST сопровождаться исходниками, примерами и проверками. Source set остаётся `specification-governance`; Go/JSON bindings добавляются только для реализованных типов.
+
+#### Scenario: Автор выбирает изменение schema limit
+- **WHEN** автору нужен configurable maxLength до task validation
+- **THEN** справочник направляет к compile parameter и не обещает такую возможность через runtime configuration input

@@ -1,0 +1,25 @@
+{
+  "status": "passed",
+  "release_tag": "v0.13.89",
+  "release_sha": "30c3635081f8f012aef3953072dcd45d0807d618",
+  "checked_at": "2026-11-09T20:15:28.625550+00:00",
+  "public_key_hex": "521250b29cb38544a7ec7fc1a2ee12b738cbcc3aca78d3bdc860ea438b5435b4",
+  "public_key_source": "https://api.github.com/repos/StenHigh/prifly/actions/variables/PRIFLY_RELEASE_PUBLIC_KEY",
+  "signatures": [
+    "release-manifest.jcs.sig",
+    "release-manifest.sig"
+  ],
+  "manifest_sha256": "5c5cd35f83ecb473cfec86071977e37ac36d218e8911c7ac191433c5623b875f",
+  "archive": "prifly-linux-amd64.tar.gz",
+  "archive_sha256": "1bf00adc2a1258ee6ab7c4781e4931e860a36d551bcc44febc2611219f8f3a28",
+  "binary_sha256": "90e3e37c79a88ae0279a2542e40e34d75afa524b2b3cf7188900830ea7fe2985",
+  "binary_version": {
+    "arch": "amd64",
+    "go": "go1.27.3",
+    "os": "linux",
+    "schema_version": "foundation-version/1",
+    "semantics_profile": "foundation-sequence/1",
+    "version": "0.13.89"
+  },
+  "asset_url": "https://github.com/StenHigh/prifly/releases/download/v0.13.89/prifly-linux-amd64.tar.gz"
+}

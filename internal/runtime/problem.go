@@ -58,6 +58,8 @@ func persistenceFailure(err error) bool { return local.IsPersistenceFailure(err)
 // and only allows inspection.
 func exitForCode(code string) int {
 	switch {
+	case code == "schema_migration_plan_stale":
+		return 3
 	// The project surface validates declarations, not authority state. A
 	// "conflict" there is two lines of project.yaml disagreeing with each
 	// other, which is the form-and-input class the exit table calls 2, not the
@@ -322,10 +324,16 @@ func ProblemFor(err error) (Problem, int) {
 		"execution_environment_unavailable": {"project.local.set", "run.status"},
 		// A Run that cannot be reopened still has an answer that names what it
 		// can do, and reading the Run says why it ended.
-		"authority_scan_budget_exhausted": {"doctor", "claim.list"},
-		"claim_ownership_conflict":        {"claim.list", "doctor"},
-		"not_a_broken_run":                {"run.next", "run.status"},
-		"stage_not_reopenable":            {"run.next", "run.status"},
+		"authority_scan_budget_exhausted":   {"doctor", "claim.list"},
+		"claim_ownership_conflict":          {"claim.list", "doctor"},
+		"schema_migration_invalid":          {"package.schema-migration.prepare"},
+		"schema_migration_incomplete":       {"package.schema-migration.prepare"},
+		"schema_migration_plan_stale":       {"package.schema-migration.prepare"},
+		"schema_migration_scope_mismatch":   {"package.schema-migration.prepare", "package.schema-migration.inspect"},
+		"schema_migration_integrity":        {"package.verify", "package.schema-migration.inspect"},
+		"schema_migration_decision_invalid": {"package.schema-migration.inspect", "package.schema-migration.prepare"},
+		"not_a_broken_run":                  {"run.next", "run.status"},
+		"stage_not_reopenable":              {"run.next", "run.status"},
 	}[p.Code]; ok {
 		p.SafeNextActions = actions
 	} else if strings.HasPrefix(p.Code, "project_") || p.Code == "unsafe_path" {

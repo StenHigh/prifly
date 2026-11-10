@@ -1,0 +1,3 @@
+tag-release: 5e7f81c has full verify and qualify on exact SHA
+verify: https://github.com/StenHigh/prifly/actions/runs/42716142852 (direct batch, attempt 1)
+qualify: https://github.com/StenHigh/prifly/actions/runs/42716176781 (direct batch, attempt 1)

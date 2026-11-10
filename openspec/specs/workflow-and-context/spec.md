@@ -101,9 +101,19 @@ pins, receipts, effects или evidence живого/сохраняемого Ru
 revocation MUST блокировать новые admissions и trusted reuse, сохраняя
 наблюдения прошлых effects и честную unavailable history.
 
+Явная миграция проверенных общих schemas SHALL допускать ограниченное исключение
+для нового Run. Исключение MUST связывать точный consumer package, schema refs,
+выбранных доверенных поставщиков и покрытые записи отзыва. Оно MUST NOT
+восстанавливать revoked package, менять старые Runs или допускать executable content.
+Без отдельного решения и явного выбора этого решения при Start прежний запрет MUST сохраняться.
+
 #### Scenario: Package отозван во время Run
 - **WHEN** следующий admission требует отозванный package
 - **THEN** он блокируется, а уже наблюдаемый external effect не исчезает
+
+#### Scenario: Новый consumer выбирает одобренную миграцию schemas
+- **WHEN** новый Run явно выбирает действующее решение для своих точных schemas и consumer package
+- **THEN** движок закрепляет выбранных поставщиков и происхождение допуска, сохраняя исходный revoked package и pins старых Runs
 
 ### Requirement: Пользователь может создать минимальный local step
 Пользователь MUST иметь возможность определить local StepDefinition с ports,
@@ -1504,3 +1514,81 @@ Source set остаётся `openspec/specs/workflow-and-context/spec.md`; owner
 #### Scenario: Naming does not apply to the selected launch
 - **WHEN** запуск использует checkout либо вообще не требует Git Workspace
 - **THEN** Core не требует naming values; структурная проверка profile сохраняется, явно переданные неиспользуемые naming values отказываются
+
+### Requirement: План миграции показывает полный schema closure
+Read-only prepare SHALL проверять установленный точный consumer package и весь
+его dependency closure. План MUST показывать все затронутые schema refs, все
+отозванные packages, их status/reason и доступное происхождение lifecycle.
+План MUST различать первоначальный trust reason и последующий status reason.
+Для каждой схемы план MUST показывать выбранного точного поставщика либо отсутствие выбора.
+Поставщик MUST находиться в объявленном closure consumer, иметь проверенные bytes и разрешаемые доверенные зависимости.
+План MUST перечислять затронутые текущие и сохранённые Runs и объяснять сохранение их прежних ограничений.
+Неполный или превышающий опубликованный предел scan MUST NOT выдавать применимый план.
+
+#### Scenario: Старый пакет содержит несколько общих schemas
+- **WHEN** consumer требует несколько schemas, которые объявлял revoked package
+- **THEN** план перечисляет все такие refs и состояние покрытия каждого, включая refs после первого отказа Start
+
+#### Scenario: Один schema Ref объявляли два revoked пакета
+- **WHEN** два сохранённых revoked пакета объявляли одну требуемую схему
+- **THEN** план показывает обе записи отзыва; применимое решение покрывает обе либо prepare сообщает неполное покрытие
+
+#### Scenario: Владелец ещё не выбрал поставщиков
+- **WHEN** prepare получает consumer без полного списка выбранных поставщиков схем
+- **THEN** он возвращает неприменимый диагностический план с кандидатами и причинами; trust, Runs и claims не меняются
+
+### Requirement: Допуск схем нового Run имеет собственное происхождение
+Новый Run с выбранной миграцией SHALL закреплять решение, точный consumer,
+schema refs и конкретных поставщиков. Движок MUST проверять эти bindings при
+Start и каждом последующем admission, включая вложенную работу.
+Решение MUST NOT менять supplier произвольно или распространяться на другой consumer revision.
+Старый Run без такого binding MUST сохранять прежний запрет даже при одинаковом schema Ref.
+Решение MUST NOT автоматически делать результаты старого revoked Run пригодными для trusted reuse.
+
+#### Scenario: Новый Run продолжает работу после Start
+- **WHEN** новый consumer с действующим binding завершает первый шаг и запрашивает следующий
+- **THEN** admission использует закреплённое решение и допускает работу при сохранении остальных условий
+
+#### Scenario: Старый Run содержит тот же schema Ref
+- **WHEN** старый Run запрашивает admission после применения миграции для нового consumer
+- **THEN** прежний revoked pin продолжает блокировать работу; его history и claims не переписываются
+
+#### Scenario: Start не выбирает решение
+- **WHEN** consumer запускается без явного выбора решения после успешного apply
+- **THEN** прежняя revocation policy продолжает действовать
+
+### Requirement: Миграция не расширяет исполняемый scope
+Разрешение SHALL относиться только к проверенным компонентам вида schema.
+Workflow, step, adapter, context, executable bytes и непроверенные refs MUST
+сохранять прежние trust checks. Отличающаяся version или digest схемы MUST
+требовать нового проверенного плана. Обычный import, alias и повторная компиляция MUST NOT создавать решение миграции.
+
+#### Scenario: Старый package также содержит code
+- **WHEN** новый consumer требует executable ref из revoked package наряду с одобренной общей схемой
+- **THEN** Start отказывает до создания Run; разрешение схемы не допускает code
+
+#### Scenario: Неизвестный schema Ref добавлен после prepare
+- **WHEN** выбранный consumer или его closure требует schema Ref вне одобренного набора
+- **THEN** движок не распространяет исключение на этот Ref и возвращает именованный отказ
+
+### Requirement: Пакет разрешает ограниченные параметры сборки
+Package SHALL объявлять в `compile-parameters.yaml` (`prifly-compile-parameters/1`) именованные параметры с типом integer, положительными minimum/maximum, default и непустыми bindings. Binding SHALL называть собственную schema через локальный alias и JSON Pointer существующего maxLength строковой schema. Значением поля SHALL быть whole scalar placeholder того же параметра. Compiler MUST отказать неизвестной, чужой, повторной или несовместимой цели. Owner SHALL сохранять значения в `project/compile-values.yaml` (`prifly-compile-values/1`), отдельно от upstream-owned файлов. Неизвестное имя, неправильный тип и значение вне диапазона MUST получать типизированный отказ до Run.
+
+#### Scenario: Default и owner value ограничивают описание
+- **WHEN** default равен 12000, а owner value равен 32000
+- **THEN** default принимает 12000 и отклоняет 12001; owner value принимает 16557 и 32000, но отклоняет 32001
+
+#### Scenario: Binding не соответствует объявленному полю
+- **WHEN** binding называет внешний schema alias, отсутствующий pointer или поле без matching placeholder
+- **THEN** compiler отказывает до sealing и не подменяет другую schema
+
+### Requirement: Параметр сборки сохраняет совместимость closure и Run
+Compiler MUST применять validated value до проверки task и до sealing refs корня, child workflow и worker. Project-owned consumer MUST получать ту же effective schema через обычный typed binding. Разные значения MUST давать отдельные compiled identities в одной authority. Update MUST сохранять owner file и MUST явно отказать несовместимому оставшемуся значению при последующей compilation. Existing Run MUST сохранять исходные definitions и task bytes. Continue MUST использовать исходный контракт либо явно отказать до эффектов. Source set остаётся `workflow-and-context`; legacy authoring без sidecar сохраняет текущий смысл.
+
+#### Scenario: Два проекта запускают разные пределы
+- **WHEN** два проекта с одной author identity выбирают разные допустимые значения в общей authority
+- **THEN** оба Run используют свои compiled refs без definition drift и конфликтов shared schemas
+
+#### Scenario: Настройка изменена после запуска
+- **WHEN** owner меняет значение либо обновляет пакет
+- **THEN** прежний Run сохраняет definitions и полный task, а новая compilation проверяет обновлённую декларацию

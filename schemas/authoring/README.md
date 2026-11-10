@@ -30,6 +30,8 @@ Frameworks → Schemas and DTDs → JSON Schema Mappings**.
 | `.prifly/project.yaml` | `project-profile.schema.json` (markers `/2` и `/3`) |
 | `.prifly/workflows/NAME/workflow.yaml` | `project-workflow-folder-v1.schema.json` |
 | Folder с `prifly-project-workflow/2` | `project-workflow-folder-v2.schema.json` через явную modeline |
+| `.prifly/workflows/NAME/compile-parameters.yaml` | `compile-parameters-v1.schema.json` |
+| `.prifly/workflows/NAME/project/compile-values.yaml` | `compile-values-v1.schema.json` |
 | `.prifly/workflows/NAME/extend.yaml` | `extension-v1.schema.json` |
 | Extend и shared layers с `prifly-extension/3` | `extension-v3.schema.json` через явную modeline |
 | `.prifly/workflows/NAME/decisions/**/*.yaml` | `run-decision-v1.schema.json` |

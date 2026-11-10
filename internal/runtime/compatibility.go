@@ -50,7 +50,7 @@ func Capabilities() CapabilityManifest {
 	}
 	profile := &manifest.Profiles[1]
 	profile.Capabilities = append(profile.Capabilities, "project_call_extensions", "project_extension_points")
-	profile.Capabilities = append(profile.Capabilities, "workflow_composition", "workflow_composition_with_points")
+	profile.Capabilities = append(profile.Capabilities, "workflow_composition", "workflow_composition_with_points", "project_compile_parameters")
 	profile.StateVersion, profile.ReadVersion = CoreNeutralStateVersion, CoreNeutralReadVersion
 	profile.StateVersions = append(profile.StateVersions, CoreNeutralStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreNeutralReadVersion)
@@ -221,6 +221,10 @@ func Capabilities() CapabilityManifest {
 	profile.ReadVersions = append(profile.ReadVersions, CoreQueueReadVersion)
 	profile.Capabilities = append(profile.Capabilities, "project_task_queue", "project_worktree_naming", "project_owned_naming_inputs", "light_task_board")
 
+	profile.StateVersion, profile.ReadVersion = CoreSchemaMigrationStateVersion, CoreSchemaMigrationReadVersion
+	profile.StateVersions = append(profile.StateVersions, CoreSchemaMigrationStateVersion)
+	profile.ReadVersions = append(profile.ReadVersions, CoreSchemaMigrationReadVersion)
+	profile.Capabilities = append(profile.Capabilities, "shared_schema_migration")
 	return manifest
 }
 

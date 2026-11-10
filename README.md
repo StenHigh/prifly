@@ -394,6 +394,7 @@ config-каталоге. Срез добавлен в исходники; это
 | Публичные JSON contracts | [Published contracts](openspec/specs/published-contracts/spec.md) |
 | Примеры и справочники YAML | [examples/](examples/README.md) |
 | Как описать и выбрать запуск | [Руководство выбора запуска](examples/authoring/launch-choice-guide.md) |
+| Как задать проектный предел описания до prepare/start | [Параметры сборки и полный пример](examples/authoring/compile-parameters-guide.md) |
 | Как объявить вопросы до старта и во время Run | [Справочник решений Run](examples/authoring/run-decision-authoring-reference.yaml) |
 | Как продолжить, возобновить или восстановить Run | [Руководство продолжения](examples/authoring/continuation-guide.md) |
 | Как читать прогресс программы | [Диагностика прогресса](examples/troubleshooting.md#монитор-пишет-прогресс-не-сообщается-у-долгой-программы) |

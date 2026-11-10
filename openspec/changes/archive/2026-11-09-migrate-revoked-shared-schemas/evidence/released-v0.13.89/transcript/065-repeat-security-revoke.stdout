@@ -1,0 +1,1 @@
+{"duplicate":false,"receipt":{"command_id":"command:repeat-security-revoke","actor":"local:uid:1001","key":"packages","request_digest":"sha256:6185205e0435cd1d2eb9aac4291aad1197b55419aafdba7c2cceab6266507c6a","version":9,"cut":49,"result":{"status":"revoked"}},"schema_version":"foundation-control-command/1"}

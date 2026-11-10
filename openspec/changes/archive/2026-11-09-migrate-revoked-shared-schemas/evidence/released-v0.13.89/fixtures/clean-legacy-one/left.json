@@ -1,0 +1,1 @@
+{"additionalProperties":false,"properties":{"value":{"type":"integer"}},"required":["value"],"type":"object"}

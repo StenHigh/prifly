@@ -158,7 +158,7 @@ func (e *Engine) enterMap(ctx context.Context, loaded Run, view local.ReadView, 
 		opened = append(opened, item.Key)
 	}
 	payload := map[string]any{"stage_activation_id": activation.ID, "item_keys": opened, "input_refs": inputs, "sealed": sealed}
-	_, err = e.apply(ctx, e.owner, commandID, loaded.ID, "stage.map_entered", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	_, err = e.applyPackageAdmission(ctx, loaded, e.owner, commandID, loaded.ID, "stage.map_entered", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		a := r.Activations[activation.ID]
 		if err := checkFanOutActivation(*r, p, a, "ready"); err != nil {
 			return local.Change{}, err

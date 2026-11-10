@@ -100,7 +100,7 @@ Global: --project DIR  --json  --format text|json|csv
                                    extension-authoring-reference.yaml shows a complete extend.yaml, extensions included
   validate --workflow FILE          Shape, refs, graph and profile validation; FILE is resolved from the authority root, not the working directory
   preview --workflow FILE [--brief FILE] [--input-ref PORT=REF.json]
-  run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive] [--grant ID]
+  run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive] [--grant ID] [--schema-migration ID]
 
   run fork --file REQUEST.json      Create a linked Run from exact sealed refs; old Run is unchanged
   run list [--limit N]              This authority's Runs, newest first: id, workflow, status, outcome, created,
@@ -153,6 +153,12 @@ Global: --project DIR  --json  --format text|json|csv
                                    Authority-side stops; they forbid new admissions, not running work
   package import --dir DIR --reason TEXT [--command-id ID]
                                    Seal, verify and trust a local package; nothing in it is executed
+  package schema-migration prepare --request FILE
+                                   Read-only exact consumer/schema/supplier review; incomplete choices are diagnostic
+  package schema-migration apply --plan FILE --expected-review-digest DIGEST --reason TEXT [--command-id ID]
+                                   Owner-scoped exception for verified shared schemas; preserves terminal revoke and old Runs
+  package schema-migration inspect --id ID
+                                   Recorded decision and its current validity; later lifecycle decisions invalidate it
   package list                      Trusted packages, their origin and recorded trust decision
                                    author_package names the edition an author wrote; it is shown, never accepted by --package, since two builds of it are one version
   package inspect --ref REF.json | --component ID [--package ID@VERSION]
@@ -445,6 +451,11 @@ Default в таблице — значение parser до применения 
 | `--explain` | boolean | `false` | show source composition and effective settings; output directory is optional |
 | `--value` | повторяемое значение | `[]` | explicit YAML value NAME=JSON |
 
+Объявленные параметры сборки задаются в `project/compile-values.yaml` по [процедуре](launch.md#compile-parameters).
+Compile, prepare и start читают этот файл. `--value` не переопределяет declared compile parameter.
+Нужны Core `0.13.90+`, capability `project_compile_parameters` и Project profile `/3`–`/5`.
+[Руководство и полный пример](../authoring/compile-parameters-guide.md) показывают декларацию пакета и значение проекта.
+
 <!-- cli-flags:projectExtend -->
 
 ### project extend
@@ -495,6 +506,7 @@ Default в таблице — значение parser до применения 
 
 | Flag | Тип | Default | Значение/источник |
 |---|---|---|---|
+| `--schema-migration` | строка | `""` | Явный ID решения schema migration; нужен Project profile `/3+`; пустое значение сохраняет прежний admission. |
 | `--repository` | строка | `"."` | directory that owns the shared Pri-Fly profile |
 | `--launch` | строка | `""` | declared launch ID from project.yaml |
 | `--host` | строка | `""` | host entry point that selects project skills |
@@ -666,6 +678,7 @@ Default в таблице — значение parser до применения 
 
 | Flag | Тип | Default | Значение/источник |
 |---|---|---|---|
+| `--schema-migration` | строка | `""` | Явный ID записанного решения schema migration; пустое значение сохраняет прежний admission. |
 | `--workflow` | строка | `""` | Явно выбранный workflow source/ref по форме команды. Низкоуровневый путь разрешается относительно authority. |
 | `--brief` | строка | `""` | Файл brief legacy workflow. Project /3 использует declared inputs вместо универсального brief. |
 | `--command-id` | строка | `""` | Уникальный ID намерения владельца. При повторе потерянного запроса используйте тот же ID и те же bytes. |
@@ -855,6 +868,7 @@ Default в таблице — значение parser до применения 
 | `package quarantine` |
 | `package remove` |
 | `package restore` |
+| `package schema-migration` |
 | `package revoke` |
 | `package trust-root` |
 | `package verify` |
@@ -1014,3 +1028,18 @@ NAME объявлен в `worktree_naming.inputs`; FILE содержит JSON va
 Questionnaire `/5` показывает условную потребность; summary/start `/8` показывает полный snapshot.
 Continue/resume/recover отказывают override и используют source claim.
 См. [поля и команды](launch.md#project-owned-naming-inputs).
+
+<!-- cli-flags:schemaMigration -->
+
+### package schema-migration
+
+Процедура: [миграция схем](schema-migration.md).
+
+| Flag | Тип | Default | Значение/источник |
+|---|---|---|---|
+| `--request` | строка | `""` | Файл schema-migration-request/1 для prepare. |
+| `--plan` | строка | `""` | Проверенный schema-migration-plan/1 для apply. |
+| `--expected-review-digest` | строка | `""` | Точный review_digest plan. |
+| `--reason` | строка | `""` | Явная причина owner apply. |
+| `--command-id` | строка | `""` | Стабильная identity retry; без значения CLI создаёт новую. |
+| `--id` | строка | `""` | Записанный decision ID для inspect. |

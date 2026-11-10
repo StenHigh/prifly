@@ -17,6 +17,7 @@ type DecisionState struct {
 }
 
 type LaunchSummary struct {
+	SchemaMigrationID   string                        `json:"schema_migration,omitempty"`
 	Composition         *CompositionReview            `json:"composition,omitempty"`
 	WorktreeNaming      *WorktreeNamingReview         `json:"worktree_naming,omitempty"`
 	WorktreeNamePreview *prifly.WorktreeNamePreview   `json:"worktree_name_preview,omitempty"`
@@ -112,8 +113,9 @@ type ExecutionReview struct {
 }
 
 type StartResult struct {
-	QueueTask     *prifly.QueueTaskBinding `json:"queue_task,omitempty"`
-	SchemaVersion string                   `json:"schema_version"`
+	SchemaMigrationID string                   `json:"schema_migration,omitempty"`
+	QueueTask         *prifly.QueueTaskBinding `json:"queue_task,omitempty"`
+	SchemaVersion     string                   `json:"schema_version"`
 	// RunID, NextCommand and RetiredEditions lead the document: the full Run
 	// view below runs to tens of kilobytes, and a model reading a started
 	// launch could not find the new Run's id in it and fell back to run list.

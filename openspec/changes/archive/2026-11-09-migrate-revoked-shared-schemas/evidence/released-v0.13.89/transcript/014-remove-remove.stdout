@@ -1,0 +1,1 @@
+{"duplicate":false,"receipt":{"command_id":"command:remove-remove","actor":"local:uid:1001","key":"packages","request_digest":"sha256:f6819bf14952be675ce0efe52fbe1167a4e31fce1d2131b2b5e8f841cd1d93e9","version":2,"cut":3,"result":{"status":"removed"}},"schema_version":"foundation-control-command/1"}

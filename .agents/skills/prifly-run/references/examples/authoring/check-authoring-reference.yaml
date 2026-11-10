@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.87/schemas/authoring/check-v1.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/check-v1.schema.json
 # Full check-definition/1 reference for .prifly/workflows/NAME/checks/FILE.yaml.
 # Every field below is required: unlike step authoring, this full contract has
 # no shorthand/defaults. A check is not a graph stage or an invented Step.

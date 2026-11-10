@@ -43,6 +43,15 @@ Git и archived OpenSpec changes; они не являются current source se
 definitions остаются product artifacts рядом с кодом, а не Markdown-копиями в
 OpenSpec.
 
+Explicit schema migration включена в main source sets `workflow-and-context`,
+`control-security-ux`, `cli-protocol`, `published-contracts` и
+`specification-governance`; ownership не меняется. Machine shapes находятся
+рядом с Go types и в опубликованных schema bundles. История и baseline сохранены
+в archived `2026-11-09-migrate-revoked-shared-schemas`.
+Generic released-binary acceptance выполнена на Core `v0.13.89`;
+evidence — `changes/archive/2026-11-09-migrate-revoked-shared-schemas/evidence/released-v0.13.89/README.md`.
+Private authority acceptance не выполнялась и сохраняет отдельный статус.
+
 ## Как вести изменение
 
 До archive `add-workflow-component-imports-and-layers` его deltas задают opt-in
@@ -128,3 +137,12 @@ Opt-in profile `/5`, naming namespace, summary/start `/8` и claim snapshot `/5`
 сохраняют прежние version boundaries. Ownership не переносится.
 Released-Core приёмка issue №19 выполнена на `v0.13.88`; evidence —
 `changes/archive/2026-11-03-add-project-owned-worktree-naming-inputs/evidence/released-acceptance.md`.
+
+Объявленные параметры сборки и project-owned values включены в main source sets
+`workflow-and-context`, `cli-protocol`, `published-contracts` и `specification-governance`.
+История сохранена в archived `2026-11-10-add-project-owned-compile-parameters`.
+Sidecars `/1` используют compiled variants профилей `/3`–`/5`; ownership не переносится.
+Приёмка исходников C1–C8 и последующая проверка опубликованного Core `v0.13.90`
+разделены в `changes/archive/2026-11-10-add-project-owned-compile-parameters/evidence/`.
+Точный release SHA, signed assets и Linux probe записаны в `evidence/released-v0.13.90/README.md` этого archive.
+Consumer workflows #3 сохраняет отдельную приёмку; old bundles и saved Run contracts сохраняются.

@@ -32,7 +32,8 @@ func startGrantRefs(grantID string) []any {
 }
 
 type StartOptions struct {
-	QueueTask *QueueTaskBinding
+	SchemaMigrationID string
+	QueueTask         *QueueTaskBinding
 	// Empty and "1" retain the mandatory RunBrief contract. Version 2 admits
 	// declared workflow inputs without manufacturing a separate task document.
 	SchemaVersion string
@@ -846,7 +847,7 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	// holds scoped invocations even when its graph alone would not need them.
 	// A single-plan closure has no children, so this is the same map that
 	// function would have built, not a second way of building it.
-	if (neutral || len(options.Guards) != 0 || requiresArtifactPublicationState(plan) || requiresContextState(plan)) && configurations == nil && plan.Profile == flow.CoreProfile {
+	if (neutral || options.SchemaMigrationID != "" || len(options.Guards) != 0 || requiresArtifactPublicationState(plan) || requiresContextState(plan)) && configurations == nil && plan.Profile == flow.CoreProfile {
 		configurations = map[string]*EffectiveConfiguration{plan.Digest: effective}
 	}
 	// Pin only the actual compiler closure and core transport contracts. An
@@ -1018,7 +1019,7 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	executors := map[string]PinnedExecutor{}
 	for ref, executor := range executorDefinitions(plan) {
 		key := ref.ID
-		if requiresInvocationState(plan) || neutral {
+		if requiresInvocationState(plan) || neutral || options.SchemaMigrationID != "" {
 			key = ref.String()
 		}
 		if _, ok := executors[key]; ok {
@@ -1189,14 +1190,19 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
-	packageRefs := make([]flow.Ref, 0, len(defs)+len(resources))
+	packageRefs := make([]flow.Ref, 0, len(defs)+len(resources)+1)
+	packageRefs = append(packageRefs, workflowRef)
 	for _, definition := range defs {
 		packageRefs = append(packageRefs, definition.Ref)
 	}
 	for _, resource := range resources {
 		packageRefs = append(packageRefs, resource.Ref)
 	}
-	packagePin, packageBlocked, err := e.packageAdmissionGate(ctx, packageRefs, true)
+	migrationBinding, err := e.schemaMigrationBinding(ctx, options.SchemaMigrationID, workflowRef, defs)
+	if err != nil {
+		return local.ApplyResult{}, err
+	}
+	packagePin, packageBlocked, err := e.packageAdmissionGateWithMigration(ctx, packageRefs, true, migrationBinding)
 	if err != nil {
 		return local.ApplyResult{}, err
 	}
@@ -1265,6 +1271,10 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 	}
 	var queueRequestBytes []byte
 	queueGuards := []local.AuthorityGuard{e.queueUnboundRunGuard(runID)}
+	if options.SchemaMigrationID != "" {
+		startPayload = map[string]any{"start": startPayload, "schema_migration": options.SchemaMigrationID}
+	}
+
 	if options.QueueTask != nil {
 		if plan.Profile != flow.CoreProfile || configurations == nil {
 			return local.ApplyResult{}, fault("queue_requires_core", "a queue task requires a scoped core Run")
@@ -1476,8 +1486,11 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		if options.QueueTask != nil {
 			stateVersion = higherState(stateVersion, CoreQueueStateVersion)
 		}
+		if migrationBinding != nil {
+			stateVersion = higherState(stateVersion, CoreSchemaMigrationStateVersion)
+		}
 		ledger := decisionInitialLedger(options.DecisionSheet, obs)
-		*r = Run{QueueTask: options.QueueTask, QueueRequestBytes: queueRequestBytes, SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Recovery: provenance, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{startStage}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles, StageResources: options.StageResources, ResourceLimits: options.ResourceLimits}
+		*r = Run{SchemaMigration: migrationBinding, QueueTask: options.QueueTask, QueueRequestBytes: queueRequestBytes, SchemaVersion: stateVersion, ID: runID, AuthorityID: e.Installation.ID, ProjectID: e.Config.ID, ProjectTitle: options.ProjectTitle, Profile: plan.Profile, TrustProfile: "core-local/cooperative", InteractionMode: "with_human", ExecutionMode: "managed", CapacityProfile: "foundation:one-slot", Status: "ready", RootInvocationID: rootID, WorkflowRef: workflowRef, Workflow: plan.Canonical, Definitions: defs, Executors: executors, EffectiveConfiguration: effective, Fork: fork, Recovery: provenance, Brief: briefRef, LockRef: lockRef, Inputs: inputs, Outputs: map[string]ArtifactRef{}, DecisionCatalog: options.DecisionCatalog, DecisionSheet: options.DecisionSheet, DecisionLedger: ledger, Ready: []string{startStage}, Active: []string{}, Activations: map[string]*Activation{}, Steps: map[string]*Step{}, Attempts: map[string]*Attempt{}, Stops: []Stop{}, Publications: []Publication{}, Diagnostics: []Diagnostic{}, Created: obs, CoreBuild: Version, Gaps: []TimingGap{}, Transitions: []StateChange{}, ModelProfileTranslations: options.ModelProfiles, StageResources: options.StageResources, ResourceLimits: options.ResourceLimits}
 		if configurations != nil {
 			r.Ready = nil
 			r.WorkflowConfigurations = configurations

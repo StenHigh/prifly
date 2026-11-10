@@ -1,0 +1,15 @@
+authoring: prifly-workflow/1
+id: example:workflow/child
+version: 1.0.0
+policy_ref: "{{policy}}"
+inputs: {task: {schema_ref: "{{schema_task}}", required: true}}
+entry: worker
+limits: {max_step_instances: 1, max_control_transitions: 3}
+stages:
+  worker:
+    kind: step
+    step_ref: "{{step_worker}}"
+    input_bindings: {task: $inputs.task}
+    on: {pass: done}
+    impossible_verdicts: [fail, needs_revision, no_work]
+  done: {kind: finish, outcome: succeeded}

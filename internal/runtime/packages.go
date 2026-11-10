@@ -36,21 +36,23 @@ const (
 )
 
 type PackageRecord struct {
-	SchemaVersion string         `json:"schema_version"`
-	AuthorityID   string         `json:"authority_id"`
-	Packages      []PackageEntry `json:"packages"`
+	SchemaVersion    string                    `json:"schema_version"`
+	AuthorityID      string                    `json:"authority_id"`
+	Packages         []PackageEntry            `json:"packages"`
+	SchemaMigrations []SchemaMigrationDecision `json:"schema_migrations,omitempty"`
 }
 
 type PackageEntry struct {
-	Ref            flow.Ref      `json:"ref"`
-	ManifestDigest string        `json:"manifest_digest"`
-	Root           string        `json:"root"`
-	Origin         PackageOrigin `json:"origin"`
-	Trust          PackageTrust  `json:"trust"`
-	Components     []Definition  `json:"components"`
-	Files          []PackageFile `json:"files"`
-	Dependencies   []flow.Ref    `json:"dependencies,omitempty"`
-	Imported       Observation   `json:"imported"`
+	LifecycleGeneration int64         `json:"lifecycle_generation,omitempty"`
+	Ref                 flow.Ref      `json:"ref"`
+	ManifestDigest      string        `json:"manifest_digest"`
+	Root                string        `json:"root"`
+	Origin              PackageOrigin `json:"origin"`
+	Trust               PackageTrust  `json:"trust"`
+	Components          []Definition  `json:"components"`
+	Files               []PackageFile `json:"files"`
+	Dependencies        []flow.Ref    `json:"dependencies,omitempty"`
+	Imported            Observation   `json:"imported"`
 	// An entry written before the lifecycle existed carries no status, which
 	// honestly means it was trusted and never withdrawn.
 	Status        string       `json:"status,omitempty"`
@@ -151,10 +153,10 @@ func (e *Engine) readPackages(ctx context.Context) (PackageRecord, int64, error)
 		return PackageRecord{}, 0, err
 	}
 	var record PackageRecord
-	if err := decode(snapshot.Data, &record); err != nil {
+	if err := decodeState(snapshot.Data, &record); err != nil {
 		return PackageRecord{}, 0, err
 	}
-	if record.SchemaVersion != AuthorityPackagesVersion || record.AuthorityID != e.Installation.ID {
+	if !packageRecordSupported(record) || record.AuthorityID != e.Installation.ID {
 		return PackageRecord{}, 0, errors.New("unsupported or foreign package record")
 	}
 	return record, snapshot.Version, nil
@@ -279,10 +281,10 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 	result, err := e.Store.ApplyAuthority(ctx, authority, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		record := PackageRecord{SchemaVersion: AuthorityPackagesVersion, AuthorityID: e.Installation.ID, Packages: []PackageEntry{}}
 		if s.Version > 0 {
-			if err := decode(s.Data, &record); err != nil {
+			if err := decodeState(s.Data, &record); err != nil {
 				return local.AuthorityChange{}, err
 			}
-			if record.SchemaVersion != AuthorityPackagesVersion || record.AuthorityID != e.Installation.ID {
+			if !packageRecordSupported(record) || record.AuthorityID != e.Installation.ID {
 				return local.AuthorityChange{}, errors.New("unsupported or foreign package record")
 			}
 		}
@@ -365,6 +367,9 @@ func (e *Engine) ImportPackage(ctx context.Context, request PackageImportRequest
 			Trust:        PackageTrust{Decision: "local_owner_accepted", ActorID: e.owner, Reason: request.Reason, ControlAdmissionID: admissionID, IntentDigest: rawDigest(intentBytes), SignedBy: signer, Decided: obs},
 			Components:   components, Files: manifest.Files, Imported: obs,
 		})
+		if record.SchemaVersion == AuthorityPackagesMigrationVersion {
+			record.Packages[len(record.Packages)-1].LifecycleGeneration = 1
+		}
 		if request.Retire != nil {
 			retired = retiredComponents(record, request.Retire)
 			if err := retireEditions(&record, request.Retire, obs); err != nil {

@@ -228,3 +228,7 @@ func projectNamingLaunchBudget(summary projectLaunchSummary) error {
 	}
 	return nil
 }
+
+func projectSummaryHasOwnedNaming(summary projectLaunchSummary) bool {
+	return summary.WorktreeNaming != nil && summary.WorktreeNaming.Snapshot != nil || summary.WorktreeClaim != nil && summary.WorktreeClaim.NamingSnapshot != nil
+}

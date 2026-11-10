@@ -10,12 +10,14 @@
 |---|---|
 | Установка, clone, binary/workflow/runner update, конфликт обновления | [Установка](installation.md) |
 | Выбор launch, inputs, profile, questionnaire, prepare, start | [Новый запуск](launch.md) |
+| Задать проектный предел длинного task до prepare/start | [Параметр сборки](launch.md#compile-parameters) |
 | Получить задание, выполнить шаг, записать outputs, отправить отчёт | [Исполнение](hosting.md) |
 | Ответить на preflight/runtime question, yield, отчёт о вопросах | [Решения](decisions.md) |
 | Continue/resume/reopen/recover; cancelled writer; неизвестные эффекты | [Восстановление](recovery.md) |
 | Worktree/checkout, claims, дерево входа/выхода, permitted effects | [Рабочее дерево](workspace.md) |
 | Написать или изменить YAML, extension, composition, программу | [Авторинг](authoring.md) |
 | ArtifactRef, schema, task/source import, package trust | [Данные и пакеты](artifacts.md) |
+| Shared schemas после ошибочного terminal revoke | [Миграция схем](schema-migration.md) |
 | Pause/cancel/stops, approvals/grants, lost response, action admission | [Управление](control.md) |
 | Monitor/Light, events/timing, stdout/stderr, progress, telemetry | [Наблюдение](observability.md) |
 | Queue, capacity, exclusive resource, storage budget, cleanup | [Обслуживание](operations.md) |

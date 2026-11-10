@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.87/schemas/authoring/extension-v5.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/extension-v5.schema.json
 # Требуется capability workflow_composition_with_points и Project profile /3 либо /4.
 # /5 включается явно в выбранном root. Прежний /4 сохраняет прежний compiler и b1.
 # Это справочник полей. Полный запускаемый пример: ../unified-composition/README.md.

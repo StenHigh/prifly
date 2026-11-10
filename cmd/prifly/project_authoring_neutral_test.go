@@ -50,6 +50,8 @@ func TestNeutralAuthoringReferencesMatchServedSchemas(t *testing.T) {
 	t.Parallel()
 	for _, example := range []struct{ name, schema string }{
 		{"check", "check-v1"},
+		{"compile-parameters", "compile-parameters-v1"},
+		{"compile-values", "compile-values-v1"},
 		{"execution-bindings", "project-workflow-folder-v1"},
 		{"project-profile", "project-profile-v5"},
 		// The step reference is where an author reads how to say "no work

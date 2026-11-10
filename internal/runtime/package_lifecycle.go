@@ -304,10 +304,10 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 	var retired []flow.Ref
 	result, err := e.Store.ApplyAuthority(ctx, authority, func(s local.AuthoritySnapshot) (local.AuthorityChange, error) {
 		var record PackageRecord
-		if err := decode(s.Data, &record); err != nil {
+		if err := decodeState(s.Data, &record); err != nil {
 			return local.AuthorityChange{}, err
 		}
-		if record.SchemaVersion != AuthorityPackagesVersion || record.AuthorityID != e.Installation.ID {
+		if !packageRecordSupported(record) || record.AuthorityID != e.Installation.ID {
 			return local.AuthorityChange{}, errors.New("unsupported or foreign package record")
 		}
 		found := false
@@ -323,6 +323,9 @@ func (e *Engine) SetPackageStatus(ctx context.Context, c PackageLifecycleRequest
 				return local.AuthorityChange{}, local.Reject("package_revoked", "a revoked package is not restored by a status change; removal is what releases its inventory pins, and revocation gave that up")
 			}
 			obs := e.clock.now()
+			if record.SchemaVersion == AuthorityPackagesMigrationVersion {
+				pkg.LifecycleGeneration = packageLifecycleGeneration(*pkg) + 1
+			}
 			pkg.Status, pkg.StatusReason, pkg.StatusChanged = c.Status, c.Reason, &obs
 			found = true
 		}
@@ -494,7 +497,10 @@ func dependents(record PackageRecord, ref flow.Ref) []string {
 }
 
 func runPackageRefs(r Run) []flow.Ref {
-	refs := make([]flow.Ref, 0, len(r.Definitions)+len(r.ContextResources))
+	refs := make([]flow.Ref, 0, len(r.Definitions)+len(r.ContextResources)+1)
+	if r.WorkflowRef != (flow.Ref{}) {
+		refs = append(refs, r.WorkflowRef)
+	}
 	for _, definition := range r.Definitions {
 		refs = append(refs, definition.Ref)
 	}
@@ -509,9 +515,26 @@ func runPackageRefs(r Run) []flow.Ref {
 // package to remain resolvable; an existing Run is interrupted only by direct
 // security revocation, not orderly removal or quarantine of its old pin.
 func (e *Engine) packageAdmissionGate(ctx context.Context, refs []flow.Ref, requireResolvable bool) (*local.ControlPin, error, error) {
+	return e.packageAdmissionGateWithMigration(ctx, refs, requireResolvable, nil)
+}
+
+func (e *Engine) packageAdmissionGateWithMigration(ctx context.Context, refs []flow.Ref, requireResolvable bool, binding *SchemaMigrationBinding, unmigratedRefs ...flow.Ref) (*local.ControlPin, error, error) {
 	record, version, err := e.readPackages(ctx)
 	if err != nil {
 		return nil, nil, err
+	}
+	if err := e.validateSchemaMigrationBinding(ctx, record, binding); err != nil {
+		return &local.ControlPin{Key: AuthorityPackagesKey, Version: version}, err, nil
+	}
+	selected := map[flow.Ref]flow.Ref{}
+	if binding != nil {
+		for _, s := range binding.Selections {
+			// An executable operation keeps its ordinary gate even if a
+			// package also declares that exact ref as a schema.
+			if !slices.Contains(unmigratedRefs, s.SchemaRef) {
+				selected[s.SchemaRef] = s.SupplierRef
+			}
+		}
 	}
 	wanted := map[flow.Ref]bool{}
 	for _, ref := range refs {
@@ -536,10 +559,16 @@ func (e *Engine) packageAdmissionGate(ctx context.Context, refs []flow.Ref, requ
 			// the code each caller already matches on — an existing Run is
 			// interrupted as package_revoked, a new one is refused as before.
 			if pkg.Status == PackageRevoked {
+				if _, covered := selected[component.Ref]; covered && component.Kind == "schema" {
+					continue
+				}
 				if requireResolvable {
 					return &local.ControlPin{Key: AuthorityPackagesKey, Version: version}, local.Reject("package_not_resolvable", "a package no longer trusted supplied "+component.Ref.ID+" from "+pkg.Ref.ID), nil
 				}
 				return &local.ControlPin{Key: AuthorityPackagesKey, Version: version}, local.Reject("package_revoked", "a revoked package supplied "+component.Ref.ID+" from "+pkg.Ref.ID), nil
+			}
+			if supplier, covered := selected[component.Ref]; covered && supplier != pkg.Ref {
+				continue
 			}
 			if resolvable[pkg.Ref] {
 				supplied[component.Ref] = true
@@ -570,7 +599,7 @@ func (e *Engine) packageAdmissionGate(ctx context.Context, refs []flow.Ref, requ
 }
 
 func (e *Engine) revokedPin(ctx context.Context, r Run) (*local.ControlPin, error, error) {
-	return e.packageAdmissionGate(ctx, runPackageRefs(r), false)
+	return e.packageAdmissionGateWithMigration(ctx, runPackageRefs(r), false, r.SchemaMigration)
 }
 
 // reuseTrustPin rechecks the current lifecycle of every package component that
@@ -587,11 +616,8 @@ func (e *Engine) reuseTrustPin(ctx context.Context, source Run, refs []ArtifactR
 		return nil, err
 	}
 	pinned := map[flow.Ref]bool{}
-	for _, definition := range source.Definitions {
-		pinned[definition.Ref] = true
-	}
-	for _, resource := range source.ContextResources {
-		pinned[resource.Ref] = true
+	for _, ref := range runPackageRefs(source) {
+		pinned[ref] = true
 	}
 	resolvable := resolvablePackages(record)
 	tracked := false

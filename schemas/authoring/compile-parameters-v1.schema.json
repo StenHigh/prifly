@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pri-Fly compile parameters v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "authoring",
+    "parameters"
+  ],
+  "$id": "urn:prifly:yaml-authoring:compile-parameters:1",
+  "properties": {
+    "authoring": {
+      "const": "prifly-compile-parameters/1"
+    },
+    "parameters": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 256,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "minimum",
+          "maximum",
+          "default",
+          "bindings"
+        ],
+        "properties": {
+          "type": {
+            "const": "integer"
+          },
+          "minimum": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "maximum": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "default": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "bindings": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "schema",
+                "pointer"
+              ],
+              "properties": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*$"
+                },
+                "pointer": {
+                  "type": "string",
+                  "pattern": "^/.*maxLength$"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

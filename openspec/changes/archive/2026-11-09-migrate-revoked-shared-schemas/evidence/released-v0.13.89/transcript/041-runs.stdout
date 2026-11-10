@@ -1,0 +1,1 @@
+{"runs":[{"run_id":"run:0ef4f36d5b0be666d984f50a152bdd210a9772967c7c65f2d192a44f79fc6c28","workflow_id":"acceptance:workflow/shared-schemas","status":"ready","outcome":null,"created":"2026-11-09T20:15:54.599635168Z","awaiting_host":false,"subject":"Synthetic shared schemas"}],"schema_version":"run-list/1","total":1}

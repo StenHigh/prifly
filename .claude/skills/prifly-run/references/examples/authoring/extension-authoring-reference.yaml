@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.87/schemas/authoring/extension.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/extension.schema.json
 # Complete reference for the optional extend.yaml beside one project workflow.
 # Copy only the sections your project needs. Values are validated by the named
 # workflow input schema during `prifly project compile`.

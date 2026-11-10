@@ -164,3 +164,40 @@ Checkout и запуск без Git workspace не требуют naming values.
 
 [Author reference](../authoring/project-profile-authoring-reference.yaml) показывает сами поля.
 [Native probe](../workflows/project-owned-naming/README.md) проверяет контракт без AI host.
+
+<a id="compile-parameters"></a>
+## Предел схемы через параметр сборки
+
+Параметр сборки задаёт разрешённый пакетом предел до проверки task.
+Минимальная версия Core — `0.13.90`; нужны capability `project_compile_parameters` и Project profile `/3`–`/5`.
+Пакет объявляет параметр в `compile-parameters.yaml` версии `prifly-compile-parameters/1`.
+[Объявление](../authoring/compile-parameters-authoring-reference.yaml) показывает тип, диапазон, default и точный binding к `maxLength` строковой schema.
+[Руководство](../authoring/compile-parameters-guide.md) связывает все файлы; [полный пример](../compile-parameters/README.md) показывает root, child и project-owned worker.
+
+1. Проверьте имя и диапазон объявленного параметра.
+2. Создайте `.prifly/workflows/NAME/project/compile-values.yaml` по [примеру](../authoring/compile-values-authoring-reference.yaml).
+3. Задайте `values.task_description_limit: 32000` для объявленного параметра с таким именем.
+4. Выполните обычный `project questionnaire --prepare` с task и сохраните `review_digest`.
+5. Проверьте summary и запустите `project start` с теми же аргументами и `--expected-launch-digest`.
+
+```text
+compile-parameters.yaml + project/compile-values.yaml
+    → проверка диапазона и binding → сборка всех refs
+    → prepare → reviewed start → закреплённый Run
+```
+
+Compile, prepare и start читают одинаковый owner file. Для default достаточно опустить имя в `values` либо весь owner file.
+Изменение значения создаёт новую сборку и делает старый launch review недействительным.
+Сводка показывает exact package ref и build key effective контракта.
+Ошибка длины показывает JSON pointer, effective limit и фактическое число Unicode code points.
+Кириллический символ и emoji считаются каждый одним символом; combining marks считаются отдельно.
+
+Update сохраняет owner file вместе с каталогом `project/`.
+После сужения диапазона новая compilation явно отказывает несовместимому значению.
+Прежний Run сохраняет свои definitions и полный task.
+Continue проверяет carried task по объявленному контракту продолжения и отказывает до эффектов, если данные несовместимы.
+
+`settings` продолжает менять default configuration input.
+`compile --value` остаётся разовым legacy input compilation; declared compile parameter задаётся только через owner file.
+Подстановка параметра разрешена только в его declared schema bindings.
+Package profiles и references не могут объявлять одноимённый параметр.

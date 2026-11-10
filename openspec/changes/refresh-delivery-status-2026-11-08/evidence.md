@@ -33,3 +33,15 @@ BLOCKED до первого теста, отсутствует `.tools/go/bin/go
 Это не успешная CI-приёмка. Ограничение вынесено в draft PR; required CI
 должен выполняться на точном опубликованном commit. Strict OpenSpec validation
 по-прежнему не запускался из-за отсутствующего CLI.
+
+## Обновление на main 2026-11-10
+
+База 3dfca79fb42963b29cd3c2a8e5ae2acedebb3590. Latest stable0.13.90
+подтверждён через GitHub. Новые shared-schema migration0.13.89 и owner compile
+parameters0.13.90 уже архивированы; добавлены ссылки на их tasks/released evidence.
+Все 21 прежних активных changes и счётчики сверены повторно. Runtime, schemas,
+новые примеры и архивы main сохраняются без изменений. Roadmap product gates прежние.
+Предыдущий SHAe0095f1 прошёл оба GitHub verify; это не результат нового SHA.
+Локальный Go toolchain и OpenSpec CLI по-прежнему отсутствуют.
+
+Полный helper ci-check-once повторно вызван с контекстом cloud-roadmap-docs-2026-11-10: BLOCKED до тестов, отсутствует .tools/go/bin/go (Error127). Python-сверка inventory/counts/ссылок и git diff --check PASS.

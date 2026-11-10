@@ -300,7 +300,7 @@ func (e *Engine) enterCall(ctx context.Context, r Run, view local.ReadView, p *f
 		return e.failPreparation(ctx, r, view, p, activation, err, "call_input_binding_failed")
 	}
 	payload := map[string]any{"workflow_invocation_id": childID, "parent_invocation_id": activation.InvocationID, "caller_stage_activation_id": activation.ID, "workflow_ref": planRef(child), "input_refs": inputs}
-	_, err = e.apply(ctx, e.owner, commandID, r.ID, "invocation.created", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
+	_, err = e.applyPackageAdmission(ctx, r, e.owner, commandID, r.ID, "invocation.created", payload, &view.Snapshot.Version, local.CommandCAS, func(r *Run, s local.Snapshot, obs Observation) (local.Change, error) {
 		a := r.Activations[activation.ID]
 		if a == nil || a.Kind != "call" || a.Status != "ready" || a.Settled != nil || r.childForCall(a.ID) != nil || r.admissionsBlockedFor(a.InvocationID) || r.cancelRequestedFor(a.InvocationID) || r.HasUnresolvedEffects || r.activeIn(a.InvocationID) != "" {
 			return local.Change{}, local.Reject("call_blocked", "call no longer owns its ready scope")
