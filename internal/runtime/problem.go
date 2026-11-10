@@ -58,7 +58,7 @@ func persistenceFailure(err error) bool { return local.IsPersistenceFailure(err)
 // and only allows inspection.
 func exitForCode(code string) int {
 	switch {
-	case code == "schema_migration_plan_stale":
+	case code == "schema_migration_plan_stale" || code == "schema_migration_choice_stale":
 		return 3
 	// The project surface validates declarations, not authority state. A
 	// "conflict" there is two lines of project.yaml disagreeing with each
@@ -329,6 +329,7 @@ func ProblemFor(err error) (Problem, int) {
 		"schema_migration_invalid":          {"package.schema-migration.prepare"},
 		"schema_migration_incomplete":       {"package.schema-migration.prepare"},
 		"schema_migration_plan_stale":       {"package.schema-migration.prepare"},
+		"schema_migration_choice_stale":     {"project.schema-migration.inspect", "project.schema-migration.set", "project.schema-migration.clear"},
 		"schema_migration_scope_mismatch":   {"package.schema-migration.prepare", "package.schema-migration.inspect"},
 		"schema_migration_integrity":        {"package.verify", "package.schema-migration.inspect"},
 		"schema_migration_decision_invalid": {"package.schema-migration.inspect", "package.schema-migration.prepare"},

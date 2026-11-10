@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stenhigh/prifly/internal/flow"
@@ -143,75 +144,104 @@ func TestCLISchemaMigrationPublicPrepareApplyInspectAndExplicitStart(t *testing.
 
 }
 
-func TestCLIProjectSchemaMigrationIsExplicitReviewedAndSerializedAtNine(t *testing.T) {
+func projectMigrationFixture(t *testing.T, naming bool, features ...string) (string, string, []string, projectCompileResult, []string) {
+	t.Helper()
+	var root, authority string
+	packageName := "single"
+	var launchArgs []string
+	if naming {
+		root, authority, launchArgs, _ = ownedNamingFixture(t)
+		packageName = "inspect"
+	} else {
+		root, authority = singleLaunchFixture(t)
+		launchArgs = []string{"--repository", root, "--launch", "single", "--host", "codex-cli", "--input", "task=" + filepath.Join(root, "task.json")}
+	}
+	for _, feature := range features {
+		if feature == "build-variants" {
+			workflowPath := filepath.Join(root, ".prifly/workflows/single/workflow.yaml")
+			workflow, err := os.ReadFile(workflowPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFixtureFile(t, root, ".prifly/workflows/single/workflow.yaml", strings.Replace(string(workflow), "  references:", "  profiles:\n    default: a\n    values: {a: {work_title: First}, b: {work_title: Second}}\n  references:", 1))
+			stepPath := filepath.Join(root, ".prifly/workflows/single/steps/work.yaml")
+			step, err := os.ReadFile(stepPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFixtureFile(t, root, ".prifly/workflows/single/steps/work.yaml", strings.Replace(string(step), "kind: worker", "title: \"{{work_title}}\"\nkind: worker", 1))
+			writeFixtureFile(t, root, ".prifly/workflows/single/contexts/work.yaml", "id: example-single:context/work\nversion: 1.0.0\nmedia_type: text/markdown; charset=utf-8\nsource: {root: host_skills, path: choice/SKILL.md}\n")
+			writeFixtureFile(t, root, ".codex/skills/choice/SKILL.md", "CLI selected work.\n")
+			writeFixtureFile(t, root, ".agents/skills/choice/SKILL.md", "App selected work.\n")
+		}
+		if feature == "compile-values" {
+			writeFixtureFile(t, root, ".prifly/workflows/single/compile-parameters.yaml", strings.ReplaceAll(compileParameterDeclaration, "schema_task", "schema_object"))
+			writeFixtureFile(t, root, ".prifly/workflows/single/schemas/object.yaml", "id: example-single:schema/object\nversion: 1.0.0\ntype: object\nproperties:\n  description: {type: string, maxLength: \"{{task_description_limit}}\"}\n")
+		}
+	}
+	output := filepath.Join(t.TempDir(), "compiled")
+	raw := queueCLICommand(t, "--project", authority, "project", "compile", "--repository", root, "--package", packageName, "--host", "codex-cli", "--output", output)
+	var compiled projectCompileResult
+	if err := json.Unmarshal([]byte(raw), &compiled); err != nil {
+		t.Fatal(err)
+	}
+	source := t.TempDir()
+	files := []map[string]any{}
+	components := []map[string]any{}
+	schemas := []flow.Ref{}
+	for _, component := range compiled.Components {
+		if component.Kind == "schema" {
+			data, err := os.ReadFile(filepath.Join(output, component.Path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFixtureFile(t, source, component.Path, string(data))
+			files = append(files, map[string]any{"path": component.Path, "digest": fmt.Sprintf("sha256:%x", sha256.Sum256(data)), "size_bytes": len(data), "media_type": "application/json", "role": "data"})
+			components = append(components, map[string]any{"kind": "schema", "ref": component.Ref, "path": component.Path})
+			schemas = append(schemas, component.Ref)
+		}
+	}
+	if len(schemas) == 0 {
+		t.Fatal("Project fixture has no shared schema")
+	}
+	manifest, err := json.Marshal(map[string]any{"schema_version": "1", "id": "test:package/project-legacy-schemas", "version": "1.0.0", "description": "Legacy Project schemas", "requires_core_protocol": "1", "dependencies": []flow.Ref{}, "components": components, "files": files, "requested_capabilities": []string{}, "license": "MIT"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, source, prifly.PackageManifestFile, string(manifest))
+	queueCLICommand(t, "--project", authority, "package", "import", "--dir", source, "--reason", "reviewed legacy schemas")
+	queueCLICommand(t, "--project", authority, "package", "revoke", "--id", "test:package/project-legacy-schemas", "--version", "1.0.0", "--reason", "mistaken retirement")
+	queueCLICommand(t, "--project", authority, "package", "import", "--dir", output, "--reason", "reviewed exact consumer")
+	engine, err := prifly.Open(authority, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := prifly.SchemaMigrationRequest{SchemaVersion: "schema-migration-request/1", ConsumerRef: compiled.Package, Selections: []prifly.SchemaMigrationSelection{}}
+	for _, schema := range schemas {
+		request.Selections = append(request.Selections, prifly.SchemaMigrationSelection{SchemaRef: schema, SupplierRef: compiled.Package})
+	}
+	decisions := []string{}
+	for _, command := range []string{"command:project-migration-one", "command:project-migration-two"} {
+		plan, err := engine.PrepareSchemaMigration(context.Background(), request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := engine.ApplySchemaMigration(context.Background(), prifly.SchemaMigrationApplyRequest{CommandID: command, Plan: plan, ExpectedReviewDigest: plan.ReviewDigest, Reason: "verified exact shared schema"})
+		if err != nil || result.Receipt.Rejection != nil {
+			t.Fatal(err, result.Receipt.Rejection)
+		}
+		decisions = append(decisions, result.Decision.ID)
+	}
+	engine.Close()
+	return root, authority, launchArgs, compiled, decisions
+}
+
+func TestCLIProjectSchemaMigrationIsExplicitReviewedAndSerializedAtTen(t *testing.T) {
 	t.Parallel()
 	for _, naming := range []bool{false, true} {
 		t.Run(fmt.Sprint("owned-naming=", naming), func(t *testing.T) {
 			t.Parallel()
-			var root, authority string
-			packageName := "single"
-			var launchArgs []string
-			if naming {
-				root, authority, launchArgs, _ = ownedNamingFixture(t)
-				packageName = "inspect"
-			} else {
-				root, authority = singleLaunchFixture(t)
-				launchArgs = []string{"--repository", root, "--launch", "single", "--host", "codex-cli", "--input", "task=" + filepath.Join(root, "task.json")}
-			}
-			output := filepath.Join(t.TempDir(), "compiled")
-			raw := queueCLICommand(t, "--project", authority, "project", "compile", "--repository", root, "--package", packageName, "--host", "codex-cli", "--output", output)
-			var compiled projectCompileResult
-			if err := json.Unmarshal([]byte(raw), &compiled); err != nil {
-				t.Fatal(err)
-			}
-			source := t.TempDir()
-			files := []map[string]any{}
-			components := []map[string]any{}
-			schemas := []flow.Ref{}
-			for _, component := range compiled.Components {
-				if component.Kind == "schema" {
-					data, err := os.ReadFile(filepath.Join(output, component.Path))
-					if err != nil {
-						t.Fatal(err)
-					}
-					writeFixtureFile(t, source, component.Path, string(data))
-					files = append(files, map[string]any{"path": component.Path, "digest": fmt.Sprintf("sha256:%x", sha256.Sum256(data)), "size_bytes": len(data), "media_type": "application/json", "role": "data"})
-					components = append(components, map[string]any{"kind": "schema", "ref": component.Ref, "path": component.Path})
-					schemas = append(schemas, component.Ref)
-				}
-			}
-			if len(schemas) == 0 {
-				t.Fatal("Project fixture has no shared schema")
-			}
-			manifest, err := json.Marshal(map[string]any{"schema_version": "1", "id": "test:package/project-legacy-schemas", "version": "1.0.0", "description": "Legacy Project schemas", "requires_core_protocol": "1", "dependencies": []flow.Ref{}, "components": components, "files": files, "requested_capabilities": []string{}, "license": "MIT"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			writeFixtureFile(t, source, prifly.PackageManifestFile, string(manifest))
-			queueCLICommand(t, "--project", authority, "package", "import", "--dir", source, "--reason", "reviewed legacy schemas")
-			queueCLICommand(t, "--project", authority, "package", "revoke", "--id", "test:package/project-legacy-schemas", "--version", "1.0.0", "--reason", "mistaken retirement")
-			queueCLICommand(t, "--project", authority, "package", "import", "--dir", output, "--reason", "reviewed exact consumer")
-			engine, err := prifly.Open(authority, false)
-			if err != nil {
-				t.Fatal(err)
-			}
-			request := prifly.SchemaMigrationRequest{SchemaVersion: "schema-migration-request/1", ConsumerRef: compiled.Package, Selections: []prifly.SchemaMigrationSelection{}}
-			for _, schema := range schemas {
-				request.Selections = append(request.Selections, prifly.SchemaMigrationSelection{SchemaRef: schema, SupplierRef: compiled.Package})
-			}
-			decisions := []string{}
-			for _, command := range []string{"command:project-migration-one", "command:project-migration-two"} {
-				plan, err := engine.PrepareSchemaMigration(context.Background(), request)
-				if err != nil {
-					t.Fatal(err)
-				}
-				result, err := engine.ApplySchemaMigration(context.Background(), prifly.SchemaMigrationApplyRequest{CommandID: command, Plan: plan, ExpectedReviewDigest: plan.ReviewDigest, Reason: "verified exact shared schema"})
-				if err != nil || result.Receipt.Rejection != nil {
-					t.Fatal(err, result.Receipt.Rejection)
-				}
-				decisions = append(decisions, result.Decision.ID)
-			}
-			engine.Close()
+			_, authority, launchArgs, _, decisions := projectMigrationFixture(t, naming)
 			base := append([]string{"--project", authority, "project", "questionnaire", "--prepare"}, launchArgs...)
 			base = append(base, "--schema-migration", decisions[0])
 			review := queueCLICommand(t, base...)
@@ -219,10 +249,10 @@ func TestCLIProjectSchemaMigrationIsExplicitReviewedAndSerializedAtNine(t *testi
 			if err := json.Unmarshal([]byte(review), &summary); err != nil {
 				t.Fatal(err)
 			}
-			if summary.SchemaVersion != "project-launch-summary/9" || summary.SchemaMigrationID != decisions[0] {
+			if summary.SchemaVersion != "project-launch-summary/10" || summary.SchemaMigrationID != decisions[0] {
 				t.Fatalf("selected decision missing from review: %s", review)
 			}
-			validateQueueCLI(t, "ProjectLaunchSummaryV9", review)
+			validateQueueCLI(t, "ProjectLaunchSummaryV10", review)
 			start := append([]string{"--project", authority, "project", "start"}, launchArgs...)
 			start = append(start, "--expected-launch-digest", summary.ReviewDigest)
 			code, _, stderr := runCLI(t, append(append([]string{}, start...), "--schema-migration", decisions[1])...)
@@ -234,10 +264,10 @@ func TestCLIProjectSchemaMigrationIsExplicitReviewedAndSerializedAtNine(t *testi
 			if err := json.Unmarshal([]byte(response), &started); err != nil {
 				t.Fatal(err)
 			}
-			if started.SchemaVersion != "project-start/9" || started.SchemaMigrationID != decisions[0] || started.Run.Run.SchemaMigration == nil {
+			if started.SchemaVersion != "project-start/10" || started.SchemaMigrationID != decisions[0] || started.Run.Run.SchemaMigration == nil {
 				t.Fatalf("Project Start lost selected decision: %s", response)
 			}
-			validateQueueCLI(t, "ProjectStartV9", response)
+			validateQueueCLI(t, "ProjectStartV10", response)
 			if naming && (started.Workspace == nil || started.Workspace.NamingSnapshot == nil || started.LaunchSummary.WorktreeNaming == nil) {
 				t.Fatal("migration lost owned naming snapshot")
 			}
@@ -290,4 +320,280 @@ func TestCLIProjectSchemaMigrationRejectsLegacyProfileBeforeEffects(t *testing.T
 		t.Fatal("legacy refusal changed authority or claims", err)
 	}
 	t.Log("[FIX:21] legacy profile refusal leaves authority cut and claims unchanged")
+}
+
+func TestCLIProjectSavedSchemaMigrationRepeatsWithoutDecisionID(t *testing.T) {
+	t.Parallel()
+	root, authority, launchArgs, compiled, decisions := projectMigrationFixture(t, false)
+	queueCLICommand(t, "--project", authority, "project", "schema-migration", "set", "--repository", root, "--launch", "single", "--host", "codex-cli", "--id", decisions[0], "--expected-build-key", compiled.BuildKey, "--expected-generation", "0", "--reason", "reviewed launch choice", "--command-id", "command:save-launch-migration")
+	for i := range 2 {
+		writeFixtureFile(t, root, "task.json", fmt.Sprintf(`{"round":%d}`, i))
+		review := queueCLICommand(t, append([]string{"--project", authority, "project", "questionnaire", "--prepare"}, launchArgs...)...)
+		var summary projectLaunchSummary
+		if err := json.Unmarshal([]byte(review), &summary); err != nil {
+			t.Fatal(err)
+		}
+		if summary.SchemaMigrationID != decisions[0] || summary.SchemaMigrationChoice == nil || summary.SchemaMigrationChoice.Source != "saved" || summary.SchemaMigrationChoice.Generation != 1 {
+			t.Fatalf("saved migration absent: %s", review)
+		}
+		validateQueueCLI(t, "ProjectLaunchSummaryV10", review)
+		response := queueCLICommand(t, append(append([]string{"--project", authority, "project", "start"}, launchArgs...), "--expected-launch-digest", summary.ReviewDigest, "--command-id", fmt.Sprintf("command:saved-run-%d", i))...)
+		var started projectStartResult
+		if err := json.Unmarshal([]byte(response), &started); err != nil {
+			t.Fatal(err)
+		}
+		if started.Run.Run.SchemaMigration == nil || started.Run.Run.SchemaMigration.DecisionID != decisions[0] {
+			t.Fatalf("saved binding lost: %s", response)
+		}
+	}
+}
+
+func TestCLIProjectSavedSchemaMigrationReviewOverrideClearAndReplay(t *testing.T) {
+	t.Parallel()
+	root, authority, launchArgs, compiled, decisions := projectMigrationFixture(t, false, "compile-values")
+	invoke := func(args ...string) string {
+		t.Helper()
+		return queueCLICommand(t, append([]string{"--project", authority}, args...)...)
+	}
+	inspect := func() prifly.LaunchSchemaMigrationInspection {
+		t.Helper()
+		raw := invoke("project", "schema-migration", "inspect", "--repository", root, "--launch", "single", "--host", "codex-cli")
+		var view prifly.LaunchSchemaMigrationInspection
+		if err := json.Unmarshal([]byte(raw), &view); err != nil {
+			t.Fatal(err)
+		}
+		validateQueueCLI(t, "LaunchSchemaMigrationInspectionV1", raw)
+		return view
+	}
+	prepare := func(extra ...string) projectLaunchSummary {
+		t.Helper()
+		args := append(append([]string{"project", "questionnaire", "--prepare"}, launchArgs...), extra...)
+		raw := invoke(args...)
+		var view projectLaunchSummary
+		if err := json.Unmarshal([]byte(raw), &view); err != nil {
+			t.Fatal(err)
+		}
+		return view
+	}
+	fail := func(want string, args ...string) {
+		t.Helper()
+		code, _, stderr := runCLI(t, append([]string{"--project", authority}, args...)...)
+		if code == 0 || !strings.Contains(stderr, want) {
+			t.Fatalf("wanted %s: exit=%d %s", want, code, stderr)
+		}
+	}
+	absent := inspect()
+	if absent.State.Choice != nil || absent.State.Generation != 0 {
+		t.Fatal(absent)
+	}
+	set := []string{"project", "schema-migration", "set", "--repository", root, "--launch", "single", "--host", "codex-cli", "--id", decisions[0], "--expected-build-key", compiled.BuildKey, "--expected-generation", "0", "--reason", "reviewed", "--command-id", "command:choice"}
+	invoke(set...)
+	selected := inspect()
+	if !selected.Valid || selected.State.Generation != 1 {
+		t.Fatal(selected)
+	}
+	review := prepare()
+	if review.SchemaMigrationChoice == nil || review.SchemaMigrationChoice.Source != "saved" || review.SchemaMigrationChoice.Generation != 1 {
+		t.Fatal("saved provenance absent", review)
+	}
+	emptyExplicit := prepare("--schema-migration", "")
+	if emptyExplicit.ReviewDigest != review.ReviewDigest || emptyExplicit.SchemaMigrationChoice.Source != "saved" {
+		t.Fatal("empty explicit flag disabled the saved choice")
+	}
+	explicit := prepare("--schema-migration", decisions[1])
+	if explicit.SchemaMigrationChoice.Source != "explicit" || explicit.SchemaMigrationID != decisions[1] {
+		t.Fatal("explicit override lost")
+	}
+	fail("schema_migration_decision_invalid", append(append([]string{"project", "questionnaire", "--prepare"}, launchArgs...), "--schema-migration", "schema-migration:unknown")...)
+	fail("expected-launch-digest", append([]string{"project", "start"}, launchArgs...)...)
+	fail("project_start_stale_launch", append(append([]string{"project", "start"}, launchArgs...), "--schema-migration", decisions[0], "--expected-launch-digest", review.ReviewDigest)...)
+	start := append(append([]string{"project", "start"}, launchArgs...), "--expected-launch-digest", review.ReviewDigest, "--command-id", "command:saved-replay")
+	raw := invoke(start...)
+	var first projectStartResult
+	if err := json.Unmarshal([]byte(raw), &first); err != nil {
+		t.Fatal(err)
+	}
+	validateQueueCLI(t, "ProjectStartV10", raw)
+	// A real source byte changes the build without creating a different approval.
+	writeFixtureFile(t, root, ".prifly/workflows/single/project/compile-values.yaml", "authoring: prifly-compile-values/1\nvalues: {task_description_limit: 32000}\n")
+	fail("schema_migration_scope_mismatch", append([]string{"project", "questionnaire", "--prepare"}, launchArgs...)...)
+	writeFixtureFile(t, root, ".prifly/workflows/single/project/compile-values.yaml", "authoring: prifly-compile-values/1\nvalues: {task_description_limit: 12000}\n")
+	contextFile := filepath.Join(root, ".prifly/workflows/single/contexts/work.yaml")
+	original, err := os.ReadFile(contextFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, root, ".prifly/workflows/single/contexts/work.yaml", strings.Replace(string(original), "Fixture work.", "Changed launch work.", 1))
+	fail("schema_migration_scope_mismatch", append([]string{"project", "questionnaire", "--prepare"}, launchArgs...)...)
+	drift := inspect()
+	if drift.Valid || drift.Current == nil || drift.Current.BuildKey == compiled.BuildKey {
+		t.Fatal("build drift not shown", drift)
+	}
+	profileFile := filepath.Join(root, ".prifly/project.yaml")
+	profileBytes, err := os.ReadFile(profileFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixtureFile(t, root, ".prifly/project.yaml", "invalid: [")
+	// The accepted set replays before reading either changed source or profile.
+	replaySet := invoke(set...)
+	var replay prifly.LaunchSchemaMigrationResult
+	if err := json.Unmarshal([]byte(replaySet), &replay); err != nil || !replay.Duplicate {
+		t.Fatal("set replay reread mutable sources", replaySet, err)
+	}
+	invalid := inspect()
+	if invalid.State.Choice == nil || len(invalid.Reasons) == 0 {
+		t.Fatal("recorded inspection unavailable", invalid)
+	}
+	clear := []string{"project", "schema-migration", "clear", "--repository", root, "--launch", "single", "--expected-generation", "1", "--reason", "clear invalid launch", "--command-id", "command:clear-choice"}
+	invoke(clear...)
+	writeFixtureFile(t, root, ".prifly/project.yaml", string(profileBytes))
+	writeFixtureFile(t, root, ".prifly/workflows/single/contexts/work.yaml", string(original))
+	cleared := inspect()
+	if cleared.State.Choice != nil || cleared.State.Generation != 2 {
+		t.Fatal(cleared)
+	}
+	var repeated projectStartResult
+	if err := json.Unmarshal([]byte(invoke(start...)), &repeated); err != nil {
+		t.Fatal(err)
+	}
+	if repeated.Run.Run.ID != first.Run.Run.ID || repeated.SchemaMigrationChoice.Generation != 1 {
+		t.Fatal("accepted Start changed after clear")
+	}
+	restore := append([]string{}, set...)
+	for i := range restore {
+		if restore[i] == "command:choice" {
+			restore[i] = "command:restore-choice"
+		}
+		if restore[i] == "--expected-generation" {
+			restore[i+1] = "2"
+		}
+	}
+	invoke(restore...)
+	fail("project_start_stale_launch", append(append([]string{"project", "start"}, launchArgs...), "--expected-launch-digest", review.ReviewDigest)...)
+	invoke(clear...)
+	if inspect().State.Generation != 3 {
+		t.Fatal("old clear receipt mutated a newer choice")
+	}
+	// Setting the choice never reverses the terminal package withdrawal.
+	e, err := prifly.Open(authority, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	packages, err := e.Packages(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range packages.Packages {
+		if pkg.Ref.ID == "test:package/project-legacy-schemas" && pkg.Status != prifly.PackageRevoked {
+			t.Fatal("choice restored revoked package")
+		}
+	}
+}
+
+func TestCLIProjectSavedSchemaMigrationBindsHostBytesAndPackageProfile(t *testing.T) {
+	t.Parallel()
+	root, authority, launchArgs, compiled, decisions := projectMigrationFixture(t, false, "build-variants")
+	set := []string{"--project", authority, "project", "schema-migration", "set", "--repository", root, "--launch", "single", "--host", "codex-cli", "--id", decisions[0], "--expected-build-key", compiled.BuildKey, "--expected-generation", "0", "--reason", "exact variant"}
+	queueCLICommand(t, set...)
+	for _, kind := range []string{"host", "profile", "host-bytes"} {
+		args := append([]string{}, launchArgs...)
+		switch kind {
+		case "host":
+			for i := range args {
+				if args[i] == "codex-cli" {
+					args[i] = "codex-app"
+				}
+			}
+		case "profile":
+			args = append(args, "--package-profile", "b")
+		case "host-bytes":
+			writeFixtureFile(t, root, ".codex/skills/choice/SKILL.md", "Changed CLI selected work.\n")
+		}
+		code, _, stderr := runCLI(t, append([]string{"--project", authority, "project", "questionnaire", "--prepare"}, args...)...)
+		if code == 0 || !strings.Contains(stderr, "schema_migration_scope_mismatch") {
+			t.Fatalf("%s inherited choice: %d %s", kind, code, stderr)
+		}
+	}
+	// The same root remains manageable after its launch declaration disappears.
+	writeFixtureFile(t, root, ".prifly/project.yaml", "schema_version: prifly-project-profile/3\npackages: {}\nlaunches: {}\n")
+	raw := queueCLICommand(t, "--project", authority, "project", "schema-migration", "clear", "--repository", root, "--launch", "single", "--expected-generation", "1", "--reason", "launch removed")
+	var cleared prifly.LaunchSchemaMigrationResult
+	if err := json.Unmarshal([]byte(raw), &cleared); err != nil || cleared.State.Choice != nil || cleared.State.Generation != 2 {
+		t.Fatal(raw, err)
+	}
+}
+
+// The first response can fail after admission. A retry still owns that Run,
+// even if the owner has since cleared the saved selection.
+func TestCLIProjectSavedSchemaMigrationAcceptedReplayAfterDriveFailure(t *testing.T) {
+	t.Parallel()
+	root, authority, launchArgs, compiled, decisions := projectMigrationFixture(t, false)
+	queueCLICommand(t, "--project", authority, "project", "schema-migration", "set", "--repository", root, "--launch", "single", "--host", "codex-cli", "--id", decisions[0], "--expected-build-key", compiled.BuildKey, "--expected-generation", "0", "--reason", "reviewed", "--command-id", "command:save-before-failure")
+	reviewRaw := queueCLICommand(t, append([]string{"--project", authority, "project", "questionnaire", "--prepare"}, launchArgs...)...)
+	var review projectLaunchSummary
+	if err := json.Unmarshal([]byte(reviewRaw), &review); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := os.OpenFile(filepath.Join(authority, ".prifly/state/driver.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
+	commandID := "command:accepted-before-drive-failure"
+	args := append(append([]string{"--project", authority, "project", "start"}, launchArgs...), "--expected-launch-digest", review.ReviewDigest, "--command-id", commandID)
+	code, _, stderr := runCLI(t, args...)
+	if code == 0 || !strings.Contains(stderr, "driver_already_active") {
+		t.Fatalf("post-admission failure missing: %d %s", code, stderr)
+	}
+	engine, err := prifly.Open(authority, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := engine.Receipt(context.Background(), commandID)
+	if err != nil || receipt.Rejection != nil {
+		t.Fatal("Run was not accepted", receipt, err)
+	}
+	view, err := engine.View(context.Background(), receipt.RunID)
+	engine.Close()
+	if err != nil || view.Run.SchemaMigration == nil || view.Run.SchemaMigration.DecisionID != decisions[0] {
+		t.Fatal("original Run missing", err)
+	}
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_UN); err != nil {
+		t.Fatal(err)
+	}
+	queueCLICommand(t, "--project", authority, "project", "schema-migration", "clear", "--repository", root, "--launch", "single", "--expected-generation", "1", "--reason", "owner cleared after admission", "--command-id", "command:clear-after-failure")
+	t.Logf("[FIX:24] retry accepted Run %s after clear", receipt.RunID)
+	raw := queueCLICommand(t, args...)
+	var replay projectStartResult
+	if err := json.Unmarshal([]byte(raw), &replay); err != nil {
+		t.Fatal(err)
+	}
+	validateQueueCLI(t, "ProjectStartV10", raw)
+	if replay.RunID != receipt.RunID || replay.SchemaMigrationChoice == nil || replay.SchemaMigrationChoice.Generation != 1 || replay.SchemaMigrationID != decisions[0] {
+		t.Fatalf("accepted context changed: %s", raw)
+	}
+	engine, err = prifly.Open(authority, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+	repeated, err := engine.Receipt(context.Background(), commandID)
+	if err != nil || repeated.Digest != receipt.Digest || repeated.Cut != receipt.Cut {
+		t.Fatal("retry changed original receipt", repeated, err)
+	}
+	args[len(args)-1] = "command:new-after-clear"
+	code, _, stderr = runCLI(t, args...)
+	if code == 0 || !strings.Contains(stderr, "project_start_stale_launch") {
+		t.Fatalf("new command reused stale review: %d %s", code, stderr)
+	}
+	runs, err := engine.Runs(context.Background())
+	if err != nil || len(runs) != 1 {
+		t.Fatal("retry admitted another Run", len(runs), err)
+	}
+	t.Log("[FIX:24] accepted replay preserved; new command refused")
 }

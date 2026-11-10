@@ -224,7 +224,7 @@ func Capabilities() CapabilityManifest {
 	profile.StateVersion, profile.ReadVersion = CoreSchemaMigrationStateVersion, CoreSchemaMigrationReadVersion
 	profile.StateVersions = append(profile.StateVersions, CoreSchemaMigrationStateVersion)
 	profile.ReadVersions = append(profile.ReadVersions, CoreSchemaMigrationReadVersion)
-	profile.Capabilities = append(profile.Capabilities, "shared_schema_migration")
+	profile.Capabilities = append(profile.Capabilities, "shared_schema_migration", "project_launch_schema_migration")
 	return manifest
 }
 

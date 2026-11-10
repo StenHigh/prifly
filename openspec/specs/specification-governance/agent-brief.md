@@ -114,3 +114,7 @@ Binding разрешает собственный строковый `maxLength`
 `published-contracts` и `specification-governance`.
 Evidence Core #22 сохранено в archived `2026-11-10-add-project-owned-compile-parameters`;
 приёмка consumer workflows #3 остаётся отдельной.
+
+LaunchSchemaMigrationChoice сохраняет owner выбор Decision для проекта, launch и exact build в одной authority.
+Непустой `--schema-migration` имеет разовый приоритет. Prepare показывает источник и generation; saved start требует launch digest.
+Set/clear меняют generation. Старые Run bindings и terminal revoke сохраняют смысл.

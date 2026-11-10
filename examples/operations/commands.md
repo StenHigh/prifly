@@ -100,6 +100,9 @@ Global: --project DIR  --json  --format text|json|csv
                                    extension-authoring-reference.yaml shows a complete extend.yaml, extensions included
   validate --workflow FILE          Shape, refs, graph and profile validation; FILE is resolved from the authority root, not the working directory
   preview --workflow FILE [--brief FILE] [--input-ref PORT=REF.json]
+  project schema-migration inspect --repository DIR --launch ID [--host HOST] [--package-profile NAME] [--id ID]
+  project schema-migration set --repository DIR --launch ID --host HOST --id ID --expected-build-key KEY --expected-generation N --reason TEXT [--command-id ID]
+  project schema-migration clear --repository DIR --launch ID --expected-generation N --reason TEXT [--command-id ID]
   run start --workflow FILE --brief FILE [--input PORT=FILE] [--input-ref PORT=REF.json] [--drive] [--grant ID] [--schema-migration ID]
 
   run fork --file REQUEST.json      Create a linked Run from exact sealed refs; old Run is unchanged
@@ -506,7 +509,7 @@ Compile, prepare и start читают этот файл. `--value` не пер�
 
 | Flag | Тип | Default | Значение/источник |
 |---|---|---|---|
-| `--schema-migration` | строка | `""` | Явный ID решения schema migration; нужен Project profile `/3+`; пустое значение сохраняет прежний admission. |
+| `--schema-migration` | строка | `""` | Разовый ID решения schema migration; приоритет над сохранённым выбором launch. Пустое значение использует saved при его наличии. Нужен Project profile `/3+`. |
 | `--repository` | строка | `"."` | directory that owns the shared Pri-Fly profile |
 | `--launch` | строка | `""` | declared launch ID from project.yaml |
 | `--host` | строка | `""` | host entry point that selects project skills |
@@ -882,6 +885,7 @@ Compile, prepare и start читают этот файл. `--value` не пер�
 | `project extend` |
 | `project init` |
 | `project local` |
+| `project schema-migration` |
 | `project questionnaire` |
 | `project queue` |
 | `project recover` |
@@ -1043,3 +1047,32 @@ Continue/resume/recover отказывают override и используют so
 | `--reason` | строка | `""` | Явная причина owner apply. |
 | `--command-id` | строка | `""` | Стабильная identity retry; без значения CLI создаёт новую. |
 | `--id` | строка | `""` | Записанный decision ID для inspect. |
+
+### project schema-migration
+
+Процедура: [сохранённый выбор launch](schema-migration.md#saved-launch-choice).
+Требуются capability `project_launch_schema_migration` и Project profile `/3+` для set; clear не компилирует profile.
+Поддержка находится в development после `0.13.90`. Closed contracts: Choice/inspection/result `/1`, Project summary/start `/10`.
+
+```text
+project schema-migration inspect --repository DIR --launch ID [--host HOST] [--package-profile NAME] [--id DECISION_ID]
+project schema-migration set --repository DIR --launch ID --host HOST [--package-profile NAME] --id DECISION_ID --expected-build-key KEY --expected-generation N --reason TEXT [--command-id ID]
+project schema-migration clear --repository DIR --launch ID --expected-generation N --reason TEXT [--command-id ID]
+```
+
+<!-- cli-flags:projectSchemaMigration -->
+
+| Flag | Тип | Default | Назначение |
+|---|---|---|---|
+| `--repository` | строка | `.` | Canonical root проекта; scope не переносится между repository. |
+| `--launch` | строка | `""` | Обязательный launch ID; clear работает после удаления launch из profile. |
+| `--host` | строка | `""` | Тот же host, который выбирает ресурсы compile/prepare/start; для clear не используется. |
+| `--package-profile` | строка | `""` | Тот же package profile; пустое значение использует standing/default выбор. |
+| `--id` | строка | `""` | Существующий Decision для set или read-only проверки candidate в inspect. |
+| `--expected-build-key` | строка | `""` | Обязателен для set; берётся из `current.build_key` inspect. |
+| `--expected-generation` | integer | `-1` | Обязателен для set/clear; inspect показывает 0 при отсутствии записи. |
+| `--reason` | строка | `""` | Обязательная причина владельца для set/clear. |
+| `--command-id` | строка | генерируется | Стабильный ID для явного повтора set/clear; другая payload того же ID получает conflict. |
+
+Inspect возвращает `state`, `valid`, `reasons`, optional `current` и проверенный `candidate` при `--id`.
+Set/clear возвращают `state`, `receipt` и `duplicate`. Никакая команда не создаёт SchemaMigrationDecision.

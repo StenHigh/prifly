@@ -93,7 +93,7 @@ func (g *generator) schema(t reflect.Type) map[string]any {
 					if t == reflect.TypeFor[prifly.Run]() && field.Name == "SchemaMigration" {
 						continue
 					}
-					if (t == reflect.TypeFor[projectwire.LaunchSummary]() || t == reflect.TypeFor[projectwire.StartResult]()) && field.Name == "SchemaMigrationID" {
+					if (t == reflect.TypeFor[projectwire.LaunchSummary]() || t == reflect.TypeFor[projectwire.StartResult]()) && (field.Name == "SchemaMigrationID" || field.Name == "SchemaMigrationChoice") {
 						continue
 					}
 					if field.PkgPath != "" {
@@ -385,6 +385,7 @@ var documentContracts = []struct {
 }{
 	{"light", "generate read-only Light contracts", lightSchema},
 	{"schema-migration", "generate explicit shared schema migration contracts", schemaMigrationSchema},
+	{"launch-schema-migration", "generate saved launch migration choice contracts", launchSchemaMigrationSchema},
 	{"project-schema-migration", "generate Project selected migration contracts", projectSchemaMigrationSchema},
 	{"project-owned-naming", "generate project-owned naming inputs contracts", projectOwnedNamingSchema},
 	{"worktree-naming", "generate opt-in Project worktree naming contracts", worktreeNamingSchema},

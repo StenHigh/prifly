@@ -96,3 +96,4 @@ Capability без public handler описывается как contract boundary
 | `program_external_write` | [Процедура](authoring.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 
 | `shared_schema_migration` | [Процедура](schema-migration.md) | Explicit schemas; Run/read 45, authority-packages/2; development change |
+| `project_launch_schema_migration` | [Процедура](schema-migration.md) | Choice `/1`, Project summary/start `/10`, profile `/3+`; development после Core `0.13.90` |
