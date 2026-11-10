@@ -263,3 +263,13 @@ Lifecycle generation SHALL обозначать версию решения дл
 #### Scenario: Автор выбирает изменение schema limit
 - **WHEN** автору нужен configurable maxLength до task validation
 - **THEN** справочник направляет к compile parameter и не обещает такую возможность через runtime configuration input
+
+### Requirement: Сохранённый выбор launch отличается от решения миграции
+Словарь SHALL определять LaunchSchemaMigrationChoice как явный выбор владельца для проекта, launch и точной сборки в одной authority.
+SchemaMigrationDecision SHALL сохранять смысл одобренного ограниченного допуска схем.
+SchemaMigrationBinding SHALL сохранять смысл происхождения допуска, закреплённого отдельным Run.
+Словарь и agent brief MUST объяснять, что сохранённый выбор не восстанавливает package и не создаёт новое разрешение.
+
+#### Scenario: Автор разбирает повторный запуск
+- **WHEN** reader читает словарь после реализации
+- **THEN** он различает сохранённый выбор, одобренное решение и binding нового Run; term SchemaMigrationSelection продолжает обозначать схему и поставщика

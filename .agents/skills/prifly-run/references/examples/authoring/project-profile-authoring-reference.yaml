@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/project-profile-v5.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.90/schemas/authoring/project-profile-v5.schema.json
 # Optional local queue is authority state, never an extra YAML key here.
 # Requires queue-bound core-state/44, core-read/44 and Project profile /3;
 # questionnaire --prepare: project-launch-summary/4; start: project-start/4.

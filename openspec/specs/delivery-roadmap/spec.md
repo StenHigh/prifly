@@ -150,9 +150,9 @@ runtime contract.
 [`prioritize-readable-and-measurable-workflows`](../../changes/prioritize-readable-and-measurable-workflows/tasks.md).
 HTML — датированные аналитические снимки; актуальные статусы задаёт этот roadmap.
 
-Текущий backlog сверён 2026-11-10 с `main` (`3dfca79`), всеми 21
+Текущий backlog сверён 2026-11-10 с `main` (`60931dc`), всеми 21
 неархивированными OpenSpec changes и опубликованным stable
-[0.13.90](https://github.com/StenHigh/prifly/releases/tag/v0.13.90).
+[0.13.91](https://github.com/StenHigh/prifly/releases/tag/v0.13.91).
 Счётчик означает только отметки в `tasks.md`, а не квалификацию release или
 формальную приёмку milestone. Завершённый checklist в неархивированной папке
 не становится открытой реализацией; archive/sync остаётся отдельным действием.
@@ -190,11 +190,12 @@ Prerequisites и полные критерии каждого change сохра�
 Light поставлен в 0.13.81, nested extension points — в 0.13.83,
 imports/layers и unified composition — в 0.13.85; открытые пункты их tasks
 обозначают недосверенную приёмку, а не отсутствие выпущенной capability.
-Свежие выпуски вплоть до 0.13.90 не закрывают эти checklist автоматически.
+Свежие выпуски вплоть до 0.13.91 не закрывают эти checklist автоматически.
 
 Отдельные новые capabilities уже приняты и архивированы, не являются открытым backlog:
 - 0.13.89: scoped reviewed shared-schema migration; [задачи и границы](../../changes/archive/2026-11-09-migrate-revoked-shared-schemas/tasks.md), [released evidence](../../changes/archive/2026-11-09-migrate-revoked-shared-schemas/evidence/released-v0.13.89/README.md).
 - 0.13.90: project-owned compile parameters для объявленных schema limits; [задачи](../../changes/archive/2026-11-10-add-project-owned-compile-parameters/tasks.md), [released evidence](../../changes/archive/2026-11-10-add-project-owned-compile-parameters/evidence/released-v0.13.90/README.md).
+- 0.13.91: сохранённый выбор владельца для миграции общих схем конкретного launch и точной сборки; [задачи и границы](../../changes/archive/2026-11-10-remember-launch-schema-migration/tasks.md), [выпуск и проверка опубликованного binary](https://github.com/StenHigh/prifly/releases/tag/v0.13.91). Приёмка частной authority остаётся отдельной операцией владельца.
 Эти срезы не закрывают формальные P1/P2 gates и не являются поставкой новых consumer packages.
 
 

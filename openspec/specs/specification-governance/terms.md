@@ -1085,6 +1085,11 @@ Read-only снимок точного consumer, schema suppliers, всех по�
 
 Provenance ограниченного допуска schemas, закреплённое новым Run после явного выбора decision. Binding содержит exact consumer и только нужные workflow schemas с выбранными suppliers. Каждый admission повторно проверяет текущие lifecycle facts. Старый Run без binding сохраняет прежний запрет.
 
+<a id="launch-schema-migration-choice"></a>
+### LaunchSchemaMigrationChoice — Сохранённый выбор миграции запуска
+
+Явный выбор владельца для одного проекта, canonical repository root и project launch в одной authority. Выбор связывает существующее SchemaMigrationDecision с точными build key, consumer package Ref и workflow Ref. Generation записи меняется при замене и удалении. Удаление выбора не меняет SchemaMigrationBinding уже принятого Run. Выбор не создаёт новое разрешение, не восстанавливает revoked package и не переносится между сборками. SchemaMigrationSelection по-прежнему обозначает пару schema и supplier.
+
 <a id="package-lifecycle-generation"></a>
 ### Lifecycle generation — Версия lifecycle решения одного package
 
@@ -1791,6 +1796,8 @@ P2-04 вводит state/read/next/preview v3 для нового Run, если 
 | [SchemaMigrationPlan](#schema-migration-plan) | `internal/runtime/schema_migration.go` | `runtime.SchemaMigrationPlan` | — |
 | [SchemaMigrationDecision](#schema-migration-decision) | `internal/runtime/schema_migration.go` | `runtime.SchemaMigrationDecision` | — |
 | [SchemaMigrationBinding](#schema-migration-binding) | `internal/runtime/schema_migration.go` | `runtime.SchemaMigrationBinding` | — |
+| [LaunchSchemaMigrationChoice](#launch-schema-migration-choice) | `internal/runtime/launch_schema_migration.go` | `runtime.LaunchSchemaMigrationChoice` | — |
+| [LaunchSchemaMigrationChoice](#launch-schema-migration-choice) | `internal/runtime/launch_schema_migration.go` | `runtime.LaunchSchemaMigrationState.Choice` | `choice` |
 | [SchemaMigrationBinding](#schema-migration-binding) | `internal/runtime/model.go` | `runtime.Run.SchemaMigration` | `schema_migration` |
 | [SchemaMigrationDecision](#schema-migration-decision) | `internal/runtime/packages.go` | `runtime.PackageRecord.SchemaMigrations` | `schema_migrations` |
 | [Lifecycle generation](#package-lifecycle-generation) | `internal/runtime/packages.go` | `runtime.PackageEntry.LifecycleGeneration` | `lifecycle_generation` |

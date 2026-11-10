@@ -32,6 +32,9 @@ func startGrantRefs(grantID string) []any {
 }
 
 type StartOptions struct {
+	LaunchSchemaMigration *LaunchSchemaMigrationState
+	SavedLaunchReplay     *SavedLaunchSchemaMigrationReplay
+
 	SchemaMigrationID string
 	QueueTask         *QueueTaskBinding
 	// Empty and "1" retain the mandatory RunBrief contract. Version 2 admits
@@ -1298,6 +1301,23 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 		startPayload = map[string]any{"start": startPayload, "queue_task": options.QueueTask}
 		queueGuards = []local.AuthorityGuard{e.queueAdmissionGuard(*options.QueueTask, runID)}
 	}
+	if expected := options.LaunchSchemaMigration; expected != nil {
+		if err := e.validateLaunchSchemaMigrationScope(expected.Scope); err != nil {
+			return local.ApplyResult{}, err
+		}
+		if expected.SchemaVersion != LaunchSchemaMigrationStateVersion || expected.Generation < 1 || expected.Choice == nil || expected.Choice.DecisionID != options.SchemaMigrationID || expected.Choice.WorkflowRef != workflowRef || migrationBinding == nil || expected.Choice.ConsumerRef != migrationBinding.ConsumerRef || expected.Choice.ReviewDigest != migrationBinding.ReviewDigest {
+			return local.ApplyResult{}, fault("schema_migration_scope_mismatch", "saved launch choice differs from the requested migration binding")
+		}
+		startPayload = map[string]any{"start": startPayload, "launch_schema_migration": expected}
+		// Append after the queue branch: queue binding replaces its initial guards.
+		queueGuards = append(queueGuards, e.launchSchemaMigrationGuard(*expected))
+	}
+	if replay := options.SavedLaunchReplay; replay != nil {
+		if options.LaunchSchemaMigration == nil || replay.Scope != options.LaunchSchemaMigration.Scope || replay.SchemaVersion != "saved-launch-replay/1" || flow.ValidateProtocol("Digest", []byte(strconv.Quote(replay.Fingerprint))) != nil || !json.Valid(replay.Response) {
+			return local.ApplyResult{}, fault("schema_migration_scope_mismatch", "saved replay context must match the reviewed launch choice")
+		}
+		startPayload = map[string]any{"start": startPayload, "saved_launch_replay": replay}
+	}
 	var ownershipCut *int64
 	if claimBinding != nil {
 		ownershipCut = claimBinding.ReadCut
@@ -1517,6 +1537,18 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 				}
 			}
 		}
+		change := local.Change{}
+		if options.SavedLaunchReplay != nil {
+			diagnosticIDs := []string{}
+			for _, diagnostic := range r.Diagnostics {
+				diagnosticIDs = append(diagnosticIDs, diagnostic.ID)
+			}
+			var err error
+			change.Result, err = canonical(map[string]any{"run_id": r.ID, "status": r.Status, "diagnostic_ids": diagnosticIDs, "saved_launch_replay": options.SavedLaunchReplay})
+			if err != nil {
+				return local.Change{}, err
+			}
+		}
 		if requiresContextState(plan) {
 			created, err := canonical(map[string]any{"observation": obs, "status": r.Status})
 			if err != nil {
@@ -1531,9 +1563,10 @@ func (e *Engine) start(ctx context.Context, options StartOptions) (local.ApplyRe
 				}
 				events = append(events, local.EventInput{Type: "run.recovery_created", Version: 1, Data: recovered})
 			}
-			return local.Change{Events: events}, err
+			change.Events = events
+			return change, err
 		}
-		return local.Change{}, nil
+		return change, nil
 	})
 }
 

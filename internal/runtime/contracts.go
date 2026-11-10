@@ -195,8 +195,11 @@ var schemaMigrationPublicContracts []byte
 //go:embed project-schema-migration.schema.json
 var projectSchemaMigrationPublicContracts []byte
 
+//go:embed launch-schema-migration.schema.json
+var launchSchemaMigrationPublicContracts []byte
+
 func publicBundles() [][]byte {
-	return append(historicalPublicBundles(), workflowCompositionContracts, workflowCompositionPointsContracts, projectOwnedNamingContracts, schemaMigrationPublicContracts, projectSchemaMigrationPublicContracts)
+	return append(historicalPublicBundles(), workflowCompositionContracts, workflowCompositionPointsContracts, projectOwnedNamingContracts, schemaMigrationPublicContracts, projectSchemaMigrationPublicContracts, launchSchemaMigrationPublicContracts)
 }
 
 func historicalPublicBundles() [][]byte {

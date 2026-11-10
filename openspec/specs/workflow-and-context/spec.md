@@ -105,7 +105,8 @@ revocation MUST блокировать новые admissions и trusted reuse, �
 для нового Run. Исключение MUST связывать точный consumer package, schema refs,
 выбранных доверенных поставщиков и покрытые записи отзыва. Оно MUST NOT
 восстанавливать revoked package, менять старые Runs или допускать executable content.
-Без отдельного решения и явного выбора этого решения при Start прежний запрет MUST сохраняться.
+Без отдельного решения и выбора этого решения при Start прежний запрет MUST сохраняться.
+Явный разовый flag либо действующий сохранённый выбор владельца для точной сборки SHALL задавать такой выбор.
 
 #### Scenario: Package отозван во время Run
 - **WHEN** следующий admission требует отозванный package
@@ -1554,7 +1555,7 @@ Start и каждом последующем admission, включая влож�
 - **THEN** прежний revoked pin продолжает блокировать работу; его history и claims не переписываются
 
 #### Scenario: Start не выбирает решение
-- **WHEN** consumer запускается без явного выбора решения после успешного apply
+- **WHEN** consumer запускается без разового flag и без сохранённого выбора владельца после успешного apply
 - **THEN** прежняя revocation policy продолжает действовать
 
 ### Requirement: Миграция не расширяет исполняемый scope
@@ -1592,3 +1593,29 @@ Compiler MUST применять validated value до проверки task и �
 #### Scenario: Настройка изменена после запуска
 - **WHEN** owner меняет значение либо обновляет пакет
 - **THEN** прежний Run сохраняет definitions и полный task, а новая compilation проверяет обновлённую декларацию
+
+### Requirement: Сохранённый выбор относится к точному project launch
+Владелец SHALL сохранять выбор существующего SchemaMigrationDecision для одного проекта и launch в одной authority.
+Выбор MUST закреплять build key, exact consumer package Ref и exact workflow Ref.
+Отсутствие записи MUST сохранять прежний admission.
+Установка, update, compile, migration apply, prepare и start MUST NOT самостоятельно создавать либо менять выбор.
+
+#### Scenario: Одна сборка запускается повторно
+- **WHEN** владелец сохранил действующее решение и повторяет prepare и start того же launch без разового flag
+- **THEN** обе команды выбирают это решение; каждый новый Run закрепляет собственный SchemaMigrationBinding
+
+#### Scenario: Другой launch использует тот же package
+- **WHEN** другой launch запускает даже тот же workflow из той же сборки
+- **THEN** движок не использует выбор первого launch
+
+#### Scenario: Сборка изменилась
+- **WHEN** изменились build key, consumer Ref либо workflow Ref сохранённого launch
+- **THEN** движок отказывает до создания Run с причиной и маршрутом проверки; другое разрешение автоматически не выбирается
+
+#### Scenario: Новая authority не содержит выбора
+- **WHEN** те же package bytes и project files открывают в другой authority
+- **THEN** прежняя authority не передаёт туда выбор или право допуска
+
+#### Scenario: Пакет содержит executable content
+- **WHEN** сохранённый выбор сопровождает запуск, требующий отозванный executable ref
+- **THEN** прежний запрет code сохраняется; выбор разрешает только schemas существующего решения

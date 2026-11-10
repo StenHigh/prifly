@@ -49,7 +49,7 @@ View показывает newest 64 KiB stdout и stderr; offsets описыва
 Phase, message и current/total описывают самосообщённый прогресс. Result channel fd 3 остаётся отдельным.
 `reported`, `stale`, `not_reported` и `unavailable` имеют разный смысл.
 Отсутствие progress не доказывает зависание, а `current:100` не означает accepted pass.
-[Точный progress contract](https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/core/program-progress.schema.json) задаёт форму строки.
+[Точный progress contract](https://github.com/StenHigh/prifly/blob/v0.13.90/schemas/core/program-progress.schema.json) задаёт форму строки.
 
 ## Timing и cost
 

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/extension-points-v1.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.90/schemas/authoring/extension-points-v1.schema.json
 # capability: project_extension_points; opt-in authoring, Project profile /3+.
 # Minimum native contracts: Call WorkflowRevision 1; Repeat 3; blocked 6;
 # resumable root 8. Assisted external_write uses StepDefinition 11;

@@ -17,28 +17,29 @@ type DecisionState struct {
 }
 
 type LaunchSummary struct {
-	SchemaMigrationID   string                        `json:"schema_migration,omitempty"`
-	Composition         *CompositionReview            `json:"composition,omitempty"`
-	WorktreeNaming      *WorktreeNamingReview         `json:"worktree_naming,omitempty"`
-	WorktreeNamePreview *prifly.WorktreeNamePreview   `json:"worktree_name_preview,omitempty"`
-	WorktreeClaim       *prifly.WorktreeClaim         `json:"worktree_claim,omitempty"`
-	QueueTask           *prifly.QueueTaskSelection    `json:"queue_task,omitempty"`
-	SchemaVersion       string                        `json:"schema_version"`
-	Repository          string                        `json:"repository"`
-	Authority           string                        `json:"authority"`
-	Launch              string                        `json:"launch"`
-	Host                string                        `json:"host,omitempty"`
-	WorkspaceMode       string                        `json:"workspace_mode,omitempty"`
-	Package             flow.Ref                      `json:"package"`
-	AuthorPackage       *BuildIdentity                `json:"author_package,omitempty"`
-	BuildKey            string                        `json:"build_key,omitempty"`
-	Workflow            flow.Ref                      `json:"workflow"`
-	Requirements        *LaunchRequirements           `json:"requirements,omitempty"`
-	InputDigests        map[string]string             `json:"input_digests"`
-	InputRefs           map[string]prifly.ArtifactRef `json:"input_refs"`
-	BriefDigest         string                        `json:"brief_digest,omitempty"`
-	ConfigurationDigest string                        `json:"configuration_digest"`
-	Execution           []ExecutionReview             `json:"execution"`
+	SchemaMigrationChoice *prifly.LaunchSchemaMigrationReview `json:"schema_migration_choice,omitempty"`
+	SchemaMigrationID     string                              `json:"schema_migration,omitempty"`
+	Composition           *CompositionReview                  `json:"composition,omitempty"`
+	WorktreeNaming        *WorktreeNamingReview               `json:"worktree_naming,omitempty"`
+	WorktreeNamePreview   *prifly.WorktreeNamePreview         `json:"worktree_name_preview,omitempty"`
+	WorktreeClaim         *prifly.WorktreeClaim               `json:"worktree_claim,omitempty"`
+	QueueTask             *prifly.QueueTaskSelection          `json:"queue_task,omitempty"`
+	SchemaVersion         string                              `json:"schema_version"`
+	Repository            string                              `json:"repository"`
+	Authority             string                              `json:"authority"`
+	Launch                string                              `json:"launch"`
+	Host                  string                              `json:"host,omitempty"`
+	WorkspaceMode         string                              `json:"workspace_mode,omitempty"`
+	Package               flow.Ref                            `json:"package"`
+	AuthorPackage         *BuildIdentity                      `json:"author_package,omitempty"`
+	BuildKey              string                              `json:"build_key,omitempty"`
+	Workflow              flow.Ref                            `json:"workflow"`
+	Requirements          *LaunchRequirements                 `json:"requirements,omitempty"`
+	InputDigests          map[string]string                   `json:"input_digests"`
+	InputRefs             map[string]prifly.ArtifactRef       `json:"input_refs"`
+	BriefDigest           string                              `json:"brief_digest,omitempty"`
+	ConfigurationDigest   string                              `json:"configuration_digest"`
+	Execution             []ExecutionReview                   `json:"execution"`
 	// RegistryBudget is how full the authority's definition budget is after
 	// this launch's edition: a project that follows every release fills it by
 	// being diligent, and the refusal came without warning.
@@ -113,9 +114,10 @@ type ExecutionReview struct {
 }
 
 type StartResult struct {
-	SchemaMigrationID string                   `json:"schema_migration,omitempty"`
-	QueueTask         *prifly.QueueTaskBinding `json:"queue_task,omitempty"`
-	SchemaVersion     string                   `json:"schema_version"`
+	SchemaMigrationChoice *prifly.LaunchSchemaMigrationReview `json:"schema_migration_choice,omitempty"`
+	SchemaMigrationID     string                              `json:"schema_migration,omitempty"`
+	QueueTask             *prifly.QueueTaskBinding            `json:"queue_task,omitempty"`
+	SchemaVersion         string                              `json:"schema_version"`
 	// RunID, NextCommand and RetiredEditions lead the document: the full Run
 	// view below runs to tens of kilobytes, and a model reading a started
 	// launch could not find the new Run's id in it and fell back to run list.

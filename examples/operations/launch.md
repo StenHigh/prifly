@@ -201,3 +201,11 @@ Continue проверяет carried task по объявленному конт�
 `compile --value` остаётся разовым legacy input compilation; declared compile parameter задаётся только через owner file.
 Подстановка параметра разрешена только в его declared schema bindings.
 Package profiles и references не могут объявлять одноимённый параметр.
+
+## Повторный запуск с одобренной миграцией
+
+Capability `project_launch_schema_migration` позволяет один раз сохранить проверенный выбор для exact build.
+Используйте [inspect/set/clear](schema-migration.md#saved-launch-choice); upstream YAML менять не требуется.
+Затем обычные prepare/start выбирают запись по проекту и launch. Prepare показывает источник `saved` и generation.
+Start требует новый проверенный launch digest. Другая сборка получает отказ с причиной, пока владелец не проверит выбор.
+Разовый непустой `--schema-migration` имеет приоритет и не сохраняется автоматически.

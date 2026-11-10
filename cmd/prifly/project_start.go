@@ -181,6 +181,31 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return err
 		}
 		if !prepare {
+			scope := prifly.LaunchSchemaMigrationScope{AuthorityID: reader.Installation.ID, ProjectID: reader.Config.ID, Repository: root, Launch: *launchID}
+			previous, lookupErr := reader.SavedLaunchSchemaMigrationResult(ctx, scope, *command, queueCommandDigest)
+			if lookupErr != nil {
+				reader.Close()
+				return lookupErr
+			}
+			if len(previous) != 0 {
+				reader.Close()
+				return c.emit(previous)
+			}
+			metadata, runID, lookupErr := reader.AcceptedLaunchSchemaMigrationReplay(ctx, scope, *command, queueCommandDigest)
+			if lookupErr != nil {
+				reader.Close()
+				return lookupErr
+			}
+			if len(metadata) != 0 {
+				result, replayErr := projectAcceptedSavedLaunch(ctx, reader, metadata, runID, *command, queueCommandDigest, *expectedLaunch)
+				reader.Close()
+				if replayErr != nil {
+					return replayErr
+				}
+				return c.emit(result)
+			}
+		}
+		if !prepare {
 			previous, lookupErr := reader.NamedProjectLaunchResult(ctx, *command, queueCommandDigest)
 			if lookupErr != nil {
 				reader.Close()
@@ -568,6 +593,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	} else if len(namingFiles) > 0 {
 		return refusal("project_worktree_input_inapplicable", "naming inputs require a worktree workspace")
 	}
+	var savedMigration *prifly.LaunchSchemaMigrationState
 	var summary projectLaunchSummary
 	var retirement *prifly.RegistryRetirement
 	if neutral {
@@ -635,25 +661,56 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			}
 			summary.WorktreeNamePreview = &namePreview
 		}
-		if *schemaMigration != "" {
-			reader, err := prifly.Open(c.project, true)
-			if err != nil {
-				return err
-			}
-			inspection, err := reader.InspectSchemaMigration(ctx, *schemaMigration)
-			reader.Close()
-			if err != nil {
-				return err
-			}
-			if !inspection.Valid {
-				return refusal("schema_migration_decision_invalid", strings.Join(inspection.Reasons, "; "))
-			}
-			if inspection.Decision.Plan.Request.ConsumerRef != compiled.Package {
-				return refusal("schema_migration_scope_mismatch", "selected decision belongs to another exact consumer package")
-			}
-			summary.SchemaVersion = "project-launch-summary/9"
-			summary.SchemaMigrationID = *schemaMigration
+
+		reader, openErr := prifly.Open(c.project, true)
+		if openErr != nil {
+			return openErr
 		}
+		scope := prifly.LaunchSchemaMigrationScope{AuthorityID: reader.Installation.ID, ProjectID: reader.Config.ID, Repository: root, Launch: *launchID}
+		build := prifly.LaunchSchemaMigrationBuild{BuildKey: compiled.BuildKey, ConsumerRef: compiled.Package, WorkflowRef: summary.Workflow}
+		var migrationReview *prifly.LaunchSchemaMigrationReview
+		if *schemaMigration != "" {
+			choice, checkErr := reader.CheckLaunchSchemaMigration(ctx, *schemaMigration, build)
+			if checkErr != nil {
+				reader.Close()
+				return checkErr
+			}
+			migrationReview = &prifly.LaunchSchemaMigrationReview{Source: "explicit", Scope: scope, Choice: choice}
+		} else {
+			inspection, checkErr := reader.InspectLaunchSchemaMigration(ctx, scope)
+			if checkErr != nil {
+				reader.Close()
+				return checkErr
+			}
+			if inspection.State.Choice != nil {
+				if inspection.State.Choice.LaunchSchemaMigrationBuild != build {
+					reader.Close()
+					return refusal("schema_migration_scope_mismatch", fmt.Sprintf("saved build=%s consumer=%s workflow=%s; current build=%s consumer=%s workflow=%s; run project schema-migration inspect and review set or clear", inspection.State.Choice.BuildKey, inspection.State.Choice.ConsumerRef.String(), inspection.State.Choice.WorkflowRef.String(), build.BuildKey, build.ConsumerRef.String(), build.WorkflowRef.String()))
+				}
+				if !inspection.Valid {
+					_, validationErr := reader.CheckLaunchSchemaMigration(ctx, inspection.State.Choice.DecisionID, build)
+					reader.Close()
+					if validationErr != nil {
+						return validationErr
+					}
+					return refusal("schema_migration_decision_invalid", strings.Join(inspection.Reasons, "; ")+"; inspect and replace or clear the saved choice")
+				}
+				savedMigration = &inspection.State
+				*schemaMigration = inspection.State.Choice.DecisionID
+				migrationReview = &prifly.LaunchSchemaMigrationReview{Source: "saved", Scope: scope, Generation: inspection.State.Generation, Choice: *inspection.State.Choice}
+				if !prepare && *expectedLaunch == "" {
+					reader.Close()
+					return usageError("saved schema migration requires --expected-launch-digest from project questionnaire --prepare")
+				}
+			}
+		}
+		reader.Close()
+		if migrationReview != nil {
+			summary.SchemaVersion = "project-launch-summary/10"
+			summary.SchemaMigrationID = *schemaMigration
+			summary.SchemaMigrationChoice = migrationReview
+		}
+
 		summary.ReviewDigest, err = projectCallExtensionReview(summary, compiled.CallExtensions, stageResources, resourceLimits)
 		if err != nil {
 			return err
@@ -998,7 +1055,7 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 		// never became a Run, and the next start was refused by it.
 		return cleanupStart(err)
 	}
-	startOptions := prifly.StartOptions{SchemaMigrationID: *schemaMigration, CommandID: *command, ProjectTitle: profile.Title, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
+	startOptions := prifly.StartOptions{LaunchSchemaMigration: savedMigration, SchemaMigrationID: *schemaMigration, CommandID: *command, ProjectTitle: profile.Title, WorkflowFile: workflowPath, Brief: briefBytes, Inputs: inputPaths, InputRefs: refs, WorkspaceMode: *workspace}
 	startOptions.WorkspaceClaim = claim
 	startOptions.QueueTask = queueBinding
 	if neutral {
@@ -1021,6 +1078,84 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 	startOptions.StageResources, startOptions.ResourceLimits = stageResources, resourceLimits
 	if preflight.Declared {
 		startOptions.DecisionCatalog, startOptions.DecisionSheet = &preflight.Catalog, &preflight.Sheet
+	}
+	result := projectStartResult{SchemaVersion: "project-start/1", Repository: root, Launch: *launchID, Package: compiled.Package, PackageProfile: selectedProfile, Workspace: claim}
+	result.Recovery = recoveryPlan
+	if recovering && !resuming {
+		result.SchemaVersion = "project-recover/1"
+	}
+	if claim != nil {
+		path, err := engine.ClaimWorkspacePath(*claim)
+		if err != nil {
+			return cleanupStart(err)
+		}
+		result.WorkspacePath = path
+	}
+	if preflight.Declared {
+		if !recovering || resuming {
+			result.SchemaVersion = "project-start/2"
+		}
+		result.DecisionSheet = &preflight.Sheet
+		if preflight.Sheet.DecisionPolicy == "autonomous" {
+			blocked := prifly.DecisionsAutonomyCannotTake(&preflight.Catalog, &preflight.Sheet)
+			result.AutonomyUnanswered = &blocked
+		}
+	}
+	if compiled.AuthorPackage != nil {
+		result.SchemaVersion = "project-start/3"
+		result.AuthorPackage, result.BuildKey = compiled.AuthorPackage, compiled.BuildKey
+		result.LaunchSummary = &summary
+	}
+	result.RunID = engine.IntendedRunID(*command)
+	result.NextCommand = "run next " + result.RunID
+	if retirement != nil {
+		result.RetiredEditions = retirement.Retire
+	}
+	if claim != nil && claim.Naming != nil {
+		result.SchemaVersion = "project-start/5"
+	}
+	if queueBinding != nil {
+		if claim == nil || claim.Naming == nil {
+			result.SchemaVersion = "project-start/4"
+		}
+		result.QueueTask = queueBinding
+		if compiled.Composition != nil {
+			result.SchemaVersion = "project-start/6"
+			if compiled.SchemaVersion == "project-compile/4" {
+				result.SchemaVersion = "project-start/7"
+			}
+		}
+		if projectSummaryHasOwnedNaming(summary) {
+			result.SchemaVersion = "project-start/8"
+		}
+		if *schemaMigration != "" {
+			result.SchemaVersion = "project-start/10"
+			result.SchemaMigrationID = *schemaMigration
+			result.SchemaMigrationChoice = summary.SchemaMigrationChoice
+			result.LaunchSummary = &summary
+		}
+	}
+	if compiled.Composition != nil {
+		result.SchemaVersion = "project-start/6"
+		if compiled.SchemaVersion == "project-compile/4" {
+			result.SchemaVersion = "project-start/7"
+		}
+	}
+	if projectSummaryHasOwnedNaming(summary) {
+		result.SchemaVersion = "project-start/8"
+	}
+	if *schemaMigration != "" {
+		result.SchemaVersion = "project-start/10"
+		result.SchemaMigrationID = *schemaMigration
+		result.SchemaMigrationChoice = summary.SchemaMigrationChoice
+		result.LaunchSummary = &summary
+	}
+	if savedMigration != nil {
+		response, err := json.Marshal(result)
+		if err != nil {
+			return cleanupStart(err)
+		}
+		startOptions.SavedLaunchReplay = &prifly.SavedLaunchSchemaMigrationReplay{SchemaVersion: "saved-launch-replay/1", Scope: savedMigration.Scope, Fingerprint: queueCommandDigest, Response: response}
 	}
 	started, err := engine.Start(ctx, startOptions)
 	if err == nil && started.Receipt.Rejection != nil {
@@ -1095,65 +1230,21 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			}
 		}
 	}
-	result := projectStartResult{SchemaVersion: "project-start/1", Repository: root, Launch: *launchID, Package: compiled.Package, PackageProfile: selectedProfile, Run: view, Workspace: claim}
-	result.Recovery = recoveryPlan
-	if recovering && !resuming {
-		result.SchemaVersion = "project-recover/1"
-	}
+	result.Run = view
+	result.Workspace = claim
 	if claim != nil {
-		path, err := engine.ClaimWorkspacePath(*claim)
+		result.WorkspacePath, err = engine.ClaimWorkspacePath(*claim)
 		if err != nil {
 			return err
 		}
-		result.WorkspacePath = path
 	}
-	if preflight.Declared {
-		if !recovering || resuming {
-			result.SchemaVersion = "project-start/2"
-		}
-		result.DecisionSheet = &preflight.Sheet
-		if preflight.Sheet.DecisionPolicy == "autonomous" {
-			blocked := prifly.DecisionsAutonomyCannotTake(&preflight.Catalog, &preflight.Sheet)
-			result.AutonomyUnanswered = &blocked
-		}
-	}
-	if compiled.AuthorPackage != nil {
-		result.SchemaVersion = "project-start/3"
-		result.AuthorPackage, result.BuildKey = compiled.AuthorPackage, compiled.BuildKey
-		result.LaunchSummary = &summary
-	}
-	result.RunID = view.Run.ID
-	result.NextCommand = "run next " + view.Run.ID
+
 	// The Run exists whatever this read answers; a failed read leaves the
 	// command that works for any Run.
-	if next, err := engine.Next(ctx, view.Run.ID); err == nil && next.NextCommand != "" {
+	if next, err := engine.Next(ctx, result.RunID); err == nil && next.NextCommand != "" {
 		result.NextCommand = next.NextCommand
 	}
-	if retirement != nil {
-		result.RetiredEditions = retirement.Retire
-	}
-	if claim != nil && claim.Naming != nil {
-		result.SchemaVersion = "project-start/5"
-	}
 	if queueBinding != nil {
-		if claim == nil || claim.Naming == nil {
-			result.SchemaVersion = "project-start/4"
-		}
-		result.QueueTask = queueBinding
-		if compiled.Composition != nil {
-			result.SchemaVersion = "project-start/6"
-			if compiled.SchemaVersion == "project-compile/4" {
-				result.SchemaVersion = "project-start/7"
-			}
-		}
-		if projectSummaryHasOwnedNaming(summary) {
-			result.SchemaVersion = "project-start/8"
-		}
-		if *schemaMigration != "" {
-			result.SchemaVersion = "project-start/9"
-			result.SchemaMigrationID = *schemaMigration
-			result.LaunchSummary = &summary
-		}
 		resultBytes, err := json.Marshal(result)
 		if err != nil {
 			return err
@@ -1166,19 +1257,14 @@ func (c *cli) projectPrepareAndStart(ctx context.Context, args []string, prepare
 			return finalized.Receipt.Rejection
 		}
 	}
-	if compiled.Composition != nil {
-		result.SchemaVersion = "project-start/6"
-		if compiled.SchemaVersion == "project-compile/4" {
-			result.SchemaVersion = "project-start/7"
+	if savedMigration != nil {
+		response, err := json.Marshal(result)
+		if err != nil {
+			return err
 		}
-	}
-	if projectSummaryHasOwnedNaming(summary) {
-		result.SchemaVersion = "project-start/8"
-	}
-	if *schemaMigration != "" {
-		result.SchemaVersion = "project-start/9"
-		result.SchemaMigrationID = *schemaMigration
-		result.LaunchSummary = &summary
+		if err := engine.RecordSavedLaunchSchemaMigrationResult(ctx, savedMigration.Scope, *command, queueCommandDigest, response); err != nil {
+			return err
+		}
 	}
 	if claim != nil && claim.Naming != nil {
 		response, err := json.Marshal(result)
@@ -1816,4 +1902,60 @@ func projectMissingDecisionRefusal(catalog []prifly.DecisionDefinition, selected
 		message += " " + strings.Join(byHand, ", ") + " must be answered with --preflight-answer ID=JSON: no policy answers them, because they are not declared automatic, not of ordinary sensitivity, or carry no recommendation"
 	}
 	return message + ". project questionnaire --repository DIR --launch ID lists every declared question with its choices"
+}
+
+// Recover only the accepted Run. A retry does not perform another admission or
+// drive work that was not completed by the original start response.
+func projectAcceptedSavedLaunch(ctx context.Context, engine *prifly.Engine, metadata json.RawMessage, runID, command, fingerprint, review string) (projectStartResult, error) {
+	var result projectStartResult
+	if err := json.Unmarshal(metadata, &result); err != nil {
+		return result, err
+	}
+	if result.SchemaVersion != "project-start/10" || result.RunID != runID || result.SchemaMigrationChoice == nil || result.SchemaMigrationChoice.Source != "saved" {
+		return result, local.ErrIntegrity
+	}
+	view, err := engine.View(ctx, runID)
+	if err != nil {
+		return result, err
+	}
+	result.Run = view
+	result.NextCommand = "run next " + runID
+	if next, err := engine.Next(ctx, runID); err == nil && next.NextCommand != "" {
+		result.NextCommand = next.NextCommand
+	}
+	if result.Workspace != nil {
+		record, err := engine.Claims(ctx)
+		if err != nil {
+			return result, err
+		}
+		found := false
+		for _, claim := range record.Claims {
+			if claim.ID == result.Workspace.ID {
+				fresh := claim
+				result.Workspace = &fresh
+				found = true
+				break
+			}
+		}
+		if !found {
+			return result, local.ErrIntegrity
+		}
+		result.WorkspacePath, err = engine.ClaimWorkspacePath(*result.Workspace)
+		if err != nil {
+			return result, err
+		}
+	}
+	if result.QueueTask != nil {
+		intent, err := engine.QueueLaunchCommand(ctx, command, fingerprint, review)
+		if err != nil {
+			return result, err
+		}
+		if intent == nil {
+			return result, local.ErrIntegrity
+		}
+		if len(intent.ResultBytes) == 0 {
+			result.NextCommand = "project queue show --task-id " + result.QueueTask.Selection.TaskID
+		}
+	}
+	return result, nil
 }

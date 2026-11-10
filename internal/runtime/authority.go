@@ -180,6 +180,16 @@ func (e *Engine) ensureControl(ctx context.Context) (AuthorityControl, int64, er
 	if version > 0 {
 		return e.reconcileOwnerOperations(ctx, control, version)
 	}
+	return e.enrolControl(ctx)
+}
+
+// enrolControl creates the authenticated owner's first control plane. Existing
+// access remains unchanged; callers that need compatibility reconciliation use ensureControl.
+func (e *Engine) enrolControl(ctx context.Context) (AuthorityControl, int64, error) {
+	control, version, err := e.Control(ctx)
+	if err != nil || version > 0 {
+		return control, version, err
+	}
 	if e.ReadOnly {
 		return AuthorityControl{}, 0, local.ErrReadOnly
 	}

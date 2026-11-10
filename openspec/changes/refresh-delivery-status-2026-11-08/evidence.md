@@ -45,3 +45,16 @@ parameters0.13.90 уже архивированы; добавлены ссылк
 Локальный Go toolchain и OpenSpec CLI по-прежнему отсутствуют.
 
 Полный helper ci-check-once повторно вызван с контекстом cloud-roadmap-docs-2026-11-10: BLOCKED до тестов, отсутствует .tools/go/bin/go (Error127). Python-сверка inventory/counts/ссылок и git diff --check PASS.
+
+## Повторная сверка после 0.13.91
+
+База main60931dc6f77770d748ff4ff0fc58b8c177b74dfa, release v0.13.91.
+PR25 добавил сохранённый выбор миграции схем launch; change архивирован
+2026-11-10. Roadmap отражает поставленную capability, но не объявляет
+приёмку частной authority или P1/P2. Новые исходники, спецификации, схемы,
+справочники и архив main сохранены без правок.
+Все 21 исходных active changes и точные checklist counts перепроверены.
+PASS: inventory, относительные ссылки roadmap и git diff --check.
+Локальные full CI и strict OpenSpec остаются недоступны без Go toolchain
+и OpenSpec CLI. Предыдущий SHA c9de00b прошёл GitHub verify; это не результат
+нового SHA. Required CI проверяется отдельно после публикации ветки.

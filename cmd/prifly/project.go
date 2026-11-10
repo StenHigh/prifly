@@ -1079,6 +1079,8 @@ func (c *cli) projectCommand(ctx context.Context, args []string) error {
 		return operationError("project", args)
 	}
 	switch args[0] {
+	case "schema-migration":
+		return c.projectSchemaMigration(ctx, args[1:])
 	case "queue":
 		return c.projectQueue(ctx, args[1:])
 	case "init":

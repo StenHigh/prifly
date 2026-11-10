@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.88/schemas/authoring/step-v2.schema.json
+# yaml-language-server: $schema=https://github.com/StenHigh/prifly/blob/v0.13.90/schemas/authoring/step-v2.schema.json
 # Complete reference for one prifly-step/2 assisted source -- session steps only:
 # a program step (executor operation: process) is written as authoring:
 # prifly-step/1, with the same ports, effects, external_write and

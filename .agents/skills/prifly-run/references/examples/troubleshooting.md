@@ -7,7 +7,7 @@
 или флаг, а затем ведёт туда, где оно описано полностью.
 
 Это не список всех отказов и не вторая спецификация: нормативные правила
-остаются в [OpenSpec](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/specs). Сюда попадает только то, на чём
+остаются в [OpenSpec](https://github.com/StenHigh/prifly/blob/v0.13.90/openspec/specs). Сюда попадает только то, на чём
 действительно спотыкались.
 
 Строки отказов приведены дословно, чтобы их можно было искать по выводу CLI.
@@ -122,7 +122,7 @@ location — **не** отказ: runtime берёт объявленный path
 Форма binding — в том же
 [`authoring/step-authoring-reference.yaml`](authoring/step-authoring-reference.yaml);
 обязанности стороны host — в
-[cli-protocol](https://github.com/StenHigh/prifly/blob/v0.13.88/openspec/specs/cli-protocol/spec.md).
+[cli-protocol](https://github.com/StenHigh/prifly/blob/v0.13.90/openspec/specs/cli-protocol/spec.md).
 
 ### После `project workflows update` программа шага перестала запускаться
 
