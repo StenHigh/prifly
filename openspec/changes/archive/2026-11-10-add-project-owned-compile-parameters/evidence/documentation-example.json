@@ -1,0 +1,28 @@
+{
+  "binary": "/srv/projects/prifly/core/.cache/release-preparation/v0.13.90/installed/prifly",
+  "binary_sha256": "db8a158149088e6f9bfb9df3ebe5fc97e1b57942a620c78b65841f5c996bd984",
+  "version": "0.13.90",
+  "result": "passed",
+  "checks": [
+    "version-capability-editor-contracts",
+    "default-12000-owner-32000-distinct-builds",
+    "16557-unicode-root-child-worker-completed",
+    "32000-accepts-32001-refuses-with-unicode-diagnostic",
+    "owner-change-invalidates-reviewed-launch",
+    "out-of-range-owner-value-refuses"
+  ],
+  "fixture": "examples/compile-parameters",
+  "verification_method": "Six-group release probe with YAML documents read from the documentation example; owner defaults and overrides exercised in a temporary copy.",
+  "readme_shell_blocks": "passed: all three shell blocks on released Core v0.13.90",
+  "files": {
+    "examples/compile-parameters/README.md": "61d0d4686c2be589653cb5d5c684a368fbc7e60b4a8217ffda3f673822334c2f",
+    "examples/compile-parameters/package/compile-parameters.yaml": "0ba173500b27987f5718bea8b583d307d33fa8c0bc7ec070cf3a3efa98a8bbd0",
+    "examples/compile-parameters/package/contexts/worker.yaml": "673975c252c92d7fb60da8e2bda5ac511ae272b2b282f97f067d8bde0bdcd2bb",
+    "examples/compile-parameters/package/project/compile-values.yaml": "69008b25d3d67f1b51fe8ffe56679d94d5707440cee211fea34f41a46c3fda62",
+    "examples/compile-parameters/package/project/steps/worker.yaml": "5098756028dee6c3919b6bfed4cfb8a0822bd09f4c2c47bd38e74b70e0788969",
+    "examples/compile-parameters/package/schemas/task.yaml": "a59ca91f4a488269287c786aade82bd0e48f26db576cacfbf466d14cd7780b85",
+    "examples/compile-parameters/package/workflow.yaml": "d595a3e47b57d1de7ae6011853e29ffde3ab8eeaf07c5cc2268d1f4b9a0ba186",
+    "examples/compile-parameters/package/workflows/child.yaml": "086464c2b6afbb7c73dabddc98734687d180805f595c3f3d7d1e02685ee04a9b",
+    "examples/compile-parameters/project.yaml": "1185dd74e8dee5556f2d5abb97b3b6c0098ef7e2223216ab7b01c3ccd045f457"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "binary": "/srv/projects/prifly/core/.cache/release-preparation/v0.13.90/installed/prifly",
+  "binary_sha256": "db8a158149088e6f9bfb9df3ebe5fc97e1b57942a620c78b65841f5c996bd984",
+  "version": "0.13.90",
+  "result": "passed",
+  "checks": [
+    "version-capability-editor-contracts",
+    "default-12000-owner-32000-distinct-builds",
+    "16557-unicode-root-child-worker-completed",
+    "32000-accepts-32001-refuses-with-unicode-diagnostic",
+    "owner-change-invalidates-reviewed-launch",
+    "out-of-range-owner-value-refuses"
+  ]
+}

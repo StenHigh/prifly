@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=../../../../schemas/authoring/compile-values-v1.schema.json
+authoring: prifly-compile-values/1
+values:
+  task_description_limit: 32000

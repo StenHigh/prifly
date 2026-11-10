@@ -1,0 +1,23 @@
+authoring: prifly-project-workflow/1
+package:
+  id: example:package/limits
+  version: 1.0.0
+  description: Пример параметра сборки.
+  requires_core_protocol: "1"
+  references:
+    policy: core:policy/local@3.0.0
+    assisted: core:adapter/assisted-session@1.0.0
+    result: core:schema/step-result@1.0.0
+id: example:workflow/limits
+version: 1.0.0
+policy_ref: "{{policy}}"
+inputs: {task: {schema_ref: "{{schema_task}}", required: true}}
+entry: child
+limits: {max_step_instances: 2, max_control_transitions: 8, max_child_depth: 1}
+stages:
+  child:
+    kind: call
+    workflow_ref: "{{workflow_child}}"
+    input_bindings: {task: $inputs.task}
+    on: {succeeded: done}
+  done: {kind: finish, outcome: succeeded}

@@ -67,6 +67,17 @@ func TestRunnerManualInstallsForEveryHostAndRepairsMissingPages(t *testing.T) {
 					t.Fatalf("missing or wrong installed asset %s: %v", name, err)
 				}
 			}
+			for _, name := range []string{
+				"references/examples/compile-parameters/README.md",
+				"references/examples/compile-parameters/project.yaml",
+				"references/examples/compile-parameters/package/compile-parameters.yaml",
+				"references/examples/compile-parameters/package/project/compile-values.yaml",
+				"references/examples/compile-parameters/package/project/steps/worker.yaml",
+			} {
+				if data, err := runnerReadFile(skillRoot, name); err != nil || len(data) == 0 {
+					t.Fatalf("compile parameter example is not installed: %s: %v", name, err)
+				}
+			}
 			updated, missing, err := checkProjectRunnerUpdates(root, host)
 			if err != nil || len(updated) != 0 || len(missing) != 0 {
 				t.Fatalf("fresh install is stale: %v %v %v", updated, missing, err)

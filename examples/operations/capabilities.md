@@ -21,7 +21,7 @@ Capability без public handler описывается как contract boundary
 | `project_extension_points` | [Процедура](authoring.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `workflow_composition` | [Процедура](authoring.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `workflow_composition_with_points` | [Процедура](authoring.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
-| `project_compile_parameters` | [Процедура](launch.md) | [Параметр сборки](../authoring/compile-parameters-authoring-reference.yaml), [значение проекта](../authoring/compile-values-authoring-reference.yaml) |
+| `project_compile_parameters` | [Процедура](launch.md) | Core `0.13.90+`; [руководство](../authoring/compile-parameters-guide.md), [объявление](../authoring/compile-parameters-authoring-reference.yaml), [значение проекта](../authoring/compile-values-authoring-reference.yaml), [полный пример](../compile-parameters/README.md) |
 | `storage_budget_management` | [Процедура](operations.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `on_error` | [Процедура](authoring.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `json_projection` | [Процедура](authoring.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |

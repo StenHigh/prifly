@@ -168,9 +168,11 @@ Checkout и запуск без Git workspace не требуют naming values.
 <a id="compile-parameters"></a>
 ## Предел схемы через параметр сборки
 
-Параметр сборки задаёт разрешённый пакетом предел до проверки task. Требуется Project profile `/3` или новее.
+Параметр сборки задаёт разрешённый пакетом предел до проверки task.
+Минимальная версия Core — `0.13.90`; нужны capability `project_compile_parameters` и Project profile `/3`–`/5`.
 Пакет объявляет параметр в `compile-parameters.yaml` версии `prifly-compile-parameters/1`.
 [Объявление](../authoring/compile-parameters-authoring-reference.yaml) показывает тип, диапазон, default и точный binding к `maxLength` строковой schema.
+[Руководство](../authoring/compile-parameters-guide.md) связывает все файлы; [полный пример](../compile-parameters/README.md) показывает root, child и project-owned worker.
 
 1. Проверьте имя и диапазон объявленного параметра.
 2. Создайте `.prifly/workflows/NAME/project/compile-values.yaml` по [примеру](../authoring/compile-values-authoring-reference.yaml).

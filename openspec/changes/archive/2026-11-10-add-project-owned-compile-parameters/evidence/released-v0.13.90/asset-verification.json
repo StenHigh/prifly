@@ -1,0 +1,15 @@
+{
+  "version": "0.13.90",
+  "signature": "passed",
+  "jcs_signature": "passed",
+  "archives": [
+    {
+      "archive": "prifly-darwin-arm64.tar.gz",
+      "sha256": "0b59dbeeea5bd93d88a48043d435d520fc4cd1fb8ee51385eaf183aac836be9a"
+    },
+    {
+      "archive": "prifly-linux-amd64.tar.gz",
+      "sha256": "1a755a7a1134b71a484bedfc347686908eaccd25a81d85d808beddff5da03546"
+    }
+  ]
+}

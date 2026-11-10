@@ -1,0 +1,74 @@
+{
+  "version": "v0.13.90",
+  "sha": "5e7f81cf5e6b53b72b86a937584e18f699f90ff9",
+  "base_release": "v0.13.89",
+  "state": "published-and-verified",
+  "local_checks": {
+    "editor_contracts": "passed",
+    "test_changed": "passed",
+    "ci_check_once_staged": "passed",
+    "e2e": "passed"
+  },
+  "remote_checks": {
+    "verify": {
+      "state": "success",
+      "url": "https://github.com/StenHigh/prifly/actions/runs/42716142852"
+    },
+    "qualify": {
+      "state": "success",
+      "url": "https://github.com/StenHigh/prifly/actions/runs/42716176781"
+    }
+  },
+  "prior_sha": "564e4a4e12acbe07ade1261b651372d7e9937cb6",
+  "prior_qualify": "https://github.com/StenHigh/prifly/actions/runs/42712164413",
+  "prior_qualify_conclusion": "failure",
+  "tag_created": true,
+  "release_created": true,
+  "owner_required_for": [
+    "push",
+    "tag",
+    "release-environment-approval"
+  ],
+  "push_authorized_by_owner": true,
+  "release_publication_delegated_by_owner": true,
+  "tag_dry_run": "passed",
+  "release_url": "https://github.com/StenHigh/prifly/releases/tag/v0.13.90",
+  "release_workflow": {
+    "state": "success",
+    "url": "https://github.com/StenHigh/prifly/actions/runs/42719875397"
+  },
+  "owner_environment_approval": {
+    "actor": "StenHigh",
+    "deployment_id": 7668871792
+  },
+  "asset_verification": {
+    "version": "0.13.90",
+    "signature": "passed",
+    "jcs_signature": "passed",
+    "archives": [
+      {
+        "archive": "prifly-darwin-arm64.tar.gz",
+        "sha256": "0b59dbeeea5bd93d88a48043d435d520fc4cd1fb8ee51385eaf183aac836be9a"
+      },
+      {
+        "archive": "prifly-linux-amd64.tar.gz",
+        "sha256": "1a755a7a1134b71a484bedfc347686908eaccd25a81d85d808beddff5da03546"
+      }
+    ]
+  },
+  "released_binary_smoke": {
+    "binary": "/srv/projects/prifly/core/.cache/release-preparation/v0.13.90/installed/prifly",
+    "binary_sha256": "db8a158149088e6f9bfb9df3ebe5fc97e1b57942a620c78b65841f5c996bd984",
+    "version": "0.13.90",
+    "result": "passed",
+    "checks": [
+      "version-capability-editor-contracts",
+      "default-12000-owner-32000-distinct-builds",
+      "16557-unicode-root-child-worker-completed",
+      "32000-accepts-32001-refuses-with-unicode-diagnostic",
+      "owner-change-invalidates-reviewed-launch",
+      "out-of-range-owner-value-refuses"
+    ]
+  },
+  "installed_binary_matches_release_archive": true
+}

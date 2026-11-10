@@ -7,5 +7,5 @@ import "embed"
 // Handbook includes the worked examples needed by the references. Programs in
 // examples are data here; installing the handbook never executes them.
 //
-//go:embed operations/*.md authoring workflows workflow-composition nested-extension-points unified-composition light README.md troubleshooting.md
+//go:embed operations/*.md authoring compile-parameters workflows workflow-composition nested-extension-points unified-composition light README.md troubleshooting.md
 var Handbook embed.FS

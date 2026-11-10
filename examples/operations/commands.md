@@ -453,6 +453,8 @@ Default в таблице — значение parser до применения 
 
 Объявленные параметры сборки задаются в `project/compile-values.yaml` по [процедуре](launch.md#compile-parameters).
 Compile, prepare и start читают этот файл. `--value` не переопределяет declared compile parameter.
+Нужны Core `0.13.90+`, capability `project_compile_parameters` и Project profile `/3`–`/5`.
+[Руководство и полный пример](../authoring/compile-parameters-guide.md) показывают декларацию пакета и значение проекта.
 
 <!-- cli-flags:projectExtend -->
 

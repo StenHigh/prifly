@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=../../schemas/authoring/compile-parameters-v1.schema.json
 # File: .prifly/workflows/NAME/compile-parameters.yaml (package-owned).
-# Requires Project profile /3 or newer. Sidecar contract: /1.
+# Core 0.13.90+. Requires Project profile /3-/5 and project_compile_parameters.
+# Sidecar contract: /1. Guide: compile-parameters-guide.md.
 # The schema source contains a whole scalar placeholder:
 # properties:
 #   description: {type: string, maxLength: "{{task_description_limit}}"}

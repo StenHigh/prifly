@@ -104,3 +104,13 @@ Terminal revoke, old Runs и code сохраняют запреты. Новый 
 `cli-protocol`, `published-contracts` и `specification-governance`.
 История и baseline сохранены в archived `2026-11-09-migrate-revoked-shared-schemas`.
 Generic acceptance Core `v0.13.89` прошла; private authority acceptance не выполнялась.
+
+Параметр сборки объявляет пакет в `compile-parameters.yaml` `/1`.
+Проект сохраняет свой выбор в `project/compile-values.yaml` `/1` до compile/prepare/start.
+Нужны Core `0.13.90+`, capability `project_compile_parameters` и Project profile `/3`–`/5`.
+Binding разрешает собственный строковый `maxLength` с совпадающей whole-scalar подстановкой.
+Значение входит в build identity и review; прежний Run сохраняет definitions и task.
+Правила включены в main source sets `workflow-and-context`, `cli-protocol`,
+`published-contracts` и `specification-governance`.
+Evidence Core #22 сохранено в archived `2026-11-10-add-project-owned-compile-parameters`;
+приёмка consumer workflows #3 остаётся отдельной.

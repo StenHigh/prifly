@@ -1,0 +1,4 @@
+id: example:context/worker
+version: 1.0.0
+media_type: text/markdown; charset=utf-8
+text: Проверьте полный task. Отправьте pass без outputs. Не запускайте внешние программы.

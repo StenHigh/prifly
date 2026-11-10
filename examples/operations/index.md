@@ -10,6 +10,7 @@
 |---|---|
 | Установка, clone, binary/workflow/runner update, конфликт обновления | [Установка](installation.md) |
 | Выбор launch, inputs, profile, questionnaire, prepare, start | [Новый запуск](launch.md) |
+| Задать проектный предел длинного task до prepare/start | [Параметр сборки](launch.md#compile-parameters) |
 | Получить задание, выполнить шаг, записать outputs, отправить отчёт | [Исполнение](hosting.md) |
 | Ответить на preflight/runtime question, yield, отчёт о вопросах | [Решения](decisions.md) |
 | Continue/resume/reopen/recover; cancelled writer; неизвестные эффекты | [Восстановление](recovery.md) |

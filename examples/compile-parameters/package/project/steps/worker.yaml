@@ -1,0 +1,9 @@
+authoring: prifly-step/1
+id: example:step/worker
+version: 1.0.0
+kind: worker
+executor: {adapter_ref: "{{assisted}}", operation: session}
+instructions_ref: "{{context_worker}}"
+inputs: {task: {schema_ref: "{{schema_task}}", required: true}}
+effects: {class: none, retry_class: never}
+result_schema_ref: "{{result}}"
