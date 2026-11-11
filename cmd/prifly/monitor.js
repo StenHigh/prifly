@@ -266,6 +266,13 @@ function stepReceipt(run,attempt) {
  const reported=attempt.question_report?attempt.question_report.questions:null;
  return {stage:stageID,program:!session,inputs,decisions,texts,expects,asked,pending,reported,reportsKept:stateNumber(run)>=41};
 }
+// Use the same saved title sources as the Run catalog.
+function runTaskTitle(inputValues,brief){
+ const subject=brief?.subject;
+ if(typeof subject==='string' && subject)return subject;
+ const task=inputValues?.task?.title;
+ return (typeof task==='string' && task.trim()) || 'Название задачи не записано';
+}
 // Launch inputs and every decision of the sealed sheet, with who gave each
 // answer. A decision the profile excludes is named as such, not left out.
 function launchInputs(run,inputValues={}) {
@@ -413,11 +420,11 @@ function boardHTML(runs,sources=[]) {
   return `<section class="board-column${cards.length?'':' is-empty'}" tabindex="0" data-scroll="board-column-${id}" data-category="${id}" aria-label="${esc(title)}"><h2>${esc(title)} <span>${cards.length}</span></h2>${cards.map(r=>boardCardHTML(r,sources)).join('')}${!cards.length?'<p class="muted">На этой странице нет Run</p>':''}</section>`;
  }).join('')+'</div>';
 }
-if(typeof module !== 'undefined') module.exports = {boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
+if(typeof module !== 'undefined') module.exports = {boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,runTaskTitle,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='',graphFocus='';
-let listScroll=0,listPositions=new Map(),maintenanceBusy=false,storageBusy=false;
+let listScroll=0,listPositions=new Map(),listFocus=null,maintenanceBusy=false,storageBusy=false;
 let relatedInitialized=false,expandSearch=false;
 const childPages=new Map(),childCache=new Map();
 const artifactCache=new Map(),fileCache=new Map();
@@ -683,7 +690,8 @@ async function loadFiles() {
 }
 function renderDetail() {
  const scrollX=window.scrollX,scrollY=window.scrollY;
- const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Прогон';
+ const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=state.taskTitle;
+ $('detail-workflow').textContent='План: '+(parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Название не записано');
  $('detail-id').textContent=run.project_id+' · '+run.id;$('permalink').href=location.hash;
  const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run,state.capacity,state.progress);
  const summary=`<div class="detail-primary"><p>${badge(run.status)}${run.outcome?' · '+esc(label(run.outcome)):''}</p>
@@ -700,15 +708,39 @@ function renderDetail() {
  window.scrollTo(scrollX,scrollY);
 }
 function navigateNode(id,inv=invocation) {const h=new URLSearchParams({source,run:selected});if(id)h.set('node',id);if(inv)h.set('invocation',inv);location.hash=h;}
+function rememberListPosition(source,id){
+ const list=$('run-list'), focus=document.activeElement;
+ listScroll=window.scrollY;
+ listPositions=new Map([...$('board').querySelectorAll('[data-scroll]')].map(el=>[el.dataset.scroll,[el.scrollLeft,el.scrollTop]]));
+ listFocus={
+  key:list.contains(focus)?focus.dataset.focus:null,
+  href:list.contains(focus)?focus.getAttribute('href'):null,
+  run:runKey({source,run_id:id})
+ };
+}
+function restoreListPosition(){
+ for(const el of $('board').querySelectorAll('[data-scroll]')){
+  const saved=listPositions.get(el.dataset.scroll);
+  if(saved){el.scrollLeft=saved[0];el.scrollTop=saved[1];}
+ }
+ if(!listFocus)return;
+ const list=$('run-list');
+ const same=[...list.querySelectorAll('[data-focus], a[href]')].find(el=>
+  el.getClientRects().length && (listFocus.key?el.dataset.focus===listFocus.key:listFocus.href && el.getAttribute('href')===listFocus.href));
+ const row=[...list.querySelectorAll('[data-run-key]')].find(el=>el.dataset.runKey===listFocus.run && el.getClientRects().length);
+ (same || row?.querySelector('.run-title-cell a, h3 a') || form.elements.q).focus({preventScroll:true});
+ listFocus=null;
+}
 function useRoute() {
  const h=route(),next=h.get('run')||'',nextSource=h.get('source')||'';
- const changed=next!==selected || nextSource!==source;if(changed && !selected){listScroll=window.scrollY;listPositions=new Map([...$('board').querySelectorAll('[data-scroll]')].map(e=>[e.dataset.scroll,[e.scrollLeft,e.scrollTop]]));}
+ const changed=next!==selected || nextSource!==source;
+ if(changed && !selected && next)rememberListPosition(nextSource,next);
  if(next!==selected || nextSource!==source) {selected=next;source=nextSource;generation++;stamp='';state=null;eventsCursor=0;artifactCache.clear();fileCache.clear();$('events').innerHTML='';$('overview').textContent='Загрузка прогона…';$('tree').innerHTML='';$('node').innerHTML='';$('graph').innerHTML='';$('facts').innerHTML='';for(const name of ['overview','tree','node','graph','facts'])lastMarkup.delete($(name));$('detail-title').textContent='Загрузка прогона…';$('detail-id').textContent=selected;$('detail-error').hidden=true;$('retry-run').hidden=true;}
  nodeID=h.get('node')||'';invocation=h.get('invocation')||'';definition='';
  const requestedTab=h.get('tab');tab=['workflow','facts','journal'].includes(requestedTab)?requestedTab:(changed?'workflow':tab);
  for(const button of document.querySelectorAll('[data-tab]')){const active=button.dataset.tab===tab;button.setAttribute('aria-pressed',active);$(button.dataset.tab).hidden=!active;}
  $('run-list').hidden=!!selected;$('detail').hidden=!selected;$('empty-detail').hidden=!!selected;
- if(changed){window.scrollTo(0,selected?0:listScroll);if(selected)$('back-to-runs').focus({preventScroll:true});else for(const e of $('board').querySelectorAll('[data-scroll]')){const saved=listPositions.get(e.dataset.scroll);if(saved){e.scrollLeft=saved[0];e.scrollTop=saved[1];}}}
+ if(changed){window.scrollTo(0,selected?0:listScroll);if(selected)$('back-to-runs').focus({preventScroll:true});else restoreListPosition();}
  if(state){renderDetail();const target=[...$('tree').querySelectorAll('[data-node]')].find(n=>n.dataset.node===(nodeID || invocation));for(let parent=target?.parentElement;parent && parent!==$('tree');parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;}schedule();
 }
 async function refreshEvents(g) {
@@ -785,6 +817,10 @@ async function refreshDetail(g){
  const programs=values(next.run?.attempts).filter(a=>!a.session&&a.process);
  const shown=nodeID&&receivedAttempt(next.run,nodeID);
  const reads=[];
+ const brief=next.run?.brief_ref;
+ const briefKey=brief && params.source+':'+brief.digest;
+ let briefArtifact=briefKey && artifactCache.get(briefKey);
+ if(brief && !briefArtifact)reads.push(['brief','/api/artifact',{source:params.source,...brief}]);
  if(next.run?.stage_resources || !terminalStatuses.includes(next.run?.status))reads.push(['capacity','/api/capacity',{source}]);
  if(programs.length)reads.push(['progress','/api/progress',params]);
  if(shown&&!shown.session&&shown.process)reads.push(['output','/api/output',{...params,attempt:shown.id}]);
@@ -794,10 +830,14 @@ async function refreshDetail(g){
  observations.forEach((result,i)=>{
   const name=reads[i][0];
   if(result.status==='fulfilled'){
-   if(name!=='output' || receivedAttempt(next.run,nodeID)?.id===shown.id)next[name]=result.value;
-  }else unavailable.push(({capacity:'допуск и ресурсы',progress:'ход исполнения',output:'вывод программы'})[name]);
+   if(name==='brief'){
+    briefArtifact=result.value;
+    artifactCache.set(briefKey,briefArtifact);
+   }else if(name!=='output' || receivedAttempt(next.run,nodeID)?.id===shown.id)next[name]=result.value;
+  }else unavailable.push(({brief:'название задачи',capacity:'допуск и ресурсы',progress:'ход исполнения',output:'вывод программы'})[name]);
  });
- const version=JSON.stringify([params,next.run_version,next.event_sequence,next.driver_live,next.capacity?.resources,next.capacity?.waiting,next.capacity?.capacity,next.progress?.attempts,programs.some(a=>!a.settled)?next.progress?.as_of?.utc:'',next.output?[next.output.attempt_id,next.output.state,(next.output.streams||[]).map(x=>x.end_offset)]:null]);
+ next.taskTitle=runTaskTitle(next.input_values,parseMaybe(briefArtifact?.content));
+ const version=JSON.stringify([params,next.taskTitle,next.run_version,next.event_sequence,next.driver_live,next.capacity?.resources,next.capacity?.waiting,next.capacity?.capacity,next.progress?.attempts,programs.some(a=>!a.settled)?next.progress?.as_of?.utc:'',next.output?[next.output.attempt_id,next.output.state,(next.output.streams||[]).map(x=>x.end_offset)]:null]);
  state=next;
  if(stamp!==version){stamp=version;renderDetail();}
  if(tab==='journal')try{await refreshEvents(g);}catch{unavailable.push('журнал');}

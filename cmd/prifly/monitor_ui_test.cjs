@@ -341,3 +341,8 @@ const explanation=reasonsHTML(reasons,'source:a','run:a');
 assert.match(explanation,/Связь с хостом потеряна[^]*Другие причины · 2/);
 assert.match(explanation,/Исполнение начато/);
 assert.doesNotMatch(explanation,/attempt_deadline_expired/);
+
+const {runTaskTitle}=require('./monitor.js');
+assert.equal(runTaskTitle({task:{title:' Заголовок задачи '}},null),'Заголовок задачи');
+assert.equal(runTaskTitle({task:{title:'Другой заголовок'}},{subject:'Название задачи <буквально>'}),'Название задачи <буквально>');
+assert.equal(runTaskTitle({task:{title:42}},null),'Название задачи не записано');
