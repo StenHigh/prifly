@@ -44,4 +44,4 @@
 
 В этом этапе создаются только planning artifacts. Реализация и её приёмка остаются отдельным этапом.
 
-Порядок работы: [план AI Factory](../../../.ai-factory/plans/improve-monitor-operational-clarity.md). Прогресс ведётся только в [tasks.md](tasks.md). Проверяемые сочетания и команды собраны в [acceptance.md](acceptance.md).
+Порядок работы: [план AI Factory](https://github.com/StenHigh/prifly/blob/eb6e47dae6c9a2a183419ed06e39c0e76cf2ce0c/.ai-factory/plans/improve-monitor-operational-clarity.md). Прогресс ведётся только в [tasks.md](tasks.md). Проверяемые сочетания и команды собраны в [acceptance.md](acceptance.md).
