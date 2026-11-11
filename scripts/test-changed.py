@@ -62,6 +62,7 @@ def choose(files, graph, root, report=lambda *_: None):
     by_dir = {info["dir"][len(root) + 1:]: path for path, info in graph.items()}
     selected, reasons, extra, everything = set(), {}, [], None
 
+    ui_suites = set()
     for name in files:
         if name.startswith(RUN_ALL) or name in RUN_ALL:
             everything = name
@@ -75,8 +76,12 @@ def choose(files, graph, root, report=lambda *_: None):
             if name.endswith("_test.go"):
                 selected.add(MODULE + "/internal/testguard")
                 reasons.setdefault(MODULE + "/internal/testguard", name)
-            if name.startswith("cmd/prifly/monitor") and not name.endswith(".go"):
-                extra.append(["node", "cmd/prifly/monitor_ui_test.cjs"])
+            if not name.endswith(".go"):
+                for family in ("monitor", "light"):
+                    if name.startswith(f"cmd/prifly/{family}"):
+                        ui_suites.add(family)
+                if name == "cmd/prifly/monitor-theme.js":
+                    ui_suites.add("light")
             continue
         matched = False
         for prefix, targets in READ_BY_PATH.items():
@@ -92,6 +97,7 @@ def choose(files, graph, root, report=lambda *_: None):
             everything = everything or name
 
     if everything:
+        ui_suites.update(("monitor", "light"))
         report(f"test-changed: {everything} decides how everything is built or checked -> all packages")
         command = ["go", "test", "./..."]
     else:
@@ -112,6 +118,7 @@ def choose(files, graph, root, report=lambda *_: None):
             return None, []
         command = ["go", "test"] + ["./" + path[len(MODULE) + 1:] for path in sorted(closure)] if closure else []
 
+    extra.extend(["node", f"cmd/prifly/{family}_ui_test.cjs"] for family in sorted(ui_suites))
     return command, extra
 
 

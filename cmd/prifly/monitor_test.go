@@ -33,7 +33,7 @@ func TestMonitorServesDesignAssets(t *testing.T) {
 	if theme, css := bytes.Index(monitorPage, []byte("/monitor-theme.js")), bytes.Index(monitorPage, []byte("/monitor.css")); theme < 0 || css < theme {
 		t.Fatal("theme must load before the stylesheet")
 	}
-	for _, required := range []string{`id="theme"`, `src="/monitor-logo.jpg"`, `<h1 id="runs-title">Pri-Fly`, `url('/monitor-hero.jpg')`} {
+	for _, required := range []string{`id="theme"`, `src="/monitor-logo.jpg"`, `<h1 id="runs-title">Прогоны</h1>`} {
 		if !bytes.Contains(monitorPage, []byte(required)) && !bytes.Contains(monitorCSS, []byte(required)) {
 			t.Fatalf("design binding missing: %s", required)
 		}

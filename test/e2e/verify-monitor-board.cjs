@@ -5,11 +5,11 @@ const {chromium:engine}=require(modulePath);
 const cli=JSON.parse(fs.readFileSync(path.join(target,'authorities/cli-fixtures.json')));
 const runtime=JSON.parse(fs.readFileSync(path.join(target,'authorities/runtime-fixtures.json')));
 const live=JSON.parse(fs.readFileSync(path.join(target,'authorities/live-fixture.json')));
-const ids={parallel:runtime.parallel.run_id,resource:runtime.resource.run_id,holder:runtime.holder.run_id};
+const ids={parallel:runtime.parallel.run_id,resource:runtime.resource.run_id,holder:runtime.holder.run_id,uncertain:runtime.uncertain.run_id};
 async function until(check,message){const end=Date.now()+20000;while(Date.now()<end){if(await check())return;await new Promise(r=>setTimeout(r,100));}throw new Error(message);}
 (async()=>{
  const browser=await engine.launch({executablePath:chromium,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
- const context=await browser.newContext({viewport:{width:1440,height:1000}});await context.tracing.start({screenshots:true,snapshots:true,sources:true});
+ const context=await browser.newContext({viewport:{width:1440,height:900}});await context.tracing.start({screenshots:true,snapshots:true,sources:true});
  const page=await context.newPage(),errors=[],consoleErrors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push({text:m.text(),location:m.location()});});page.on('request',r=>requests.push(new URL(r.url()).pathname));
  const listing=async(query='')=>(await context.request.get(base+'/api/runs?view=board&'+query)).json();
  const search=async(id)=>{await page.locator('[name=q]').fill(id);await until(async()=>{const cards=page.locator('.board-card');return await cards.count()===1 && await cards.first().getAttribute('data-run-id')===id;},'search did not settle on '+id);};
@@ -17,7 +17,7 @@ async function until(check,message){const end=Date.now()+20000;while(Date.now()<
  await page.clock.install();
  const checks=[];
  try {
-  await page.goto(base);await page.locator('[name=view]').selectOption('board');await until(async()=>await page.locator('.board-column').count()===6,'six board columns missing');
+  await page.goto(base);await page.locator('#filter-summary').click();await page.locator('[name=view]').selectOption('board');await until(async()=>await page.locator('.board-column').count()===6,'six board columns missing');
   await search(ids.parallel);
   const parallel=page.locator('.board-card');assert.match(await parallel.innerText(),/reader-left/);assert.match(await parallel.innerText(),/reader-right/);assert.match(await parallel.innerText(),/Ожидается ответ/);assert.equal(await parallel.locator('xpath=..').getAttribute('data-category'),'waiting');
   await page.screenshot({path:path.join(target,'parallel.png'),fullPage:true});
@@ -108,9 +108,57 @@ async function until(check,message){const end=Date.now()+20000;while(Date.now()<
   await page.locator('#back-to-runs').click();await until(async()=>!await page.locator('#run-list').isHidden(),'updated board did not return');assert.ok(Math.abs(await column.evaluate(e=>e.scrollTop)-columnPosition)<8,'hidden polling lost column scroll');
   checks.push('A8: real Run arrival during details preserves column scroll after hidden-list DOM replacement');
   await page.locator('[name=status]').selectOption('');await search(cli.next);
-  for(const view of ['flat','related','related-newest']) {await page.locator('[name=view]').selectOption(view);await until(async()=>!await page.locator('.table-wrap').isHidden(),'table view did not return');assert.ok(await page.locator('#runs tr').count()>0);}
+  for(const view of ['flat','related','related-newest']) {await page.locator('[name=view]').selectOption(view);await until(async()=>!await page.locator('.table-wrap').isHidden(),'table view did not return');await until(async()=>await page.locator('#runs [data-run-key]').count()>0,'table results did not load');}
   await until(async()=>await page.locator('[data-run-depth="1"]').count()>0,'related indentation fixture missing');
   assert.equal(await page.locator('[data-run-depth="1"]').first().evaluate(e=>getComputedStyle(e).getPropertyValue('--run-depth')),'1');
+  const mobile=await browser.newContext({viewport:{width:390,height:844}});
+  const compact=await mobile.newPage();
+  const beforeViewport=async(locator,label)=>{
+   await locator.waitFor();
+   const box=await locator.boundingBox();
+   assert.ok(box.x>=0 && box.x+box.width<=391 && box.y>=0 && box.y+box.height<=844,label);
+  };
+  const failList=route=>route.fulfill({status:503,body:'offline'});
+  await compact.route('**/api/runs?*',failList);
+  await compact.goto(base);
+  await until(async()=>/Не удалось прочитать список/.test(await compact.locator('#connection').innerText()),'first list failure not shown');
+  assert.doesNotMatch(await compact.locator('#connection').innerText(),/устаревшие/);
+  await compact.unroute('**/api/runs?*',failList);
+  await compact.locator('#retry-list').click();
+  await beforeViewport(compact.locator('.run-title-cell a').first(),'first title in mobile viewport');
+  await beforeViewport(compact.locator('.run-status-cell .run-explanation a').first(),'first next step in mobile viewport');
+  const pageFailure=route=>new URL(route.request().url()).searchParams.get('page')==='2'?failList(route):route.continue();
+  await compact.route('**/api/runs?*',pageFailure);
+  await compact.locator('#next').click();
+  await until(async()=>/Не удалось прочитать список/.test(await compact.locator('#connection').innerText()),'second page failure not shown');
+  assert.equal(await compact.locator('.run-title-cell').count(),0,'page A was shown as page B');
+  await compact.unroute('**/api/runs?*',pageFailure);
+  await compact.locator('#previous').click();
+  await compact.locator('[name=q]').fill(ids.uncertain);
+  const matching=compact.locator('#runs [data-run-key]').filter({hasText:ids.uncertain}).first();
+  await beforeViewport(matching.locator('.run-title-cell a'),'title and status together');
+  await beforeViewport(matching.locator('.run-status-cell .run-explanation > a'),'uncertain next step on mobile');
+  assert.ok(await compact.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await compact.screenshot({path:path.join(target,'table-mobile.png')});
+  let driver=false, pinnedVersion;
+  await compact.route('**/api/run?*',async route=>{
+   const response=await route.fetch();
+   const data=await response.json();
+   pinnedVersion??=data.run_version;
+   assert.equal(data.run_version,pinnedVersion);
+   await route.fulfill({json:{...data,driver_live:driver}});
+  });
+  await matching.locator('.run-title-cell a').focus();
+  await compact.keyboard.press('Enter');
+  await beforeViewport(compact.locator('.detail-primary .run-explanation > a'),'mobile explanation before details');
+  assert.match(await compact.locator('.detail-primary').innerText(),/Связь с хостом потеряна|Исход обязательств не установлен/);
+  await compact.locator('[data-key=run-metadata] summary').click();
+  await until(async()=>/Активность драйвера не подтверждена/.test(await compact.locator('#overview').innerText()),'driver inactive wording missing');
+  driver=true;
+  await until(async()=>/Драйвер активен/.test(await compact.locator('#overview').innerText()),'driver observation with the same run revision did not refresh');
+  assert.equal(await compact.locator('[data-key=run-metadata]').evaluate(el=>el.open),true);
+  await mobile.close();
+  checks.push('Mobile title/status/next step, first-read failure and recovery, failed new page, same-revision driver observation');
   assert.deepEqual(errors,[]);assert.deepEqual(consoleErrors,[]);await page.screenshot({path:path.join(target,'table.png')});
   fs.writeFileSync(path.join(target,'browser.json'),JSON.stringify({outcome:'passed',checks,console_page_errors:errors,console_errors:consoleErrors,card_population:(await listing()).total,artifacts:['board.png','parallel.png','table.png','trace.zip']},null,2));
  } finally {await context.tracing.stop({path:path.join(target,'trace.zip')});await browser.close();}

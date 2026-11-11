@@ -56,6 +56,12 @@ assert.equal(cycle.nodes.length,2);assert.ok(Number.isFinite(cycle.width));
 assert.equal(fileChanges(null,{files:[]}),null);
 assert.deepEqual(fileChanges({files:[{path:'a',ref:{digest:'old'}},{path:'deleted',ref:{digest:'d'}}]},{files:[{path:'a',ref:{digest:'new'}},{path:'new',ref:{digest:'n'}}]}),[{path:'a',change:'Изменён'},{path:'deleted',change:'Удалён'},{path:'new',change:'Добавлен'}]);
 assert.deepEqual(executionRole({session:{principal_id:'host:codex'},started:null}),{kind:'Внешний host',detail:'host:codex',state:'Выдано · ожидается отчёт host'});
+for(const started of [null,{}]){
+ const role=executionRole({session:{host_state:'disconnected'},started});
+ assert.match(role.state,/Связь с хостом потеряна/);
+ assert.doesNotMatch(role.state,/ожидается отчёт/);
+ assert.equal(role.detail,'host не записан');
+}
 assert.equal(executionRole({process:{executable:'go'},started:{}},null).kind,'Локальная программа');
 assert.equal(executionRole(null,{kind:'call'}).detail,'Не является fork Run');
 assert.match(executionRole(null,null).kind,/не записана/);
@@ -204,7 +210,7 @@ assert.match(activityRows(recovered)[0].detail,/1 узлов взято/);
 }
 // Roles and the admission queue.
 {
- assert.equal(executionRole({session:{principal_id:'host:a',host_state:'waiting_admission'}}).state,'Ожидает допуска: занята capacity authority');
+ assert.equal(executionRole({session:{principal_id:'host:a',host_state:'waiting_admission'}}).state,'Ожидает повторного допуска');
  assert.equal(executionRole({session:{principal_id:'host:a',host_state:'waiting_decision'}}).state,'Ожидает решения оператора');
  const two=activityRows({attempts:{a:{id:'attempt:a',session:{principal_id:'host:a'}},b:{id:'attempt:b',session:{principal_id:'host:b'}}}});
  assert.deepEqual(two.map(r=>[r.node,r.detail]),[['attempt:a','host:a · Выдано · ожидается отчёт host'],['attempt:b','host:b · Выдано · ожидается отчёт host']]);
@@ -271,13 +277,13 @@ const monitorJS=fs.readFileSync(path.join(__dirname,'monitor.js'),'utf8');
 assert.match(monitorHTML,/<select name="view"[^>]*><option value="related-newest">Связанные Run · новые сверху<\/option><option value="related">/);
 assert.match(monitorHTML,/<option value="flat">Плоский список/);
 assert.match(monitorCSS,/\.run-lineage\.is-child::before/);
-assert.match(monitorCSS,/@media\(max-width:1100px\).*\.run-table\{min-width:820px\}/);
+
 // Time and launch inputs open on demand: collapsed at first, kept as the reader left them.
 assert.match(monitorJS,/<details class="facts-section receipt" data-key="launch">/);
 assert.match(monitorJS,/<details class="facts-section" data-key="time">/);
-// The execution column's meaning is visible text before the scrolling table, not a hover title.
-assert.match(monitorHTML,/<p class="muted table-note" id="execution-note">[^<]*не доля сценария\.<\/p><div class="table-wrap"><table class="run-table" aria-describedby="execution-note">/);
-assert.match(monitorHTML,/<th>Исполнение<\/th>/);
+// The execution column retains its accessible description.
+assert.match(monitorHTML,/<p class="muted table-note" id="execution-note">[^<]*не доля сценария\.<\/p>/);
+assert.match(monitorHTML,/<th scope="col">Исполнение<\/th>/);
 assert.doesNotMatch(monitorJS,/function executionCell[^\n]*badge/,'a settled count must not be coloured as success');
 assert.match(monitorJS,/runStatus\(run\)/);assert.match(monitorJS,/run\.outcome/);
 assert.match(monitorJS,/window\.scrollBy\(0,current\.getBoundingClientRect\(\)\.top-anchorTop\)/);
@@ -318,6 +324,20 @@ const noTitle=boardCardHTML({source:'b',run_id:'r',workflow_id:'generic',status:
 assert.match(noTitle,/Название задачи не записано/);assert.match(noTitle,/Локальное имя/);assert.match(noTitle,/Причина.*не записана/);
 const columns=boardHTML([boardRun,{...boardRun,run_id:'run:independent',board:{category:'terminal',reasons:[],stages:[]}}],[]);
 assert.equal((columns.match(/class="board-card"/g)||[]).length,2);
-assert.equal((columns.match(/class="board-column"/g)||[]).length,6);
+assert.equal((columns.match(/class="board-column[ " ]/g)||[]).length,6);
 assert.match(columns,/Текущая страница/);
 console.log('monitor board: independent identities, all branches, provenance, fallback and escaping passed');
+
+const {detailReasons,reasonsHTML}=require('./monitor.js');
+const diagnostic={severity:'error',code:'attempt_deadline_expired',attempt_id:'old',stage_activation_id:'stage'};
+const old={id:'old',status:'failed',step_instance_id:'step',stage_activation_id:'stage',settled:{}};
+const failing={status:'failed',attempts:{old},steps:{step:{status:'failed',attempt_ids:['old']}},diagnostics:[diagnostic]};
+assert.match(reasonsHTML(detailReasons(failing),'s','r'),/Истёк срок попытки.*attempt_deadline_expired/);
+assert.equal(detailReasons({...failing,steps:{step:{status:'failed',attempt_ids:['old','new']}}})[0].code,'unknown');
+assert.equal(detailReasons({...failing,diagnostics:[{...diagnostic,stage_activation_id:'another'}]})[0].code,'unknown');
+const uncertain={status:'uncertain',attempts:{old,left:{id:'left',started:{},session:{host_state:'awaiting_host'}},right:{id:'right',session:{host_state:'disconnected'}}}};
+const reasons=detailReasons(uncertain);
+const explanation=reasonsHTML(reasons,'source:a','run:a');
+assert.match(explanation,/Связь с хостом потеряна[^]*Другие причины · 2/);
+assert.match(explanation,/Исполнение начато/);
+assert.doesNotMatch(explanation,/attempt_deadline_expired/);

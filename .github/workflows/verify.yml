@@ -66,12 +66,16 @@ jobs:
           path: .cache
           key: prifly-go-${{ runner.os }}-${{ hashFiles('go.sum') }}
           restore-keys: prifly-go-${{ runner.os }}-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Toolchain
         run: |
           go version
           python3 --version
+          node --version
       - name: Static gates
-        run: make vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check GO="$(go env GOROOT)/bin/go"
+        run: make ui-check vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check GO="$(go env GOROOT)/bin/go"
 
   engine:
     needs: preflight

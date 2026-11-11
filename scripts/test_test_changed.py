@@ -51,13 +51,20 @@ class Selection(unittest.TestCase):
         _, extra = module.choose(["cmd/prifly/monitor.js"], GRAPH, ROOT)
         self.assertIn(["node", "cmd/prifly/monitor_ui_test.cjs"], extra)
 
-    def test_a_build_file_runs_everything(self):
-        command, _ = module.choose(["Makefile"], GRAPH, ROOT)
-        self.assertEqual(command, ["go", "test", "./..."])
+    def test_light_page_runs_its_node_test(self):
+        _, extra = module.choose(["cmd/prifly/light.css"], GRAPH, ROOT)
+        self.assertEqual(extra, [["node", "cmd/prifly/light_ui_test.cjs"]])
 
-    def test_an_unknown_place_runs_everything_rather_than_nothing(self):
-        command, _ = module.choose(["somewhere/new.txt"], GRAPH, ROOT)
-        self.assertEqual(command, ["go", "test", "./..."])
+    def test_shared_theme_runs_both_suites(self):
+        _, extra = module.choose(["cmd/prifly/monitor-theme.js"], GRAPH, ROOT)
+        self.assertEqual(extra, [["node", "cmd/prifly/light_ui_test.cjs"], ["node", "cmd/prifly/monitor_ui_test.cjs"]])
+
+    def test_fallback_runs_everything(self):
+        for path in ("Makefile", "somewhere/new.txt"):
+            with self.subTest(path=path):
+                command, extra = module.choose([path], GRAPH, ROOT)
+                self.assertEqual(command, ["go", "test", "./..."])
+                self.assertEqual(extra, [["node", "cmd/prifly/light_ui_test.cjs"], ["node", "cmd/prifly/monitor_ui_test.cjs"]])
 
     def test_a_change_no_test_reads_runs_nothing(self):
         command, extra = module.choose(["openspec/changes/x/tasks.md"], GRAPH, ROOT)

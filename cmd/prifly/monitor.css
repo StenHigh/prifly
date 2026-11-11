@@ -161,7 +161,7 @@ footer{max-width:1680px;margin:auto;padding:18px 28px;color:var(--muted);font-si
 #cleanup-dialog form{display:flex;justify-content:flex-end;gap:12px;margin-top:20px}
 .danger{color:var(--bad);border-color:var(--bad)}
 [hidden]{display:none!important}
-@media(max-width:1100px){.brand span,.readonly{display:none}.filters{gap:8px}.run-table{min-width:820px}.header-tools{gap:16px}}
+@media(max-width:1100px){.brand span,.readonly{display:none}.filters{gap:8px}.run-table{min-width:0}.header-tools{gap:16px}}
 .receipt{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;background:var(--raised);padding:12px 16px;margin:14px 0}
 .receipt h4{margin:0 0 6px}
 .receipt h5{margin:14px 0 6px;font-size:12px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
@@ -179,16 +179,6 @@ footer{max-width:1680px;margin:auto;padding:18px 28px;color:var(--muted);font-si
 @media(max-width:760px){.receipt-row,.time-bar{grid-template-columns:1fr}header{padding:12px 16px;gap:10px;flex-wrap:wrap}.brand{font-size:16px}.header-tools{gap:10px}.theme-picker{gap:6px}#connection{font-size:11px}main{padding:22px 16px}.heading{align-items:start;flex-wrap:wrap;gap:16px}.totals{gap:22px}.totals b{font-size:21px}.storage-overview{grid-template-columns:1fr;gap:8px}.cards,.node-card{grid-template-columns:repeat(2,minmax(0,1fr))}.inspector-layout{grid-template-columns:1fr;gap:0}.inspector-layout>section+section{border-left:0;padding-left:0}.graph-toolbar{align-items:start;flex-direction:column;gap:8px}.tabs{overflow:auto}.tabs button{white-space:nowrap}.kv{grid-template-columns:110px minmax(0,1fr)}footer{padding:18px 16px}}
 @media(max-width:480px){.header-tools{flex-wrap:wrap;justify-content:flex-end}#connection{order:2;width:100%;text-align:right}.cards{grid-template-columns:1fr}.brand img{width:34px;height:34px}.theme-picker select{max-width:140px}}
 
-/* The same flight deck as the README, kept above the operational data. */
-.flight-deck{position:relative;isolation:isolate;overflow:hidden;min-height:210px;border:1px solid var(--line);border-radius:7px;padding:24px 28px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:20px;background:#0c1829;color:#e4ecf5}
-.flight-deck::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,#0c1829 0%,#0c1829ee 31%,#0c182950 60%,#0c182915 100%),url('/monitor-hero.jpg') center 48%/cover no-repeat}
-.flight-deck::after{content:'';position:absolute;left:28px;top:0;width:50px;height:2px;background:#d5ae70}
-.flight-deck h1{font-size:29px;letter-spacing:-.6px}
-.flight-deck .eyebrow{color:#9cc9df;margin-top:0;letter-spacing:1.6px}
-.flight-deck .heading-note{color:#b6c8d9;font-size:12px;margin-top:8px}
-.flight-deck .totals{gap:32px;color:#b6c8d9}
-.flight-deck .totals b{font-size:23px;color:#e4ecf5}
-@media(max-width:760px){.flight-deck{min-height:218px;padding:20px;gap:20px}.flight-deck h1{font-size:25px}.flight-deck::before{background:linear-gradient(90deg,#0c1829f5,#0c1829ce 65%,#0c182975),url('/monitor-hero.jpg') 68% center/cover no-repeat}.flight-deck::after{left:20px}.flight-deck .heading-note{max-width:250px}}
 @media(max-width:480px){header{display:grid;grid-template-columns:auto minmax(0,1fr)}.header-tools{display:grid;justify-items:end;gap:5px;min-width:0}.theme-picker select{max-width:125px}#connection{width:auto}}
 .program-output{max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:11px/1.5 var(--mono);background:var(--raised);padding:8px;border:1px solid var(--line);border-radius:4px}
 
@@ -202,3 +192,38 @@ footer{max-width:1680px;margin:auto;padding:18px 28px;color:var(--muted);font-si
 .board-card ul{padding-left:17px;margin:8px 0;font-size:12px}.board-card li{margin:7px 0}.board-card nav{font-size:12px;margin:14px 0 8px}
 .board-branches{font-weight:600}.board-card .error{border-left:3px solid var(--bad);padding-left:8px}.board-note{font-size:13px}
 [hidden]{display:none!important}
+
+.list-heading { margin: 0 0 12px; }
+.list-heading h1 { font-size: 24px; }
+.filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.advanced-filters { flex: 1 1 160px; }
+.filter-fields { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.filter-fields label { flex: 1 1 140px; min-width: 0; }
+.list-metadata { margin-top: 12px; }
+.run-explanation { border-inline-start: 2px solid var(--accent); padding-inline-start: 9px; overflow-wrap: anywhere; }
+.run-explanation p { margin: 5px 0; }
+.run-explanation a { display: inline-block; }
+.run-explanation details { margin-top: 5px; }
+.detail-primary { margin-block: 12px; }
+.detail-primary h3 { margin-block: 8px; }
+.run-lineage small { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+ main { padding: 12px 16px; }
+ .filters .search { flex: 1 0 100%; }
+ .run-table, .run-table tbody { display: block; width: 100%; }
+ .run-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+ .run-table tr { display: grid; grid-template-columns: minmax(0,1fr); gap: 6px; padding: 9px; border-bottom: 1px solid var(--line); }
+ .run-table tr > td { display: block; width: auto; border: 0; padding: 0; min-width: 0; overflow-wrap: anywhere; }
+ .run-table tr > td:first-child, .run-table tr > td:nth-child(2) { width: auto; }
+ .run-title-cell { grid-row: 1; }
+ .run-status-cell { grid-row: 2; }
+ .run-table .run-project-cell, .run-table .run-execution-cell, .run-table .run-created-cell { font-size: 12px; }
+ .run-project-cell small, .run-created-cell small { display: block; }
+ .board-grid { grid-template-columns: minmax(0,1fr); }
+ .board-column { max-height: none; }
+ .board-column.is-empty { display: none; }
+ .board-column > h2 { position: static; }
+}
+
+.run-project-cell details { overflow-wrap: anywhere; }
+.run-project-cell summary { cursor: pointer; }

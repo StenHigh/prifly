@@ -9,7 +9,16 @@ const parseMaybe = value => { if(typeof value !== 'string') return value; try{re
 const values = o => Object.values(o || {}).filter(Boolean);
 const short = s => String(s || '').replace(/^[a-z_]+:/,'').slice(0,12);
 function executionRole(object,stage) {
- if(object?.session)return {kind:'Внешний host',detail:object.session.principal_id || 'host не записан',state:object.session.host_state==='waiting_admission'?'Ожидает допуска: занята capacity authority':object.session.host_state==='waiting_decision'?'Ожидает решения оператора':object.started?'Исполнение начато':'Выдано · ожидается отчёт host'};
+ if(object?.session){
+  const states={
+   disconnected:'Связь с хостом потеряна; исход требует проверки',
+   waiting_admission:'Ожидает повторного допуска',
+   waiting_decision:'Ожидает решения оператора',
+   reported:'Отчёт получен; ожидается обработка'
+  };
+  return {kind:'Внешний host',detail:object.session.principal_id || 'host не записан',
+   state:states[object.session.host_state] || (object.started?'Исполнение начато':'Выдано · ожидается отчёт host')};
+ }
  if(object?.process)return {kind:'Локальная программа',detail:object.process.executable || 'программа не записана',state:object.started?'Исполнение начато':'Процесс ещё не начал работу'};
  if(stage?.kind==='call')return {kind:'Вложенный workflow',detail:'Не является fork Run',state:label(object?.status || 'future')};
  if(stage?.kind)return {kind:'Управляющий узел workflow',detail:label(stage.kind),state:label(object?.status || 'future')};
@@ -307,26 +316,104 @@ function attemptPhases(node,assisted) {
 function isRelatedView(view) { return view==='related' || view==='related-newest'; }
 const boardColumns=[['work','Работа и готовые стадии',['working','ready']],['waiting','Ответ, хост или сигнал',['decision','waiting']],['resource','Ожидание ресурса',['resource']],['stopped','Остановка или неопределённость',['stopped']],['terminal','Завершённые Run',['terminal']],['unknown','Причина неизвестна',['unknown']]];
 function boardAction(board) {
- const actions={terminal:'Просмотреть результат',uncertain:'Разобрать неопределённость',restricted:'Проверить ограничения',guarded:'Проверить условие допуска',resume_required:'Проверить возобновление',waiting_decision:'Ответить на вопрос',active:'Открыть исполнение',check:'Открыть проверку',acceptance:'Открыть приёмку',publication_checks:'Открыть проверки публикации',cancel:'Проверить завершение отмены',session_resume:'Проверить повторный допуск',stage:'Открыть готовую стадию'};
+ const actions={terminal:'Просмотреть результат',uncertain:'Разобрать неопределённость',restricted:'Проверить ограничения',guarded:'Проверить условие допуска',resume_required:'Проверить возобновление',waiting_decision:'Открыть вопрос',active:'Открыть исполнение',check:'Открыть проверку',acceptance:'Открыть приёмку',publication_checks:'Открыть проверки публикации',cancel:'Проверить завершение отмены',session_resume:'Проверить повторный допуск',stage:'Открыть готовую стадию'};
  return actions[board?.next_action]||(board?.category==='working'?'Открыть исполнение':board?.category==='waiting'?'Открыть задание или ожидание':'Уточнить состояние по журналу');
+}
+const reasonPriority=['disconnected','unresolved','cancelling','stop','restricted','guarded','resume_required','branch_cancel','branch_resume','decision','resource_busy','admission','signal'];
+function reasonRank(reason){
+ const rank=reasonPriority.indexOf(reason.code);
+ return rank<0?reasonPriority.length:rank;
+}
+function reasonText(reason){
+ if(reason.code==='attempt_deadline_expired')return 'Истёк срок попытки';
+ if(reason.code==='terminal')return 'Исполнение завершено';
+ return reason.text || 'Причина не установлена по текущим данным';
+}
+function reasonLink(source,id,reason){
+ const tab=['workflow','facts','journal'].includes(reason.action)?reason.action:'facts';
+ const hash=new URLSearchParams({source,run:id,tab});
+ if(tab==='workflow' && reason.stage_activation_id)hash.set('node',reason.stage_activation_id);
+ return '#'+hash;
+}
+function reasonsHTML(reasons,source,id,action){
+ const ordered=reasons.filter(r=>r.code!=='terminal').sort((a,b)=>reasonRank(a)-reasonRank(b));
+ const [primary,...rest]=ordered;
+ const reason=primary || reasons.find(r=>r.code==='terminal') || {text:'Причина текущего состояния не записана',action:'facts'};
+ const key=source+':'+id;
+ const show=r=>esc(reasonText(r))+(r.code==='attempt_deadline_expired'?' <code>attempt_deadline_expired</code>':'')+(r.scope?` <small>${esc(r.scope)}</small>`:'');
+ const primaryText=reasonText(reason);
+ const characters=Array.from(primaryText);
+ const main=characters.length>180
+  ? `<details data-key="${esc(key+':long-reason')}"><summary>${esc(characters.slice(0,175).join(''))}…</summary><p>${show(reason)}</p></details>`
+  : `<p>${show(reason)}</p>`;
+ return `<div class="run-explanation">${main}<a data-focus="${esc(key+':reason')}" href="${esc(reasonLink(source,id,reason))}">${esc(action || 'Открыть подробности')}</a>${rest.length?`<details data-key="${esc(key+':reasons')}"><summary data-focus="${esc(key+':reasons')}">Другие причины · ${rest.length}</summary><ul class="board-reasons">${rest.map(r=>`<li><a href="${esc(reasonLink(source,id,r))}">${show(r)}</a></li>`).join('')}</ul></details>`:''}</div>`;
+}
+function listReasons(run){
+ return (run.board?.reasons || []).map(reason=>{
+  const stage=run.board.stages?.find(s=>s.stage_activation_id===reason.stage_activation_id && reason.stage_activation_id);
+  return {...reason,scope:[...(stage?.branches || []),stage?.stage_id].filter(Boolean).join(' / ')};
+ });
+}
+function detailReasons(run,capacity){
+ const reasons=[];
+ const add=(code,text,action='facts',scope='')=>reasons.push({code,text,action,scope});
+ if(run.status==='completed'){
+  add('result',run.outcome==='partial'?'Записан частичный результат':'Run завершён');
+  return reasons;
+ }
+ if(run.status==='cancelled'){
+  add('result','Отмена завершена','journal');
+  return reasons;
+ }
+ if(run.status==='failed'){
+  const current=(run.diagnostics || []).filter(d=>{
+   const attempt=run.attempts?.[d.attempt_id];
+   const step=run.steps?.[attempt?.step_instance_id];
+   return d.severity==='error' && attempt?.status==='failed' && step?.status==='failed' &&
+    step?.attempt_ids?.at(-1)===attempt.id &&
+    (!d.stage_activation_id || d.stage_activation_id===attempt.stage_activation_id);
+  });
+  if(current.length===1)add(current[0].code,current[0].message,'journal');
+  else add('unknown','Причина ошибки не установлена по текущим данным','journal');
+  return reasons;
+ }
+ if(run.has_unresolved_effects || run.status==='uncertain')add('unresolved','Исход обязательств не установлен');
+ if(run.cancel_requested || run.status==='stopping')add('cancelling','Запрошена отмена; завершение ещё не записано','journal');
+ if(run.resume_required)add('resume_required','Требуется явное возобновление');
+ for(const stop of (run.stops || []).filter(s=>s.status==='active'))add('stop',stop.reason,'facts',stop.scope_id);
+ if(run.pending_decision)add('decision','Ожидается ответ: '+run.pending_decision.decision_id,'facts',run.pending_decision.attempt_id);
+ for(const attempt of values(run.attempts).filter(a=>!a.settled)){
+  const role=executionRole(attempt);
+  const code=({waiting_decision:'decision',waiting_admission:'admission'})[attempt.session?.host_state] || attempt.session?.host_state || 'attempt';
+  add(code,role.state || 'Начало исполнения не подтверждено','workflow',run.activations?.[attempt.stage_activation_id]?.stage_id || attempt.id);
+ }
+ for(const wait of values(run.wait_registrations).filter(w=>w.status==='active'))add('signal','Стадия ожидает сигнал','facts',wait.target_stage_id);
+ if(Object.hasOwn(capacity?.waiting || {},run.id))add('admission','Run ожидает допуска');
+ for(const activation of values(run.activations).filter(a=>a.status==='ready')){
+  const names=run.stage_resources?.[activation.stage_id] || [];
+  const blocked=names.filter(name=>run.resource_limits?.[name]>0 && (capacity?.resources?.[name]?.length || 0)>=run.resource_limits[name]);
+  if(blocked.length)add('resource_busy','По данным о ресурсах занято: '+blocked.join(', '),'facts',activation.stage_id);
+  else add('ready','Стадия готова к выдаче','workflow',activation.stage_id);
+ }
+ return reasons;
 }
 function boardCardHTML(run,sources=[]) {
  const source=sources.find(s=>s.id===run.source),board=run.board;
  const link=(text,tab='workflow',id=run.run_id,extra={})=>`<a href="#${esc(new URLSearchParams({source:run.source,run:id,tab,...extra}))}">${esc(text)}</a>`;
  const stages=(board?.stages||[]).map(s=>`<li>${link(s.stage_id||'Стадия не записана','workflow',run.run_id,{...(s.workflow_invocation_id?{invocation:s.workflow_invocation_id}:{}),...(s.stage_activation_id?{node:s.stage_activation_id}:{})})} <span>${esc(s.status)}</span>${s.branches?.length?`<div class="board-branches">Ветвь: ${esc(s.branches.join(' / '))}</div>`:''}<small>${esc(s.workflow_invocation_id)}</small>${(s.attempts||[]).map(a=>`<small>${esc(a.attempt_id)} · ${esc(a.status)}${a.host_state?' · '+esc(a.host_state):''}</small>`).join('')}</li>`).join('');
- const reasons=(board?.reasons?.length?board.reasons:[{text:'Причина текущего состояния не записана',action:'journal'}]).map(r=>`<li>${link(r.text,['facts','journal','workflow'].includes(r.action)?r.action:'journal',run.run_id,r.stage_activation_id?{node:r.stage_activation_id}:{})}</li>`).join('');
+
  const parent=run.fork_source_run_id?`<p>Источник: ${link(run.fork_source_run_id,'facts',run.fork_source_run_id)}<small>${esc(run.fork_reason||'Тип связи не записан')}${run.fork_source_available?'':' · источник вне прочитанного каталога'}</small></p>`:'<p class="muted">Связь с исходным Run не записана</p>';
  const children=(run.related_runs||[]).map(child=>`<li>${link(child.run_id,'facts',child.run_id)} · ${esc(child.status)}${child.outcome?' / '+esc(child.outcome):''}</li>`).join('');
  const error=run.error||source?.error;
- return `<article class="board-card" data-run-key="${esc(runKey(run))}" data-run-id="${esc(run.run_id)}"><h3>${link(run.subject||'Название задачи не записано')}</h3><small>${esc(run.run_id)} · ${esc(run.source)}</small><p>${esc(run.project_title||run.project_fallback||'Имя не записано')}${!run.project_title?'<small>Локальное имя · fallback</small>':''}<small>${esc(run.workflow_id)} · ${esc(run.project)}</small><small>${esc(run.root)}</small></p><p>${badge(run.status||'unknown')}${run.outcome?` <b>Outcome: ${esc(run.outcome)}</b>`:''}</p>${error?`<p class="error" role="status">Устаревшие данные: ${esc(error)}</p>`:''}<ul class="board-reasons">${reasons}</ul>${stages?`<h4>Активные стадии и ветви</h4><ul class="board-stages">${stages}</ul>`:''}<p class="muted">Далее: ${link(boardAction(board),board?.category==='unknown'?'journal':'facts')}</p>${parent}${children?`<h4>Производные Run</h4><ul>${children}</ul>`:''}<nav aria-label="Подробности Run">${link('Схема')} · ${link('Результаты и решения','facts')} · ${link('Журнал','journal')}</nav><small>v${esc(run.run_version??'?')} · e${esc(run.event_sequence??'?')} · authority cut ${esc(board?.cut??'?')}</small></article>`;
+ return `<article class="board-card" data-run-key="${esc(runKey(run))}" data-run-id="${esc(run.run_id)}"><h3>${link(run.subject||'Название задачи не записано')}</h3><p>${badge(run.status||'unknown')}${run.outcome?` <b>Outcome: ${esc(run.outcome)}</b>`:''}</p>${error?`<p class="error" role="status">Устаревшие данные: ${esc(error)}</p>`:''}${reasonsHTML(listReasons(run),run.source,run.run_id,boardAction(board))}<details data-key="board-meta:${esc(runKey(run))}"><summary>Сведения о Run</summary><small>${esc(run.run_id)} · ${esc(run.source)}</small><p>${esc(run.project_title||run.project_fallback||'Имя не записано')}${!run.project_title?'<small>Локальное имя · fallback</small>':''}<small>${esc(run.workflow_id)} · ${esc(run.project)}</small><small>${esc(run.root)}</small></p></details>${stages?`<h4>Активные стадии и ветви</h4><ul class="board-stages">${stages}</ul>`:''}${parent}${children?`<h4>Производные Run</h4><ul>${children}</ul>`:''}<nav aria-label="Подробности Run">${link('Схема')} · ${link('Результаты и решения','facts')} · ${link('Журнал','journal')}</nav><small>v${esc(run.run_version??'?')} · e${esc(run.event_sequence??'?')} · authority cut ${esc(board?.cut??'?')}</small></article>`;
 }
 function boardHTML(runs,sources=[]) {
  return '<p class="muted board-note">Текущая страница: одна карточка на Run. Продолжения имеют собственные исходы. Счётчики колонок относятся к этой странице.</p><div class="board-grid" data-scroll="board">'+boardColumns.map(([id,title,categories])=>{
   const cards=runs.filter(r=>categories.includes(boardColumns.some(c=>c[2].includes(r.board?.category))?r.board.category:'unknown'));
-  return `<section class="board-column" tabindex="0" data-scroll="board-column-${id}" data-category="${id}" aria-label="${esc(title)}"><h2>${esc(title)} <span>${cards.length}</span></h2>${cards.map(r=>boardCardHTML(r,sources)).join('')}${!cards.length?'<p class="muted">На этой странице нет Run</p>':''}</section>`;
+  return `<section class="board-column${cards.length?'':' is-empty'}" tabindex="0" data-scroll="board-column-${id}" data-category="${id}" aria-label="${esc(title)}"><h2>${esc(title)} <span>${cards.length}</span></h2>${cards.map(r=>boardCardHTML(r,sources)).join('')}${!cards.length?'<p class="muted">На этой странице нет Run</p>':''}</section>`;
  }).join('')+'</div>';
 }
-if(typeof module !== 'undefined') module.exports = {boardHTML,boardCardHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
+if(typeof module !== 'undefined') module.exports = {boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='',graphFocus='';
@@ -336,7 +423,12 @@ const childPages=new Map(),childCache=new Map();
 const artifactCache=new Map(),fileCache=new Map();
 const fileKey=a=>source+selected+nodeID+JSON.stringify(a?.accepted?.outputs || {});
 const form=$('filters');
-const query = () => new URLSearchParams(new FormData(form));
+const query = () => {
+ const params=new URLSearchParams(new FormData(form));
+ if(isRelatedView(params.get('view')))params.delete('sort');
+ else if(form.elements.sort.value)params.set('sort',form.elements.sort.value);
+ return params;
+};
 const route = () => new URLSearchParams(location.hash.slice(1));
 async function get(path,params={}) {
  const response=await fetch(path+'?'+new URLSearchParams(params),{signal:AbortSignal.timeout(15000)});
@@ -477,6 +569,8 @@ function renderList(data) {
  $('coverage-title').textContent=`${data.sources.length} хранилищ · ${d.scanning?'поиск продолжается':'обход завершён'} · ${d.directories} каталогов${d.unreadable?' · недоступно: '+d.unreadable:''}${errors.length?' · ошибок чтения: '+errors.length:''}${pending?' · индексируется: '+pending:''}`;
  preserve($('sources'),`<p class="muted">Область поиска: ${esc(d.roots.join(', '))}. Исключены системные/сетевые каталоги: ${d.excluded}. Символические ссылки при обходе не раскрываются; физические каталоги читаются по исходному пути. Полнота относится к доступной проверенной области.</p>${d.completed?`<p>Последний обход: ${esc(date(d.completed))}</p>`:''}${data.sources.map(s=>`<div class="source"><b>${esc(s.project || 'Хранилище')}</b><small>${esc(s.root)}</small>${s.conflict?'<p class="error">Конфликт: одинаковая идентичность у нескольких хранилищ. Их Run показаны отдельно.</p>':''}<p class="${s.error?'error':'muted'}">${esc(s.error || (s.indexed?'Прочитано '+date(s.updated):'Индексируется…'))}</p></div>`).join('')}${d.errors.length?section('Недоступные пути (примеры)',d.errors,'scan-errors'):''}`);
  options('project',data.filters.projects,'Все проекты');options('status',data.filters.statuses,'Все статусы');options('executor',data.filters.executors,'Все исполнители');
+ const selectedFilters=['project','status','executor','from','to','sort'].filter(name=>form.elements[name].value).length+Number(form.elements.view.value!=='related-newest');
+ $('filter-summary').textContent='Фильтры и вид'+(selectedFilters?' · '+selectedFilters:'');
  const boardView=form.elements.view.value==='board';
  document.querySelector('.table-wrap').hidden=boardView;$('board').hidden=!boardView;
  const listBox=boardView?$('board'):$('runs');
@@ -496,7 +590,7 @@ function renderList(data) {
   if(more)return `<tr><td colspan="5" class="run-more" data-run-depth="${depth}"><button type="button" data-more="${esc(runKey(more))}">Показать ещё дочерние Run →</button></td></tr>`;
   const hash=new URLSearchParams({source:run.source,run:run.run_id});
   const task=run.subject || 'Название задачи не записано',project=run.project_title || run.project_fallback || 'Локальное имя не найдено',fallback=!run.project_title;
-  return `<tr data-run-key="${esc(runKey(run))}" class="${run.source===source && run.run_id===selected?'selected':''} ${run.context?'run-context-row':''}"><td>${isRelatedView(form.elements.view.value)?relatedTitle(run,depth):`<a data-focus="${esc(run.source+run.run_id)}" href="#${esc(hash)}">${esc(task)}</a><small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}`}</td><td>${esc(project)}${fallback?'<small>Локальное имя</small>':''}<small>${esc(run.project)}</small><small>${esc(run.workflow_id)}</small><small>${esc(run.root)}</small></td><td>${runStatus(run)}</td><td>${executionCell(run)}</td><td>${esc(date(run.created))}<small>v${esc(run.run_version)} · e${esc(run.event_sequence)}</small></td></tr>`;
+  return `<tr role="row" data-run-key="${esc(runKey(run))}" class="${run.source===source && run.run_id===selected?'selected':''} ${run.context?'run-context-row':''}"><td role="cell" class="run-title-cell">${isRelatedView(form.elements.view.value)?relatedTitle(run,depth):`<a data-focus="${esc(run.source+run.run_id)}" href="#${esc(hash)}">${esc(task)}</a><small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}`}</td><td role="cell" class="run-project-cell"><details data-key="project:${esc(runKey(run))}"><summary>${esc(project)}</summary>${fallback?'<small>Локальное имя</small>':''}<small>${esc(run.project)}</small><small>${esc(run.workflow_id)}</small><small>${esc(run.root)}</small></details></td><td role="cell" class="run-status-cell">${runStatus(run)}${reasonsHTML(listReasons(run),run.source,run.run_id,boardAction(run.board))}</td><td role="cell" class="run-execution-cell">${executionCell(run)}</td><td role="cell" class="run-created-cell">${esc(date(run.created))}<small>v${esc(run.run_version)} · e${esc(run.event_sequence)}</small></td></tr>`;
  }).join(''):'<tr><td colspan="5" class="empty">Прогоны не найдены в прочитанной области. Измените фильтры или проверьте состояние поиска выше.</td></tr>');
  if(!selected && anchorKey && anchorTop!=null){const current=[...listBox.querySelectorAll('[data-run-key]')].find(row=>row.dataset.runKey===anchorKey);if(current)window.scrollBy(0,current.getBoundingClientRect().top-anchorTop);}
  $('matches').textContent=`Найдено: ${data.filtered}`;$('page').textContent=`${page} / ${pages}`;$('previous').disabled=page<=1;$('next').disabled=page>=pages;
@@ -592,7 +686,10 @@ function renderDetail() {
  const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Прогон';
  $('detail-id').textContent=run.project_id+' · '+run.id;$('permalink').href=location.hash;
  const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run,state.capacity,state.progress);
- preserve($('overview'),`<div class="cards"><div class="card"><small>Состояние исполнения</small><strong>${badge(run.status)}</strong>${run.outcome?`<p>Outcome: ${esc(run.outcome)}</p>`:''}</div><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div><h3>Сейчас</h3>${nowHTML({...run,source},activity,state.choices)}${timeHTML(state.timing)}${resourceHTML(run,state.capacity)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
+ const summary=`<div class="detail-primary"><p>${badge(run.status)}${run.outcome?' · '+esc(label(run.outcome)):''}</p>
+  <h3>Сейчас</h3>${reasonsHTML(detailReasons(run,state.capacity),source,run.id)}</div>`;
+ const metadata=`<details class="facts-section" data-key="run-metadata"><summary data-focus="run-metadata">Время, попытки и сведения о чтении</summary><div class="cards"><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div></details>`;
+ preserve($('overview'),summary+metadata+`${nowHTML({...run,source},activity,state.choices)}${timeHTML(state.timing)}${resourceHTML(run,state.capacity)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
  const invs=values(run.invocations);if(!invocation && !definition)invocation=run.root_workflow_invocation_id || '';
  $('invocation').innerHTML=invs.map(i=>`<option value="${esc(i.id)}">${esc(i.workflow_ref.id)} · ${esc(i.branch_id || '')}${i.iteration?' · итерация '+i.iteration:''} · ${esc(short(i.id))}</option>`).join('')+(!invs.length?'<option value="">Корневой workflow</option>':'')+definitions(run).map(d=>`<option value="def:${esc(d.id)}">План: ${esc(d.title || d.id)}</option>`).join('');
  $('invocation').value=definition?'def:'+definition:invocation;
@@ -606,7 +703,7 @@ function navigateNode(id,inv=invocation) {const h=new URLSearchParams({source,ru
 function useRoute() {
  const h=route(),next=h.get('run')||'',nextSource=h.get('source')||'';
  const changed=next!==selected || nextSource!==source;if(changed && !selected){listScroll=window.scrollY;listPositions=new Map([...$('board').querySelectorAll('[data-scroll]')].map(e=>[e.dataset.scroll,[e.scrollLeft,e.scrollTop]]));}
- if(next!==selected || nextSource!==source) {selected=next;source=nextSource;generation++;stamp='';state=null;eventsCursor=0;artifactCache.clear();fileCache.clear();$('events').innerHTML='';$('overview').textContent='Загрузка прогона…';$('tree').innerHTML='';$('node').innerHTML='';$('graph').innerHTML='';$('facts').innerHTML='';for(const name of ['overview','tree','node','graph','facts'])lastMarkup.delete($(name));$('detail-title').textContent='Загрузка прогона…';$('detail-id').textContent=selected;$('detail-error').hidden=true;}
+ if(next!==selected || nextSource!==source) {selected=next;source=nextSource;generation++;stamp='';state=null;eventsCursor=0;artifactCache.clear();fileCache.clear();$('events').innerHTML='';$('overview').textContent='Загрузка прогона…';$('tree').innerHTML='';$('node').innerHTML='';$('graph').innerHTML='';$('facts').innerHTML='';for(const name of ['overview','tree','node','graph','facts'])lastMarkup.delete($(name));$('detail-title').textContent='Загрузка прогона…';$('detail-id').textContent=selected;$('detail-error').hidden=true;$('retry-run').hidden=true;}
  nodeID=h.get('node')||'';invocation=h.get('invocation')||'';definition='';
  const requestedTab=h.get('tab');tab=['workflow','facts','journal'].includes(requestedTab)?requestedTab:(changed?'workflow':tab);
  for(const button of document.querySelectorAll('[data-tab]')){const active=button.dataset.tab===tab;button.setAttribute('aria-pressed',active);$(button.dataset.tab).hidden=!active;}
@@ -619,43 +716,114 @@ async function refreshEvents(g) {
  for(const e of data.events){if(e.seq<=eventsCursor)continue;eventsCursor=e.seq;const row=document.createElement('details');row.className='event';row.innerHTML=`<summary><small>#${e.seq} · v${e.run_version} · ${esc(e.actor)}</small>${esc(e.type)}</summary>${readable(e.data,'event:'+e.seq)}`;$('events').appendChild(row);}
  eventsMore=data.more;$('more-events').hidden=!eventsMore;
 }
-async function tick() {
- if(busy){queued=true;return;}busy=true;queued=false;const g=generation;
- try {
-  const params=query();params.set('page',page);const data=await get('/api/runs',params);if(g!==generation)return;
+let listSnapshot='', listRequest='';
+function readStatus(saved,object){
+ return saved?`Не удалось обновить ${object}. Показаны устаревшие данные.`:`Не удалось прочитать ${object}.`;
+}
+function listParams(){
+ const params=query();
+ params.set('page',page);
+ return params;
+}
+function prepareListRead(params){
+ const key=params.toString();
+ if(key===listRequest)return;
+ listRequest=key;
+ listSnapshot='';
+ childCache.clear();
+ for(const id of ['runs','board','totals','matches','page','sources'])preserve($(id),'');
+ $('connection').textContent='Загрузка списка…';
+ $('retry-list').hidden=true;
+ $('next').disabled=true;
+ $('previous').disabled=page<=1;
+}
+async function refreshList(g){
+ const params=listParams();
+ prepareListRead(params);
+ const key=listRequest;
+ try{
+  const data=await get('/api/runs',params);
+  if(g!==generation)return;
+  let relatedError=false;
   if(isRelatedView(form.elements.view.value)){
    if(!relatedInitialized){for(const run of data.runs.filter(r=>r.children).slice(0,10))expandedRuns.add(runKey(run));relatedInitialized=true;}
    if(expandSearch)for(const run of data.runs)if(run.context && run.children)expandedRuns.add(runKey(run));
-   await loadRelated(data.runs,params,g,expandSearch);if(g!==generation)return;
+   try{await loadRelated(data.runs,params,g,expandSearch);}
+   catch{relatedError=true;}
+   if(g!==generation)return;
    expandSearch=false;
   }
-  renderList(data);$('connection').textContent='Обновлено '+new Date().toLocaleTimeString('ru-RU');
-  if(selected) {
-   try {const next=await get('/api/run',{source,id:selected});if(g!==generation)return;
-    // Who holds an exclusive resource is the authority's, not the Run's: it
-    // changes while this Run's version does not.
-    // A live Run also reads it for its place in the admission queue.
-    if(next.run?.stage_resources || !terminalStatuses.includes(next.run?.status))next.capacity=await get('/api/capacity',{source});
-    // A program's progress moves while the Run's version does not.
-    const programs=values(next.run?.attempts).filter(a=>!a.session&&a.process);
-    if(programs.length)next.progress=await get('/api/progress',{source,id:selected});
-    // Output is read for the program attempt the operator is looking at.
-    const shown=nodeID&&receivedAttempt(next.run,nodeID);
-    if(shown&&!shown.session&&shown.process)next.output=await get('/api/output',{source,id:selected,attempt:shown.id});
-    if(g!==generation)return;
-    $('detail-error').hidden=true;
-    const version=source+selected+':'+next.run_version+':'+next.event_sequence+':'+JSON.stringify([next.capacity?.resources||{},next.capacity?.waiting||{},next.progress?.attempts||[],programs.some(a=>!a.settled)?next.progress?.as_of?.utc:'',next.output?[next.output.attempt_id,next.output.state,(next.output.streams||[]).map(x=>x.end_offset)]:null]);
-    state=next;if(stamp!==version){stamp=version;renderDetail();}
-    if(tab==='journal')await refreshEvents(g);
-   }catch(err){if(g===generation){$('detail-error').hidden=false;$('detail-error').textContent='Нет актуального чтения. Последние показанные данные могут устареть: '+err.message;}}
+  renderList(data);
+  listSnapshot=key;
+  listRequest=listParams().toString();
+  if(listRequest!==key)listSnapshot=listRequest;
+  const partial=data.sources.some(s=>s.error);
+  $('connection').textContent=relatedError?'Список прочитан. Часть связанных Run недоступна.':partial?'Список прочитан. Есть недоступные источники.':'Список прочитан';
+  $('retry-list').hidden=!relatedError;
+ }catch{
+  if(g!==generation)return;
+  $('connection').textContent=readStatus(listSnapshot===key,'список');
+  $('retry-list').hidden=false;
+ }
+}
+async function refreshDetail(g){
+ const params={source,id:selected};
+ let next;
+ try{next=await get('/api/run',params);}
+ catch{
+  if(g!==generation)return;
+  $('detail-error').hidden=false;
+  $('detail-error').textContent=readStatus(!!state,'прогон');
+  $('retry-run').hidden=false;
+  if(!state){
+   $('detail-title').textContent='Прогон';
+   $('overview').textContent='';
   }
- }catch(err){if(g===generation)$('connection').textContent='Нет связи: '+err.message;}
- finally{busy=false;if(queued)setTimeout(tick,0);}
+  return;
+ }
+ if(g!==generation)return;
+ const programs=values(next.run?.attempts).filter(a=>!a.session&&a.process);
+ const shown=nodeID&&receivedAttempt(next.run,nodeID);
+ const reads=[];
+ if(next.run?.stage_resources || !terminalStatuses.includes(next.run?.status))reads.push(['capacity','/api/capacity',{source}]);
+ if(programs.length)reads.push(['progress','/api/progress',params]);
+ if(shown&&!shown.session&&shown.process)reads.push(['output','/api/output',{...params,attempt:shown.id}]);
+ const observations=await Promise.allSettled(reads.map(([,endpoint,query])=>get(endpoint,query)));
+ if(g!==generation)return;
+ const unavailable=[];
+ observations.forEach((result,i)=>{
+  const name=reads[i][0];
+  if(result.status==='fulfilled'){
+   if(name!=='output' || receivedAttempt(next.run,nodeID)?.id===shown.id)next[name]=result.value;
+  }else unavailable.push(({capacity:'допуск и ресурсы',progress:'ход исполнения',output:'вывод программы'})[name]);
+ });
+ const version=JSON.stringify([params,next.run_version,next.event_sequence,next.driver_live,next.capacity?.resources,next.capacity?.waiting,next.capacity?.capacity,next.progress?.attempts,programs.some(a=>!a.settled)?next.progress?.as_of?.utc:'',next.output?[next.output.attempt_id,next.output.state,(next.output.streams||[]).map(x=>x.end_offset)]:null]);
+ state=next;
+ if(stamp!==version){stamp=version;renderDetail();}
+ if(tab==='journal')try{await refreshEvents(g);}catch{unavailable.push('журнал');}
+ if(g!==generation)return;
+ $('detail-error').hidden=!unavailable.length;
+ $('detail-error').textContent=unavailable.length?'Прогон прочитан. Недоступно: '+unavailable.join(', ')+'.':'';
+ $('retry-run').hidden=!unavailable.length;
+}
+async function tick(){
+ if(busy){queued=true;return;}
+ busy=true;queued=false;
+ const g=generation;
+ try{
+  const reads=[refreshList(g)];
+  if(selected)reads.push(refreshDetail(g));
+  await Promise.all(reads);
+ }finally{
+  busy=false;
+  if(queued)setTimeout(tick,0);
+ }
 }
 function schedule(){if(busy)queued=true;else tick();}
-form.onsubmit=e=>e.preventDefault();form.oninput=()=>{clearTimeout(filterTimer);generation++;page=1;expandSearch=true;filterTimer=setTimeout(schedule,200);};
+$('retry-list').onclick=schedule;$('retry-run').onclick=schedule;
+form.onsubmit=e=>e.preventDefault();form.oninput=()=>{clearTimeout(filterTimer);generation++;page=1;prepareListRead(listParams());expandSearch=true;filterTimer=setTimeout(schedule,200);};
 $('runs').addEventListener('click',event=>{const expand=event.target.closest('[data-expand]');if(expand){const key=expand.dataset.expand;if(expandedRuns.has(key))expandedRuns.delete(key);else expandedRuns.add(key);schedule();}const more=event.target.closest('[data-more]');if(more){childPages.set(more.dataset.more,(childPages.get(more.dataset.more)||1)+1);schedule();}});
-$('previous').onclick=()=>{page--;generation++;schedule();};$('next').onclick=()=>{page++;generation++;schedule();};
+$('previous').onclick=()=>{page--;generation++;prepareListRead(listParams());schedule();};$('next').onclick=()=>{page++;generation++;prepareListRead(listParams());schedule();};
 $('invocation').onchange=e=>{if(e.target.value.startsWith('def:')){definition=e.target.value.slice(4);invocation='';nodeID='';renderDetail();}else navigateNode('',e.target.value);};
 $('detail').addEventListener('click',e=>{const target=e.target.closest('[data-node]');if(target){const obj=nodeObject(state.run,target.dataset.node);navigateNode(target.dataset.node,(state.run.invocations?.[obj?.id] ? obj.id : obj?.workflow_invocation_id || state.run.activations?.[obj?.stage_activation_id]?.workflow_invocation_id || invocation));}if(e.target.closest('#load-files'))loadFiles();});
 for(const button of document.querySelectorAll('[data-tab]'))button.onclick=()=>{const h=route();h.set('tab',button.dataset.tab);location.hash=h.toString();};

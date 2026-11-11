@@ -9,7 +9,7 @@ export GOTELEMETRY := off
 export GOCACHE := $(CURDIR)/.cache/go-build
 export GOMODCACHE := $(CURDIR)/.cache/go-mod
 
-.PHONY: build test race vet check ci-check ci-check-once check-fast test-changed test-shard test-rest shard-check scripts-check qualify fmt schemas schemas-check release-ci-check staticcheck-check vuln-check e2e examples release
+.PHONY: build test ui-check race vet check ci-check ci-check-once check-fast test-changed test-shard test-rest shard-check scripts-check qualify fmt schemas schemas-check release-ci-check staticcheck-check vuln-check e2e examples release
 build:
 	$(GO) build -trimpath -buildvcs=false -o bin/prifly ./cmd/prifly
 test:
@@ -34,6 +34,9 @@ test-rest:
 	$(GO) test -timeout $(TEST_TIMEOUT) $$($(GO) list ./... | grep -v '/internal/runtime$$')
 shard-check:
 	python3 scripts/test-shard.py --go "$(GO)" --package $(RUNTIME_PACKAGE) --shards $(SHARDS) --check
+ui-check:
+	node cmd/prifly/monitor_ui_test.cjs
+	node cmd/prifly/light_ui_test.cjs
 scripts-check:
 	python3 -B scripts/test_light_projection.py
 	python3 -B scripts/test_release_ci_contract.py
@@ -59,10 +62,10 @@ vet:
 		CGO_ENABLED=0 GOOS=$$target $(GO) vet ./... || exit 1; \
 		echo "vet: $$target read"; \
 	done
-check: test race vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check
+check: test race ui-check vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check
 ci-check-once:
 	python3 -B scripts/ensure-ci-check.py --go "$(GO)" $(if $(CHECK_CONTEXT),--context "$(CHECK_CONTEXT)") $(if $(filter 1,$(CHECK_FORCE)),--force) $(if $(filter 1,$(CHECK_FOR_COMMIT)),--for-commit)
-ci-check: test vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check
+ci-check: test ui-check vet fmt-check refusal-check staticcheck-check vuln-check schemas-check release-ci-check scripts-check shard-check
 fmt:
 	$(GO) fmt ./...
 # Formatting drifted unnoticed because nothing checked it. A gate that does not
