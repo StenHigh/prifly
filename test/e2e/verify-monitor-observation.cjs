@@ -11,8 +11,8 @@ const fixture=read('observation-fixtures.json');
 const saved=read('authorities/runtime-fixtures.json');
 const title=variant=>`Наблюдение · Run ${variant.toUpperCase()}`;
 
-async function until(check,message){
- const end=Date.now()+20000;
+async function until(check,message,timeout=20000){
+ const end=Date.now()+timeout;
  while(Date.now()<end){
   const result=await check();
   if(result)return result;
@@ -119,6 +119,17 @@ async function verify(){
    await page.locator('#observe-link').click();
    await pin(variant).waitFor();
   }
+  await go(page,running.a,{tab:'workflow',node:overlap[0].progress.attempt_id});
+  await page.locator('#node').getByText(/Сейчас: build-a/).waitFor();
+  const failInspector=route=>route.fulfill({status:503,body:'simulated inspector read failure'});
+  await page.route(runRoute,failInspector);
+  try{
+   await page.locator('#node').getByText(/Последний отчёт — чтение прервано: build-a/).waitFor({timeout:6500});
+  }finally{
+   await page.unroute(runRoute,failInspector);
+  }
+  await page.locator('#observe-link').click();
+  await phase('a','build-a').waitFor();
   signal(fixture.a,'advance');
   await phase('a','verify-a').waitFor();
   assert.match(await pin('b').innerText(),/compare-b/);
@@ -144,6 +155,37 @@ async function verify(){
    budget.push(reads);
   }
   await page.clock.resume();
+
+  let slowProgress=false,releaseProgress,finishProgress;
+  const heldProgress=new Promise(resolve=>{releaseProgress=resolve;});
+  const progressContinued=new Promise(resolve=>{finishProgress=resolve;});
+  const holdAProgress=async route=>{
+   if(new URL(route.request().url()).searchParams.get('id')===fixture.a.run_id && !slowProgress){
+    slowProgress=true;
+    await heldProgress;
+    try{await route.continue();}
+    finally{finishProgress();}
+    return;
+   }
+   await route.continue();
+  };
+  await page.route(progressRoute,holdAProgress);
+  try{
+   await until(()=>slowProgress,'progress request for A did not enter its barrier');
+   const from=requests.length;
+   await until(()=>{
+    const cycle=requests.slice(from);
+    return cycle.some(r=>r.path==='/api/run' && r.query.id===fixture.a.run_id) &&
+           cycle.some(r=>r.path==='/api/progress' && r.query.id===fixture.b.run_id);
+   },'held progress for A delayed a new Run read',6000);
+   assert.match(await pin('a').innerText(),/verify-a/);
+  }finally{
+   releaseProgress();
+   if(slowProgress)await progressContinued;
+   await page.unroute(progressRoute,holdAProgress);
+  }
+  checks.push('A held progress response does not delay A state reads or B progress; inspector labels stale progress');
+
   const failA=route=>new URL(route.request().url()).searchParams.get('id')===fixture.a.run_id
    ?route.fulfill({status:503,body:'simulated read failure'}):route.continue();
   await page.route(runRoute,failA);

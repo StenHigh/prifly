@@ -364,3 +364,13 @@ assert.match(observedProgress(progressReport,[{id:'new',settled:{},status:'faile
 assert.doesNotMatch(observedProgress(progressReport,[{id:'new'}]),/old|<unsafe>/);
 assert.match(reasonsHTML(detailReasons(failing),'s','r'),/tab=workflow&amp;focus=1&amp;node=old/);
 console.log('monitor observation: catalogue URL, snapshot selection, host acceptance, progress identity and exact reasons passed');
+
+const {positionNewGraph}=require('./monitor.js');
+const openedBeforeActivation={clientHeight:300,clientWidth:390,dataset:{},scrollLeft:0,scrollTop:0};
+positionNewGraph(openedBeforeActivation,'same graph',[]);
+assert.equal(openedBeforeActivation.dataset.graphView,'same graph');
+openedBeforeActivation.scrollLeft=175;
+openedBeforeActivation.scrollTop=81;
+positionNewGraph(openedBeforeActivation,'same graph',[{x:700,y:200}]);
+assert.deepEqual([openedBeforeActivation.scrollLeft,openedBeforeActivation.scrollTop],[175,81]);
+assert.match(progressHTML({...progressReport.attempts[1]},null,true),/Последний отчёт — чтение прервано/);

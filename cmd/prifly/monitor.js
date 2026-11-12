@@ -129,7 +129,8 @@ function receivedAttempt(run,id) {
  const object=nodeObject(run,id);
  return run.attempts?.[id]||(object?values(run.steps).filter(s=>s.stage_activation_id===object.id).flatMap(s=>s.attempt_ids||[]).map(a=>run.attempts?.[a]).filter(Boolean).at(-1):null);
 }
-function progressHTML(row,asOf) {
+function progressHTML(row,asOf,interrupted=false) {
+ if(interrupted && row && !row.settled)row={...row,state:'read_stale'};
  const v=progressView(row,asOf);if(!v)return '';
  return `<h4>Прогресс программы</h4><p><b>${esc(v.lead)}</b>${v.phase?`: ${esc(v.phase)}`:''}${v.counted?` · ${esc(v.counted.current)}${v.counted.total?' / '+esc(v.counted.total):''}`:''}${v.age!==null?` <span class="muted">· ${esc(v.age)} с на момент чтения</span>`:''}</p>${v.counted?.total?`<progress max="${esc(v.counted.total)}" value="${esc(v.counted.current)}"></progress>`:''}${v.message?`<p class="muted">${esc(v.message)}</p>`:''}${v.notes.map(n=>`<p class="muted">${esc(n)}</p>`).join('')}`;
 }
@@ -260,7 +261,7 @@ function observedProgress(progress,programs,stale=false) {
  const running=new Set(programs.filter(a=>!a.settled).map(a=>a.id));
  const recent=matched.attempts.filter(a=>!running.size || running.has(a.attempt_id));
  const rows=running.size?recent:recent.filter(a=>a.phase).sort((a,b)=>String(b.observed||'').localeCompare(String(a.observed||''))).slice(0,1);
- return rows.map(row=>`<section class="observed-progress">${rows.length>1?`<small>Attempt ${esc(short(row.attempt_id))}</small>`:''}${progressHTML(stale && !row.settled?{...row,state:'read_stale'}:row,matched.as_of?.utc)}</section>`).join('');
+ return rows.map(row=>`<section class="observed-progress">${rows.length>1?`<small>Attempt ${esc(short(row.attempt_id))}</small>`:''}${progressHTML(row,matched.as_of?.utc,stale)}</section>`).join('');
 }
 function relatedTitle(run,depth) {
  const relation=run.fork_source_run_id?(run.fork_reason==='project continuation'?'Продолжение':run.fork_reason==='recover_failed_stage'?'Восстановление':run.fork_reason==='resume_stopped_run'?'Возобновление':'Производный Run'):'';
@@ -475,10 +476,19 @@ function boardHTML(runs,sources=[]) {
   return `<section class="board-column${cards.length?'':' is-empty'}" tabindex="0" data-scroll="board-column-${id}" data-category="${id}" aria-label="${esc(title)}"><h2>${esc(title)} <span>${cards.length}</span></h2>${cards.map(r=>boardCardHTML(r,sources)).join('')}${!cards.length?'<p class="muted">На этой странице нет Run</p>':''}</section>`;
  }).join('')+'</div>';
 }
-if(typeof module !== 'undefined') module.exports = {runKey,catalogueAddress,currentRuns,matchingProgress,observedProgress,runHash,boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,runTaskTitle,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
+function positionNewGraph(box,key,active){
+ if(!box.clientHeight || box.dataset.graphView===key)return;
+ box.dataset.graphView=key;
+ if(!active.length)return;
+ const pad=parseFloat(getComputedStyle(box).paddingTop)||0;
+ const ys=active.map(n=>n.y),xs=active.map(n=>n.x);
+ box.scrollTop=pad+(Math.min(...ys)+Math.max(...ys)+78)/2-box.clientHeight/2;
+ box.scrollLeft=pad+(Math.min(...xs)+Math.max(...xs)+230)/2-box.clientWidth/2;
+}
+if(typeof module !== 'undefined') module.exports = {positionNewGraph,runKey,catalogueAddress,currentRuns,matchingProgress,observedProgress,runHash,boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,runTaskTitle,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
-let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='overview',stamp='',filterTimer,revealed='',graphFocus='';
+let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='overview',stamp='',filterTimer,revealed='';
 let observing=false,readingList=false,detailFlight=null,detailAux=new Set(),focusRoute='',treeFocus='',restoreTreeFocus=false;
 let selectedRead={at:null,stale:false},eventView='recent',eventCursor=0,eventMore=false,eventPending=true,eventKey='',recentKey='';
 let listScroll=0,listPositions=new Map(),listFocus=null,maintenanceBusy=false,storageBusy=false;
@@ -569,7 +579,7 @@ function pinControl(source,id,title='') {
 }
 function togglePin(source,id,title) {
  const pair={source,run_id:id},key=runKey(pair);
- if(pins.has(key)){pins.get(key).flight?.abort();pins.delete(key);titles.delete(key);}
+ if(pins.has(key)){cancelPinReads(pins.get(key));pins.delete(key);titles.delete(key);}
  else if(pins.size<2)pins.set(key,pair);
  else{
   const box=observing?'observation-message':selected?'pin-message':'catalogue-message';
@@ -661,29 +671,46 @@ function renderPins() {
   preserve(card,`<div class="observation-heading"><h2>${esc(title)}</h2>${pinControl(pin.source,pin.run_id,pin.title||titles.get(key)||'')}</div><small>${esc(origin)} · Run ${esc(short(pin.run_id))}</small>${error}${main}${failure}${progress}${pin.progressError?'<p class="muted">Прогресс программы недоступен.</p>':''}${run?`<div class="read-facts muted">${snapshotReadHTML(pin.at,pin.error)}<span>Наблюдение Run: ${esc(date(run.last_observed?.utc))}</span></div>`:''}<a data-focus="${esc('open:'+key)}" href="${esc(runHash(pin.source,pin.run_id,{tab:'overview'}))}">Открыть Run →</a>`);
  }
 }
+function cancelPinReads(pin){
+ pin.runFlight?.abort();
+ pin.progressFlight?.abort();
+ pin.runFlight=pin.progressFlight=null;
+}
+const pinIsCurrent=(key,pin,signal)=>observing && pins.get(key)===pin && !signal.aborted;
+async function refreshPinProgress(key,pin,params){
+ if(pin.progressFlight)return;
+ const flight=new AbortController();pin.progressFlight=flight;
+ try{
+  const progress=await get('/api/progress',params,flight.signal);
+  if(!pinIsCurrent(key,pin,flight.signal))return;
+  pin.progress=matchingProgress(progress,programsIn(pin.view.run));
+  pin.progressError=false;
+ }catch{
+  if(!pinIsCurrent(key,pin,flight.signal))return;
+  pin.progressError=true;
+ }finally{if(pin.progressFlight===flight)pin.progressFlight=null;}
+ renderPins();
+}
 async function refreshPin(key,pin){
- if(pin.flight)return;
- const flight=new AbortController();pin.flight=flight;
- const valid=()=>observing && pins.get(key)===pin && !flight.signal.aborted;
+ if(pin.runFlight)return;
+ const flight=new AbortController();pin.runFlight=flight;
  const params={source:pin.source,id:pin.run_id};
  try{
-  let view;
-  try{view=await get('/api/run',params,flight.signal);if(view.run?.id!==pin.run_id)throw new Error('Mismatched Run');}
-  catch{if(valid()){pin.error=true;renderPins();}return;}
-  if(!valid())return;
+  const view=await get('/api/run',params,flight.signal);
+  if(view.run?.id!==pin.run_id)throw new Error('Mismatched Run');
+  if(!pinIsCurrent(key,pin,flight.signal))return;
   pin.view=view;pin.at=new Date().toISOString();pin.error=false;
   const title=runTaskTitle(view.input_values,null);
   if(title!=='Название задачи не записано')pin.title=title;
   const programs=programsIn(view.run);
   pin.progress=matchingProgress(pin.progress,programs);
-  renderPins();
-  if(!programs.length)return;
-  try{
-   const progress=await get('/api/progress',params,flight.signal);
-   if(valid()){pin.progress=matchingProgress(progress,programs);pin.progressError=false;}
-  }catch{if(valid())pin.progressError=true;}
-  if(valid())renderPins();
- }finally{if(pin.flight===flight)pin.flight=null;}
+  if(programs.length)refreshPinProgress(key,pin,params);
+  else pin.progressError=false;
+ }catch{
+  if(!pinIsCurrent(key,pin,flight.signal))return;
+  pin.error=true;
+ }finally{if(pin.runFlight===flight)pin.runFlight=null;}
+ renderPins();
 }
 function refreshPins(){
  for(const [key,pin] of pins)refreshPin(key,pin);
@@ -887,8 +914,8 @@ function renderGraph() {
  const svg=`<svg width="${data.width}" height="${data.height}" viewBox="0 0 ${data.width} ${data.height}" role="group" aria-label="Связи закреплённых стадий workflow"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>${data.edges.map((e,index)=>{const a=byID.get(e.from),b=byID.get(e.to);if(!a||!b)return '';const x=a.x+230,y=a.y+39+e.fromPort,tx=b.x,ty=b.y+39+e.toPort,channel=e.route==='return'?42+index%3*18:data.height-42-index%3*18,route=e.route==='forward'?`M ${x} ${y} H ${tx-22} V ${ty} H ${tx}`:`M ${x} ${y} H ${x+22} V ${channel} H ${tx-22} V ${ty} H ${tx}`,classes=[`route-${e.route}`,e.path?'active-path':'',e.muted?'muted-path':''].filter(Boolean).join(' ');return `<path class="${classes}" d="${route}" marker-end="url(#arrow)"/><text class="edge-label ${e.muted?'muted-path':''}" x="${(x+tx)/2}" y="${e.route==='forward'?(y+ty)/2-8:channel-6}" text-anchor="middle">${esc(e.label)}</text>`;}).join('')}${data.nodes.map(n=>`<g tabindex="0" role="button" aria-label="${esc(n.title+', '+label(n.state)+(n.reason?': '+n.reason:''))}" data-stage="${esc(n.id)}" data-focus="stage:${esc(n.id)}" class="node-${n.visual} ${(n.id===nodeID || n.actual?.some(a=>a.id===selectedActivation))?'selected':''}"><rect x="${n.x}" y="${n.y}" width="230" height="78" rx="9"/><text x="${n.x+12}" y="${n.y+22}">${esc(n.title.length>26?n.title.slice(0,24)+'…':n.title)}</text><text x="${n.x+12}" y="${n.y+43}">${esc(label(n.kind))}</text><text x="${n.x+12}" y="${n.y+64}">${esc(n.state==='reused'||n.state==='revalidated'?label(n.state):n.visual==='skipped'?label('skipped'):(n.visual==='reachable'?'Далее':label(n.state)))}</text>${n.reason?`<title>${esc(n.reason)}</title>`:''}</g>`).join('')}</svg>`;
  const left=$('graph').scrollLeft,top=$('graph').scrollTop;preserve($('graph'),svg);$('graph').scrollLeft=left;$('graph').scrollTop=top;
  // Centre the active stages on first opening a graph. Subsequent polling keeps its position.
- const box=$('graph'),active=data.nodes.filter(n=>n.visual==='current'),focusKey=[source,selected,invocation,definition].join('\n');
- if(active.length && focusKey!==graphFocus && box.clientHeight){const pad=parseFloat(getComputedStyle(box).paddingTop)||0,ys=active.map(n=>n.y),xs=active.map(n=>n.x);box.scrollTop=pad+(Math.min(...ys)+Math.max(...ys)+78)/2-box.clientHeight/2;box.scrollLeft=pad+(Math.min(...xs)+Math.max(...xs)+230)/2-box.clientWidth/2;graphFocus=focusKey;}
+ const focusKey=JSON.stringify([source,selected,invocation,definition]);
+ positionNewGraph($('graph'),focusKey,data.nodes.filter(n=>n.visual==='current'));
  $('graph').onclick=event=>{const target=event.target.closest('[data-stage]');if(!target)return;const n=byID.get(target.dataset.stage);if(n.invocation){navigateNode('',n.invocation,'');return;}if(n.ref){navigateNode('','',n.ref.id);return;}treeFocus='stage:'+n.id;navigateNode(n.actual?.at(-1)?.id || n.id,invocation);};
  $('graph').onkeydown=event=>{if(event.key==='Enter'||event.key===' '){const n=event.target.closest('[data-stage]');if(n){event.preventDefault();n.dispatchEvent(new MouseEvent('click',{bubbles:true}));}}};
 }
@@ -910,7 +937,7 @@ function renderNode() {
  }
  $('node-title').textContent=(timing?.stage_id || label(timing?.kind) || 'Исполнение')+' · '+short(nodeID);html+=`<h4>Роль исполнения</h4><p><b>${esc(role.kind)}</b><br><span class="muted">${esc(role.detail)}${role.state?' · '+esc(role.state):''}</span></p>`;
  html+=`<p>${badge(object.status)} ${esc(object.verdict || object.outcome || '')}</p>`;
- if(received&&!received.session)html+=progressHTML(state.progress?.attempts?.find(a=>a.attempt_id===received.id),state.progress?.as_of?.utc)+(state.output?.attempt_id===received.id?outputHTML(state.output):'');
+ if(received&&!received.session)html+=progressHTML(state.progress?.attempts?.find(a=>a.attempt_id===received.id),state.progress?.as_of?.utc,selectedRead.stale||detailAux.has('progress'))+(state.output?.attempt_id===received.id?outputHTML(state.output):'');
  if(timing){const metrics=Object.entries(timing.metrics||{}),shown=metrics.filter(([,v])=>v.quality!=='not_applicable');html+=section('Время',Object.fromEntries(shown.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':time',true);const other=metrics.filter(([,v])=>v.quality==='not_applicable');if(other.length)html+=section('Неприменимые метрики',Object.fromEntries(other.map(([k,v])=>[label(k),duration(v,true)])),nodeID+':other-time');}
  if(run.attempts?.[nodeID]) {
   const context=object.context || {},envelope=parseMaybe(object.envelope),step=run.steps?.[object.step_instance_id],def=(run.definitions||[]).find(d=>d.ref?.digest===step?.definition_ref?.digest)?.bytes;
@@ -1046,11 +1073,12 @@ function useRoute() {
  const h=route(),next=h.get('run')||'',nextSource=next?(h.get('source')||''):'',nextObserve=!next && h.get('observe')==='1';
  const changed=next!==selected || nextSource!==source,screenChanged=changed || nextObserve!==observing;
  if(!selected && !observing && (next || nextObserve))rememberListPosition(nextSource,next);
- if(observing && !nextObserve)for(const pin of pins.values()){pin.flight?.abort();pin.flight=null;}
+ if(observing && !nextObserve)for(const pin of pins.values())cancelPinReads(pin);
  observing=nextObserve;
  if(changed){
   selected=next;source=nextSource;state=null;stamp='';selectedRead={at:null,stale:false};detailAux.clear();recentKey='';
   artifactCache.clear();fileCache.clear();resetEvents('recent');
+  delete $('graph').dataset.graphView;
   for(const name of ['overview','activity','overview-metadata','recent-rows','tree','node','graph','facts'])preserve($(name),'');
   $('recent-events').hidden=true;
   $('overview').textContent='Загрузка прогона…';lastMarkup.delete($('overview'));
