@@ -4,13 +4,15 @@ const labels = {running:'В работе',completed:'Завершён',failed:'�
 Object.assign(labels,{host_take_not_recorded:'агент не отметил, когда взял задание (session take)',decision_request_time_not_recorded:'момент вопроса не записан в этом Run',host_work_needs_session_and_wait:'нужны время сессии и ожидание ответа',difference_of_intervals:'разность интервалов',executor_start_not_observed:'старт исполнителя не наблюдался'});
 Object.assign(labels,{ready:'Подготовлен к выдаче Attempt',pending:'Attempt передан агенту',running:'Исполнение начато',future:'Может быть выполнен',skipped:'Будет пропущен',reused:'Из исходного Run',revalidated:'Перепроверен без запуска',no_work:'Нет работы'});
 const label = s => labels[s] || s;
-const badge = s => `<span class="badge ${/^[a-z_]+$/.test(s || '') ? s : ''}">${esc(label(s) || 'Не записано')}</span>`;
+const badge = (s,text=label(s)) => `<span class="badge ${/^[a-z_]+$/.test(s || '') ? s : ''}">${esc(text || 'Не записано')}</span>`;
+const runBadge = status => status==='running'?badge(status,'В работе'):badge(status);
 const parseMaybe = value => { if(typeof value !== 'string') return value; try{return JSON.parse(value);}catch{return value;} };
 const values = o => Object.values(o || {}).filter(Boolean);
 const short = s => String(s || '').replace(/^[a-z_]+:/,'').slice(0,12);
 function executionRole(object,stage) {
  if(object?.session){
   const states={
+   awaiting_host:object.session.taken?'Принятие записано. Ожидается отчёт хоста':'Задание выдано. Принятие хостом не записано',
    disconnected:'Связь с хостом потеряна; исход требует проверки',
    waiting_admission:'Ожидает повторного допуска',
    waiting_decision:'Ожидает решения оператора',
@@ -99,7 +101,7 @@ function progressView(row,asOf) {
  if(!row)return null;
  const age=row.observed&&asOf?Math.max(0,Math.round((Date.parse(asOf)-Date.parse(row.observed))/1000)):null;
  const counted=Number.isInteger(row.current)?(Number.isInteger(row.total)&&row.total>0&&row.current<=row.total?{current:row.current,total:row.total}:{current:row.current,total:null}):null;
- const lead={reported:row.settled?'Последняя фаза до завершения попытки':'Сейчас',stale:'Последний отчёт — не текущий',not_reported:'Прогресс не сообщается',unavailable:'Прогресс недоступен в этом хранилище'}[row.state]||'Прогресс неизвестен';
+ const lead={reported:row.settled?'Последняя фаза до завершения попытки':'Сейчас',stale:'Последний отчёт — не текущий',read_stale:'Последний отчёт — чтение прервано',not_reported:'Прогресс не сообщается',unavailable:'Прогресс недоступен в этом хранилище'}[row.state]||'Прогресс неизвестен';
  const notes=[];
  if(row.state==='stale')notes.push('драйвер попытки не наблюдается или отчёт от прежнего запуска');
  if(row.settled&&row.phase)notes.push(`попытка ${label(row.attempt_status)}: фаза не говорит об итоге`);
@@ -129,7 +131,7 @@ function receivedAttempt(run,id) {
 }
 function progressHTML(row,asOf) {
  const v=progressView(row,asOf);if(!v)return '';
- return `<h4>Прогресс программы</h4><p><b>${esc(v.lead)}</b>${v.phase?`: ${esc(v.phase)}`:''}${v.counted?` · ${esc(v.counted.current)}${v.counted.total?' / '+esc(v.counted.total):''}`:''}${v.age!==null?` <span class="muted">· ${esc(v.age)} с назад</span>`:''}</p>${v.counted?.total?`<progress max="${esc(v.counted.total)}" value="${esc(v.counted.current)}"></progress>`:''}${v.message?`<p class="muted">${esc(v.message)}</p>`:''}${v.notes.map(n=>`<p class="muted">${esc(n)}</p>`).join('')}`;
+ return `<h4>Прогресс программы</h4><p><b>${esc(v.lead)}</b>${v.phase?`: ${esc(v.phase)}`:''}${v.counted?` · ${esc(v.counted.current)}${v.counted.total?' / '+esc(v.counted.total):''}`:''}${v.age!==null?` <span class="muted">· ${esc(v.age)} с на момент чтения</span>`:''}</p>${v.counted?.total?`<progress max="${esc(v.counted.total)}" value="${esc(v.counted.current)}"></progress>`:''}${v.message?`<p class="muted">${esc(v.message)}</p>`:''}${v.notes.map(n=>`<p class="muted">${esc(n)}</p>`).join('')}`;
 }
 const ms = n => n >= 60000 ? `${(n/60000).toFixed(1)} мин` : n >= 1000 ? `${(n/1000).toFixed(1)} с` : `${n} мс`;
 function spreadPorts(edges,key,port) {
@@ -209,18 +211,68 @@ function nodeCard(graph,id,object,run) {
  const reason=arrived?`<div><small>Почему выбран этот переход</small><p>После ${esc(arrived.from)}: ${esc(label(arrived.label))}${summary?` — ${esc(summary)}`:''}</p></div>`:'';
  return `<section class="node-card"><div><small>Закреплённый узел</small><p>${esc(node.title)} · ${esc(label(node.kind))}</p></div><p>${badge(node.state)}${node.reason?` <span class="muted">${esc(node.reason)}</span>`:''}</p>${reason}${list('Входящие переходы',graph.edges.filter(e=>e.to===id))}${list('Исходящие переходы',graph.edges.filter(e=>e.from===id))}<div><small>Данные</small><p>${inputs.length?`Входы: ${esc(inputs.join(', '))}`:'Входы не записаны'}${outputs.length?` · Выходы: ${esc(outputs.join(', '))}`:''}</p></div></section>`;
 }
-const runKey = run => run.source+'|'+run.run_id;
+const runKey = run => JSON.stringify([run.source,run.run_id]);
+const runHash = (source,run,params={}) => '#'+new URLSearchParams({source,run,...params});
+const runTabs = ['overview','workflow','facts','journal'];
+const catalogueViews = ['related-newest','related','flat','board'];
+const catalogueStatuses = ['ready','running','stopping','completed','failed','cancelled','uncertain'];
+const catalogueFields = ['q','project','status','executor','from','to','view','sort'];
+function catalogueAddress(search) {
+ const input=new URLSearchParams(search), params=new URLSearchParams();
+ for(const name of catalogueFields){
+  const value=input.get(name);
+  if(!value)continue;
+  if(name==='view' && !catalogueViews.includes(value))continue;
+  if(name==='status' && !catalogueStatuses.includes(value))continue;
+  if(name==='sort' && !['created','oldest','status'].includes(value))continue;
+  if((name==='from' || name==='to') && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0,10)!==value))continue;
+  params.set(name,value);
+ }
+ if(params.get('from') && params.get('to') && params.get('from')>params.get('to'))params.delete('to');
+ const page=/^\d+$/.test(input.get('page')||'')?Number(input.get('page')):1;
+ if(Number.isSafeInteger(page) && page>1 && page<=100000000)params.set('page',page);
+ return params;
+}
+function currentRuns(rows) {
+ const latest=new Map();
+ for(const run of rows){
+  const key=runKey(run), previous=latest.get(key);
+  if(!previous || run.run_version>previous.run_version ||
+   (run.run_version===previous.run_version && run.event_sequence>previous.event_sequence))latest.set(key,run);
+ }
+ return [...latest.values()].sort((a,b)=>(Date.parse(b.last_observed||'')||0)-(Date.parse(a.last_observed||'')||0) ||
+  a.source.localeCompare(b.source) || a.run_id.localeCompare(b.run_id)).slice(0,2);
+}
+const programsIn = run => values(run?.attempts).filter(a=>!a.session && a.process);
+function matchingProgress(progress,programs) {
+ if(!progress)return null;
+ const known=new Map(programs.map(a=>[a.id,a]));
+ return {...progress,attempts:(progress.attempts||[]).flatMap(row=>{
+  const attempt=known.get(row.attempt_id);
+  if(!attempt)return [];
+  if(!attempt.settled || row.settled)return [row];
+  return [{...row,settled:true,attempt_status:attempt.status}];
+ })};
+}
+function observedProgress(progress,programs,stale=false) {
+ const matched=matchingProgress(progress,programs);
+ if(!matched)return '';
+ const running=new Set(programs.filter(a=>!a.settled).map(a=>a.id));
+ const recent=matched.attempts.filter(a=>!running.size || running.has(a.attempt_id));
+ const rows=running.size?recent:recent.filter(a=>a.phase).sort((a,b)=>String(b.observed||'').localeCompare(String(a.observed||''))).slice(0,1);
+ return rows.map(row=>`<section class="observed-progress">${rows.length>1?`<small>Attempt ${esc(short(row.attempt_id))}</small>`:''}${progressHTML(stale && !row.settled?{...row,state:'read_stale'}:row,matched.as_of?.utc)}</section>`).join('');
+}
 function relatedTitle(run,depth) {
  const relation=run.fork_source_run_id?(run.fork_reason==='project continuation'?'Продолжение':run.fork_reason==='recover_failed_stage'?'Восстановление':run.fork_reason==='resume_stopped_run'?'Возобновление':'Производный Run'):'';
  const missing=run.missing_parent?`<span class="missing-parent">Исходный Run недоступен: ${esc(run.fork_source_run_id)}</span>`:'';
  const context=run.context?'<span class="run-context">Контекст поиска</span>':'';
  const count=run.children?`${run.descendants} связанных Run · ${run.matches} совпадений в ветви`:'';
- return `<div class="run-lineage ${depth?'is-child':''}" data-run-depth="${depth}">${run.children?`<button type="button" class="run-expand" data-expand="${esc(runKey(run))}" data-focus="toggle:${esc(runKey(run))}" aria-expanded="${expandedRuns.has(runKey(run))}" aria-label="${expandedRuns.has(runKey(run))?'Свернуть':'Развернуть'} связанные Run (${run.descendants})">${expandedRuns.has(runKey(run))?'▾':'▸'}</button>`:'<span class="run-expand-spacer" aria-hidden="true"></span>'}<div>${relation?`<span class="run-relation">${relation}</span>`:''}${context}${missing}<a data-focus="${esc(run.source+run.run_id)}" href="#${esc(new URLSearchParams({source:run.source,run:run.run_id}))}">${esc(run.subject || 'Название задачи не записано')}</a>${count?`<small>${esc(count)}</small>`:''}<small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}</div></div>`;
+ return `<div class="run-lineage ${depth?'is-child':''}" data-run-depth="${depth}">${run.children?`<button type="button" class="run-expand" data-expand="${esc(runKey(run))}" data-focus="toggle:${esc(runKey(run))}" aria-expanded="${expandedRuns.has(runKey(run))}" aria-label="${expandedRuns.has(runKey(run))?'Свернуть':'Развернуть'} связанные Run (${run.descendants})">${expandedRuns.has(runKey(run))?'▾':'▸'}</button>`:'<span class="run-expand-spacer" aria-hidden="true"></span>'}<div>${relation?`<span class="run-relation">${relation}</span>`:''}${context}${missing}<a data-focus="${esc(runKey(run))}" href="${esc(runHash(run.source,run.run_id))}">${esc(run.subject || 'Название задачи не записано')}</a>${count?`<small>${esc(count)}</small>`:''}<small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}</div></div>`;
 }
 function runStatus(run) {
  const tip=run.latest_descendant;
- const own=run.status==='running' && run.active_attempts>0 && run.active_attempts===run.awaiting_hosts?'awaiting_host':run.status;
- const current=`${tip?'<small>Этот Run</small>':''}${badge(own)}${run.outcome?`<small>Outcome: ${esc(run.outcome)}</small>`:''}`;
+ const handed=run.status==='running' && run.active_attempts>0 && run.active_attempts===run.awaiting_hosts;
+ const current=`${tip?'<small>Этот Run</small>':''}${runBadge(run.status)}${handed?'<small>Задания выданы хосту</small>':''}${run.outcome?`<small>Outcome: ${esc(run.outcome)}</small>`:''}`;
  if(!tip)return current;
  const hash=new URLSearchParams({source:run.source,run:tip.run_id});
  return `${current}<div class="branch-tip"><small>Последний производный Run · ${esc(date(tip.last_observed))}</small><a href="#${esc(hash)}">${badge(tip.outcome || tip.status)} <span>${esc(short(tip.run_id))}</span></a><small>Состояние: ${esc(label(tip.status))}</small></div>`;
@@ -337,15 +389,18 @@ function reasonText(reason){
  return reason.text || 'Причина не установлена по текущим данным';
 }
 function reasonLink(source,id,reason){
- const tab=['workflow','facts','journal'].includes(reason.action)?reason.action:'facts';
- const hash=new URLSearchParams({source,run:id,tab});
- if(tab==='workflow' && reason.stage_activation_id)hash.set('node',reason.stage_activation_id);
- return '#'+hash;
+ const tab=runTabs.includes(reason.action)?reason.action:'facts';
+ const target={tab,focus:'1'};
+ const node=reason.attempt_id || reason.stage_activation_id;
+ if(tab==='workflow' && node)target.node=node;
+ if(tab==='journal' && Number.isSafeInteger(reason.event_seq))target.event=reason.event_seq;
+ return runHash(source,id,target);
 }
 function reasonsHTML(reasons,source,id,action){
  const ordered=reasons.filter(r=>r.code!=='terminal').sort((a,b)=>reasonRank(a)-reasonRank(b));
  const [primary,...rest]=ordered;
  const reason=primary || reasons.find(r=>r.code==='terminal') || {text:'Причина текущего состояния не записана',action:'facts'};
+ const area={workflow:reason.attempt_id?'Открыть Attempt':reason.stage_activation_id?'Открыть стадию':'Открыть схему и шаги',facts:'Открыть результаты и решения',journal:'Открыть журнал'};
  const key=source+':'+id;
  const show=r=>esc(reasonText(r))+(r.code==='attempt_deadline_expired'?' <code>attempt_deadline_expired</code>':'')+(r.scope?` <small>${esc(r.scope)}</small>`:'');
  const primaryText=reasonText(reason);
@@ -353,7 +408,7 @@ function reasonsHTML(reasons,source,id,action){
  const main=characters.length>180
   ? `<details data-key="${esc(key+':long-reason')}"><summary>${esc(characters.slice(0,175).join(''))}…</summary><p>${show(reason)}</p></details>`
   : `<p>${show(reason)}</p>`;
- return `<div class="run-explanation">${main}<a data-focus="${esc(key+':reason')}" href="${esc(reasonLink(source,id,reason))}">${esc(action || 'Открыть подробности')}</a>${rest.length?`<details data-key="${esc(key+':reasons')}"><summary data-focus="${esc(key+':reasons')}">Другие причины · ${rest.length}</summary><ul class="board-reasons">${rest.map(r=>`<li><a href="${esc(reasonLink(source,id,r))}">${show(r)}</a></li>`).join('')}</ul></details>`:''}</div>`;
+ return `<div class="run-explanation">${main}<a data-focus="${esc(key+':reason')}" href="${esc(reasonLink(source,id,reason))}">${esc(action || area[reason.action] || 'Открыть результаты и решения')}</a>${rest.length?`<details data-key="${esc(key+':reasons')}"><summary data-focus="${esc(key+':reasons')}">Другие причины · ${rest.length}</summary><ul class="board-reasons">${rest.map(r=>`<li><a href="${esc(reasonLink(source,id,r))}">${show(r)}</a></li>`).join('')}</ul></details>`:''}</div>`;
 }
 function listReasons(run){
  return (run.board?.reasons || []).map(reason=>{
@@ -363,7 +418,7 @@ function listReasons(run){
 }
 function detailReasons(run,capacity){
  const reasons=[];
- const add=(code,text,action='facts',scope='')=>reasons.push({code,text,action,scope});
+ const add=(code,text,action='facts',scope='',target={})=>reasons.push({code,text,action,scope,...target});
  if(run.status==='completed'){
   add('result',run.outcome==='partial'?'Записан частичный результат':'Run завершён');
   return reasons;
@@ -380,7 +435,7 @@ function detailReasons(run,capacity){
     step?.attempt_ids?.at(-1)===attempt.id &&
     (!d.stage_activation_id || d.stage_activation_id===attempt.stage_activation_id);
   });
-  if(current.length===1)add(current[0].code,current[0].message,'journal');
+  if(current.length===1)add(current[0].code,current[0].message,'workflow','',{attempt_id:current[0].attempt_id});
   else add('unknown','Причина ошибки не установлена по текущим данным','journal');
   return reasons;
  }
@@ -392,7 +447,7 @@ function detailReasons(run,capacity){
  for(const attempt of values(run.attempts).filter(a=>!a.settled)){
   const role=executionRole(attempt);
   const code=({waiting_decision:'decision',waiting_admission:'admission'})[attempt.session?.host_state] || attempt.session?.host_state || 'attempt';
-  add(code,role.state || 'Начало исполнения не подтверждено','workflow',run.activations?.[attempt.stage_activation_id]?.stage_id || attempt.id);
+  add(code,role.state || 'Начало исполнения не подтверждено','workflow',run.activations?.[attempt.stage_activation_id]?.stage_id || attempt.id,{attempt_id:attempt.id});
  }
  for(const wait of values(run.wait_registrations).filter(w=>w.status==='active'))add('signal','Стадия ожидает сигнал','facts',wait.target_stage_id);
  if(Object.hasOwn(capacity?.waiting || {},run.id))add('admission','Run ожидает допуска');
@@ -400,19 +455,19 @@ function detailReasons(run,capacity){
   const names=run.stage_resources?.[activation.stage_id] || [];
   const blocked=names.filter(name=>run.resource_limits?.[name]>0 && (capacity?.resources?.[name]?.length || 0)>=run.resource_limits[name]);
   if(blocked.length)add('resource_busy','По данным о ресурсах занято: '+blocked.join(', '),'facts',activation.stage_id);
-  else add('ready','Стадия готова к выдаче','workflow',activation.stage_id);
+  else add('ready','Стадия готова к выдаче','workflow',activation.stage_id,{stage_activation_id:activation.id});
  }
  return reasons;
 }
 function boardCardHTML(run,sources=[]) {
  const source=sources.find(s=>s.id===run.source),board=run.board;
- const link=(text,tab='workflow',id=run.run_id,extra={})=>`<a href="#${esc(new URLSearchParams({source:run.source,run:id,tab,...extra}))}">${esc(text)}</a>`;
+ const link=(text,tab='overview',id=run.run_id,extra={})=>`<a href="${esc(runHash(run.source,id,{tab,...extra}))}">${esc(text)}</a>`;
  const stages=(board?.stages||[]).map(s=>`<li>${link(s.stage_id||'Стадия не записана','workflow',run.run_id,{...(s.workflow_invocation_id?{invocation:s.workflow_invocation_id}:{}),...(s.stage_activation_id?{node:s.stage_activation_id}:{})})} <span>${esc(s.status)}</span>${s.branches?.length?`<div class="board-branches">Ветвь: ${esc(s.branches.join(' / '))}</div>`:''}<small>${esc(s.workflow_invocation_id)}</small>${(s.attempts||[]).map(a=>`<small>${esc(a.attempt_id)} · ${esc(a.status)}${a.host_state?' · '+esc(a.host_state):''}</small>`).join('')}</li>`).join('');
 
  const parent=run.fork_source_run_id?`<p>Источник: ${link(run.fork_source_run_id,'facts',run.fork_source_run_id)}<small>${esc(run.fork_reason||'Тип связи не записан')}${run.fork_source_available?'':' · источник вне прочитанного каталога'}</small></p>`:'<p class="muted">Связь с исходным Run не записана</p>';
  const children=(run.related_runs||[]).map(child=>`<li>${link(child.run_id,'facts',child.run_id)} · ${esc(child.status)}${child.outcome?' / '+esc(child.outcome):''}</li>`).join('');
  const error=run.error||source?.error;
- return `<article class="board-card" data-run-key="${esc(runKey(run))}" data-run-id="${esc(run.run_id)}"><h3>${link(run.subject||'Название задачи не записано')}</h3><p>${badge(run.status||'unknown')}${run.outcome?` <b>Outcome: ${esc(run.outcome)}</b>`:''}</p>${error?`<p class="error" role="status">Устаревшие данные: ${esc(error)}</p>`:''}${reasonsHTML(listReasons(run),run.source,run.run_id,boardAction(board))}<details data-key="board-meta:${esc(runKey(run))}"><summary>Сведения о Run</summary><small>${esc(run.run_id)} · ${esc(run.source)}</small><p>${esc(run.project_title||run.project_fallback||'Имя не записано')}${!run.project_title?'<small>Локальное имя · fallback</small>':''}<small>${esc(run.workflow_id)} · ${esc(run.project)}</small><small>${esc(run.root)}</small></p></details>${stages?`<h4>Активные стадии и ветви</h4><ul class="board-stages">${stages}</ul>`:''}${parent}${children?`<h4>Производные Run</h4><ul>${children}</ul>`:''}<nav aria-label="Подробности Run">${link('Схема')} · ${link('Результаты и решения','facts')} · ${link('Журнал','journal')}</nav><small>v${esc(run.run_version??'?')} · e${esc(run.event_sequence??'?')} · authority cut ${esc(board?.cut??'?')}</small></article>`;
+ return `<article class="board-card" data-run-key="${esc(runKey(run))}" data-run-id="${esc(run.run_id)}"><h3>${link(run.subject||'Название задачи не записано')}</h3><p>${runBadge(run.status||'unknown')}${run.outcome?` <b>Outcome: ${esc(run.outcome)}</b>`:''}</p>${error?`<p class="error" role="status">Устаревшие данные: ${esc(error)}</p>`:''}${reasonsHTML(listReasons(run),run.source,run.run_id,boardAction(board))}<details data-key="board-meta:${esc(runKey(run))}"><summary>Сведения о Run</summary><small>${esc(run.run_id)} · ${esc(run.source)}</small><p>${esc(run.project_title||run.project_fallback||'Имя не записано')}${!run.project_title?'<small>Локальное имя · fallback</small>':''}<small>${esc(run.workflow_id)} · ${esc(run.project)}</small><small>${esc(run.root)}</small></p></details>${stages?`<h4>Активные стадии и ветви</h4><ul class="board-stages">${stages}</ul>`:''}${parent}${children?`<h4>Производные Run</h4><ul>${children}</ul>`:''}<nav aria-label="Подробности Run">${link('Схема','workflow')} · ${link('Результаты и решения','facts')} · ${link('Журнал','journal')}</nav><small>v${esc(run.run_version??'?')} · e${esc(run.event_sequence??'?')} · authority cut ${esc(board?.cut??'?')}</small></article>`;
 }
 function boardHTML(runs,sources=[]) {
  return '<p class="muted board-note">Текущая страница: одна карточка на Run. Продолжения имеют собственные исходы. Счётчики колонок относятся к этой странице.</p><div class="board-grid" data-scroll="board">'+boardColumns.map(([id,title,categories])=>{
@@ -420,10 +475,12 @@ function boardHTML(runs,sources=[]) {
   return `<section class="board-column${cards.length?'':' is-empty'}" tabindex="0" data-scroll="board-column-${id}" data-category="${id}" aria-label="${esc(title)}"><h2>${esc(title)} <span>${cards.length}</span></h2>${cards.map(r=>boardCardHTML(r,sources)).join('')}${!cards.length?'<p class="muted">На этой странице нет Run</p>':''}</section>`;
  }).join('')+'</div>';
 }
-if(typeof module !== 'undefined') module.exports = {boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,runTaskTitle,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
+if(typeof module !== 'undefined') module.exports = {runKey,catalogueAddress,currentRuns,matchingProgress,observedProgress,runHash,boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,runTaskTitle,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
-let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='workflow',stamp='',eventsCursor=0,eventsMore=false,busy=false,queued=false,filterTimer,revealed='',graphFocus='';
+let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='overview',stamp='',filterTimer,revealed='',graphFocus='';
+let observing=false,readingList=false,detailFlight=null,detailAux=new Set(),focusRoute='',treeFocus='',restoreTreeFocus=false;
+let selectedRead={at:null,stale:false},eventView='recent',eventCursor=0,eventMore=false,eventPending=true,eventKey='',recentKey='';
 let listScroll=0,listPositions=new Map(),listFocus=null,maintenanceBusy=false,storageBusy=false;
 let relatedInitialized=false,expandSearch=false;
 const childPages=new Map(),childCache=new Map();
@@ -437,18 +494,209 @@ const query = () => {
  return params;
 };
 const route = () => new URLSearchParams(location.hash.slice(1));
-async function get(path,params={}) {
- const response=await fetch(path+'?'+new URLSearchParams(params),{signal:AbortSignal.timeout(15000)});
+const endpoint = path => new URL(path.slice(1),new URL('.',location.href));
+async function get(path,params={},signal) {
+ const url=endpoint(path);url.search=new URLSearchParams(params);
+ const timeout=AbortSignal.timeout(15000);
+ const response=await fetch(url,{signal:signal?AbortSignal.any([signal,timeout]):timeout});
  if(!response.ok) throw new Error((await response.text()).slice(0,1200));
  return response.json();
 }
+function syncCatalogueAddress() {
+ const url=new URL(location.href),params=catalogueAddress(listParams());
+ if(params.get('view')==='related-newest')params.delete('view');
+ for(const name of [...catalogueFields,'page'])url.searchParams.delete(name);
+ for(const [name,value] of params)url.searchParams.set(name,value);
+ if(url.href!==location.href)history.replaceState(history.state,'',url);
+}
+function restoreCatalogueAddress() {
+ const params=catalogueAddress(location.search);
+ for(const name of catalogueFields){
+  const field=form.elements[name],value=params.get(name)||(name==='view'?'related-newest':'');
+  if(field.tagName==='SELECT' && value && ![...field.options].some(o=>o.value===value))field.add(new Option(name==='status'?label(value):value,value));
+  field.value=value;
+ }
+ page=Number(params.get('page'))||1;
+}
+function setCatalogueView(kind) {
+ const presets={current:['flat',$('current-state').value],recent:['flat',''],failed:['flat','failed'],history:['related-newest','']};
+ const [view,status]=presets[kind];
+ if(status && ![...form.elements.status.options].some(o=>o.value===status))form.elements.status.add(new Option(label(status),status));
+ form.elements.view.value=view;
+ form.elements.status.value=status;
+ form.elements.sort.value='';
+ changeCatalogue();
+}
+function renderCatalogueControls() {
+ const {view,status,sort}=form.elements;
+ const preset=sort.value?'':view.value==='flat'?(['running','stopping'].includes(status.value)?'current':status.value==='failed'?'failed':status.value?'':'recent'):isRelatedView(view.value)?'history':'';
+ $('current-status').hidden=preset!=='current';
+ if(preset==='current')$('current-state').value=status.value;
+ for(const button of $('catalog-views').querySelectorAll('[data-view]'))button.setAttribute('aria-pressed',String(button.dataset.view===preset));
+ for(const suffix of ['','-top']){
+  $('page'+suffix).textContent=pages?`${page} / ${pages}`:'';
+  $('previous'+suffix).disabled=page<=1;
+  $('next'+suffix).disabled=page>=pages;
+ }
+}
+function changeCatalogue(debounce=false){
+ clearTimeout(filterTimer);
+ generation++;page=1;expandSearch=true;
+ syncCatalogueAddress();prepareListRead(listParams());renderCatalogueControls();
+ if(debounce)filterTimer=setTimeout(schedule,200);
+ else schedule();
+}
+
+const pinStorage='prifly-full-observation/1';
+const pins=new Map();
+const titles=new Map();
+const sourceNames=new Map();
+function restorePins() {
+ try{
+  const pairs=JSON.parse(sessionStorage.getItem(pinStorage));
+  if(!Array.isArray(pairs))return;
+  for(const pair of pairs){
+   if(pins.size>=2)break;
+   if(typeof pair?.source!=='string' || !pair.source || typeof pair.run_id!=='string' || !pair.run_id)continue;
+   const key=runKey(pair);
+   if(!pins.has(key))pins.set(key,{source:pair.source,run_id:pair.run_id});
+  }
+ }catch{}
+}
+function pinControl(source,id,title='') {
+ const pair={source,run_id:id},key=runKey(pair);
+ return `<button type="button" data-pin="${esc(key)}" data-source="${esc(source)}" data-run="${esc(id)}" data-title="${esc(title)}" data-focus="${esc('pin:'+key)}" aria-label="${esc((pins.has(key)?'Снять закрепление: ':'Закрепить: ')+(title||short(id)))}">${pins.has(key)?'Снять':'Закрепить'}</button>`;
+}
+function togglePin(source,id,title) {
+ const pair={source,run_id:id},key=runKey(pair);
+ if(pins.has(key)){pins.get(key).flight?.abort();pins.delete(key);titles.delete(key);}
+ else if(pins.size<2)pins.set(key,pair);
+ else{
+  const box=observing?'observation-message':selected?'pin-message':'catalogue-message';
+  $(box).textContent='Снимите одно из двух закреплений, чтобы добавить этот Run.';
+  return;
+ }
+ if(pins.has(key) && title && title!=='Название задачи не записано')titles.set(key,title);
+ for(const id of ['observation-message','pin-message','catalogue-message'])$(id).textContent='';
+ try{sessionStorage.setItem(pinStorage,JSON.stringify([...pins.values()].map(({source,run_id})=>({source,run_id}))));}catch{}
+ updatePinControls();
+ if(observing)refreshPins();
+}
+function updatePinControls() {
+ $('pin-count').textContent=pins.size;
+ $('observe-link').setAttribute('aria-current',observing?'page':'false');
+ $('observation-count').textContent=`Закреплено ${pins.size} из 2`;
+ $('no-pins').hidden=!!pins.size;
+ const control=$('pin-run');
+ control.hidden=!selected || !source;
+ control.textContent=pins.has(runKey({source,run_id:selected}))?'Снять закрепление':'Закрепить';
+ // Re-render only the catalogue preview that owns pin controls.
+ if(!selected && !observing && currentRead)renderCurrent();
+ if(observing)renderPins();
+}
+function rememberSource(run){
+ const name=run.project_title || run.project_fallback;
+ if(name)sourceNames.set(run.source,name);
+}
+function renderCurrent(){
+ if(!currentRead)return;
+ const {rows,counts,partial}=currentRead;
+ $('current').hidden=!(rows.length || partial);
+ $('current-counts').textContent=counts.join(' · ')+(partial?' · выборка неполная':'');
+ preserve($('current-runs'),rows.map(run=>{
+  const title=run.subject||'Название задачи не записано';
+  if(run.subject && pins.has(runKey(run)))titles.set(runKey(run),run.subject);
+  rememberSource(run);
+  const stages=(run.board?.stages||[]).map(stage=>stage.stage_id).filter(Boolean);
+  return `<article class="observation-card current-run" data-current-key="${esc(runKey(run))}"><div class="observation-heading"><h3><a href="${esc(runHash(run.source,run.run_id,{tab:'overview'}))}">${esc(title)}</a></h3>${runStatus(run)}</div><small>${esc([run.project_title||run.project_fallback,stages.slice(0,2).join(', ')].filter(Boolean).join(' · '))}</small>${run.error?'<p class="error">Данные источника устарели.</p>':''}${pinControl(run.source,run.run_id,run.subject||'')}</article>`;
+ }).join('') || '<p class="muted">Текущие Run не прочитаны.</p>');
+}
+let currentRead=null;
+async function refreshCurrent(params,g) {
+ const results=await Promise.allSettled(['running','stopping'].map(status=>{
+  const search=new URLSearchParams(params);
+  search.set('view','flat');search.set('status',status);search.delete('page');search.delete('sort');
+  return get('/api/runs',search);
+ }));
+ if(g!==generation)return;
+ const rows=[],counts=[];
+ let partial=false,truncated=false;
+ for(const [i,result] of results.entries()){
+  const name=i?'останавливается':'в работе или ожидании';
+  if(result.status==='rejected'){partial=true;counts.push(`${name}: недоступно`);continue;}
+  const data=result.value;
+  truncated ||= data.filtered>data.runs.length;
+  counts.push(`${data.filtered} ${name}`);
+  rows.push(...data.runs);
+  partial ||= data.discovery.scanning || data.sources.some(s=>s.error || !s.indexed);
+ }
+ const preview=currentRuns(rows);
+ if(truncated || new Set(rows.map(runKey)).size>preview.length)counts.push(`показано ${preview.length}`);
+ // Retain the compact preview only when it adds information or an unavailable source matters.
+ currentRead={rows:preview,counts,partial};
+ renderCurrent();
+}
+
+function snapshotReadHTML(at,stale) {
+ return `<span>${stale?'Последнее успешное чтение':'Чтение Run'}: <time>${esc(date(at))}</time></span>`;
+}
+function renderPins() {
+ for(const card of [...$('pinned-runs').children])if(!pins.has(card.dataset.pinKey))card.remove();
+ for(const [key,pin] of pins){
+  let card=[...$('pinned-runs').children].find(el=>el.dataset.pinKey===key);
+  if(!card){card=document.createElement('article');card.className='observation-card pinned-run';card.dataset.pinKey=key;card.dataset.runId=pin.run_id;card.dataset.source=pin.source;$('pinned-runs').append(card);}
+  const run=pin.view?.run,title=pin.title||titles.get(key)||'Название задачи не прочитано';
+  const outcome=run?.outcome;
+  const activity=run?activityRows(run,null,null).filter(row=>!row.run):[];
+  const rows=activity.map(row=>{
+   const attempt=run.attempts?.[row.node],stage=run.activations?.[attempt?.stage_activation_id||row.node]?.stage_id;
+   const activity=attempt?.process?executionRole(attempt).state:row.detail;
+   return `<li><b>${esc(stage||row.title)}</b> · ${esc(activity)}</li>`;
+  });
+  const origin=run?.project_title || sourceNames.get(pin.source) || 'Источник '+short(pin.source);
+  const main=run?`<div>${runBadge(run.status)}${outcome?` · ${esc(label(outcome))}`:''}</div>${activity.length?`<ul class="observation-activity">${rows.join('')}</ul>`:terminalStatuses.includes(run.status)?'':'<p class="muted">Текущая стадия не записана.</p>'}`:'<p class="muted">Снимок Run ещё не прочитан.</p>';
+  const failure=run?.status==='failed'?`<p>${esc(reasonText(detailReasons(run,null)[0]))}</p>`:'';
+  const error=pin.error?`<p class="error">${esc(readStatus(!!run,'прогон'))}</p>`:'';
+  const progress=run?observedProgress(pin.progress,programsIn(run),!!pin.error||!!pin.progressError):'';
+  preserve(card,`<div class="observation-heading"><h2>${esc(title)}</h2>${pinControl(pin.source,pin.run_id,pin.title||titles.get(key)||'')}</div><small>${esc(origin)} · Run ${esc(short(pin.run_id))}</small>${error}${main}${failure}${progress}${pin.progressError?'<p class="muted">Прогресс программы недоступен.</p>':''}${run?`<div class="read-facts muted">${snapshotReadHTML(pin.at,pin.error)}<span>Наблюдение Run: ${esc(date(run.last_observed?.utc))}</span></div>`:''}<a data-focus="${esc('open:'+key)}" href="${esc(runHash(pin.source,pin.run_id,{tab:'overview'}))}">Открыть Run →</a>`);
+ }
+}
+async function refreshPin(key,pin){
+ if(pin.flight)return;
+ const flight=new AbortController();pin.flight=flight;
+ const valid=()=>observing && pins.get(key)===pin && !flight.signal.aborted;
+ const params={source:pin.source,id:pin.run_id};
+ try{
+  let view;
+  try{view=await get('/api/run',params,flight.signal);if(view.run?.id!==pin.run_id)throw new Error('Mismatched Run');}
+  catch{if(valid()){pin.error=true;renderPins();}return;}
+  if(!valid())return;
+  pin.view=view;pin.at=new Date().toISOString();pin.error=false;
+  const title=runTaskTitle(view.input_values,null);
+  if(title!=='Название задачи не записано')pin.title=title;
+  const programs=programsIn(view.run);
+  pin.progress=matchingProgress(pin.progress,programs);
+  renderPins();
+  if(!programs.length)return;
+  try{
+   const progress=await get('/api/progress',params,flight.signal);
+   if(valid()){pin.progress=matchingProgress(progress,programs);pin.progressError=false;}
+  }catch{if(valid())pin.progressError=true;}
+  if(valid())renderPins();
+ }finally{if(pin.flight===flight)pin.flight=null;}
+}
+function refreshPins(){
+ for(const [key,pin] of pins)refreshPin(key,pin);
+}
+
 const lastMarkup=new WeakMap();
 function preserve(box,html) {
  if(lastMarkup.get(box)===html)return;
  lastMarkup.set(box,html);
  const open=new Map([...box.querySelectorAll('details[data-key]')].map(d=>[d.dataset.key,d.open]));
  const scroll=new Map([...box.querySelectorAll('[data-scroll]')].map(e=>[e.dataset.scroll,[e.scrollLeft,e.scrollTop]]));
- const focus=document.activeElement?.dataset.focus;
+ const active=document.activeElement;
+ const focus=box.contains(active)?active.dataset.focus:null;
  box.innerHTML=html;
  for(const d of box.querySelectorAll('details[data-key]')) if(open.has(d.dataset.key)) d.open=open.get(d.dataset.key);
  hydrate(box);
@@ -575,6 +823,10 @@ function renderList(data) {
  const d=data.discovery,errors=data.sources.filter(s=>s.error),pending=data.sources.filter(s=>!s.indexed && !s.error).length;
  $('coverage-title').textContent=`${data.sources.length} хранилищ · ${d.scanning?'поиск продолжается':'обход завершён'} · ${d.directories} каталогов${d.unreadable?' · недоступно: '+d.unreadable:''}${errors.length?' · ошибок чтения: '+errors.length:''}${pending?' · индексируется: '+pending:''}`;
  preserve($('sources'),`<p class="muted">Область поиска: ${esc(d.roots.join(', '))}. Исключены системные/сетевые каталоги: ${d.excluded}. Символические ссылки при обходе не раскрываются; физические каталоги читаются по исходному пути. Полнота относится к доступной проверенной области.</p>${d.completed?`<p>Последний обход: ${esc(date(d.completed))}</p>`:''}${data.sources.map(s=>`<div class="source"><b>${esc(s.project || 'Хранилище')}</b><small>${esc(s.root)}</small>${s.conflict?'<p class="error">Конфликт: одинаковая идентичность у нескольких хранилищ. Их Run показаны отдельно.</p>':''}<p class="${s.error?'error':'muted'}">${esc(s.error || (s.indexed?'Прочитано '+date(s.updated):'Индексируется…'))}</p></div>`).join('')}${d.errors.length?section('Недоступные пути (примеры)',d.errors,'scan-errors'):''}`);
+ for(const run of data.runs){
+  rememberSource(run);
+  if(run.subject && pins.has(runKey(run)))titles.set(runKey(run),run.subject);
+ }
  options('project',data.filters.projects,'Все проекты');options('status',data.filters.statuses,'Все статусы');options('executor',data.filters.executors,'Все исполнители');
  const selectedFilters=['project','status','executor','from','to','sort'].filter(name=>form.elements[name].value).length+Number(form.elements.view.value!=='related-newest');
  $('filter-summary').textContent='Фильтры и вид'+(selectedFilters?' · '+selectedFilters:'');
@@ -595,12 +847,12 @@ function renderList(data) {
  for(const run of data.runs)append(run,0);
  if(!boardView)preserve($('runs'),listed.length?listed.map(({run,depth,more})=>{
   if(more)return `<tr><td colspan="5" class="run-more" data-run-depth="${depth}"><button type="button" data-more="${esc(runKey(more))}">Показать ещё дочерние Run →</button></td></tr>`;
-  const hash=new URLSearchParams({source:run.source,run:run.run_id});
+  const hash=new URLSearchParams({source:run.source,run:run.run_id,tab:'overview'});
   const task=run.subject || 'Название задачи не записано',project=run.project_title || run.project_fallback || 'Локальное имя не найдено',fallback=!run.project_title;
-  return `<tr role="row" data-run-key="${esc(runKey(run))}" class="${run.source===source && run.run_id===selected?'selected':''} ${run.context?'run-context-row':''}"><td role="cell" class="run-title-cell">${isRelatedView(form.elements.view.value)?relatedTitle(run,depth):`<a data-focus="${esc(run.source+run.run_id)}" href="#${esc(hash)}">${esc(task)}</a><small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}`}</td><td role="cell" class="run-project-cell"><details data-key="project:${esc(runKey(run))}"><summary>${esc(project)}</summary>${fallback?'<small>Локальное имя</small>':''}<small>${esc(run.project)}</small><small>${esc(run.workflow_id)}</small><small>${esc(run.root)}</small></details></td><td role="cell" class="run-status-cell">${runStatus(run)}${reasonsHTML(listReasons(run),run.source,run.run_id,boardAction(run.board))}</td><td role="cell" class="run-execution-cell">${executionCell(run)}</td><td role="cell" class="run-created-cell">${esc(date(run.created))}<small>v${esc(run.run_version)} · e${esc(run.event_sequence)}</small></td></tr>`;
+  return `<tr role="row" data-run-key="${esc(runKey(run))}" class="${run.source===source && run.run_id===selected?'selected':''} ${run.context?'run-context-row':''}"><td role="cell" class="run-title-cell">${isRelatedView(form.elements.view.value)?relatedTitle(run,depth):`<a data-focus="${esc(runKey(run))}" href="#${esc(hash)}">${esc(task)}</a><small>${esc(run.run_id)}</small>${run.error?`<p class="error">${esc(run.error)}</p>`:''}`}</td><td role="cell" class="run-project-cell"><details data-key="project:${esc(runKey(run))}"><summary>${esc(project)}</summary>${fallback?'<small>Локальное имя</small>':''}<small>${esc(run.project)}</small><small>${esc(run.workflow_id)}</small><small>${esc(run.root)}</small></details></td><td role="cell" class="run-status-cell">${runStatus(run)}${reasonsHTML(listReasons(run),run.source,run.run_id,boardAction(run.board))}</td><td role="cell" class="run-execution-cell">${executionCell(run)}</td><td role="cell" class="run-created-cell">${esc(date(run.created))}<small>v${esc(run.run_version)} · e${esc(run.event_sequence)}</small></td></tr>`;
  }).join(''):'<tr><td colspan="5" class="empty">Прогоны не найдены в прочитанной области. Измените фильтры или проверьте состояние поиска выше.</td></tr>');
  if(!selected && anchorKey && anchorTop!=null){const current=[...listBox.querySelectorAll('[data-run-key]')].find(row=>row.dataset.runKey===anchorKey);if(current)window.scrollBy(0,current.getBoundingClientRect().top-anchorTop);}
- $('matches').textContent=`Найдено: ${data.filtered}`;$('page').textContent=`${page} / ${pages}`;$('previous').disabled=page<=1;$('next').disabled=page>=pages;
+ $('matches').textContent=`Найдено: ${data.filtered}`;renderCatalogueControls();syncCatalogueAddress();
 }
 async function loadRelated(rows,params,g,autoExpand) {
  const seen=new Set();
@@ -622,7 +874,7 @@ async function loadRelated(rows,params,g,autoExpand) {
  await Promise.all(rows.map(load));
 }
 function definitions(run) {return (run.definitions || []).map(d=>parseMaybe(d.bytes)).filter(d=>d?.definition?.stages);}
-function executionCell(run) {const c=executionCounts(run);return `Шагов создано: ${esc(known(c.steps))}<br>Попыток: ${esc(known(c.attempts))}<small>Учтено: ${esc(known(c.settled))} · не учтено: ${esc(known(c.open))}${c.hosts?` · ожидает агента: ${esc(c.hosts)}`:''}</small>`;}
+function executionCell(run) {const c=executionCounts(run);return `Шагов создано: ${esc(known(c.steps))}<br>Попыток: ${esc(known(c.attempts))}<small>Учтено: ${esc(known(c.settled))} · не учтено: ${esc(known(c.open))}${c.hosts?` · выдано хосту: ${esc(c.hosts)}`:''}</small>`;}
 function currentWorkflow(run) {
  if(definition) return definitions(run).find(d=>d.id===definition) || run.workflow;
  const ref=run.invocations?.[invocation]?.workflow_ref || run.workflow_ref;
@@ -632,16 +884,16 @@ function renderGraph() {
  if(!state)return;const run=state.run,workflow=parseMaybe(currentWorkflow(run));
  const selectedActivation=run.attempts?.[nodeID]?.stage_activation_id || run.steps?.[nodeID]?.stage_activation_id || nodeID;
  const graphInvocation=definition?definitionInvocation(run,definition):invocation,data=graphData(workflow,run,graphInvocation,state.choices,state.input_values),byID=new Map(data.nodes.map(n=>[n.id,n]));
- const svg=`<svg width="${data.width}" height="${data.height}" viewBox="0 0 ${data.width} ${data.height}" role="group" aria-label="Связи закреплённых стадий workflow"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>${data.edges.map((e,index)=>{const a=byID.get(e.from),b=byID.get(e.to);if(!a||!b)return '';const x=a.x+230,y=a.y+39+e.fromPort,tx=b.x,ty=b.y+39+e.toPort,channel=e.route==='return'?42+index%3*18:data.height-42-index%3*18,route=e.route==='forward'?`M ${x} ${y} H ${tx-22} V ${ty} H ${tx}`:`M ${x} ${y} H ${x+22} V ${channel} H ${tx-22} V ${ty} H ${tx}`,classes=[`route-${e.route}`,e.path?'active-path':'',e.muted?'muted-path':''].filter(Boolean).join(' ');return `<path class="${classes}" d="${route}" marker-end="url(#arrow)"/><text class="edge-label ${e.muted?'muted-path':''}" x="${(x+tx)/2}" y="${e.route==='forward'?(y+ty)/2-8:channel-6}" text-anchor="middle">${esc(e.label)}</text>`;}).join('')}${data.nodes.map(n=>`<g tabindex="0" role="button" aria-label="${esc(n.title+', '+label(n.state)+(n.reason?': '+n.reason:''))}" data-stage="${esc(n.id)}" class="node-${n.visual} ${(n.id===nodeID || n.actual?.some(a=>a.id===selectedActivation))?'selected':''}"><rect x="${n.x}" y="${n.y}" width="230" height="78" rx="9"/><text x="${n.x+12}" y="${n.y+22}">${esc(n.title.length>26?n.title.slice(0,24)+'…':n.title)}</text><text x="${n.x+12}" y="${n.y+43}">${esc(label(n.kind))}</text><text x="${n.x+12}" y="${n.y+64}">${esc(n.state==='reused'||n.state==='revalidated'?label(n.state):n.visual==='skipped'?label('skipped'):(n.visual==='reachable'?'Далее':label(n.state)))}</text>${n.reason?`<title>${esc(n.reason)}</title>`:''}</g>`).join('')}</svg>`;
- const left=$('graph').scrollLeft,top=$('graph').scrollTop;$('graph').innerHTML=svg;$('graph').scrollLeft=left;$('graph').scrollTop=top;
- // The active stages are centred once per change of what is active, so polling never fights a person scrolling.
- const box=$('graph'),active=data.nodes.filter(n=>n.visual==='current'),focusKey=[source,selected,invocation,definition,...active.map(n=>n.id)].join('\n');
+ const svg=`<svg width="${data.width}" height="${data.height}" viewBox="0 0 ${data.width} ${data.height}" role="group" aria-label="Связи закреплённых стадий workflow"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>${data.edges.map((e,index)=>{const a=byID.get(e.from),b=byID.get(e.to);if(!a||!b)return '';const x=a.x+230,y=a.y+39+e.fromPort,tx=b.x,ty=b.y+39+e.toPort,channel=e.route==='return'?42+index%3*18:data.height-42-index%3*18,route=e.route==='forward'?`M ${x} ${y} H ${tx-22} V ${ty} H ${tx}`:`M ${x} ${y} H ${x+22} V ${channel} H ${tx-22} V ${ty} H ${tx}`,classes=[`route-${e.route}`,e.path?'active-path':'',e.muted?'muted-path':''].filter(Boolean).join(' ');return `<path class="${classes}" d="${route}" marker-end="url(#arrow)"/><text class="edge-label ${e.muted?'muted-path':''}" x="${(x+tx)/2}" y="${e.route==='forward'?(y+ty)/2-8:channel-6}" text-anchor="middle">${esc(e.label)}</text>`;}).join('')}${data.nodes.map(n=>`<g tabindex="0" role="button" aria-label="${esc(n.title+', '+label(n.state)+(n.reason?': '+n.reason:''))}" data-stage="${esc(n.id)}" data-focus="stage:${esc(n.id)}" class="node-${n.visual} ${(n.id===nodeID || n.actual?.some(a=>a.id===selectedActivation))?'selected':''}"><rect x="${n.x}" y="${n.y}" width="230" height="78" rx="9"/><text x="${n.x+12}" y="${n.y+22}">${esc(n.title.length>26?n.title.slice(0,24)+'…':n.title)}</text><text x="${n.x+12}" y="${n.y+43}">${esc(label(n.kind))}</text><text x="${n.x+12}" y="${n.y+64}">${esc(n.state==='reused'||n.state==='revalidated'?label(n.state):n.visual==='skipped'?label('skipped'):(n.visual==='reachable'?'Далее':label(n.state)))}</text>${n.reason?`<title>${esc(n.reason)}</title>`:''}</g>`).join('')}</svg>`;
+ const left=$('graph').scrollLeft,top=$('graph').scrollTop;preserve($('graph'),svg);$('graph').scrollLeft=left;$('graph').scrollTop=top;
+ // Centre the active stages on first opening a graph. Subsequent polling keeps its position.
+ const box=$('graph'),active=data.nodes.filter(n=>n.visual==='current'),focusKey=[source,selected,invocation,definition].join('\n');
  if(active.length && focusKey!==graphFocus && box.clientHeight){const pad=parseFloat(getComputedStyle(box).paddingTop)||0,ys=active.map(n=>n.y),xs=active.map(n=>n.x);box.scrollTop=pad+(Math.min(...ys)+Math.max(...ys)+78)/2-box.clientHeight/2;box.scrollLeft=pad+(Math.min(...xs)+Math.max(...xs)+230)/2-box.clientWidth/2;graphFocus=focusKey;}
- $('graph').onclick=event=>{const target=event.target.closest('[data-stage]');if(!target)return;const n=byID.get(target.dataset.stage);if(n.invocation){navigateNode('',n.invocation);return;}if(n.ref){definition=n.ref.id;invocation='';renderDetail();return;}navigateNode(n.actual?.at(-1)?.id || n.id,invocation);};
+ $('graph').onclick=event=>{const target=event.target.closest('[data-stage]');if(!target)return;const n=byID.get(target.dataset.stage);if(n.invocation){navigateNode('',n.invocation,'');return;}if(n.ref){navigateNode('','',n.ref.id);return;}treeFocus='stage:'+n.id;navigateNode(n.actual?.at(-1)?.id || n.id,invocation);};
  $('graph').onkeydown=event=>{if(event.key==='Enter'||event.key===' '){const n=event.target.closest('[data-stage]');if(n){event.preventDefault();n.dispatchEvent(new MouseEvent('click',{bubbles:true}));}}};
 }
 function treeNode(n,depth=0) {
- return `<details class="node" data-key="tree:${esc(n.kind+':'+n.id)}" ${depth<2?'open':''}><summary><button data-node="${esc(n.id)}" data-focus="${esc(n.id)}" aria-pressed="${n.id===nodeID}">${esc(n.stage_id || label(n.kind))} · ${esc(short(n.id))}</button> ${badge(n.status)} <small>${esc(duration(n.metrics?.elapsed))}</small></summary>${(n.children||[]).map(c=>treeNode(c,depth+1)).join('')}</details>`;
+ return `<details class="node" data-key="tree:${esc(n.kind+':'+n.id)}" ${depth<2?'open':''}><summary><button data-node="${esc(n.id)}" data-focus="node:${esc(n.id)}" aria-pressed="${n.id===nodeID}">${esc(n.stage_id || label(n.kind))} · ${esc(short(n.id))}</button> ${badge(n.status)} <small>${esc(duration(n.metrics?.elapsed))}</small></summary>${(n.children||[]).map(c=>treeNode(c,depth+1)).join('')}</details>`;
 }
 function timingNode(node,id) {if(!node)return null;if(node.id===id)return node;for(const child of node.children||[]){const found=timingNode(child,id);if(found)return found;}return null;}
 function renderNode() {
@@ -673,7 +925,7 @@ function renderNode() {
   html+=section('Заявленная стоимость',object.reported_costs,nodeID+':cost');
   html+='<p class="muted">Модель, reasoning и токены: отдельные метрики не записаны. Суммы разных источников не складываются.</p><button type="button" id="load-files">Список файлов из сохранённых результатов</button><div id="file-list">'+(fileCache.get(fileKey(object)) || '')+'</div>';
  } else html+=section('Данные исполнения',object,nodeID+':facts',true);
- if(timing?.children?.length)html+='<h4>Вложенные исполнения</h4>'+timing.children.map(n=>`<p><button data-node="${esc(n.id)}">${esc(label(n.kind))} · ${esc(n.stage_id || short(n.id))}</button> ${badge(n.status)}</p>`).join('');
+ if(timing?.children?.length)html+='<h4>Вложенные исполнения</h4>'+timing.children.map(n=>`<p><button data-node="${esc(n.id)}" data-focus="node:${esc(n.id)}">${esc(label(n.kind))} · ${esc(n.stage_id || short(n.id))}</button> ${badge(n.status)}</p>`).join('');
  html+=raw(object,nodeID);
  preserve($('node'),html);
 }
@@ -688,26 +940,85 @@ async function loadFiles() {
   fileCache.set(fileKey(a),box.innerHTML);
  } catch(err){if(g===source+selected && box.isConnected)box.textContent='Не удалось прочитать файлы: '+err.message;}
 }
-function renderDetail() {
- const scrollX=window.scrollX,scrollY=window.scrollY;
- const run=state.run;$('delete-run').disabled=maintenanceBusy || !run.settled || !['completed','failed','cancelled'].includes(run.status);$('detail-title').textContent=state.taskTitle;
- $('detail-workflow').textContent='План: '+(parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Название не записано');
- $('detail-id').textContent=run.project_id+' · '+run.id;$('permalink').href=location.hash;
- const active=values(run.attempts).filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host'),activity=activityRows(run,state.capacity,state.progress);
- const summary=`<div class="detail-primary"><p>${badge(run.status)}${run.outcome?' · '+esc(label(run.outcome)):''}</p>
-  <h3>Сейчас</h3>${reasonsHTML(detailReasons(run,state.capacity),source,run.id)}</div>`;
- const metadata=`<details class="facts-section" data-key="run-metadata"><summary data-focus="run-metadata">Время, попытки и сведения о чтении</summary><div class="cards"><div class="card"><small>Общее время · по данным Pri-Fly</small><strong>${esc(duration(state.timing?.root?.metrics?.elapsed))}</strong></div><div class="card"><small>Попытки / ожидают агента</small><strong>${values(run.attempts).length} / ${waiting.length}</strong><small>${active.length} незавершённых</small></div><div class="card"><small>Чтение</small><strong>v${state.run_version} · e${state.event_sequence}</strong><small>${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'} · ${esc(date(run.last_observed?.utc))}</small></div></div></details>`;
- preserve($('overview'),summary+metadata+`${nowHTML({...run,source},activity,state.choices)}${timeHTML(state.timing)}${resourceHTML(run,state.capacity)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
- const invs=values(run.invocations);if(!invocation && !definition)invocation=run.root_workflow_invocation_id || '';
- $('invocation').innerHTML=invs.map(i=>`<option value="${esc(i.id)}">${esc(i.workflow_ref.id)} · ${esc(i.branch_id || '')}${i.iteration?' · итерация '+i.iteration:''} · ${esc(short(i.id))}</option>`).join('')+(!invs.length?'<option value="">Корневой workflow</option>':'')+definitions(run).map(d=>`<option value="def:${esc(d.id)}">План: ${esc(d.title || d.id)}</option>`).join('');
- $('invocation').value=definition?'def:'+definition:invocation;
- renderGraph();preserve($('tree'),state.timing?.root?treeNode(state.timing.root):'<p>Дерево времени не записано.</p>');renderNode();
- const revealKey=source+selected+nodeID+invocation;if(revealed!==revealKey){const target=[...$('tree').querySelectorAll('[data-node]')].find(n=>n.dataset.node===(nodeID || invocation));for(let parent=target?.parentElement;parent && parent!==$('tree');parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;revealed=revealKey;}
- const costs=values(run.attempts).flatMap(a=>(a.reported_costs||[]).map(c=>({attempt_id:a.id,...c})));
- preserve($('facts'),section('Выходные артефакты',run.output_artifacts,'outputs',true)+section('Решения',run.decision_ledger,'decisions',true)+section('Проверки',run.check_executions,'checks')+section('Ожидающая приёмка',run.pending_acceptance,'acceptance')+section('Диагностика',run.diagnostics,'diagnostics',true)+section('Отклонения качества',run.waivers,'waivers')+section('Публикации артефактов',run.artifact_publications,'publications')+section('Заявленная стоимость по попыткам и источникам',costs,'costs')+section('Входные артефакты',run.input_artifacts,'inputs')+section('Закреплённые ресурсы контекста',run.context_resources,'resources')+section('Ожидания, сигналы и ограничения',{waits:run.wait_registrations,inbox:run.inbox,guards:run.guards},'control')+raw(run,'run'));
- window.scrollTo(scrollX,scrollY);
+function currentStages(run){
+ const ids=new Set(values(run.attempts).filter(a=>!a.settled).map(a=>a.stage_activation_id));
+ const names=values(run.activations).filter(a=>ids.has(a.id) || ['ready','running','waiting'].includes(a.status)).map(a=>a.stage_id).filter(Boolean);
+ return [...new Set(names)];
 }
-function navigateNode(id,inv=invocation) {const h=new URLSearchParams({source,run:selected});if(id)h.set('node',id);if(inv)h.set('invocation',inv);location.hash=h;}
+function renderDetailRead(){
+ if(!state)return;
+ const run=state.run,stages=terminalStatuses.includes(state.run.status)?[]:currentStages(state.run);
+ const names=stages.slice(0,2).map(esc).join(', ');
+ const stageSummary=stages.length?`<p class="run-current-stages"><b>Стадии</b> ${names}${stages.length>2?` · ещё ${stages.length-2}`:''}</p>`:'';
+ preserve($('overview'),`<div class="detail-primary"><div class="observation-heading"><p>${runBadge(run.status)}${run.outcome?' · '+esc(label(run.outcome)):''}</p><small>${selectedRead.stale?'При последнем чтении: ':''}${state.driver_live?'Драйвер активен':'Активность драйвера не подтверждена'}</small></div>${stageSummary}${reasonsHTML(detailReasons(run,state.capacity),source,run.id)}<div class="read-facts muted">${snapshotReadHTML(selectedRead.at,selectedRead.stale)}<span>Наблюдение Run: ${esc(date(run.last_observed?.utc))}</span></div></div>`);
+}
+function renderDetail() {
+ const run=state.run;
+ $('delete-run').disabled=maintenanceBusy || !run.settled || !terminalStatuses.includes(run.status);
+ $('detail-title').textContent=state.taskTitle;
+ $('detail-workflow').textContent='План: '+(parseMaybe(run.workflow)?.title || run.workflow_ref?.id || 'Название не записано');
+ $('detail-id').textContent=run.project_id+' · '+run.id;
+ $('permalink').href=location.hash;
+ renderDetailRead();
+ if(tab==='overview'){
+  const activity=activityRows(run,state.capacity,null);
+  preserve($('activity'),nowHTML({...run,source},activity,state.choices)+observedProgress(state.progress,programsIn(run),selectedRead.stale||detailAux.has('progress')));
+  const attempts=values(run.attempts),active=attempts.filter(a=>!a.settled),waiting=active.filter(a=>a.session?.host_state==='awaiting_host' && !a.session.taken);
+  preserve($('overview-metadata'),`<details class="facts-section" data-key="run-metadata"><summary data-focus="run-metadata">Попытки и версии</summary><p>Всего: ${attempts.length} · незавершённых: ${active.length} · принятие не записано: ${waiting.length}</p><p>v${esc(state.run_version)} · e${esc(state.event_sequence)}</p></details>${timeHTML(state.timing)}${resourceHTML(run,state.capacity)}${launchHTML(run,state.input_values)}${run.brief_ref?artifact(run.brief_ref,'Задача и критерии завершения'):''}${run.pending_decision?section('Ожидается решение',run.pending_decision,'pending',true):''}${run.stops?.length?section('Причины остановки',run.stops,'stops',true):''}${run.gaps?.length?section('Разрывы наблюдения',run.gaps,'gaps',true):''}`);
+ }
+ if(tab==='workflow'){
+  const invs=values(run.invocations),plans=definitions(run);
+  if(definition && !plans.some(plan=>plan.id===definition))definition='';
+  if(!definition && !run.invocations?.[invocation])invocation=run.root_workflow_invocation_id || '';
+  const options=invs.map(i=>`<option value="${esc(i.id)}">${esc(i.workflow_ref.id)} · ${esc(i.branch_id || '')}${i.iteration?' · итерация '+i.iteration:''} · ${esc(short(i.id))}</option>`).join('')+(!invs.length?'<option value="">Корневой workflow</option>':'')+plans.map(d=>`<option value="def:${esc(d.id)}">План: ${esc(d.title || d.id)}</option>`).join('');
+  if($('invocation').innerHTML!==options)$('invocation').innerHTML=options;
+  $('invocation').value=definition?'def:'+definition:invocation;
+  renderGraph();
+  preserve($('tree'),state.timing?.root?treeNode(state.timing.root):'<p>Дерево времени не записано.</p>');
+  renderNode();
+  const revealKey=JSON.stringify([source,selected,nodeID,invocation]);
+  if(revealed!==revealKey){
+   const target=[...$('tree').querySelectorAll('[data-node]')].find(n=>n.dataset.node===(nodeID || invocation));
+   for(let parent=target?.parentElement;parent && parent!==$('tree');parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;
+   revealed=revealKey;
+  }
+ }
+ if(tab==='facts'){
+  const costs=values(run.attempts).flatMap(a=>(a.reported_costs||[]).map(c=>({attempt_id:a.id,...c})));
+  preserve($('facts'),section('Выходные артефакты',run.output_artifacts,'outputs',true)+section('Решения',run.decision_ledger,'decisions',true)+section('Проверки',run.check_executions,'checks')+section('Ожидающая приёмка',run.pending_acceptance,'acceptance')+section('Диагностика',run.diagnostics,'diagnostics',true)+section('Отклонения качества',run.waivers,'waivers')+section('Публикации артефактов',run.artifact_publications,'publications')+section('Заявленная стоимость по попыткам и источникам',costs,'costs')+section('Входные артефакты',run.input_artifacts,'inputs')+section('Закреплённые ресурсы контекста',run.context_resources,'resources')+section('Ожидания, сигналы и ограничения',{waits:run.wait_registrations,inbox:run.inbox,guards:run.guards},'control')+raw(run,'run'));
+ }
+ focusDetailRoute();
+}
+function navigateNode(id,inv=invocation,plan=definition) {
+ const params={tab:'workflow'};
+ if(id)params.node=id;
+ if(inv)params.invocation=inv;
+ if(plan)params.definition=plan;
+ if(id)params.focus='1';
+ goTo(runHash(source,selected,params));
+}
+function goTo(hash) {
+ if(location.hash===hash){focusRoute=hash;focusDetailRoute();}
+ else{
+  const url=new URL(location.href);url.hash=hash;
+  history.pushState(history.state,'',url);
+  useRoute();
+ }
+}
+function focusDetailRoute(){
+ if(restoreTreeFocus && state && tab==='workflow' && !nodeID){
+  restoreTreeFocus=false;
+  const target=[...$('workflow').querySelectorAll('[data-focus]')].find(el=>el.dataset.focus===treeFocus);
+  (target || $('workflow-title')).focus();
+ }
+ if(!focusRoute || focusRoute!==location.hash || !state)return;
+ const h=route();
+ if(tab==='journal' && h.has('event') && eventPending)return;
+ focusRoute='';
+ const exact=tab==='journal' && h.has('event')?$('events').querySelector('[data-seq="'+Number(h.get('event'))+'"] summary'):null;
+ const target=exact || $(tab==='workflow' && nodeID?'node-title':tab==='overview'?'detail-title':tab+'-title');
+ target?.focus();
+}
 function rememberListPosition(source,id){
  const list=$('run-list'), focus=document.activeElement;
  listScroll=window.scrollY;
@@ -732,23 +1043,105 @@ function restoreListPosition(){
  listFocus=null;
 }
 function useRoute() {
- const h=route(),next=h.get('run')||'',nextSource=h.get('source')||'';
- const changed=next!==selected || nextSource!==source;
- if(changed && !selected && next)rememberListPosition(nextSource,next);
- if(next!==selected || nextSource!==source) {selected=next;source=nextSource;generation++;stamp='';state=null;eventsCursor=0;artifactCache.clear();fileCache.clear();$('events').innerHTML='';$('overview').textContent='Загрузка прогона…';$('tree').innerHTML='';$('node').innerHTML='';$('graph').innerHTML='';$('facts').innerHTML='';for(const name of ['overview','tree','node','graph','facts'])lastMarkup.delete($(name));$('detail-title').textContent='Загрузка прогона…';$('detail-id').textContent=selected;$('detail-error').hidden=true;$('retry-run').hidden=true;}
- nodeID=h.get('node')||'';invocation=h.get('invocation')||'';definition='';
- const requestedTab=h.get('tab');tab=['workflow','facts','journal'].includes(requestedTab)?requestedTab:(changed?'workflow':tab);
- for(const button of document.querySelectorAll('[data-tab]')){const active=button.dataset.tab===tab;button.setAttribute('aria-pressed',active);$(button.dataset.tab).hidden=!active;}
- $('run-list').hidden=!!selected;$('detail').hidden=!selected;$('empty-detail').hidden=!!selected;
- if(changed){window.scrollTo(0,selected?0:listScroll);if(selected)$('back-to-runs').focus({preventScroll:true});else restoreListPosition();}
- if(state){renderDetail();const target=[...$('tree').querySelectorAll('[data-node]')].find(n=>n.dataset.node===(nodeID || invocation));for(let parent=target?.parentElement;parent && parent!==$('tree');parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;}schedule();
+ const h=route(),next=h.get('run')||'',nextSource=next?(h.get('source')||''):'',nextObserve=!next && h.get('observe')==='1';
+ const changed=next!==selected || nextSource!==source,screenChanged=changed || nextObserve!==observing;
+ if(!selected && !observing && (next || nextObserve))rememberListPosition(nextSource,next);
+ if(observing && !nextObserve)for(const pin of pins.values()){pin.flight?.abort();pin.flight=null;}
+ observing=nextObserve;
+ if(changed){
+  selected=next;source=nextSource;state=null;stamp='';selectedRead={at:null,stale:false};detailAux.clear();recentKey='';
+  artifactCache.clear();fileCache.clear();resetEvents('recent');
+  for(const name of ['overview','activity','overview-metadata','recent-rows','tree','node','graph','facts'])preserve($(name),'');
+  $('recent-events').hidden=true;
+  $('overview').textContent='Загрузка прогона…';lastMarkup.delete($('overview'));
+  $('detail-title').textContent='Загрузка прогона…';$('detail-id').textContent=selected;
+  $('detail-error').hidden=true;$('retry-run').hidden=true;
+ }
+ const node=h.get('node')||'',inv=h.get('invocation')||'',plan=h.get('definition')||'';
+ const requested=h.get('tab'),nextTab=runTabs.includes(requested)?requested:(node || inv || plan?'workflow':'overview');
+ if(screenChanged || nextTab!==tab || node!==nodeID || inv!==invocation || plan!==definition || location.hash!==currentHash){
+  generation++;
+  detailFlight?.abort();detailFlight=null;
+  for(const flight of detailRequests.values())flight.abort();
+  detailRequests.clear();detailAux.clear();
+ }
+ currentHash=location.hash;
+ nodeID=node;invocation=inv;definition=plan;tab=nextTab;
+ if(tab==='journal' && (!eventKey || eventKey!==h.get('event'))){
+  const seq=Number(h.get('event'));
+  if(Number.isSafeInteger(seq) && seq>0)resetEvents('exact',seq);
+  else if(eventView==='exact')resetEvents('recent');
+ }
+ if(tab!=='journal' && eventView==='exact')resetEvents('recent');
+ const panes={overview:'overview-pane',facts:'facts-pane',workflow:'workflow',journal:'journal'};
+ for(const button of document.querySelectorAll('[data-tab]')){
+  const active=button.dataset.tab===tab;button.setAttribute('aria-pressed',String(active));$(panes[button.dataset.tab]).hidden=!active;
+ }
+ $('workflow').classList.toggle('inspecting',!!nodeID);
+ $('run-list').hidden=!!selected || observing;$('detail').hidden=!selected;$('observations').hidden=!observing;
+ updatePinControls();
+ $('retry-list').hidden=!!selected || observing || !listFailed;
+ $('connection').hidden=observing;
+ if(selected)renderReadState();
+ else $('connection').textContent=listFailed?readStatus(!!listSnapshot,'список'):listSnapshot?'Список прочитан':'Загрузка списка…';
+ if(screenChanged){
+  window.scrollTo(0,selected || observing?0:listScroll);
+  if(observing)$('observations-title').focus({preventScroll:true});
+  else if(selected)$('back-to-runs').focus({preventScroll:true});
+  else restoreListPosition();
+ }
+ if(h.get('focus')==='1')focusRoute=location.hash;
+ if(state)renderDetail();
+ schedule();
 }
-async function refreshEvents(g) {
- const data=await get('/api/events',{source,id:selected,after:eventsCursor});if(g!==generation)return;
- for(const e of data.events){if(e.seq<=eventsCursor)continue;eventsCursor=e.seq;const row=document.createElement('details');row.className='event';row.innerHTML=`<summary><small>#${e.seq} · v${e.run_version} · ${esc(e.actor)}</small>${esc(e.type)}</summary>${readable(e.data,'event:'+e.seq)}`;$('events').appendChild(row);}
- eventsMore=data.more;$('more-events').hidden=!eventsMore;
+let currentHash='';
+const recentAfter=seq=>Math.max(0,seq-50);
+function eventHTML(event,exact=false) {
+ return `<details class="event" data-key="event:${esc(event.seq)}" data-seq="${esc(event.seq)}"${exact?' open':''}><summary data-focus="event:${esc(event.seq)}"><small>#${esc(event.seq)} · v${esc(event.run_version)} · ${esc(event.actor)}</small>${esc(event.type)}</summary>${readable(event.data,'event:'+event.seq)}</details>`;
 }
-let listSnapshot='', listRequest='';
+function resetEvents(view,seq=0){
+ eventView=view;eventKey=seq?String(seq):'';eventCursor=seq?seq-1:0;eventMore=false;eventPending=true;
+ $('events').replaceChildren();$('event-status').textContent='';
+ $('more-events').hidden=true;
+ $('event-recent').setAttribute('aria-pressed',String(view==='recent'));
+ $('event-history').setAttribute('aria-pressed',String(view==='history'));
+}
+async function refreshRecent(g,signal) {
+ const seq=state.event_sequence;
+ const key=JSON.stringify([source,selected,seq]);
+ if(recentKey===key)return;
+ $('recent-events').hidden=false;
+ const data=await get('/api/events',{source,id:selected,after:recentAfter(seq)},signal);
+ if(g!==generation)return;
+ const events=data.events.slice(-3).reverse();
+ const boundary=data.more || (data.events.at(-1)?.seq || 0)<seq;
+ preserve($('recent-rows'),events.map(event=>`<p><a href="${esc(runHash(source,selected,{tab:'journal',event:event.seq,focus:'1'}))}">#${esc(event.seq)} · ${esc(event.type)}</a></p>`).join('')+(boundary?'<p class="muted">Недавние события прочитаны частично.</p>':events.length?'':'<p class="muted">События не записаны.</p>'));
+ recentKey=key;
+}
+async function refreshEvents(g,signal) {
+ if(!eventPending && (!$('event-follow').checked || eventMore || eventView==='exact'))return;
+ const initial=eventPending && !$('events').childElementCount;
+ const after=initial && eventView==='recent'?recentAfter(state.event_sequence):eventCursor;
+ if(!eventPending && state.event_sequence<=after)return;
+ const mode=eventView,exact=Number(eventKey);
+ const data=await get('/api/events',{source,id:selected,after},signal);
+ if(g!==generation || mode!==eventView || exact!==Number(eventKey))return;
+ if(mode==='exact'){
+  const match=data.events.find(e=>e.seq===exact);
+  $('events').innerHTML=match?eventHTML(match,true):'';
+  $('event-status').textContent=match?`Событие #${exact}`:`Событие #${exact} в этом Run не прочитано.`;
+  eventMore=false;
+ }else{
+  const rows=data.events.filter(e=>e.seq>after);
+  $('events').insertAdjacentHTML('beforeend',rows.map(e=>eventHTML(e)).join(''));
+  eventCursor=rows.at(-1)?.seq || after;
+  eventMore=data.more;
+  $('event-status').textContent=eventMore?'Есть следующая страница.':eventCursor<state.event_sequence?'Прочитана часть журнала.':eventCursor?'Достигнут последний прочитанный номер.':'События не записаны.';
+  if(rows.length && $('event-follow').checked && !initial)$('events').lastElementChild.scrollIntoView({block:'nearest'});
+ }
+ eventPending=false;$('more-events').hidden=!eventMore;focusDetailRoute();
+}
+let listSnapshot='', listRequest='',listFailed=false;
 function readStatus(saved,object){
  return saved?`Не удалось обновить ${object}. Показаны устаревшие данные.`:`Не удалось прочитать ${object}.`;
 }
@@ -762,12 +1155,11 @@ function prepareListRead(params){
  if(key===listRequest)return;
  listRequest=key;
  listSnapshot='';
- childCache.clear();
+ childCache.clear();currentRead=null;$('current').hidden=true;
  for(const id of ['runs','board','totals','matches','page','sources'])preserve($(id),'');
  $('connection').textContent='Загрузка списка…';
  $('retry-list').hidden=true;
- $('next').disabled=true;
- $('previous').disabled=page<=1;
+ for(const suffix of ['','-top']){$('next'+suffix).disabled=true;$('previous'+suffix).disabled=page<=1;}
 }
 async function refreshList(g){
  const params=listParams();
@@ -791,88 +1183,162 @@ async function refreshList(g){
   if(listRequest!==key)listSnapshot=listRequest;
   const partial=data.sources.some(s=>s.error);
   $('connection').textContent=relatedError?'Список прочитан. Часть связанных Run недоступна.':partial?'Список прочитан. Есть недоступные источники.':'Список прочитан';
-  $('retry-list').hidden=!relatedError;
+  listFailed=relatedError;$('retry-list').hidden=!relatedError;
  }catch{
   if(g!==generation)return;
   $('connection').textContent=readStatus(listSnapshot===key,'список');
-  $('retry-list').hidden=false;
+  listFailed=true;$('retry-list').hidden=false;
  }
+}
+const detailRequests=new Map();
+const unavailableNames={brief:'название задачи',capacity:'допуск и ресурсы',progress:'ход исполнения',output:'вывод программы',journal:'журнал'};
+function renderReadState(){
+ $('connection').textContent=selectedRead.stale?'Чтение Run прервано':selectedRead.at?'Run прочитан':'Чтение Run…';
+ const error=selectedRead.stale?readStatus(!!state,'прогон'):detailAux.size?'Прогон прочитан. Недоступно: '+[...detailAux].map(name=>unavailableNames[name]).join(', ')+'.':'';
+ $('detail-error').hidden=!error;$('detail-error').textContent=error;$('retry-run').hidden=!error;
+}
+function updateDetail() {
+ if(!state)return;
+ const version=JSON.stringify([state.taskTitle,state.run_version,state.event_sequence,state.driver_live,state.capacity,state.progress?.attempts,state.progress?.as_of?.utc,state.output?.attempt_id,state.output?.state,(state.output?.streams||[]).map(x=>x.end_offset),selectedRead.stale,detailAux.has('progress')]);
+ if(stamp!==version){stamp=version;renderDetail();}
+ else renderDetailRead();
+ renderReadState();
+}
+function readDetailPart(name,g,read,apply=()=>{}){
+ if(detailRequests.has(name))return;
+ const flight=new AbortController();
+ detailRequests.set(name,flight);
+ const valid=()=>g===generation && !flight.signal.aborted;
+ (async()=>{
+  try{
+   const result=await read(flight.signal);
+   if(!valid())return;
+   apply(result);detailAux.delete(name);
+  }catch{
+   if(!valid())return;
+   detailAux.add(name);
+   if(name==='capacity' || name==='output')delete state[name];
+   if(name==='journal' && tab==='overview')preserve($('recent-rows'),'<p class="muted">Недавние события недоступны.</p>');
+  }finally{
+   if(detailRequests.get(name)===flight)detailRequests.delete(name);
+   if(valid())updateDetail();
+  }
+ })();
 }
 async function refreshDetail(g){
+ if(detailFlight)return;
+ const flight=new AbortController();detailFlight=flight;
  const params={source,id:selected};
  let next;
- try{next=await get('/api/run',params);}
- catch{
-  if(g!==generation)return;
-  $('detail-error').hidden=false;
-  $('detail-error').textContent=readStatus(!!state,'прогон');
-  $('retry-run').hidden=false;
-  if(!state){
-   $('detail-title').textContent='Прогон';
-   $('overview').textContent='';
+ try{
+  next=await get('/api/run',params,flight.signal);
+  if(next.run?.id!==params.id)throw new Error('Mismatched Run');
+ }catch{
+  if(g===generation && !flight.signal.aborted){
+   selectedRead.stale=true;
+   if(!state){$('detail-title').textContent='Прогон';$('overview').textContent='';lastMarkup.delete($('overview'));}
+   updateDetail();renderReadState();
   }
   return;
- }
- if(g!==generation)return;
- const programs=values(next.run?.attempts).filter(a=>!a.session&&a.process);
- const shown=nodeID&&receivedAttempt(next.run,nodeID);
- const reads=[];
- const brief=next.run?.brief_ref;
- const briefKey=brief && params.source+':'+brief.digest;
- let briefArtifact=briefKey && artifactCache.get(briefKey);
- if(brief && !briefArtifact)reads.push(['brief','/api/artifact',{source:params.source,...brief}]);
- if(next.run?.stage_resources || !terminalStatuses.includes(next.run?.status))reads.push(['capacity','/api/capacity',{source}]);
- if(programs.length)reads.push(['progress','/api/progress',params]);
- if(shown&&!shown.session&&shown.process)reads.push(['output','/api/output',{...params,attempt:shown.id}]);
- const observations=await Promise.allSettled(reads.map(([,endpoint,query])=>get(endpoint,query)));
- if(g!==generation)return;
- const unavailable=[];
- observations.forEach((result,i)=>{
-  const name=reads[i][0];
-  if(result.status==='fulfilled'){
-   if(name==='brief'){
-    briefArtifact=result.value;
-    artifactCache.set(briefKey,briefArtifact);
-   }else if(name!=='output' || receivedAttempt(next.run,nodeID)?.id===shown.id)next[name]=result.value;
-  }else unavailable.push(({brief:'название задачи',capacity:'допуск и ресурсы',progress:'ход исполнения',output:'вывод программы'})[name]);
- });
+ }finally{if(detailFlight===flight)detailFlight=null;}
+ if(g!==generation || flight.signal.aborted)return;
+ const previous=state,run=next.run,programs=programsIn(run);
+ const shown=tab==='workflow' && nodeID?receivedAttempt(run,nodeID):null;
+ const brief=run.brief_ref,briefKey=brief && params.source+':'+brief.digest;
+ const briefArtifact=briefKey && artifactCache.get(briefKey);
  next.taskTitle=runTaskTitle(next.input_values,parseMaybe(briefArtifact?.content));
- const version=JSON.stringify([params,next.taskTitle,next.run_version,next.event_sequence,next.driver_live,next.capacity?.resources,next.capacity?.waiting,next.capacity?.capacity,next.progress?.attempts,programs.some(a=>!a.settled)?next.progress?.as_of?.utc:'',next.output?[next.output.attempt_id,next.output.state,(next.output.streams||[]).map(x=>x.end_offset)]:null]);
- state=next;
- if(stamp!==version){stamp=version;renderDetail();}
- if(tab==='journal')try{await refreshEvents(g);}catch{unavailable.push('журнал');}
- if(g!==generation)return;
- $('detail-error').hidden=!unavailable.length;
- $('detail-error').textContent=unavailable.length?'Прогон прочитан. Недоступно: '+unavailable.join(', ')+'.':'';
- $('retry-run').hidden=!unavailable.length;
+ next.capacity=previous?.capacity;
+ next.progress=matchingProgress(previous?.progress,programs);
+ if(shown && previous?.output?.attempt_id===shown.id)next.output=previous.output;
+ state=next;selectedRead={at:new Date().toISOString(),stale:false};
+ updateDetail();
+ if(brief && !briefArtifact)readDetailPart('brief',g,signal=>get('/api/artifact',{source:params.source,...brief},signal),value=>{
+  artifactCache.set(briefKey,value);state.taskTitle=runTaskTitle(state.input_values,parseMaybe(value.content));
+ });
+ if((tab==='overview' || tab==='facts') && (run.stage_resources || !terminalStatuses.includes(run.status)))readDetailPart('capacity',g,signal=>get('/api/capacity',{source:params.source},signal),value=>{state.capacity=value;});
+ if(programs.length && (tab==='overview' || (shown && !shown.session && shown.process)))readDetailPart('progress',g,signal=>get('/api/progress',params,signal),value=>{
+  state.progress=matchingProgress(value,programsIn(state.run));
+ });
+ if(shown && !shown.session && shown.process)readDetailPart('output',g,signal=>get('/api/output',{...params,attempt:shown.id},signal),value=>{
+  if(receivedAttempt(state.run,nodeID)?.id===shown.id && value.attempt_id===shown.id)state.output=value;
+ });
+ if(tab==='overview' && recentKey!==JSON.stringify([source,selected,state.event_sequence]))readDetailPart('journal',g,signal=>refreshRecent(g,signal));
+ if(tab==='journal')readDetailPart('journal',g,signal=>refreshEvents(g,signal));
 }
-async function tick(){
- if(busy){queued=true;return;}
- busy=true;queued=false;
- const g=generation;
- try{
-  const reads=[refreshList(g)];
-  if(selected)reads.push(refreshDetail(g));
-  await Promise.all(reads);
- }finally{
-  busy=false;
-  if(queued)setTimeout(tick,0);
- }
+function schedule(){
+ if(observing){refreshPins();return;}
+ if(selected){refreshDetail(generation);return;}
+ if(readingList)return;
+ readingList=true;
+ const g=generation,params=listParams();
+ Promise.all([refreshList(g),refreshCurrent(params,g)]).finally(()=>{
+  readingList=false;
+  if(g!==generation && !selected && !observing)schedule();
+ });
 }
-function schedule(){if(busy)queued=true;else tick();}
 $('retry-list').onclick=schedule;$('retry-run').onclick=schedule;
-form.onsubmit=e=>e.preventDefault();form.oninput=()=>{clearTimeout(filterTimer);generation++;page=1;prepareListRead(listParams());expandSearch=true;filterTimer=setTimeout(schedule,200);};
-$('runs').addEventListener('click',event=>{const expand=event.target.closest('[data-expand]');if(expand){const key=expand.dataset.expand;if(expandedRuns.has(key))expandedRuns.delete(key);else expandedRuns.add(key);schedule();}const more=event.target.closest('[data-more]');if(more){childPages.set(more.dataset.more,(childPages.get(more.dataset.more)||1)+1);schedule();}});
-$('previous').onclick=()=>{page--;generation++;prepareListRead(listParams());schedule();};$('next').onclick=()=>{page++;generation++;prepareListRead(listParams());schedule();};
-$('invocation').onchange=e=>{if(e.target.value.startsWith('def:')){definition=e.target.value.slice(4);invocation='';nodeID='';renderDetail();}else navigateNode('',e.target.value);};
-$('detail').addEventListener('click',e=>{const target=e.target.closest('[data-node]');if(target){const obj=nodeObject(state.run,target.dataset.node);navigateNode(target.dataset.node,(state.run.invocations?.[obj?.id] ? obj.id : obj?.workflow_invocation_id || state.run.activations?.[obj?.stage_activation_id]?.workflow_invocation_id || invocation));}if(e.target.closest('#load-files'))loadFiles();});
-for(const button of document.querySelectorAll('[data-tab]'))button.onclick=()=>{const h=route();h.set('tab',button.dataset.tab);location.hash=h.toString();};
+form.onsubmit=e=>e.preventDefault();
+form.oninput=()=>changeCatalogue(true);
+$('catalog-views').addEventListener('click',event=>{
+ const control=event.target.closest('[data-view]');
+ if(control)setCatalogueView(control.dataset.view);
+});
+$('current-state').onchange=()=>setCatalogueView('current');
+$('runs').addEventListener('click',event=>{
+ const expand=event.target.closest('[data-expand]');
+ if(expand){const key=expand.dataset.expand;if(expandedRuns.has(key))expandedRuns.delete(key);else expandedRuns.add(key);schedule();}
+ const more=event.target.closest('[data-more]');
+ if(more){childPages.set(more.dataset.more,(childPages.get(more.dataset.more)||1)+1);schedule();}
+});
+function turnPage(delta){
+ page+=delta;generation++;syncCatalogueAddress();prepareListRead(listParams());schedule();
+}
+for(const suffix of ['','-top']){
+ $('previous'+suffix).onclick=()=>turnPage(-1);
+ $('next'+suffix).onclick=()=>turnPage(1);
+}
+$('invocation').onchange=e=>{
+ const value=e.target.value;
+ navigateNode('',value.startsWith('def:')?'':value,value.startsWith('def:')?value.slice(4):'');
+};
+$('pin-run').onclick=()=>togglePin(source,selected,state?.taskTitle||'');
+$('back-to-tree').onclick=()=>{restoreTreeFocus=true;navigateNode('');};
+document.addEventListener('click',event=>{
+ const pin=event.target.closest('[data-pin]');
+ if(pin){togglePin(pin.dataset.source,pin.dataset.run,pin.dataset.title);return;}
+ const link=event.target.closest('a[href^="#"]');
+ if(!link || event.defaultPrevented || event.button!==0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)return;
+ event.preventDefault();
+ goTo(link.hash);
+});
+$('detail').addEventListener('click',e=>{
+ const target=e.target.closest('[data-node]');
+ if(target && state){
+  if(!$('workflow').classList.contains('inspecting') || $('execution-tree').contains(target))treeFocus=target.dataset.focus || 'node:'+target.dataset.node;
+  const obj=nodeObject(state.run,target.dataset.node);
+  navigateNode(target.dataset.node,(state.run.invocations?.[obj?.id]?obj.id:obj?.workflow_invocation_id||state.run.activations?.[obj?.stage_activation_id]?.workflow_invocation_id||invocation));
+ }
+ if(e.target.closest('#load-files'))loadFiles();
+});
+function openTab(name){
+ const h=route();h.set('tab',name);h.delete('focus');h.delete('event');
+ goTo('#'+h);
+}
+for(const button of document.querySelectorAll('[data-tab]'))button.onclick=()=>openTab(button.dataset.tab);
+$('open-journal').onclick=()=>openTab('journal');
+for(const mode of ['recent','history'])$('event-'+mode).onclick=()=>{
+ resetEvents(mode);
+ const h=route();
+ if(h.has('event')){h.delete('event');h.delete('focus');goTo('#'+h);}
+ else schedule();
+};
+$('event-follow').onchange=schedule;
 async function cleanStorage(targetSource,run='') {
  if(maintenanceBusy)return;maintenanceBusy=true;$('delete-run').disabled=true;
  const status=$('maintenance-status');status.textContent='Подготовка очистки: проверяем Run и ссылки на артефакты…';
  try {
   const {token}=await get('/api/maintenance-token');
-  const request=async(action,digest='')=>{const response=await fetch('/api/maintenance',{method:'POST',headers:{'Content-Type':'application/json','X-PriFly-Maintenance':token},body:JSON.stringify({source:targetSource,run,action,digest}),signal:AbortSignal.timeout(120000)});const body=await response.json();if(!response.ok)throw new Error(({storage_busy:'Хранилище используется другим процессом. Дождитесь завершения операции и повторите.',run_not_deletable:'Run не завершён окончательно или защищён зависимостями.',cleanup_plan_changed:'Данные изменились после предпросмотра. Откройте очистку заново.'})[body.code]||body.message||body.detail||JSON.stringify(body));return body;};
+  const request=async(action,digest='')=>{const response=await fetch(endpoint('/api/maintenance'),{method:'POST',headers:{'Content-Type':'application/json','X-PriFly-Maintenance':token},body:JSON.stringify({source:targetSource,run,action,digest}),signal:AbortSignal.timeout(120000)});const body=await response.json();if(!response.ok)throw new Error(({storage_busy:'Хранилище используется другим процессом. Дождитесь завершения операции и повторите.',run_not_deletable:'Run не завершён окончательно или защищён зависимостями.',cleanup_plan_changed:'Данные изменились после предпросмотра. Откройте очистку заново.'})[body.code]||body.message||body.detail||JSON.stringify(body));return body;};
   const plan=await request('preview');const ids=Object.keys(plan.runs),protectedCount=Object.keys(plan.protected).length;
   if(!ids.length && !plan.files){status.textContent='Удалять нечего. Защищённых Run: '+protectedCount;return;}
   const dialog=$('cleanup-dialog');$('cleanup-preview').innerHTML=`<p class="prose">${esc(plan.root)}</p><p>Будет удалено Run: <b>${ids.length}</b>. Файлов и каталогов: <b>${plan.files}</b> (${sizeText(plan.bytes)} содержимого, без оценки освобождения SQLite).</p><details open><summary>Удаляемые Run</summary><ul>${ids.map(id=>`<li>${esc(id)}</li>`).join('')}</ul></details>${protectedCount?`<details><summary>Защищённые Run: ${protectedCount}</summary><ul>${Object.entries(plan.protected).map(([id,reason])=>`<li>${esc(id)} — ${esc(reason)}</li>`).join('')}</ul></details>`:''}<p>Настройки, пакеты, импортированные и общие артефакты, audit/receipts и внешние рабочие папки сохранятся. Удаляются только служебные рабочие каталоги выбранных Run. Уплотнение базы может потребовать дополнительного свободного места.</p>`;
@@ -885,6 +1351,20 @@ async function cleanStorage(targetSource,run='') {
 }
 $('delete-run').onclick=()=>cleanStorage(source,selected);
 $('storage-details').addEventListener('click',event=>{const target=event.target.closest('[data-clean-source]');if(target)cleanStorage(target.dataset.cleanSource);});
-$('more-events').onclick=()=>schedule();
-window.addEventListener('hashchange',useRoute);useRoute();setInterval(schedule,1500);refreshStorage();setInterval(refreshStorage,5000);
+$('more-events').onclick=()=>{eventPending=true;schedule();};
+restorePins();
+history.scrollRestoration='manual';
+restoreCatalogueAddress();
+renderCatalogueControls();
+window.addEventListener('hashchange',useRoute);
+window.addEventListener('popstate',()=>{restoreCatalogueAddress();prepareListRead(listParams());useRoute();});
+useRoute();
+setInterval(schedule,1500);
+function readVisibleStorage(){
+ if(!observing && !selected && $('storage').closest('.list-metadata').open)refreshStorage();
+}
+document.addEventListener('toggle',event=>{
+ if(event.target===$('storage') || event.target.classList?.contains('list-metadata'))readVisibleStorage();
+},true);
+setInterval(readVisibleStorage,5000);
 }

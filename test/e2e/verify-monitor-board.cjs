@@ -39,11 +39,12 @@ async function until(check,message){const end=Date.now()+20000;while(Date.now()<
   checks.push('A3/A5: partial, cancelled, failed, uncertain, continuation chain, repeated continue, legacy missing provenance');
   // Delay an obsolete list response, then select a different filter while it is in flight.
   let release,intercepted=false,obsoleteFinished=false;
-  const obsoleteDone=request=>{if(new URL(request.url()).searchParams.get('q')==='obsolete-filter')obsoleteFinished=true;};
+  const obsoleteList=url=>url.searchParams.get('q')==='obsolete-filter' && url.searchParams.get('view')==='board';
+  const obsoleteDone=request=>{if(obsoleteList(new URL(request.url())))obsoleteFinished=true;};
   page.on('requestfinished',obsoleteDone);
   await page.route('**/api/runs?*',async route=>{
    const url=new URL(route.request().url());
-   if(url.searchParams.get('q')==='obsolete-filter' && !intercepted){
+   if(obsoleteList(url) && !intercepted){
     const response=await route.fetch();assert.equal((await response.json()).runs.length,0);
     const held=new Promise(resolve=>{release=resolve;});intercepted=true;await held;await route.fulfill({response});
    }else await route.continue();
@@ -153,6 +154,7 @@ async function until(check,message){const end=Date.now()+20000;while(Date.now()<
   await compact.keyboard.press('Enter');
   await beforeViewport(compact.locator('.detail-primary .run-explanation > a'),'mobile explanation before details');
   assert.match(await compact.locator('.detail-primary').innerText(),/Связь с хостом потеряна|Исход обязательств не установлен/);
+  await compact.locator('#overview-technical > summary').click();
   await compact.locator('[data-key=run-metadata] summary').click();
   await until(async()=>/Активность драйвера не подтверждена/.test(await compact.locator('#overview').innerText()),'driver inactive wording missing');
   driver=true;

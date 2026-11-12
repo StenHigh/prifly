@@ -72,7 +72,7 @@ const lineage={source:'authority',run_id:'run:child',subject:'#154',fork_source_
 let row=relatedTitle(lineage,2);
 assert.match(row,/data-run-depth="2"/);assert.doesNotMatch(row,/\sstyle=/);assert.match(row,/Восстановление/);assert.match(row,/Контекст поиска/);
 assert.match(row,/aria-expanded="false"/);assert.match(row,/data-expand=/);assert.match(row,/href="#source=authority&amp;run=run%3Achild"/);
-expandedRuns.add('authority|run:child');row=relatedTitle(lineage,2);assert.match(row,/aria-expanded="true"/);
+expandedRuns.add(require('./monitor.js').runKey(lineage));row=relatedTitle(lineage,2);assert.match(row,/aria-expanded="true"/);
 assert.match(relatedTitle({...lineage,children:0,missing_parent:true,fork_source_run_id:'run:deleted'},0),/Исходный Run недоступен: run:deleted/);
 assert.match(relatedTitle({...lineage,fork_source_run_id:'',children:0},0),/#154/);
 assert.match(relatedTitle({...lineage,children:0},3),/run-lineage is-child/);
@@ -226,7 +226,7 @@ assert.match(activityRows(recovered)[0].detail,/1 узлов взято/);
  const live={attempt_id:'attempt:t',state:'reported',settled:false,attempt_status:'running',phase:'product',current:4200,total:6994,observed:'2026-09-30T12:00:18Z',accepted:2,rejected:0,truncated:false};
  assert.deepEqual(progressView(live,asOf),{lead:'Сейчас',phase:'product',message:'',counted:{current:4200,total:6994},age:12,notes:[]});
  const html=progressHTML(live,asOf);
- assert.match(html,/<b>Сейчас<\/b>: product · 4200 \/ 6994/);assert.match(html,/<progress max="6994" value="4200">/);assert.match(html,/12 с назад/);
+ assert.match(html,/<b>Сейчас<\/b>: product · 4200 \/ 6994/);assert.match(html,/<progress max="6994" value="4200">/);assert.match(html,/12 с на момент чтения/);
  assert.doesNotMatch(html,/%|pass|успех/i,'no invented percentage or success');
  // Failed after its last report: the phase is its last word, not the outcome.
  const failed=progressView({...live,settled:true,attempt_status:'failed',phase:'baseline',current:undefined,total:undefined},asOf);
@@ -339,10 +339,28 @@ const uncertain={status:'uncertain',attempts:{old,left:{id:'left',started:{},ses
 const reasons=detailReasons(uncertain);
 const explanation=reasonsHTML(reasons,'source:a','run:a');
 assert.match(explanation,/Связь с хостом потеряна[^]*Другие причины · 2/);
-assert.match(explanation,/Исполнение начато/);
+assert.match(explanation,/Задание выдано. Принятие хостом не записано/);
 assert.doesNotMatch(explanation,/attempt_deadline_expired/);
 
 const {runTaskTitle}=require('./monitor.js');
 assert.equal(runTaskTitle({task:{title:' Заголовок задачи '}},null),'Заголовок задачи');
 assert.equal(runTaskTitle({task:{title:'Другой заголовок'}},{subject:'Название задачи <буквально>'}),'Название задачи <буквально>');
 assert.equal(runTaskTitle({task:{title:42}},null),'Название задачи не записано');
+
+const {runKey,catalogueAddress,currentRuns,matchingProgress,observedProgress}=require('./monitor.js');
+assert.notEqual(runKey({source:'a|b',run_id:'c'}),runKey({source:'a',run_id:'b|c'}));
+assert.equal(catalogueAddress('?view=board&status=failed&sort=status&page=5&q=%D0%91').toString(),'q=%D0%91&status=failed&view=board&sort=status&page=5');
+assert.equal(catalogueAddress('?view=broken&status=bad&sort=bad&page=1e4&from=2026-02-30&to=2026-02-28&private=123').toString(),'to=2026-02-28');
+const oldRow={source:'source:a',run_id:'run:one',run_version:2,event_sequence:3,last_observed:'2026-11-12T00:00:01Z',status:'running'};
+const sameID={...oldRow,source:'source:b',last_observed:'2026-11-12T00:00:02Z'};
+const stopping={...oldRow,event_sequence:4,status:'stopping'};
+assert.deepEqual(currentRuns([oldRow,sameID,stopping,{...oldRow,run_id:'other',last_observed:'2026-11-12T00:00:00Z'}]),[sameID,stopping]);
+assert.match(executionRole({session:{host_state:'awaiting_host',taken:{}}}).state,/Принятие записано/);
+assert.match(executionRole({session:{host_state:'awaiting_host'},started:{}}).state,/Принятие хостом не записано/);
+const progressReport={attempts:[{attempt_id:'old',phase:'old'},{attempt_id:'new',phase:'<unsafe>',current:2,total:7,state:'reported'}]};
+assert.deepEqual(matchingProgress(progressReport,[{id:'new'}]).attempts,[progressReport.attempts[1]]);
+assert.match(observedProgress(progressReport,[{id:'new'}],true),/Последний отчёт — чтение прервано.*&lt;unsafe&gt;/);
+assert.match(observedProgress(progressReport,[{id:'new',settled:{},status:'failed'}]),/Последняя фаза до завершения попытки/);
+assert.doesNotMatch(observedProgress(progressReport,[{id:'new'}]),/old|<unsafe>/);
+assert.match(reasonsHTML(detailReasons(failing),'s','r'),/tab=workflow&amp;focus=1&amp;node=old/);
+console.log('monitor observation: catalogue URL, snapshot selection, host acceptance, progress identity and exact reasons passed');

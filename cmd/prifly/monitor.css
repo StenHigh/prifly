@@ -227,3 +227,70 @@ footer{max-width:1680px;margin:auto;padding:18px 28px;color:var(--muted);font-si
 
 .run-project-cell details { overflow-wrap: anywhere; }
 .run-project-cell summary { cursor: pointer; }
+
+#observe-link { flex: 0 0 auto; padding: 5px 8px; border-radius: 5px; font-size: 13px; }
+#observe-link[aria-current=page], .observation-actions button[aria-pressed=true] { background: var(--tint); color: var(--ink); }
+#pin-count { margin-inline-start: 3px; font-variant-numeric: tabular-nums; }
+.observation-heading, .observation-actions, .read-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.observation-heading { justify-content: space-between; }
+.observation-heading :is(h1,h2,h3,p) { margin: 0; }
+.observation-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-block: 8px 14px; align-items: start; }
+.observation-card { display: grid; gap: 7px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); min-width: 0; overflow-wrap: anywhere; }
+.observation-card h2, #current-title { font-size: 16px; }
+.observation-card p, .observed-progress h4 { margin: 0; }
+.observation-card button { justify-self: start; }
+.observation-card progress, .observed-progress progress { width: min(100%, 340px); accent-color: var(--accent); }
+.observation-activity { margin: 0; padding-inline-start: 18px; }
+#catalog-views { margin-block: 10px; }
+.pagination-top { margin-block: 8px; }
+#catalogue-message:empty, #pin-message:empty, #observation-message:empty { display: none; }
+#catalogue-message, #pin-message, #observation-message { color: var(--wait); }
+#current-status { display: inline-flex; align-items: center; gap: 6px; }
+#detail > .heading { margin: 8px 0; gap: 8px 16px; }
+#detail-title { overflow-wrap: anywhere; }
+#detail-error { margin-block: 6px; }
+.detail-primary { padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.detail-primary .run-explanation { margin-block: 8px; }
+.read-facts { font-size: 12px; font-variant-numeric: tabular-nums; }
+#recent-events, #overview-technical { margin-block: 12px; }
+#recent-events h3 { margin: 0 0 4px; }
+#overview-technical summary { overflow-wrap: anywhere; }
+.focus-heading { margin-top: 0; }
+#back-to-tree { display: none; }
+.pinned-run .error { border-inline-start: 2px solid var(--bad); padding-inline-start: 8px; }
+#observations { max-width: 1120px; }
+@media (max-width: 760px) {
+ .observation-grid { grid-template-columns: minmax(0,1fr); gap: 6px; }
+ .current-run { grid-template-columns: minmax(0,1fr) auto; align-items: center; padding: 6px 8px; gap: 2px 6px; }
+ .current-run > small { grid-column: 1; grid-row: 2; }
+ .current-run > button { grid-column: 2; grid-row: 1 / span 2; }
+ .current-run .observation-heading { justify-content: start; gap: 4px 8px; }
+ .tabs { flex-wrap: wrap; overflow: visible; gap: 4px; }
+ .tabs button { white-space: normal; min-height: 34px; }
+ #workflow.inspecting :is(.graph-toolbar,#graph,#execution-tree,.focus-heading) { display: none; }
+ #workflow.inspecting #back-to-tree { display: inline-block; }
+}
+@media (max-width: 480px) {
+ header { grid-template-columns: minmax(0,1fr) auto; }
+ .header-tools { grid-column: 1 / -1; margin-inline-start: 0; display: flex; justify-content: space-between; align-items: center; }
+ #connection { order: 0; text-align: start; }
+ #observe-link { justify-self: end; }
+ #detail > .heading { display: block; }
+ #detail > .heading details { margin-top: 5px; }
+ .read-facts { column-gap: 10px; row-gap: 2px; }
+}
+#run-service { margin-top: 14px; }
+@media (max-width: 760px) {
+ .list-heading { gap: 5px 14px; margin-bottom: 8px; }
+ .totals { gap: 8px 12px; flex-wrap: wrap; }
+ .totals > span { display: inline; }
+ .totals b { font: 600 12px system-ui,sans-serif; letter-spacing: 0; }
+ .filters { margin: 10px 0 8px; gap: 6px; }
+ .filters .search { flex-basis: 60%; min-width: 0; }
+ .advanced-filters { flex: 0 1 auto; padding-block-end: 6px; }
+ .current-run > small { display: none; }
+ .current-run > button { grid-row: 1; }
+ .current-run .observation-heading .badge { font-size: 10px; }
+ #catalog-views { margin-block: 6px; gap: 5px; }
+ #catalog-views button { padding: 5px 7px; }
+}
