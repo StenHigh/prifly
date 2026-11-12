@@ -31,3 +31,22 @@ main { padding-block: 12px; }
  #filters .search { flex-basis: 100%; }
  .advanced-filters[open] { flex: 1 0 100%; }
 }
+
+#light-pin-message:empty { display: none; }
+#light-pin-message { margin: 0 0 8px; color: var(--attention); }
+.light-pin-actions { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.light-card .light-pin-actions { margin-top: 8px; }
+.light-pin-actions button { white-space: normal; }
+#detail, .run-row, .run-row > *, .observed-run { min-width: 0; overflow-wrap: anywhere; }
+.run-row pre { white-space: pre-wrap; }
+#observe-title { margin: 10px 0; }
+#observed-runs { display: grid; gap: 8px; }
+.observed-run { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr); gap: 8px 14px; align-items: start; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 12px; }
+.observed-run h3, .observed-run p { margin: 0 0 4px; }
+.observed-run small { display: block; color: var(--muted); }
+.observation-read { color: var(--attention); }
+@media (max-width: 600px) {
+ .observed-run { grid-template-columns: minmax(0,1fr); padding: 8px 10px; gap: 3px; }
+ .observed-run small { display: inline-block; margin-right: 8px; }
+ .observed-run .light-pin-actions button, .observed-run .light-pin-actions a { min-height: 44px; display: inline-flex; align-items: center; }
+}

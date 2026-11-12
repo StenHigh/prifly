@@ -76,6 +76,33 @@ async function stopCases(browser){
   assert.equal(new URLSearchParams(href.hash.slice(1)).get('source'),new URLSearchParams(new URL(page.url()).hash.slice(1)).get('source'));
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.screenshot({path:path.join(target,'light-stop-detail.png')});
+  await page.locator('#back').click();
+  for(const type of ['failed','decision']){
+   const card=await find(ids[type]);
+   await card.locator(`[data-light-pin][data-run="${ids[type]}"]`).click();
+  }
+  await page.locator('#observe-light').click();
+  const rows=page.locator('.observed-run');
+  const expired=rows.nth(0),waiting=rows.nth(1);
+  await expired.getByRole('link',{name:/Открыть попытку в Full/}).waitFor();
+  await waiting.getByRole('link',{name:/Результаты и решения в Full/}).waitFor();
+  const exact=new URL(await expired.locator('a[target=_blank]').getAttribute('href'));
+  const area=new URL(await waiting.locator('a[target=_blank]').getAttribute('href'));
+  const exactRoute=new URLSearchParams(exact.hash.slice(1)),areaRoute=new URLSearchParams(area.hash.slice(1));
+  assert.equal(exactRoute.get('tab'),'workflow');
+  assert.ok(exactRoute.get('node')?.startsWith('attempt:'));
+  assert.equal(exactRoute.get('run'),ids.failed);
+  assert.equal(areaRoute.get('tab'),'facts');
+  assert.equal(areaRoute.get('run'),ids.decision);
+  assert.equal(areaRoute.has('node'),false);
+  const inspect=await context.newPage();
+  try{
+   await inspect.goto(exact.href);
+   await inspect.locator('#node .attempt-diagnostic').getByText('attempt_deadline_expired',{exact:true}).waitFor();
+  }finally{await inspect.close();}
+  await page.locator('#observe-return').click();
+  await page.locator('#board-screen').waitFor({state:'visible'});
+  assert.equal(await page.locator('[name=q]').inputValue(),ids.decision);
   assert.ok(reads.every(r=>r.method==='GET'));
   fs.writeFileSync(path.join(target,'stop-cases.json'),JSON.stringify({outcome:'passed',cases:Object.keys(ids),reads},null,2)+'\n');
  }finally{await context.close();}
@@ -94,13 +121,90 @@ async function stopCases(browser){
   metrics.page_bytes=Buffer.byteLength(JSON.stringify(first));assert.ok(metrics.page_bytes<=128*1024);for(const card of first.cards)assert.ok(Buffer.byteLength(JSON.stringify(card))<=4096+100);
   metrics.asset_gzip_bytes=0;for(const name of ['','light.css','light.js','monitor-theme.js']){const response=await context.request.get(base+name);metrics.asset_gzip_bytes+=zlib.gzipSync(await response.body()).length;}assert.ok(metrics.asset_gzip_bytes<=250*1024);
   await page.screenshot({path:path.join(target,'light-desktop.png'),fullPage:true});await page.screenshot({path:path.join(target,'light-first-screen.png')});
-  const fullPage=await context.newPage();await fullPage.goto(full);await fullPage.locator('h1').waitFor();assert.notEqual(await fullPage.title(),await page.title());assert.equal(await fullPage.locator('#board-screen').count(),0);await fullPage.screenshot({path:path.join(target,'full-desktop.png'),fullPage:true});
+  const fullPage=await context.newPage();await fullPage.goto(full);await fullPage.locator('#runs-title').waitFor();assert.notEqual(await fullPage.title(),await page.title());assert.equal(await fullPage.locator('#board-screen').count(),0);await fullPage.screenshot({path:path.join(target,'full-desktop.png'),fullPage:true});
   const latencies=[];for(let i=0;i<100;i++){const t=performance.now();await api();latencies.push(performance.now()-t);}latencies.sort((a,b)=>a-b);metrics.warm_p95_ms=latencies[94];assert.ok(metrics.warm_p95_ms<=250,'warm p95 budget');
   if(fs.existsSync(path.join(target,'authorities/feature-mapping.json'))){const feature=await api('q='+encodeURIComponent('Выпущенный aif-feature'));assert.equal(feature.cards.length,1);assert.equal(feature.cards[0].lane,'plan');assert.equal(feature.cards[0].phase.mapped,true);metrics.shipped_feature_mapped=true;}
   const board=await context.request.get(base+'api/light/board'),etag=board.headers().etag;const unchanged=await context.request.get(base+'api/light/board',{headers:{'If-None-Match':etag}});assert.equal(unchanged.status(),304);assert.equal((await unchanged.body()).length,0);
   await page.locator('[name=q]').fill('Задача 0999');await until(async()=>await page.locator('.light-card').count()===1,'search outside first page');assert.match(await page.locator('.light-card').innerText(),/Задача 0999/);
   await page.locator('.card-title').focus();await page.keyboard.press('Enter');await page.locator('#detail-screen').waitFor({state:'visible'});await until(async()=>/ещё не запускалась/.test(await page.locator('#detail').innerText()),'queued task details did not load');await page.locator('#back').click();await page.locator('#board-screen').waitFor({state:'visible'});assert.equal(await page.locator('[name=q]').inputValue(),'Задача 0999');
   await page.locator('#reset').click();await until(async()=>await page.locator('.light-card').count()>1,'reset did not restore data');
+  const continuation=(await api(new URLSearchParams({q:'current request for the next Run'}).toString())).cards.find(card=>card.history_count===3);
+  assert.ok(continuation,'native continuation task not found');
+  const taskHash='#'+new URLSearchParams({source:continuation.source,key:continuation.key});
+  const taskRoute='**/api/light/task?*';
+  const longStage='stage_'+ 'x'.repeat(190), longBranch='branch_'+ 'y'.repeat(190);
+  let responseMode='long';
+  const changeTask=async route=>{
+   if(responseMode==='offline')return route.fulfill({status:503,json:{message:'offline'}});
+   if(responseMode==='denied')return route.fulfill({status:403,json:null});
+   if(responseMode==='delay')await new Promise(resolve=>setTimeout(resolve,1500));
+   const response=await route.fetch();
+   const data=await response.json();
+   if(responseMode==='long'){
+    data.runs[0].board??={};
+    data.runs[0].board.stages=[{stage_id:longStage,branches:[longBranch],status:'running'}];
+   }
+   if(responseMode==='missing'){
+    data.runs=data.runs.slice(2);
+    data.card.current_runs=[];
+   }
+   await route.fulfill({response,json:data});
+  };
+  await page.route(taskRoute,changeTask);
+  await page.goto(base+taskHash);
+  const history=page.locator('#light-run-history'), historyRows=history.locator('.run-row');
+  await historyRows.nth(2).waitFor();
+  await page.getByText(longStage+' · '+longBranch+' · Выполняется',{exact:true}).waitFor();
+  for(const width of [390,375,320]){
+   await page.setViewportSize({width,height:812});
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'long task history overflows at '+width);
+   assert.ok((await history.innerText()).includes(longStage+' · '+longBranch));
+  }
+  await page.setViewportSize({width:1440,height:900});
+  const historyPins=history.locator('[data-light-pin]');
+  const selected=await historyPins.evaluateAll(buttons=>buttons.slice(0,2).map(button=>button.dataset.run));
+  await historyPins.nth(0).click();
+  await historyPins.nth(1).click();
+  await historyPins.nth(2).click();
+  assert.match(await page.locator('#light-pin-message').innerText(),/Закреплено два Run/);
+  await page.evaluate(()=>{
+   window.observationReads=[];
+   const request=window.fetch;
+   window.fetch=(...args)=>{
+    if(!document.getElementById('observe-screen').hidden)window.observationReads.push(new URL(args[0],location.href).pathname);
+    return request(...args);
+   };
+  });
+  await page.clock.install();
+  await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
+  await page.locator('#observe-light').click();
+  const rows=page.locator('.observed-run');
+  await until(async()=>await rows.locator('.run-status').count()===2,'same-task pair did not load');
+  assert.deepEqual(await rows.evaluateAll(items=>items.map(item=>item.dataset.observedRun)),selected);
+  assert.notEqual(await rows.nth(0).locator('.run-status').innerText(),await rows.nth(1).locator('.run-status').innerText());
+  assert.deepEqual(await page.evaluate(()=>window.observationReads),[new URL('api/light/task',base).pathname],'same task fetched twice');
+  await page.clock.resume();
+  responseMode='offline';
+  await rows.nth(0).getByText(/Последние данные устарели/).waitFor();
+  assert.equal(await rows.locator('.run-status').count(),2);
+  responseMode='missing';
+  await rows.nth(0).getByText(/Run отсутствует/).waitFor();
+  assert.deepEqual(await rows.evaluateAll(items=>items.map(item=>item.dataset.observedRun)),selected);
+  responseMode='denied';
+  await rows.nth(0).getByText(/Доступ к источнику запрещён/).waitFor();
+  assert.equal(await rows.locator('.run-status,a[target=_blank]').count(),0);
+  responseMode='normal';
+  await until(async()=>await rows.locator('.run-status').count()===2,'observation did not recover after denied read');
+  responseMode='delay';
+  await page.waitForRequest(request=>new URL(request.url()).pathname.endsWith('/api/light/task'),{timeout:12000});
+  await page.locator('#observe-return').click();
+  await page.locator('#detail-screen').waitFor({state:'visible'});
+  assert.equal(new URL(page.url()).hash,taskHash);
+  await page.waitForTimeout(1700);
+  assert.equal(await page.locator('#observe-screen').isVisible(),false,'obsolete observation response changed the view');
+  await page.unroute(taskRoute,changeTask);
+  await page.locator('#back').click();
+  metrics.refined_observation=['same task pinned twice with one bounded request','third pin refused','503, missing and 403, recovery and late response','full unbroken stage and branch at 390, 375 and 320 px'];
   const native=first.cards.find(c=>c.reviews.some(r=>r.state==='unavailable'));await page.goto(base+'#'+new URLSearchParams({source:native.source,key:native.key}));await page.locator('[data-reviews]').first().click();await page.locator('[data-review-result] article details > summary').first().waitFor();assert.match(await page.locator('#detail').innerText(),/Приёмка заблокирована|blocked/);assert.match(await page.locator('#detail').innerText(),/Пройдено|passed/);await page.locator('[data-review-result] article details > summary').first().click();await page.locator('[data-raw=gate]').first().click();await page.locator('.raw-result pre').waitFor();assert.match(await page.locator('.raw-result pre').first().innerText(),/blocked/);
   const link=new URL(await page.locator('#detail a[target=_blank]').first().getAttribute('href'));assert.equal(link.origin,new URL(full).origin);const hash=new URLSearchParams(link.hash.slice(1));assert.equal(hash.get('source'),native.source);assert.ok(hash.get('run'));await page.screenshot({path:path.join(target,'typed-review-provenance.png'),fullPage:true});
   await page.locator('#back').click();await page.locator('#theme').selectOption('dark');assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(target,'light-mobile-dark.png'),fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'mobile horizontal overflow');

@@ -51,7 +51,7 @@ async function until(check,message){const end=Date.now()+20000;while(Date.now()<
   });
   try {
    await page.locator('[name=q]').fill('obsolete-filter');await until(()=>intercepted,'delayed response was not intercepted');
-   await page.clock.pauseAt(await page.evaluate(()=>Date.now()+100));
+   await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
    await page.evaluate(desired=>{
     window.obsoleteBoardInstalls=[];
     window.boardFilterObserver=new MutationObserver(records=>{
@@ -175,6 +175,106 @@ async function until(check,message){const end=Date.now()+20000;while(Date.now()<
   assert.match(await direct.locator('#detail-workflow').textContent(),/^План: /);
   await direct.waitForTimeout(1800);
   assert.equal(briefReads.length,1,'selected brief must be reused by polling');
+  const getRun=async id=>{
+   const item=(await listing('q='+encodeURIComponent(id))).runs.find(item=>item.run_id===id);
+   const response=await mobile.request.get(base+'/api/run?'+new URLSearchParams({source:item.source,id}));
+   assert.ok(response.ok());
+   return {source:item.source,id,run:(await response.json()).run};
+  };
+  const open=(fixture,fields={})=>direct.goto(base+'/#'+new URLSearchParams({source:fixture.source,run:fixture.id,...fields}));
+  const pending=await getRun(ids.parallel), failed=await getRun(runtime.failed.run_id);
+  await open(pending);
+  const question=direct.locator('.detail-primary').getByRole('link',{name:'Открыть вопрос',exact:true});
+  await question.waitFor();
+  const questionHref=await question.getAttribute('href');
+  const identity=new URLSearchParams(questionHref.slice(1));
+  assert.equal(identity.get('decision'),pending.run.pending_decision.decision_id);
+  assert.equal(identity.get('decision_attempt'),pending.run.pending_decision.attempt_id);
+  assert.equal(identity.get('decision_digest'),pending.run.pending_decision.definition_digest);
+  await question.click();
+  const decision=direct.locator('#decision-target');
+  assert.match(await decision.innerText(),/Ожидается ответ/);
+  assert.equal(await direct.evaluate(()=>document.activeElement.id),'decision-target');
+  await direct.locator('#pin-run').click();
+  await open(failed);
+  const failureLink=direct.locator('.detail-primary .run-explanation a').first();
+  await failureLink.waitFor();
+  const failedHref=await failureLink.getAttribute('href');
+  const failureRoute=new URLSearchParams(failedHref.slice(1));
+  assert.equal(failureRoute.get('tab'),'workflow');
+  assert.ok(failureRoute.get('node'));
+  await direct.locator('#pin-run').click();
+  await direct.locator('#observe-link').click();
+  const pair=direct.locator('.pinned-run');
+  const pinQuestion=pair.nth(0).getByRole('link',{name:'Открыть вопрос',exact:true});
+  await pinQuestion.waitFor();
+  assert.equal(await pinQuestion.getAttribute('href'),questionHref);
+  assert.equal(await pair.nth(1).locator('.run-explanation a').getAttribute('href'),failedHref);
+  assert.equal(await pair.getByRole('link',{name:/Открыть Run/}).count(),2);
+  await pinQuestion.click();
+  assert.match(await decision.innerText(),/Ожидается ответ/);
+  await direct.locator('#observe-link').click();
+  await until(async()=>await pair.count()===2,'Full lost the pinned pair');
+  assert.deepEqual(await pair.evaluateAll(items=>items.map(item=>item.dataset.runId)),[pending.id,failed.id]);
+  // Keep the native saved data intact. Alter the response only to check how an
+  // old URL handles a recorded answer, an absent record, or duplicate matches.
+  let variant='answered';
+  const altered=async route=>{
+   const response=await route.fetch();
+   const data=await response.json();
+   const match=record=>record.definition_id===identity.get('decision') && record.attempt_id===identity.get('decision_attempt') && record.definition_digest===identity.get('decision_digest');
+   if(data.run.id===pending.id){
+    const record=data.run.decision_ledger.find(match);
+    if(variant==='answered'){
+     data.run.pending_decision=null;
+     record.status='answered';
+    }
+    if(variant==='missing')data.run.decision_ledger=data.run.decision_ledger.filter(item=>!match(item));
+    if(variant==='duplicate')data.run.decision_ledger.push(record);
+   }
+   await route.fulfill({response,json:data}).catch(error=>{
+    if(!error.message.includes('Route is already handled'))throw error;
+   });
+  };
+  await direct.route('**/api/run?*',altered);
+  for(const [kind,expected] of [['answered',/Ответ записан/],['missing',/Точная запись вопроса недоступна/],['duplicate',/Точная запись вопроса недоступна/]]){
+   variant=kind;
+   await direct.goto(base+'/?question='+kind+questionHref);
+   await decision.waitFor();
+   assert.match(await decision.innerText(),expected);
+   assert.equal(await direct.evaluate(()=>document.activeElement.id),'decision-target');
+   if(kind!=='answered')assert.doesNotMatch(await direct.locator('.detail-primary').innerText(),/Открыть вопрос/);
+  }
+  await open(pending);
+  await direct.locator('.detail-primary').getByRole('link',{name:'Открыть результаты и решения',exact:true}).click();
+  await decision.getByText('Точная запись вопроса недоступна',{exact:true}).waitFor();
+  await direct.unroute('**/api/run?*',altered);
+  await direct.goto(base+'/'+failedHref);
+  const cause=direct.locator('#node .attempt-diagnostic');
+  await cause.waitFor();
+  assert.match(await cause.innerText(),/Истёк срок попытки.*attempt_deadline_expired/s);
+  for(const width of [390,375,320]){
+   await direct.setViewportSize({width,height:812});
+   await direct.goto(base+'/'+failedHref);
+   await cause.waitFor();
+   await direct.locator('#back-to-tree').click();
+   const node=direct.locator(`#tree [data-node="${failureRoute.get('node')}"]`);
+   await node.waitFor();
+   assert.equal(await node.evaluate(element=>element===document.activeElement),true);
+   assert.equal(await node.evaluate(element=>{const box=element.getBoundingClientRect();return box.top>=0 && box.bottom<=innerHeight;}),true);
+  }
+  const other=Object.values(pending.run.attempts).find(attempt=>attempt.id!==pending.run.pending_decision.attempt_id);
+  assert.ok(other,'parallel fixture must have another Attempt');
+  const activation=pending.run.activations[other.stage_activation_id];
+  await open(pending,{tab:'workflow',node:other.id,invocation:activation.workflow_invocation_id,focus:'1'});
+  await direct.locator('#node-title').waitFor();
+  assert.equal(await cause.count(),0);
+  await direct.locator('#back-to-tree').click();
+  await until(async()=>await direct.evaluate(()=>document.activeElement.dataset.node)===other.id,'nested Attempt did not regain focus');
+  await open(pending,{tab:'workflow',node:'attempt:unknown',focus:'1'});
+  await direct.locator('#back-to-tree').click();
+  await until(async()=>await direct.evaluate(()=>document.activeElement.id)==='execution-tree-title','missing Attempt did not focus the tree heading');
+  checks.push('F01–F05: exact question, saved-link answer and incomplete/ambiguous data, scoped failure, pinned actions, nested mobile return and fallback');
   await mobile.close();
   checks.push('Mobile title/status/next step, first-read failure and recovery, failed new page, same-revision driver observation');
   assert.deepEqual(errors,[]);assert.deepEqual(consoleErrors,[]);await page.screenshot({path:path.join(target,'table.png')});

@@ -389,12 +389,57 @@ function reasonText(reason){
  if(reason.code==='terminal')return 'Исполнение завершено';
  return reason.text || 'Причина не установлена по текущим данным';
 }
+function exactDecision(run,identity){
+ const {decision,decision_attempt,decision_digest}=identity;
+ if(!decision || !decision_attempt || !decision_digest || !run.attempts?.[decision_attempt])return null;
+ const records=(run.decision_ledger || []).filter(record=>record.definition_id===decision &&
+  record.attempt_id===decision_attempt && record.definition_digest===decision_digest);
+ return records.length===1?records[0]:null;
+}
+function pendingDecisionTarget(run){
+ const pending=run.pending_decision;
+ if(!pending)return null;
+ const identity={decision:pending.decision_id,decision_attempt:pending.attempt_id,decision_digest:pending.definition_digest};
+ return exactDecision(run,identity)?.status==='pending'?identity:null;
+}
+function decisionRoute(params){
+ const keys=['decision','decision_attempt','decision_digest'];
+ return keys.some(key=>params.has(key))?Object.fromEntries(keys.map(key=>[key,params.get(key)])):null;
+}
+function decisionDetailsHTML(run,requested){
+ const identity=requested || pendingDecisionTarget(run);
+ if(!identity && !run.pending_decision)return '';
+ const record=identity && exactDecision(run,identity);
+ if(!record)return '<section class="decision-target" id="decision-target" tabindex="-1"><h4>Точная запись вопроса недоступна</h4><p>Доступные записи находятся в разделе «Решения».</p></section>';
+ const definition=catalogDecision(run,record.definition_id);
+ const choices=definition?.choices || [];
+ const status=({pending:'Ожидается ответ',answered:'Ответ записан',closed:'Вопрос закрыт',excluded:'Не применяется'})[record.status] || 'Состояние вопроса не установлено';
+ const answer=record.status==='answered'?(choiceTitle(definition,record.value) || JSON.stringify(record.value)):null;
+ return `<section class="decision-target" id="decision-target" tabindex="-1"><h4>${esc(definition?.title || record.definition_id)}</h4><p><strong>${status}</strong>${answer?' · '+esc(answer):''}</p>${definition?.description?`<p>${esc(definition.description)}</p>`:''}${choices.length?`<p>Варианты ответа</p><ul>${choices.map(choice=>`<li>${esc(choice.title)}</li>`).join('')}</ul>`:''}</section>`;
+}
+function diagnosticBelongs(run,attempt,diagnostic){
+ return attempt && diagnostic.attempt_id===attempt.id &&
+  (!diagnostic.run_id || diagnostic.run_id===run.id) &&
+  (!diagnostic.stage_activation_id || diagnostic.stage_activation_id===attempt.stage_activation_id);
+}
+function attemptDiagnosticsHTML(run,attempt,source){
+ if(!attempt)return '';
+ const errors=(run.diagnostics || []).filter(diagnostic=>diagnostic.severity==='error' && diagnosticBelongs(run,attempt,diagnostic));
+ if(!errors.length && attempt.status!=='failed')return '';
+ const body=errors.length?errors.map(diagnostic=>`<p>${esc(reasonText({code:diagnostic.code,text:diagnostic.message}))} <code>${esc(diagnostic.code)}</code></p>`).join(''):
+  `<p>Причина ошибки не установлена по текущим данным.</p><a href="${esc(runHash(source,run.id,{tab:'facts',focus:'1'}))}">Открыть результаты и решения</a>`;
+ return `<section class="attempt-diagnostic"><h4>Причина ошибки попытки</h4>${body}</section>`;
+}
 function reasonLink(source,id,reason){
  const tab=runTabs.includes(reason.action)?reason.action:'facts';
  const target={tab,focus:'1'};
  const node=reason.attempt_id || reason.stage_activation_id;
- if(tab==='workflow' && node)target.node=node;
- if(tab==='journal' && Number.isSafeInteger(reason.event_seq))target.event=reason.event_seq;
+ if(tab==='workflow' && node){
+  target.node=node;
+  if(reason.workflow_invocation_id)target.invocation=reason.workflow_invocation_id;
+ }
+ if(tab==='facts' && reason.question)Object.assign(target,reason.question);
+ if(tab==='journal' && Number.isSafeInteger(reason.event_seq) && reason.event_seq>0)target.event=reason.event_seq;
  return runHash(source,id,target);
 }
 function reasonsHTML(reasons,source,id,action){
@@ -409,7 +454,7 @@ function reasonsHTML(reasons,source,id,action){
  const main=characters.length>180
   ? `<details data-key="${esc(key+':long-reason')}"><summary>${esc(characters.slice(0,175).join(''))}…</summary><p>${show(reason)}</p></details>`
   : `<p>${show(reason)}</p>`;
- return `<div class="run-explanation">${main}<a data-focus="${esc(key+':reason')}" href="${esc(reasonLink(source,id,reason))}">${esc(action || area[reason.action] || 'Открыть результаты и решения')}</a>${rest.length?`<details data-key="${esc(key+':reasons')}"><summary data-focus="${esc(key+':reasons')}">Другие причины · ${rest.length}</summary><ul class="board-reasons">${rest.map(r=>`<li><a href="${esc(reasonLink(source,id,r))}">${show(r)}</a></li>`).join('')}</ul></details>`:''}</div>`;
+ return `<div class="run-explanation">${main}<a data-focus="${esc(key+':reason')}" href="${esc(reasonLink(source,id,reason))}">${esc(reason.question?'Открыть вопрос':action || area[reason.action] || 'Открыть результаты и решения')}</a>${rest.length?`<details data-key="${esc(key+':reasons')}"><summary data-focus="${esc(key+':reasons')}">Другие причины · ${rest.length}</summary><ul class="board-reasons">${rest.map(r=>`<li><a href="${esc(reasonLink(source,id,r))}">${show(r)}</a></li>`).join('')}</ul></details>`:''}</div>`;
 }
 function listReasons(run){
  return (run.board?.reasons || []).map(reason=>{
@@ -419,7 +464,10 @@ function listReasons(run){
 }
 function detailReasons(run,capacity){
  const reasons=[];
- const add=(code,text,action='facts',scope='',target={})=>reasons.push({code,text,action,scope,...target});
+ const add=(code,text,action='facts',scope='',target={})=>{
+  const activation=run.activations?.[run.attempts?.[target.attempt_id]?.stage_activation_id || target.stage_activation_id];
+  reasons.push({code,text,action,scope,...target,...(activation?.workflow_invocation_id?{workflow_invocation_id:activation.workflow_invocation_id}:{})});
+ };
  if(run.status==='completed'){
   add('result',run.outcome==='partial'?'Записан частичный результат':'Run завершён');
   return reasons;
@@ -434,7 +482,7 @@ function detailReasons(run,capacity){
    const step=run.steps?.[attempt?.step_instance_id];
    return d.severity==='error' && attempt?.status==='failed' && step?.status==='failed' &&
     step?.attempt_ids?.at(-1)===attempt.id &&
-    (!d.stage_activation_id || d.stage_activation_id===attempt.stage_activation_id);
+    diagnosticBelongs(run,attempt,d);
   });
   if(current.length===1)add(current[0].code,current[0].message,'workflow','',{attempt_id:current[0].attempt_id});
   else add('unknown','Причина ошибки не установлена по текущим данным','journal');
@@ -444,8 +492,14 @@ function detailReasons(run,capacity){
  if(run.cancel_requested || run.status==='stopping')add('cancelling','Запрошена отмена; завершение ещё не записано','journal');
  if(run.resume_required)add('resume_required','Требуется явное возобновление');
  for(const stop of (run.stops || []).filter(s=>s.status==='active'))add('stop',stop.reason,'facts',stop.scope_id);
- if(run.pending_decision)add('decision','Ожидается ответ: '+run.pending_decision.decision_id,'facts',run.pending_decision.attempt_id);
+ if(run.pending_decision){
+  const pending=run.pending_decision, question=pendingDecisionTarget(run);
+  const title=catalogDecision(run,pending.decision_id)?.title || pending.decision_id;
+  const scope=run.activations?.[run.attempts?.[pending.attempt_id]?.stage_activation_id]?.stage_id || '';
+  add('decision','Ожидается ответ: '+title,'facts',scope,question?{question}:{});
+ }
  for(const attempt of values(run.attempts).filter(a=>!a.settled)){
+  if(attempt.session?.host_state==='waiting_decision' && run.pending_decision?.attempt_id===attempt.id)continue;
   const role=executionRole(attempt);
   const code=({waiting_decision:'decision',waiting_admission:'admission'})[attempt.session?.host_state] || attempt.session?.host_state || 'attempt';
   add(code,role.state || 'Начало исполнения не подтверждено','workflow',run.activations?.[attempt.stage_activation_id]?.stage_id || attempt.id,{attempt_id:attempt.id});
@@ -485,11 +539,11 @@ function positionNewGraph(box,key,active){
  box.scrollTop=pad+(Math.min(...ys)+Math.max(...ys)+78)/2-box.clientHeight/2;
  box.scrollLeft=pad+(Math.min(...xs)+Math.max(...xs)+230)/2-box.clientWidth/2;
 }
-if(typeof module !== 'undefined') module.exports = {positionNewGraph,runKey,catalogueAddress,currentRuns,matchingProgress,observedProgress,runHash,boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,runTaskTitle,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
+if(typeof module !== 'undefined') module.exports = {exactDecision,pendingDecisionTarget,decisionDetailsHTML,attemptDiagnosticsHTML,reasonLink,positionNewGraph,runKey,catalogueAddress,currentRuns,matchingProgress,observedProgress,runHash,boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,runTaskTitle,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='overview',stamp='',filterTimer,revealed='';
-let observing=false,readingList=false,detailFlight=null,detailAux=new Set(),focusRoute='',treeFocus='',restoreTreeFocus=false;
+let observing=false,readingList=false,detailFlight=null,detailAux=new Set(),focusRoute='',restoreTreeFocus='';
 let selectedRead={at:null,stale:false},eventView='recent',eventCursor=0,eventMore=false,eventPending=true,eventKey='',recentKey='';
 let listScroll=0,listPositions=new Map(),listFocus=null,maintenanceBusy=false,storageBusy=false;
 let relatedInitialized=false,expandSearch=false;
@@ -665,10 +719,11 @@ function renderPins() {
   });
   const origin=run?.project_title || sourceNames.get(pin.source) || 'Источник '+short(pin.source);
   const main=run?`<div>${runBadge(run.status)}${outcome?` · ${esc(label(outcome))}`:''}</div>${activity.length?`<ul class="observation-activity">${rows.join('')}</ul>`:terminalStatuses.includes(run.status)?'':'<p class="muted">Текущая стадия не записана.</p>'}`:'<p class="muted">Снимок Run ещё не прочитан.</p>';
-  const failure=run?.status==='failed'?`<p>${esc(reasonText(detailReasons(run,null)[0]))}</p>`:'';
+  const reasons=run?detailReasons(run,null).filter(reason=>run.status==='failed' || reasonPriority.includes(reason.code) || reason.code==='awaiting_host'):[];
+  const explanation=reasons.length?(pin.error?'<small>Последняя известная причина</small>':'')+reasonsHTML(reasons,pin.source,pin.run_id):'';
   const error=pin.error?`<p class="error">${esc(readStatus(!!run,'прогон'))}</p>`:'';
   const progress=run?observedProgress(pin.progress,programsIn(run),!!pin.error||!!pin.progressError):'';
-  preserve(card,`<div class="observation-heading"><h2>${esc(title)}</h2>${pinControl(pin.source,pin.run_id,pin.title||titles.get(key)||'')}</div><small>${esc(origin)} · Run ${esc(short(pin.run_id))}</small>${error}${main}${failure}${progress}${pin.progressError?'<p class="muted">Прогресс программы недоступен.</p>':''}${run?`<div class="read-facts muted">${snapshotReadHTML(pin.at,pin.error)}<span>Наблюдение Run: ${esc(date(run.last_observed?.utc))}</span></div>`:''}<a data-focus="${esc('open:'+key)}" href="${esc(runHash(pin.source,pin.run_id,{tab:'overview'}))}">Открыть Run →</a>`);
+  preserve(card,`<div class="observation-heading"><h2>${esc(title)}</h2>${pinControl(pin.source,pin.run_id,pin.title||titles.get(key)||'')}</div><small>${esc(origin)} · Run ${esc(short(pin.run_id))}</small>${error}${main}${explanation}${progress}${pin.progressError?'<p class="muted">Прогресс программы недоступен.</p>':''}${run?`<div class="read-facts muted">${snapshotReadHTML(pin.at,pin.error)}<span>Наблюдение Run: ${esc(date(run.last_observed?.utc))}</span></div>`:''}<a data-focus="${esc('open:'+key)}" href="${esc(runHash(pin.source,pin.run_id,{tab:'overview'}))}">Открыть Run →</a>`);
  }
 }
 function cancelPinReads(pin){
@@ -916,7 +971,7 @@ function renderGraph() {
  // Centre the active stages on first opening a graph. Subsequent polling keeps its position.
  const focusKey=JSON.stringify([source,selected,invocation,definition]);
  positionNewGraph($('graph'),focusKey,data.nodes.filter(n=>n.visual==='current'));
- $('graph').onclick=event=>{const target=event.target.closest('[data-stage]');if(!target)return;const n=byID.get(target.dataset.stage);if(n.invocation){navigateNode('',n.invocation,'');return;}if(n.ref){navigateNode('','',n.ref.id);return;}treeFocus='stage:'+n.id;navigateNode(n.actual?.at(-1)?.id || n.id,invocation);};
+ $('graph').onclick=event=>{const target=event.target.closest('[data-stage]');if(!target)return;const n=byID.get(target.dataset.stage);if(n.invocation){navigateNode('',n.invocation,'');return;}if(n.ref){navigateNode('','',n.ref.id);return;}navigateNode(n.actual?.at(-1)?.id || n.id,invocation);};
  $('graph').onkeydown=event=>{if(event.key==='Enter'||event.key===' '){const n=event.target.closest('[data-stage]');if(n){event.preventDefault();n.dispatchEvent(new MouseEvent('click',{bubbles:true}));}}};
 }
 function treeNode(n,depth=0) {
@@ -926,7 +981,7 @@ function timingNode(node,id) {if(!node)return null;if(node.id===id)return node;f
 function renderNode() {
  const run=state.run,object=nodeObject(run,nodeID),timing=timingNode(state.timing?.root,nodeID);
  const activation=run.activations?.[object?.stage_activation_id||object?.activation_id||nodeID],stageID=activation?.stage_id||object?.stage_id||nodeID,graph=graphData(parseMaybe(currentWorkflow(run)),run,definition?definitionInvocation(run,definition):invocation,state.choices,state.input_values);
- let html=nodeCard(graph,stageID,object,run),role=executionRole(object,parseMaybe(currentWorkflow(run))?.definition?.stages?.[stageID]);
+ let html=attemptDiagnosticsHTML(run,run.attempts?.[nodeID],source)+nodeCard(graph,stageID,object,run),role=executionRole(object,parseMaybe(currentWorkflow(run))?.definition?.stages?.[stageID]);
  const received=receivedAttempt(run,nodeID);
  if(received)html+=receiptHTML(run,received,state.input_values,attemptPhases(timingNode(state.timing?.root,received.id),!!received.session),received.id===nodeID?'':'Последнее исполнение этой стадии: '+short(received.id));
  if(!object) {
@@ -1006,13 +1061,13 @@ function renderDetail() {
   const revealKey=JSON.stringify([source,selected,nodeID,invocation]);
   if(revealed!==revealKey){
    const target=[...$('tree').querySelectorAll('[data-node]')].find(n=>n.dataset.node===(nodeID || invocation));
-   for(let parent=target?.parentElement;parent && parent!==$('tree');parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;
+   revealTreePath(target);
    revealed=revealKey;
   }
  }
  if(tab==='facts'){
   const costs=values(run.attempts).flatMap(a=>(a.reported_costs||[]).map(c=>({attempt_id:a.id,...c})));
-  preserve($('facts'),section('Выходные артефакты',run.output_artifacts,'outputs',true)+section('Решения',run.decision_ledger,'decisions',true)+section('Проверки',run.check_executions,'checks')+section('Ожидающая приёмка',run.pending_acceptance,'acceptance')+section('Диагностика',run.diagnostics,'diagnostics',true)+section('Отклонения качества',run.waivers,'waivers')+section('Публикации артефактов',run.artifact_publications,'publications')+section('Заявленная стоимость по попыткам и источникам',costs,'costs')+section('Входные артефакты',run.input_artifacts,'inputs')+section('Закреплённые ресурсы контекста',run.context_resources,'resources')+section('Ожидания, сигналы и ограничения',{waits:run.wait_registrations,inbox:run.inbox,guards:run.guards},'control')+raw(run,'run'));
+  preserve($('facts'),decisionDetailsHTML(run,decisionRoute(route()))+section('Выходные артефакты',run.output_artifacts,'outputs',true)+section('Решения',run.decision_ledger,'decisions',true)+section('Проверки',run.check_executions,'checks')+section('Ожидающая приёмка',run.pending_acceptance,'acceptance')+section('Диагностика',run.diagnostics,'diagnostics',true)+section('Отклонения качества',run.waivers,'waivers')+section('Публикации артефактов',run.artifact_publications,'publications')+section('Заявленная стоимость по попыткам и источникам',costs,'costs')+section('Входные артефакты',run.input_artifacts,'inputs')+section('Закреплённые ресурсы контекста',run.context_resources,'resources')+section('Ожидания, сигналы и ограничения',{waits:run.wait_registrations,inbox:run.inbox,guards:run.guards},'control')+raw(run,'run'));
  }
  focusDetailRoute();
 }
@@ -1032,18 +1087,24 @@ function goTo(hash) {
   useRoute();
  }
 }
+function revealTreePath(target){
+ for(let parent=target?.parentElement;parent && parent!==$('tree');parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;
+}
 function focusDetailRoute(){
  if(restoreTreeFocus && state && tab==='workflow' && !nodeID){
-  restoreTreeFocus=false;
-  const target=[...$('workflow').querySelectorAll('[data-focus]')].find(el=>el.dataset.focus===treeFocus);
-  (target || $('workflow-title')).focus();
+  const returnedNode=restoreTreeFocus;
+  restoreTreeFocus='';
+  const target=[...$('tree').querySelectorAll('[data-node]')].find(el=>el.dataset.node===returnedNode);
+  revealTreePath(target);
+  (target || $('execution-tree-title')).focus();
  }
  if(!focusRoute || focusRoute!==location.hash || !state)return;
  const h=route();
  if(tab==='journal' && h.has('event') && eventPending)return;
  focusRoute='';
  const exact=tab==='journal' && h.has('event')?$('events').querySelector('[data-seq="'+Number(h.get('event'))+'"] summary'):null;
- const target=exact || $(tab==='workflow' && nodeID?'node-title':tab==='overview'?'detail-title':tab+'-title');
+ const question=tab==='facts' && decisionRoute(h)?$('decision-target'):null;
+ const target=exact || question || $(tab==='workflow' && nodeID?'node-title':tab==='overview'?'detail-title':tab+'-title');
  target?.focus();
 }
 function rememberListPosition(source,id){
@@ -1077,6 +1138,7 @@ function useRoute() {
  observing=nextObserve;
  if(changed){
   selected=next;source=nextSource;state=null;stamp='';selectedRead={at:null,stale:false};detailAux.clear();recentKey='';
+  restoreTreeFocus='';
   artifactCache.clear();fileCache.clear();resetEvents('recent');
   delete $('graph').dataset.graphView;
   for(const name of ['overview','activity','overview-metadata','recent-rows','tree','node','graph','facts'])preserve($(name),'');
@@ -1330,7 +1392,7 @@ $('invocation').onchange=e=>{
  navigateNode('',value.startsWith('def:')?'':value,value.startsWith('def:')?value.slice(4):'');
 };
 $('pin-run').onclick=()=>togglePin(source,selected,state?.taskTitle||'');
-$('back-to-tree').onclick=()=>{restoreTreeFocus=true;navigateNode('');};
+$('back-to-tree').onclick=()=>{restoreTreeFocus=nodeID;navigateNode('');};
 document.addEventListener('click',event=>{
  const pin=event.target.closest('[data-pin]');
  if(pin){togglePin(pin.dataset.source,pin.dataset.run,pin.dataset.title);return;}
@@ -1342,7 +1404,6 @@ document.addEventListener('click',event=>{
 $('detail').addEventListener('click',e=>{
  const target=e.target.closest('[data-node]');
  if(target && state){
-  if(!$('workflow').classList.contains('inspecting') || $('execution-tree').contains(target))treeFocus=target.dataset.focus || 'node:'+target.dataset.node;
   const obj=nodeObject(state.run,target.dataset.node);
   navigateNode(target.dataset.node,(state.run.invocations?.[obj?.id]?obj.id:obj?.workflow_invocation_id||state.run.activations?.[obj?.stage_activation_id]?.workflow_invocation_id||invocation));
  }
@@ -1350,6 +1411,7 @@ $('detail').addEventListener('click',e=>{
 });
 function openTab(name){
  const h=route();h.set('tab',name);h.delete('focus');h.delete('event');
+ for(const key of ['decision','decision_attempt','decision_digest'])h.delete(key);
  goTo('#'+h);
 }
 for(const button of document.querySelectorAll('[data-tab]'))button.onclick=()=>openTab(button.dataset.tab);
