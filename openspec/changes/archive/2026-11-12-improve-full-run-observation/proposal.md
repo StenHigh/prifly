@@ -28,4 +28,4 @@
 
 Основание — расширенный браузерный аудит v0.13.92 на 1440×900 и 390×844. В проверенном каталоге было 1098 Run и одна активная Attempt. На первой странице доски было 50 завершённых Run. В сложных подробностях мобильные вкладки начинались на 1654 px. Одновременный ход двух Run остаётся новой проверкой.
 
-[Решения](design.md) · [Сценарии приёмки](acceptance.md) · [Задачи](tasks.md) · [План AI Factory](../../../.ai-factory/plans/improve-full-run-observation.md)
+[Решения](design.md) · [Сценарии приёмки](acceptance.md) · [Задачи](tasks.md) · [План AI Factory](../../../../.ai-factory/plans/improve-full-run-observation.md)

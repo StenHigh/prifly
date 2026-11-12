@@ -2,8 +2,8 @@
 
 - Дата подготовки: 2026-11-12.
 - База планирования: `674065b7`, ветка `main`. Базу реализации уточняет Run.
-- Change: [improve-full-run-observation](../../openspec/changes/improve-full-run-observation/proposal.md).
-- Прогресс: [tasks.md](../../openspec/changes/improve-full-run-observation/tasks.md).
+- Change: [improve-full-run-observation](../../openspec/changes/archive/2026-11-12-improve-full-run-observation/proposal.md).
+- Прогресс: [tasks.md](../../openspec/changes/archive/2026-11-12-improve-full-run-observation/tasks.md).
 
 ## Original Request
 
@@ -22,7 +22,7 @@ Milestone: `none`. Change уточняет уже поставляемый Full.
 
 ## Requirements Reconciliation
 
-Источники — [дельта Full](../../openspec/changes/improve-full-run-observation/specs/local-run-monitor/spec.md) и [решения D1–D4](../../openspec/changes/improve-full-run-observation/design.md). Они уточняют [local-run-monitor](../../openspec/specs/local-run-monitor/spec.md). Общие UX и границы безопасности остаются в [control-security-ux](../../openspec/specs/control-security-ux/spec.md).
+Источники — [дельта Full](../../openspec/changes/archive/2026-11-12-improve-full-run-observation/specs/local-run-monitor/spec.md) и [решения D1–D4](../../openspec/changes/archive/2026-11-12-improve-full-run-observation/design.md). Они уточняют [local-run-monitor](../../openspec/specs/local-run-monitor/spec.md). Общие UX и границы безопасности остаются в [control-security-ux](../../openspec/specs/control-security-ux/spec.md).
 
 Связанный порядок остаётся исходным для истории. Текущая выборка лежит над историей. Состояние Attempt объясняет ожидание хоста, а записанный статус Run остаётся отдельно. Существующие ссылки на Run и область разбора работают. Снимки разных authority не объединяются в один момент времени.
 
@@ -37,7 +37,7 @@ Milestone: `none`. Change уточняет уже поставляемый Full.
 
 ## Tasks
 
-Команды браузерного replay, границы чтений и условия приёмки приведены в [acceptance.md](../../openspec/changes/improve-full-run-observation/acceptance.md).
+Команды браузерного replay, границы чтений и условия приёмки приведены в [acceptance.md](../../openspec/changes/archive/2026-11-12-improve-full-run-observation/acceptance.md).
 
 ### Этап 1. Эталон и каталог
 
