@@ -294,3 +294,7 @@ footer{max-width:1680px;margin:auto;padding:18px 28px;color:var(--muted);font-si
  #catalog-views { margin-block: 6px; gap: 5px; }
  #catalog-views button { padding: 5px 7px; }
 }
+
+.decision-target, .attempt-diagnostic { margin-block: 10px; padding: 8px 12px; border-inline-start: 2px solid var(--accent); overflow-wrap: anywhere; }
+.decision-target h4, .attempt-diagnostic h4 { margin: 0 0 4px; }
+.decision-target p, .attempt-diagnostic p { margin-block: 4px; }

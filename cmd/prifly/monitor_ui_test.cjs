@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const monitorJSSource=require('node:fs').readFileSync(require('node:path').join(__dirname,'monitor.js'),'utf8');
-const {esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows}=require('./monitor.js');
+const {exactDecision,pendingDecisionTarget,decisionDetailsHTML,attemptDiagnosticsHTML,reasonLink,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows}=require('./monitor.js');
 assert.equal(esc(`<img src='x' onerror="evil()">&`),'&lt;img src=&#39;x&#39; onerror=&quot;evil()&quot;&gt;&amp;');
 assert.equal(label('ready'),'Подготовлен к выдаче Attempt');
 assert.equal(label('pending'),'Attempt передан агенту');
@@ -374,3 +374,34 @@ openedBeforeActivation.scrollTop=81;
 positionNewGraph(openedBeforeActivation,'same graph',[{x:700,y:200}]);
 assert.deepEqual([openedBeforeActivation.scrollLeft,openedBeforeActivation.scrollTop],[175,81]);
 assert.match(progressHTML({...progressReport.attempts[1]},null,true),/Последний отчёт — чтение прервано/);
+
+const questionIdentity={decision:'decision:continue',decision_attempt:'attempt:a',decision_digest:'sha256:exact'};
+const questionRecord={definition_id:questionIdentity.decision,attempt_id:questionIdentity.decision_attempt,definition_digest:questionIdentity.decision_digest,status:'pending'};
+const selectedAttempt={id:'attempt:a',status:'failed',stage_activation_id:'activation:a'};
+const questionRun={
+ id:'run:one', attempts:{'attempt:a':selectedAttempt,'attempt:b':{id:'attempt:b'}},
+ pending_decision:{decision_id:questionRecord.definition_id,attempt_id:questionRecord.attempt_id,definition_digest:questionRecord.definition_digest},
+ decision_ledger:[{...questionRecord,attempt_id:'attempt:b'},questionRecord],
+ decision_catalog:{decisions:[{id:questionRecord.definition_id,title:'Continue <x>',choices:[{value:'yes',title:'Yes <x>'}]}]}
+};
+assert.equal(exactDecision(questionRun,questionIdentity),questionRecord);
+assert.deepEqual(pendingDecisionTarget(questionRun),questionIdentity);
+assert.match(decisionDetailsHTML(questionRun,questionIdentity),/Continue &lt;x&gt;.*Ожидается ответ.*Yes &lt;x&gt;/s);
+questionRecord.status='answered';
+questionRecord.value='yes';
+assert.equal(pendingDecisionTarget(questionRun),null);
+assert.match(decisionDetailsHTML(questionRun,questionIdentity),/Ответ записан.*Yes &lt;x&gt;/s);
+questionRun.decision_ledger.push(questionRecord);
+assert.match(decisionDetailsHTML(questionRun,questionIdentity),/Точная запись вопроса недоступна/);
+assert.match(decisionDetailsHTML(questionRun,null),/Точная запись вопроса недоступна/);
+const error={severity:'error',run_id:'run:one',attempt_id:'attempt:a',stage_activation_id:'activation:a',code:'scoped_error',message:'Scope <x>'};
+questionRun.diagnostics=[error,
+ {...error,run_id:'run:other',code:'wrong_run'},
+ {...error,stage_activation_id:'activation:b',code:'wrong_activation'},
+ {...error,attempt_id:'attempt:b',code:'wrong_attempt'}];
+const scopedDiagnostic=attemptDiagnosticsHTML(questionRun,selectedAttempt,'source:one');
+assert.match(scopedDiagnostic,/Scope &lt;x&gt;.*scoped_error/s);
+assert.doesNotMatch(scopedDiagnostic,/wrong_/);
+assert.match(attemptDiagnosticsHTML({...questionRun,diagnostics:[]},selectedAttempt,'source:one'),/Причина ошибки не установлена/);
+assert.equal(new URLSearchParams(reasonLink('source:one','run:one',{action:'journal',event_seq:24}).slice(1)).get('event'),'24');
+assert.equal(new URLSearchParams(reasonLink('source:one','run:one',{action:'journal'}).slice(1)).has('event'),false);

@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {execFileSync}=require('node:child_process');
-const [base,target,binary,modulePath,chromium]=process.argv.slice(2);
+const [base,target,binary,modulePath,chromium,lightBase]=process.argv.slice(2);
 const {chromium:engine}=require(modulePath);
 const read=name=>JSON.parse(fs.readFileSync(path.join(target,name)));
 const fixture=read('observation-fixtures.json');
@@ -119,6 +119,74 @@ async function verify(){
    await page.locator('#observe-link').click();
    await pin(variant).waitFor();
   }
+  const light=await context.newPage();
+  try{
+   const lightReads=[];
+   light.on('pageerror',error=>errors.push(error.message));
+   light.on('request',request=>{
+    const url=new URL(request.url());
+    if(url.pathname.startsWith('/light/api/'))lightReads.push({method:request.method(),path:url.pathname,query:Object.fromEntries(url.searchParams)});
+   });
+   await light.goto(lightBase+'?'+new URLSearchParams({q:'Наблюдение'}));
+   for(const variant of ['a','b']){
+    const id=fixture[variant].run_id;
+    await light.locator(`[data-light-pin][data-run="${id}"]`).click();
+   }
+   await light.locator('#observe-light').click();
+   const rows=light.locator('.observed-run');
+   await until(async()=>await rows.count()===2 && await rows.locator('.run-status').count()===2,'Light did not read both active Runs');
+   for(const [index,variant] of ['a','b'].entries()){
+    const row=rows.nth(index);
+    assert.equal(await row.getAttribute('data-observed-run'),fixture[variant].run_id);
+    assert.equal(await row.getAttribute('data-observed-source'),running[variant].source);
+    assert.match(await row.locator('.run-status').innerText(),/В работе|Исполняется|Выполняется/);
+    const link=new URL(await row.locator('a[target=_blank]').getAttribute('href'));
+    assert.equal(link.origin,base);
+    assert.equal(new URLSearchParams(link.hash.slice(1)).get('run'),fixture[variant].run_id);
+    assert.equal(new URLSearchParams(link.hash.slice(1)).get('source'),running[variant].source);
+   }
+   await light.screenshot({path:path.join(target,'light-two-runs-desktop.png')});
+   screenshots.push('light-two-runs-desktop.png');
+   await light.setViewportSize({width:390,height:844});
+   for(const row of await rows.all()){
+    const box=await row.boundingBox();
+    assert.ok(box.x>=0 && box.x+box.width<=390 && box.y+box.height<=844,JSON.stringify(box));
+   }
+   assert.ok(await light.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   await light.screenshot({path:path.join(target,'light-two-runs-mobile.png')});
+   screenshots.push('light-two-runs-mobile.png');
+   const afterEntry=lightReads.length;
+   await until(()=>lightReads.slice(afterEntry).filter(read=>read.path.endsWith('/task')).length>=2,'Light observation did not refresh');
+   const fresh=lightReads.slice(afterEntry);
+   assert.equal(fresh.length,2);
+   assert.ok(fresh.every(read=>read.method==='GET' && read.path==='/light/api/light/task'));
+   assert.equal(new Set(fresh.map(read=>read.query.source)).size,2);
+   const taskRoute='**/api/light/task?*';
+   let releaseRead;
+   const heldRead=new Promise(resolve=>{releaseRead=resolve;});
+   const holdA=async route=>{
+    if(new URL(route.request().url()).searchParams.get('source')===running.a.source)await heldRead;
+    await route.continue().catch(error=>{
+     if(!error.message.includes('Route is already handled'))throw error;
+    });
+   };
+   await light.route(taskRoute,holdA);
+   const heldStart=lightReads.length;
+   try{
+    await until(()=>lightReads.slice(heldStart).filter(read=>read.query.source===running.b.source).length>=2,'a pending Light read delayed the other Run');
+    assert.equal(lightReads.slice(heldStart).filter(read=>read.query.source===running.a.source).length,1,'overlapping reads for the same Light task');
+   }finally{
+    releaseRead();
+    await light.unroute(taskRoute,holdA);
+   }
+   checks.push('L02/L04/L05: native active Runs in Light, exact Full links under a prefix, mobile first screen, bounded independent task reads');
+   await light.reload();
+   await until(async()=>await rows.locator('.run-status').count()===2,'Light reload lost the pinned pair');
+   assert.deepEqual(await rows.evaluateAll(items=>items.map(row=>row.dataset.observedRun)),[fixture.a.run_id,fixture.b.run_id]);
+   await light.locator('#observe-return').click();
+   await light.locator('#board-screen').waitFor({state:'visible'});
+   assert.equal(await light.locator('[name=q]').inputValue(),'Наблюдение');
+  }finally{await light.close();}
   await go(page,running.a,{tab:'workflow',node:overlap[0].progress.attempt_id});
   await page.locator('#node').getByText(/Сейчас: build-a/).waitFor();
   const failInspector=route=>route.fulfill({status:503,body:'simulated inspector read failure'});
@@ -139,7 +207,7 @@ async function verify(){
   assert.equal((await readProgress(running.a)).find(row=>row.attempt_id===overlap[0].progress.attempt_id).current,4);
   checks.push('O10: two native drivers, distinct progress, mobile and desktop, exact links, A changes without a Run revision');
 
-  await page.clock.pauseAt(await page.evaluate(()=>Date.now()+100));
+  await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
   await until(()=>inFlight.size===0,'reads before the budget check did not finish');
   const budget=[];
   for(let cycle=0;cycle<2;cycle++){

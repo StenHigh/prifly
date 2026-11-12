@@ -228,6 +228,30 @@ def main():
                 time.sleep(0.2)
             with ExitStack() as owned:
                 drivers = []
+                light = None
+                light_base = ''
+                if observations:
+                    with socket.socket() as sock:
+                        sock.bind(('127.0.0.1', 0))
+                        light_port = sock.getsockname()[1]
+                    light_base = f'http://127.0.0.1:{light_port}/light/'
+                    light_log = owned.enter_context((target / 'light-monitor.log').open('w'))
+                    light = subprocess.Popen([str(binary), 'monitor', '--addr', f'127.0.0.1:{light_port}',
+                                              '--scan-root', str(fixtures), '--ui', 'light', '--base-path', '/light/',
+                                              '--full-monitor-url', base + '/'], env=env, stdout=light_log,
+                                             stderr=subprocess.STDOUT)
+                    owned.callback(stop_process, light)
+                    light_deadline = time.monotonic() + 25
+                    while True:
+                        if light.poll() is not None:
+                            raise RuntimeError('Light monitor exited; see light-monitor.log')
+                        try:
+                            with urllib.request.urlopen(light_base, timeout=2):
+                                break
+                        except (urllib.error.URLError, OSError):
+                            if time.monotonic() >= light_deadline:
+                                raise RuntimeError('Light monitor did not start')
+                            time.sleep(0.2)
                 for run in observations:
                     log_path = target / f"driver-{Path(run['authority']).name}.log"
                     log_file = owned.enter_context(log_path.open('w'))
@@ -237,7 +261,7 @@ def main():
                     drivers.append(driver)
                 script = 'verify-monitor-observation.cjs' if observations else 'verify-monitor-board.cjs'
                 subprocess.run(['node', str(root / 'test/e2e' / script), base, str(target), str(binary),
-                                args.playwright_module, args.chromium], check=True, timeout=180, env=env)
+                                args.playwright_module, args.chromium, light_base], check=True, timeout=180, env=env)
                 for driver in drivers:
                     driver.wait(timeout=15)
                     if driver.returncode not in (0, 1, 4):
@@ -248,7 +272,7 @@ def main():
     report.update(binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(), fixture_boundary='Saved CLI/runtime fixtures on this source tree; no release/remote host qualification claim.')
     if observations:
         report['fixture_boundary'] = 'Two simultaneous native program Runs in temporary authorities; only the browser read failure is simulated.'
-        report['owned_processes_exited'] = all(p.poll() is not None for p in [process, *drivers])
+        report['owned_processes_exited'] = all(p.poll() is not None for p in [process, light, *drivers])
     (target / 'summary.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
