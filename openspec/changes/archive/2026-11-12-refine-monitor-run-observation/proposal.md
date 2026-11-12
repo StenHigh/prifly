@@ -20,10 +20,10 @@ Light не даёт наблюдать за двумя выбранными Run 
 ### Modified Capabilities
 
 - `local-run-monitor` — переходы из наблюдения и карточки Run в Full.
-- `control-security-ux` — пользовательские правила наблюдения Light и мобильной истории задачи. Проекция `prifly-light` по-прежнему определяется в [действующем change Light](../add-prifly-light-task-board/specs/prifly-light/spec.md).
+- `control-security-ux` — пользовательские правила наблюдения Light и мобильной истории задачи. Проекция `prifly-light` по-прежнему определяется в [действующем change Light](../../add-prifly-light-task-board/specs/prifly-light/spec.md).
 
 ## Impact
 
 Будущая реализация затрагивает браузерное представление Full и Light, браузерные проверки и действующий справочник оператора. Изменение сохраняет runtime, versioned JSON, сохранённые ответы replay и текущие HTTP endpoints. Переходы остаются в пределах доступного чтения.
 
-Источник требований каждой возможности остаётся прежним по [карте источников](../../SOURCE-OF-TRUTH.md). Разработка и приёмка этого изменения не закрывают открытые released и production gates Light.
+Источник требований каждой возможности остаётся прежним по [карте источников](../../../SOURCE-OF-TRUTH.md). Разработка и приёмка этого изменения не закрывают открытые released и production gates Light.

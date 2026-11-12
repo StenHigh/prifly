@@ -2,8 +2,8 @@
 
 - Дата подготовки — 2026-11-12.
 - База планирования — `a8a7620c` в `main`. Фактическую базу реализации фиксирует Run.
-- Change — [refine-monitor-run-observation](../../openspec/changes/refine-monitor-run-observation/proposal.md).
-- Прогресс — [tasks.md](../../openspec/changes/refine-monitor-run-observation/tasks.md).
+- Change — [refine-monitor-run-observation](../../openspec/changes/archive/2026-11-12-refine-monitor-run-observation/proposal.md).
+- Прогресс — [tasks.md](../../openspec/changes/archive/2026-11-12-refine-monitor-run-observation/tasks.md).
 
 ## Original Request
 
@@ -23,9 +23,9 @@ Milestone — `none`. Срез уточняет интерфейсы. Дейст
 
 ## Requirements Reconciliation
 
-[Дельта Full](../../openspec/changes/refine-monitor-run-observation/specs/local-run-monitor/spec.md) уточняет действующий [local-run-monitor](../../openspec/specs/local-run-monitor/spec.md). Она сохраняет прежние точные ссылки, независимость закреплений и журнал.
+[Дельта Full](../../openspec/changes/archive/2026-11-12-refine-monitor-run-observation/specs/local-run-monitor/spec.md) уточняет действующий [local-run-monitor](../../openspec/specs/local-run-monitor/spec.md). Она сохраняет прежние точные ссылки, независимость закреплений и журнал.
 
-[Дельта UX](../../openspec/changes/refine-monitor-run-observation/specs/control-security-ux/spec.md) уточняет браузерные действия Light. [Проекция и доступ Light](../../openspec/changes/add-prifly-light-task-board/read-contract.md) остаются в действующем change Light. Источники согласуются по [карте](../../openspec/SOURCE-OF-TRUTH.md).
+[Дельта UX](../../openspec/changes/archive/2026-11-12-refine-monitor-run-observation/specs/control-security-ux/spec.md) уточняет браузерные действия Light. [Проекция и доступ Light](../../openspec/changes/add-prifly-light-task-board/read-contract.md) остаются в действующем change Light. Источники согласуются по [карте](../../openspec/SOURCE-OF-TRUTH.md).
 
 | Сочетание | Правило | Проверка |
 |---|---|---|
@@ -37,7 +37,7 @@ Milestone — `none`. Срез уточняет интерфейсы. Дейст
 | Отсутствие в странице, 503, 403 или переход в Full | Сохраняется выбор. Причина неполноты видна. Явный отказ скрывает содержимое. Ссылка сохраняет источник, Run и доступную цель | D3, L03/L04 |
 | Узкая история и длинная строка Light | Значение переносится или раскрывается. Страница остаётся в ширине экрана | D4, L05 |
 
-Все точные переходы используют браузерный адрес. Runtime, JSON и сохранённые ответы replay остаются в защищённой области. [Приёмка](../../openspec/changes/refine-monitor-run-observation/acceptance.md) связывает проверку с текущими native exports и двумя временными исполнениями.
+Все точные переходы используют браузерный адрес. Runtime, JSON и сохранённые ответы replay остаются в защищённой области. [Приёмка](../../openspec/changes/archive/2026-11-12-refine-monitor-run-observation/acceptance.md) связывает проверку с текущими native exports и двумя временными исполнениями.
 
 ## Tasks
 
