@@ -127,7 +127,50 @@ function outputHTML(view) {
 function nodeObject(run,id) {for(const pool of [run.attempts,run.steps,run.activations,run.invocations,run.check_executions])if(pool?.[id])return pool[id];return id===run.id?run:null;}
 function receivedAttempt(run,id) {
  const object=nodeObject(run,id);
- return run.attempts?.[id]||(object?values(run.steps).filter(s=>s.stage_activation_id===object.id).flatMap(s=>s.attempt_ids||[]).map(a=>run.attempts?.[a]).filter(Boolean).at(-1):null);
+ const steps=run.steps?.[id]?[run.steps[id]]:object?values(run.steps).filter(s=>s.stage_activation_id===object.id):[];
+ return run.attempts?.[id]||steps.flatMap(s=>s.attempt_ids||[]).map(a=>run.attempts?.[a]).filter(Boolean).at(-1)||null;
+}
+const artifactRefKey=ref=>JSON.stringify([ref.artifact_id||ref.id,ref.revision,ref.digest]);
+function artifactKind(schema,media='') {
+ const names={
+  'core:schema/workspace-tree-manifest':'Документ',
+  'core:schema/git-diff':'Сохранённый diff',
+  'aif:schema/implementation':'Коммиты',
+  'aif:schema/merge-request':'Merge request',
+  'aif:schema/pull-request':'Pull request',
+  'aif:schema/gate-result':'Результат проверки',
+  'aif:schema/test-run':'Отчёт тестов',
+  'aif:schema/challenge-findings':'Замечания',
+  'aif:schema/task':'Задача',
+  'aif:schema/warmup-handoff':'Контекст',
+ };
+ return names[schema]||(media.startsWith('text/')?'Документ':'Артефакт');
+}
+function stepArtifacts(run,attempt) {
+ if(!attempt)return [];
+ const definition=definitionBytes(run,run.steps?.[attempt.step_instance_id]?.definition_ref)||{};
+ const envelope=parseMaybe(attempt.envelope)||{};
+ const inputs=attempt.context?.inputs
+  ?Object.fromEntries(Object.entries(attempt.context.inputs).map(([port,value])=>[port,value.ref]))
+  :envelope.input_artifacts;
+ return [['input',inputs,definition.inputs],['output',attempt.accepted?.outputs,definition.outputs||envelope.output_contracts]]
+  .flatMap(([side,ports,contracts])=>Object.entries(ports||{}).sort(([a],[b])=>a.localeCompare(b)).flatMap(([port,ref])=>{
+   if(!ref?.artifact_id||!ref.revision||!ref.digest)return [];
+   const contract=contracts?.[port],schema=contract?.schema_ref?.id||'';
+   return [{side,port,ref,schema,kind:artifactKind(schema,contract?.media_types?.[0]),key:JSON.stringify([side,port,artifactRefKey(ref)])}];
+  }));
+}
+function sameDocument(before,after) {
+ if(before?.schema_version!=='workspace-tree-manifest/1'||after?.schema_version!==before.schema_version||before.entrypoint!==after.entrypoint)return false;
+ const files=tree=>Array.isArray(tree.files)&&tree.files.length&&tree.files.every(f=>f.path&&f.ref?.digest)?tree.files.map(f=>JSON.stringify([f.path,f.ref.digest])).sort():null;
+ const a=files(before),b=files(after);
+ return !!a&&!!b&&a.length===b.length&&a.every((file,i)=>file===b[i]);
+}
+function safeArtifactURL(value) {
+ try {
+  const url=new URL(value);
+  return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password?url.href:'';
+ } catch {return '';}
 }
 function progressHTML(row,asOf,interrupted=false) {
  if(interrupted && row && !row.settled)row={...row,state:'read_stale'};
@@ -539,7 +582,7 @@ function positionNewGraph(box,key,active){
  box.scrollTop=pad+(Math.min(...ys)+Math.max(...ys)+78)/2-box.clientHeight/2;
  box.scrollLeft=pad+(Math.min(...xs)+Math.max(...xs)+230)/2-box.clientWidth/2;
 }
-if(typeof module !== 'undefined') module.exports = {exactDecision,pendingDecisionTarget,decisionDetailsHTML,attemptDiagnosticsHTML,reasonLink,positionNewGraph,runKey,catalogueAddress,currentRuns,matchingProgress,observedProgress,runHash,boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,runTaskTitle,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
+if(typeof module !== 'undefined') module.exports = {stepArtifacts,artifactRefKey,sameDocument,safeArtifactURL,exactDecision,pendingDecisionTarget,decisionDetailsHTML,attemptDiagnosticsHTML,reasonLink,positionNewGraph,runKey,catalogueAddress,currentRuns,matchingProgress,observedProgress,runHash,boardHTML,boardCardHTML,detailReasons,listReasons,reasonsHTML,isRelatedView,esc,label,duration,graphData,definitionInvocation,fileChanges,nodeCard,executionRole,activityRows,runTaskTitle,progressView,progressHTML,outputHTML,inertText,receivedAttempt,partialCause,nowHTML,executionCounts,relatedTitle,expandedRuns,runStatus,stepReceipt,launchInputs,timeBreakdown,attemptPhases,resourceRows};
 if(typeof document !== 'undefined') {
 const $ = id => document.getElementById(id);
 let selected='',source='',generation=0,page=1,pages=1,state=null,nodeID='',invocation='',definition='',tab='overview',stamp='',filterTimer,revealed='';
@@ -851,7 +894,7 @@ function timeHTML(timing) {
  return html+'</div></details>';
 }
 function raw(value,key) {return `<details class="facts-section" data-key="raw:${esc(key)}"><summary>Исходные сохранённые данные</summary><pre class="raw" data-scroll="${esc(key)}">${esc(JSON.stringify(value,null,2))}</pre></details>`;}
-function artifact(ref,title) {return `<details class="artifact" data-key="artifact:${esc(ref.digest)}" data-ref="${esc(JSON.stringify(ref))}"><summary>${esc(title || ref.artifact_id)} <small>Ревизия ${esc(ref.revision)} · ${esc(short(ref.digest))}</small></summary><div class="artifact-content">Откройте для чтения содержимого</div></details>`;}
+function artifact(ref,title,open=false,documentPath='') {return `<details class="artifact" data-key="artifact:${esc(artifactRefKey(ref))}" data-ref="${esc(JSON.stringify(ref))}" data-document-path="${esc(documentPath)}" ${open?'open':''}><summary>${esc(title || ref.artifact_id)} <small>Ревизия ${esc(ref.revision)} · ${esc(short(ref.digest))}</small></summary><div class="artifact-content">Откройте для чтения содержимого</div></details>`;}
 function readable(value,key='',depth=0) {
  if(value==null) return '<span class="muted">Не записано</span>';
  if(value?.artifact_id && value?.digest && value?.revision) return artifact(value,'Артефакт '+short(value.artifact_id));
@@ -863,26 +906,272 @@ function readable(value,key='',depth=0) {
  return '<dl class="kv">'+Object.entries(value).map(([k,v])=>`<dt>${esc(label(k))}</dt><dd>${readable(v,key+':'+k,depth+1)}</dd>`).join('')+'</dl>';
 }
 function section(title,value,key,open=false) {return `<details class="facts-section" data-key="${esc(key)}" ${open?'open':''}><summary>${esc(title)}</summary><div class="facts-body">${readable(value,key)}</div></details>`;}
-function artifactBody(a) {
+function artifactBody(a,documentPath='') {
  const parsed=parseMaybe(a.content);
- const files=parsed?.schema_version==='workspace-tree-manifest/1' && Array.isArray(parsed.files) ? `<h4>Файлы сохранённого дерева</h4><p class="muted">Состав этого снимка. Для списка изменений нужны входной и выходной снимки.</p>${readable(parsed.files)}` : '';
- return `<p class="muted">${esc(a.bytes)} байт · ${esc(a.artifact?.media_type || a.artifact?.format || '')}${a.truncated ? ' · Показан только первый 1 MiB' : ''}</p>${files || (typeof parsed==='object' ? readable(parsed) : `<pre class="raw" data-scroll="blob:${esc(a.artifact?.digest || '')}">${esc(a.content)}</pre>`)}${typeof parsed==='object'?`<details class="facts-section"><summary>Исходный текст артефакта</summary><pre class="raw" data-scroll="raw-blob:${esc(a.artifact?.digest || '')}">${esc(a.content)}</pre></details>`:''}${a.truncated?'<button type="button" data-full>Загрузить текст целиком</button>':''}`;
+ const schema=a.artifact?.schema_ref?.id,media=a.artifact?.media_type||'',key=artifactRefKey(a.artifact||{});
+ const sourceText=`<pre class="raw" data-scroll="blob:${esc(key)}">${esc(a.content)}</pre>`;
+ let preview=typeof parsed==='object'?readable(parsed):sourceText;
+ const markdown=media.startsWith('text/markdown')||(a.artifact?.format==='blob'&&/\.md$/i.test(documentPath));
+ if(a.artifact?.format==='blob'&&!markdown&&!media.startsWith('text/')){
+  const ref=a.artifact;
+  const query=new URLSearchParams({source,artifact_id:ref.id,revision:ref.revision,digest:ref.digest,download:'1'});
+  return `<p class="muted">${esc(media||'Двоичный файл')} · ${esc(a.bytes)} байт</p><p><a href="/api/artifact?${esc(query)}" download>Скачать артефакт</a></p>`;
+ }
+ if(!a.truncated && markdown) {
+  preview=artifactMarkdown(a.content);
+ } else if(!a.truncated && media.startsWith('text/')) {
+  preview='<div class="artifact-document">'+esc(a.content)+'</div>';
+ } else if(!a.truncated && schema==='core:schema/workspace-tree-manifest' && Array.isArray(parsed?.files)) {
+  const entry=parsed.files.find(file=>file.path===parsed.entrypoint)||parsed.files[0];
+  preview=parsed.files.map(file=>file.ref?artifact(file.ref,file.path,file===entry,file.path):'').join('')||'<p class="muted">В снимке нет файлов.</p>';
+ } else if(!a.truncated && schema==='core:schema/git-diff' && parsed?.schema_version==='git-diff/1'){
+  preview=savedDiffHTML(parsed,key);
+ } else if(!a.truncated && schema==='aif:schema/implementation' && parsed?.head_commit){
+  preview=commitRangeHTML(parsed.base_commit,parsed.head_commit)+changedFilesHTML(parsed.changed_files);
+ } else if(!a.truncated && ['aif:schema/merge-request','aif:schema/pull-request'].includes(schema) && parsed?.published){
+  preview=mergeRequestHTML(parsed);
+ }
+ const isTree=schema==='core:schema/workspace-tree-manifest';
+ const type=isTree?'Снимок документа':markdown?'Документ':artifactKind(schema,media);
+ const sourceLabel=isTree?'Исходные данные снимка':markdown?'Исходный текст файла':'Исходные данные артефакта';
+ return `<p class="muted">${esc(type)} · ${esc(a.bytes)} байт${a.truncated ? ' · Показан только первый 1 МиБ' : ''}</p>`+
+  (a.truncated?`<button type="button" data-full>Загрузить целиком</button>${sourceText}`:preview)+
+  (preview!==sourceText&&!a.truncated?`<details class="facts-section" data-key="source:${esc(key)}"><summary>${sourceLabel}</summary>${sourceText}</details>`:'');
 }
+// Saved markup and links remain text. Opening a document loads no external content.
+function artifactMarkdownInline(text) {
+ const tokens=/(\x60[^\x60\n]+\x60|\[[^\]\n]+\]\([^)\n]+\)|\*\*[^*\n]+\*\*)/g;
+ return text.split(tokens).map((part,i)=>{
+  if(i%2===0)return esc(part);
+  if(part.startsWith('\x60'))return '<code>'+esc(part.slice(1,-1))+'</code>';
+  if(part.startsWith('**'))return '<strong>'+esc(part.slice(2,-2))+'</strong>';
+  const link=/^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
+  return link?'<span title="'+esc(link[2])+'">'+esc(link[1])+'</span>':esc(part);
+ }).join('');
+}
+function artifactMarkdown(text) {
+ const blocks=[];
+ let fence=null,paragraph=[],list=[];
+ const flushList=()=>{
+  if(!list.length)return;
+  blocks.push('<ul>'+list.map(line=>'<li>'+artifactMarkdownInline(line)+'</li>').join('')+'</ul>');
+  list=[];
+ };
+ const flush=()=>{
+  flushList();
+  if(!paragraph.length)return;
+  blocks.push('<p>'+artifactMarkdownInline(paragraph.join('\n'))+'</p>');
+  paragraph=[];
+ };
+ for(const line of text.split(/\r?\n/)){
+  if(line.startsWith('\x60\x60\x60')){
+   if(fence){blocks.push('<pre class="raw">'+esc(fence.join('\n'))+'</pre>');fence=null;}
+   else{flush();fence=[];}
+   continue;
+  }
+  if(fence){fence.push(line);continue;}
+  const bullet=/^[-*]\s+(.+)$/.exec(line);
+  if(bullet){
+   if(paragraph.length)flush();
+   list.push(bullet[1]);
+   continue;
+  }
+  flushList();
+  const heading=/^(#{1,6})\s+(.+)$/.exec(line);
+  if(heading){
+   flush();
+   const tag=heading[1].length===1?'h4':'h5';
+   blocks.push('<'+tag+'>'+artifactMarkdownInline(heading[2])+'</'+tag+'>');
+  }else if(line.trim()==='')flush();
+  else paragraph.push(line);
+ }
+ flush();
+ if(fence)blocks.push('<pre class="raw">'+esc(fence.join('\n'))+'</pre>');
+ return '<div class="artifact-document" tabindex="0">'+blocks.join('')+'</div>';
+}
+function commitRangeHTML(base,head) {
+ return `<dl class="kv artifact-range"><dt>База</dt><dd><code>${esc(base||'Не записана')}</code></dd><dt>Голова</dt><dd><code>${esc(head||'Не записана')}</code></dd></dl>`;
+}
+function changedFilesHTML(files) {
+ if(!Array.isArray(files))return '<p class="muted">Список файлов не записан.</p>';
+ if(!files.length)return '<p>Изменённых файлов нет.</p>';
+ return `<details class="facts-section"><summary>Изменённые файлы · ${files.length}</summary><ul>${files.map(file=>`<li><code>${esc(file)}</code></li>`).join('')}</ul></details>`;
+}
+function mergeRequestHTML(value) {
+ const published=value.published,url=safeArtifactURL(published.mr_url||published.pr_url);
+ return `<h5>${esc(value.title||'Запрос на слияние')}</h5>
+ <p>${published.mr_iid!=null?`<b>MR !${esc(published.mr_iid)}</b> · `:''}${esc(value.source_branch)} → ${esc(value.target?.branch||value.base?.branch)}${value.draft===true?' · Черновик на момент записи':''}</p>
+ ${url?`<p><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Открыть запрос на слияние</a></p>`:''}
+ ${commitRangeHTML(value.range?.from||value.base?.expected_commit,value.range?.to||value.head_commit)}
+ ${changedFilesHTML(value.changed_files)}
+ ${value.description?`<details class="facts-section"><summary>Описание</summary><div class="artifact-document">${esc(value.description)}</div></details>`:''}`;
+}
+function savedDiffHTML(diff,key) {
+ const kinds={text:'Текст',binary:'Двоичный файл',submodule:'Подмодуль',metadata:'Метаданные'};
+ const statuses={A:'Добавлен',D:'Удалён',M:'Изменён',R:'Переименован',T:'Сменился тип'};
+ const files=Array.isArray(diff.files)?diff.files:[];
+ return commitRangeHTML(diff.base_commit,diff.head_commit)+`<p class="muted">Сохранённый снимок · ${files.length} файлов${diff.complete===true?'':' · неполный'}</p>`+
+  (files.length?files.map((file,i)=>{
+   const title=file.status==='R'?`${file.old_path} → ${file.new_path}`:file.new_path||file.old_path;
+   return `<details class="diff-file" data-key="diff:${esc(key+':'+i)}"><summary><code>${esc(title)}</code><small>${esc(statuses[file.status])} · ${esc(kinds[file.kind])}${file.old_mode!==file.new_mode?` · ${esc(file.old_mode)} → ${esc(file.new_mode)}`:''}</small></summary><div data-patch hidden>${esc(file.patch||'')}</div><pre class="raw diff-lines" data-scroll="diff:${esc(key+':'+i)}" hidden></pre></details>`;
+  }).join(''):'<p>Изменённых файлов нет.</p>');
+}
+function showDiffLines(details) {
+ const patch=details.querySelector('[data-patch]'),box=details.querySelector('.diff-lines');
+ if(!patch||!box||!box.hidden)return;
+ const text=patch.textContent;
+ if(text.length>500000)box.textContent=text;
+ else box.innerHTML=text.split('\n').map(line=>{
+  const kind=line.startsWith('@@')?'hunk':line.startsWith('+')&&!line.startsWith('+++ ')?'add':line.startsWith('-')&&!line.startsWith('--- ')?'remove':'';
+  return kind?`<span class="diff-${kind}">${esc(line)}</span>`:esc(line);
+ }).join('\n');
+ box.hidden=false;
+}
+let stepArtifactView=null;
+const stepArtifactRequests=new Map();
+function readStepArtifact(authority,ref,full=false) {
+ const key=authority+':'+artifactRefKey(ref),cached=artifactCache.get(key);
+ if(cached&&(!full||!cached.truncated))return Promise.resolve(cached);
+ const requestKey=key+':'+full;
+ if(!stepArtifactRequests.has(requestKey))stepArtifactRequests.set(requestKey,
+  get('/api/artifact',{source:authority,...ref,...(full?{full:'1'}:{})}).then(value=>{
+   if(!artifactCache.has(key)||!value.truncated)artifactCache.set(key,value);
+   return artifactCache.get(key);
+  }).finally(()=>stepArtifactRequests.delete(requestKey)));
+ return stepArtifactRequests.get(requestKey);
+}
+function renderStepArtifacts(run,attempt) {
+ const box=$('step-artifacts');
+ if(!attempt){box.hidden=true;box.replaceChildren();stepArtifactView=null;return;}
+ const rows=stepArtifacts(run,attempt),identity=JSON.stringify([source,run.id,attempt.id]);
+ const inventory=JSON.stringify([rows,!!attempt.accepted]);
+ if(stepArtifactView?.identity===identity&&stepArtifactView.inventory===inventory)return;
+ const previous=stepArtifactView?.identity===identity?stepArtifactView.selected:null;
+ const chosen=rows.find(row=>row.key===previous)||rows.find(row=>row.side==='output'&&row.port!=='diff'&&row.port!=='step_diff')||rows[0];
+ stepArtifactView={identity,inventory,rows,attempt,run,selected:chosen?.key,authority:source,revision:0};
+ box.hidden=false;
+ const group=(side,label,empty)=>`<section class="artifact-flow-list" aria-label="${label}"><h5>${label}</h5>`+
+  (rows.filter(row=>row.side===side).map(row=>`<button type="button" data-step-artifact="${esc(row.key)}" aria-pressed="${row.key===chosen?.key}"><b>${esc(row.port==='step_diff'?'Diff шага':row.port==='diff'?'Общий diff':row.port)}</b><small>${esc(row.kind)}</small></button>`).join('')||`<p class="muted">${empty}</p>`)+
+  '</section>';
+ box.innerHTML=`<section class="artifact-flow"><h4>Артефакты шага</h4>
+ <div class="artifact-flow-ports">${group('input','Получено','Артефакты не переданы.')}${group('output','Создано',attempt.accepted?'Результат без артефактов.':'Принятых выходов пока нет.')}</div>
+ ${chosen?'<div class="artifact-flow-preview" aria-busy="true"><p class="muted">Загрузка артефакта…</p></div>':''}</section>`;
+ if(chosen)loadStepArtifact();
+}
+function artifactMetadata(artifact,view) {
+ const producer=artifact.producer||{},sameRun=producer.run_id===view.run.id;
+ let origin=esc(({authority:'Из хранилища проекта',import:'Импорт',workflow_input:'Вход запуска'})[producer.kind]||producer.run_id||producer.kind||'Не записан');
+ if(sameRun&&view.run.attempts?.[producer.attempt_id]){
+  const stage=view.run.activations?.[producer.stage_activation_id]?.stage_id;
+  origin=`<button type="button" data-node="${esc(producer.attempt_id)}">${esc(stage||short(producer.attempt_id))}</button>`;
+ }else if(producer.run_id&&producer.attempt_id){
+  const href=runHash(view.authority,producer.run_id,{tab:'workflow',node:producer.attempt_id,focus:'1'});
+  origin=`<a href="${esc(href)}">Попытка ${esc(short(producer.attempt_id))} · Run ${esc(short(producer.run_id))}</a>`;
+ }
+ return `<p class="artifact-origin"><span class="muted">Источник</span> ${origin}${producer.port?` · ${esc(producer.port)}`:''}</p><details class="facts-section"><summary>Точная ссылка</summary><dl class="kv">
+ <dt>Артефакт</dt><dd><code>${esc(artifact.id)}</code></dd>
+ <dt>Ревизия</dt><dd>${esc(artifact.revision)}</dd>
+ <dt>Хеш</dt><dd><code>${esc(artifact.digest)}</code></dd>
+ <dt>Схема</dt><dd>${esc(artifact.schema_ref?.id||artifact.media_type||artifact.format)} ${esc(artifact.schema_ref?.version||'')}</dd>
+ </dl></details>`;
+}
+async function artifactContextHTML(row,value,view) {
+ const parsed=parseMaybe(value.content),schema=value.artifact.schema_ref?.id;
+ const other=view.rows.find(candidate=>candidate.side!==row.side&&candidate.port===row.port&&artifactRefKey(candidate.ref)!==artifactRefKey(row.ref));
+ if(schema==='core:schema/workspace-tree-manifest'&&other&&!value.truncated){
+  const compare=await readStepArtifact(view.authority,other.ref).catch(()=>null);
+  if(compare&&!compare.truncated&&sameDocument(parsed,parseMaybe(compare.content)))return '<p class="artifact-note">Содержимое входного и выходного снимков совпадает. Ссылки разные.</p>';
+ }
+ if(schema!=='aif:schema/implementation')return '';
+ const producer=value.artifact.producer;
+ const owner=row.side==='output'?view.attempt:producer?.run_id===view.run.id?view.run.attempts?.[producer.attempt_id]:null;
+ const saved=owner?.accepted?.outputs?.diff;
+ let html=saved?artifact(saved,'Diff всего результата'):'<p class="muted">Сохранённый diff для этого диапазона не записан.</p>';
+ if(row.side==='output'){
+  const stepDiff=owner?.accepted?.outputs?.step_diff;
+  if(stepDiff)return html+artifact(stepDiff,'Diff только этого шага');
+  const input=view.rows.find(i=>i.side==='input'&&i.port==='implementation');
+  if(input&&!value.truncated){
+   const before=await readStepArtifact(view.authority,input.ref).catch(()=>null);
+   const head=before&&!before.truncated?parseMaybe(before.content)?.head_commit:null;
+   if(head&&head===parsed?.head_commit)html+='<p class="artifact-note">Шаг получил и вернул один коммит. Изменений между ними нет.</p>';
+   else if(head&&head===parsed?.base_commit&&saved)html+='<p class="artifact-note">Общий diff совпадает с diff шага.</p>';
+   else if(head)html+='<p class="muted">Отдельный diff шага не записан.</p>';
+  }
+ }
+ return html;
+}
+async function loadStepArtifact(full=false) {
+ const view=stepArtifactView,box=$('step-artifacts').querySelector('.artifact-flow-preview');
+ const row=view?.rows.find(candidate=>candidate.key===view.selected);
+ if(!row||!box)return;
+ const revision=++view.revision;
+ box.setAttribute('aria-busy','true');
+ box.innerHTML='<p class="muted" role="status">Загрузка артефакта…</p>';
+ try {
+  const value=await readStepArtifact(view.authority,row.ref,full);
+  const extra=await artifactContextHTML(row,value,view);
+  if(stepArtifactView!==view||revision!==view.revision||!box.isConnected)return;
+  const selectedButton=[...$('step-artifacts').querySelectorAll('[data-step-artifact]')].find(button=>button.dataset.stepArtifact===row.key);
+  if(selectedButton)selectedButton.querySelector('small').textContent=artifactKind(value.artifact.schema_ref?.id,value.artifact.media_type);
+  const isTree=value.artifact.schema_ref?.id==='core:schema/workspace-tree-manifest';
+  const body=artifactBody(value);
+  box.innerHTML=artifactMetadata(value.artifact,view)+(isTree?extra+body:body+extra);
+  if(value.truncated){
+   const fullButton=box.querySelector('[data-full]');
+   fullButton?.removeAttribute('data-full');
+   fullButton?.setAttribute('data-step-full','');
+  }
+  hydrate(box);
+ } catch(err){
+  if(stepArtifactView===view&&revision===view.revision&&box.isConnected)box.innerHTML=`<p class="error" role="status">Не удалось прочитать артефакт. ${esc(err.message)}</p><button type="button" data-step-full>Повторить</button>`;
+ } finally {
+  if(stepArtifactView===view&&revision===view.revision)box.setAttribute('aria-busy','false');
+ }
+}
+$('step-artifacts').addEventListener('click',event=>{
+ const button=event.target.closest('[data-step-artifact]');
+ if(button&&stepArtifactView&&button.dataset.stepArtifact!==stepArtifactView.selected){
+  stepArtifactView.selected=button.dataset.stepArtifact;
+  for(const item of $('step-artifacts').querySelectorAll('[data-step-artifact]'))item.setAttribute('aria-pressed',String(item===button));
+  loadStepArtifact();
+ }
+ if(event.target.closest('[data-step-full]'))loadStepArtifact(true);
+});
 function hydrate(box) {
  for(const element of box.querySelectorAll('[data-run-depth]')) {const depth=Number(element.dataset.runDepth);if(Number.isSafeInteger(depth)&&depth>=0)element.style.setProperty('--run-depth',String(depth));}
  for(const details of box.querySelectorAll('details[data-ref]')) {
-  const ref=JSON.parse(details.dataset.ref),cached=artifactCache.get(source+':'+ref.digest);
-  if(cached && details.open) details.querySelector('.artifact-content').innerHTML=artifactBody(cached);
+  const ref=JSON.parse(details.dataset.ref),cached=artifactCache.get(source+':'+artifactRefKey(ref));
+  if(cached && details.open) mountArtifact(details,cached);
   else if(details.open && !cached) loadArtifact(details);
  }
+ for(const details of box.querySelectorAll('details.diff-file[open]'))showDiffLines(details);
+}
+function mountArtifact(details,value) {
+ const box=details.querySelector('.artifact-content');
+ if(box.dataset.loaded===String(value.truncated))return;
+ box.dataset.loaded=String(value.truncated);
+ box.innerHTML=artifactBody(value,details.dataset.documentPath);
+ hydrate(box);
 }
 async function loadArtifact(details,full=false) {
- const ref=JSON.parse(details.dataset.ref),key=source+':'+ref.digest,g=source+selected;
- const box=details.querySelector('.artifact-content');box.textContent='Загрузка…';
- try {const value=await get('/api/artifact',{source,...ref,...(full?{full:'1'}:{})});if(g!==source+selected || !details.isConnected)return;artifactCache.set(key,value);box.innerHTML=artifactBody(value);}
- catch(err){if(g===source+selected && details.isConnected)box.textContent='Не удалось прочитать: '+err.message;}
+ const ref=JSON.parse(details.dataset.ref),g=JSON.stringify([source,selected]);
+ const box=details.querySelector('.artifact-content');
+ delete box.dataset.loaded;
+ box.textContent='Загрузка…';
+ try {const value=await readStepArtifact(source,ref,full);if(g!==JSON.stringify([source,selected])||!details.isConnected)return;mountArtifact(details,value);}
+ catch(err){if(g===JSON.stringify([source,selected])&&details.isConnected)box.textContent='Не удалось прочитать: '+err.message;}
 }
-document.addEventListener('toggle',event=>{const d=event.target;if(d.matches?.('details[data-ref]') && d.open && !artifactCache.has(source+':'+JSON.parse(d.dataset.ref).digest))loadArtifact(d);else if(d.matches?.('details[data-ref]') && d.open){const a=artifactCache.get(source+':'+JSON.parse(d.dataset.ref).digest);if(a)d.querySelector('.artifact-content').innerHTML=artifactBody(a);}},true);
+document.addEventListener('toggle',event=>{
+ const d=event.target;
+ if(!d.open)return;
+ if(d.matches?.('details.diff-file'))showDiffLines(d);
+ if(d.matches?.('details[data-ref]')){
+  const value=artifactCache.get(source+':'+artifactRefKey(JSON.parse(d.dataset.ref)));
+  if(value)mountArtifact(d,value);
+  else loadArtifact(d);
+ }
+},true);
 document.addEventListener('click',event=>{if(event.target.closest('[data-full]'))loadArtifact(event.target.closest('details[data-ref]'),true);});
 function options(name,items,all) {
  const el=form.elements[name],old=el.value;
@@ -983,6 +1272,7 @@ function renderNode() {
  const activation=run.activations?.[object?.stage_activation_id||object?.activation_id||nodeID],stageID=activation?.stage_id||object?.stage_id||nodeID,graph=graphData(parseMaybe(currentWorkflow(run)),run,definition?definitionInvocation(run,definition):invocation,state.choices,state.input_values);
  let html=attemptDiagnosticsHTML(run,run.attempts?.[nodeID],source)+nodeCard(graph,stageID,object,run),role=executionRole(object,parseMaybe(currentWorkflow(run))?.definition?.stages?.[stageID]);
  const received=receivedAttempt(run,nodeID);
+ renderStepArtifacts(run,received);
  if(received)html+=receiptHTML(run,received,state.input_values,attemptPhases(timingNode(state.timing?.root,received.id),!!received.session),received.id===nodeID?'':'Последнее исполнение этой стадии: '+short(received.id));
  if(!object) {
   const stage=parseMaybe(currentWorkflow(run))?.definition?.stages?.[nodeID];
@@ -1140,6 +1430,7 @@ function useRoute() {
   selected=next;source=nextSource;state=null;stamp='';selectedRead={at:null,stale:false};detailAux.clear();recentKey='';
   restoreTreeFocus='';
   artifactCache.clear();fileCache.clear();resetEvents('recent');
+  renderStepArtifacts(null,null);
   delete $('graph').dataset.graphView;
   for(const name of ['overview','activity','overview-metadata','recent-rows','tree','node','graph','facts'])preserve($(name),'');
   $('recent-events').hidden=true;
@@ -1334,7 +1625,7 @@ async function refreshDetail(g){
  if(g!==generation || flight.signal.aborted)return;
  const previous=state,run=next.run,programs=programsIn(run);
  const shown=tab==='workflow' && nodeID?receivedAttempt(run,nodeID):null;
- const brief=run.brief_ref,briefKey=brief && params.source+':'+brief.digest;
+ const brief=run.brief_ref,briefKey=brief && params.source+':'+artifactRefKey(brief);
  const briefArtifact=briefKey && artifactCache.get(briefKey);
  next.taskTitle=runTaskTitle(next.input_values,parseMaybe(briefArtifact?.content));
  next.capacity=previous?.capacity;

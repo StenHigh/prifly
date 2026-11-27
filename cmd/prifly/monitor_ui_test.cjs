@@ -405,3 +405,20 @@ assert.doesNotMatch(scopedDiagnostic,/wrong_/);
 assert.match(attemptDiagnosticsHTML({...questionRun,diagnostics:[]},selectedAttempt,'source:one'),/Причина ошибки не установлена/);
 assert.equal(new URLSearchParams(reasonLink('source:one','run:one',{action:'journal',event_seq:24}).slice(1)).get('event'),'24');
 assert.equal(new URLSearchParams(reasonLink('source:one','run:one',{action:'journal'}).slice(1)).has('event'),false);
+
+const {stepArtifacts,artifactRefKey,sameDocument,safeArtifactURL}=require('./monitor.js');
+const inputPlan={artifact_id:'artifact:original',revision:1,digest:'sha256:manifest-one'};
+const outputPlan={artifact_id:'artifact:copy',revision:1,digest:'sha256:manifest-two'};
+const attemptWithPlan={
+ context:{inputs:{plan:{ref:inputPlan}}},
+ candidate:{outputs:{unaccepted:{...outputPlan,artifact_id:'artifact:unaccepted'}}},
+ accepted:{outputs:{plan:outputPlan}},
+};
+assert.deepEqual(stepArtifacts({},attemptWithPlan).map(r=>[r.side,r.ref]),[['input',inputPlan],['output',outputPlan]]);
+assert.notEqual(artifactRefKey(inputPlan),artifactRefKey({...inputPlan,artifact_id:outputPlan.artifact_id}));
+const snapshot=ref=>({schema_version:'workspace-tree-manifest/1',entrypoint:'plan.md',files:[{path:'plan.md',ref}]});
+const sameContent={...outputPlan,digest:inputPlan.digest};
+assert.equal(sameDocument(snapshot(inputPlan),snapshot(sameContent)),true);
+assert.equal(sameDocument(snapshot(inputPlan),snapshot(outputPlan)),false);
+assert.equal(safeArtifactURL('javascript:alert(1)'),'');
+assert.equal(safeArtifactURL('https://gitlab.com/project/-/merge_requests/1'),'https://gitlab.com/project/-/merge_requests/1');

@@ -316,13 +316,20 @@ func monitorMux(catalog *monitorCatalog) http.Handler {
 	scoped("/api/artifact", func(w http.ResponseWriter, r *http.Request, engine *prifly.Engine) {
 		revision, _ := strconv.ParseInt(r.URL.Query().Get("revision"), 10, 64)
 		ref := prifly.ArtifactRef{ArtifactID: r.URL.Query().Get("artifact_id"), Revision: revision, Digest: r.URL.Query().Get("digest")}
-		if ref.ArtifactID == "" || ref.Digest == "" {
+		if ref.ArtifactID == "" || ref.Revision < 1 || ref.Digest == "" {
 			http.Error(w, "artifact_id, revision and digest required", http.StatusBadRequest)
 			return
 		}
 		artifact, data, err := engine.Artifact(ref)
 		if err != nil {
 			write(w, nil, err)
+			return
+		}
+		if r.URL.Query().Get("download") == "1" {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Disposition", "attachment")
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			_, _ = w.Write(data)
 			return
 		}
 		// A monitor page is not the place to move a large blob through; the
