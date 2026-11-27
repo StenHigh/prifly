@@ -1,5 +1,11 @@
 # AI Factory classic workflow
 
+В пакете 2.1.0 шаги `implement`, `fix` и `commit` используют возможность
+`git_diff_artifacts`. При отчёте с вердиктом `pass` Pri-Fly снимает diff
+по коммитам из `implementation` и сохраняет его в результате шага.
+Отчёт хоста заполняет только выданные выходные слоты. Если снимок не удалось
+получить, повторите отправку отчёта после устранения причины отказа.
+
 ## Unified composition 2.0.0
 
 Requires Pri-Fly >=0.13.86 and explicit installation of the

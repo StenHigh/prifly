@@ -71,6 +71,17 @@ outputs: # Optional: defaults to {}.
     schema_ref: plan_manifest # The same builtin schema is required for tree output.
     required_for: [pass]
 
+# git_diff_artifacts, StepDefinition contract 2 or later with an assisted
+# workspace_write executor. Pin core:schema/git-diff@1.0.0 as git_diff_schema.
+# Declare these beside a required JSON implementation output. Its base_commit
+# and head_commit contain full Git hashes. The authority fills the diff ports.
+# outputs:
+#   implementation: {schema_ref: implementation_schema, required_for: [pass]}
+#   diff: {schema_ref: git_diff_schema, required_for: [pass]}
+#   step_diff: {schema_ref: git_diff_schema}
+# Declare step_diff only when implementation is also an input. The authority
+# fills it if the incoming head differs from both the outgoing head and base.
+
 executor:
   adapter_ref: adapter # Required exact execution adapter.
   operation: session # Required adapter operation.

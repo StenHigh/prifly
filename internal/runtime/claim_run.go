@@ -314,5 +314,8 @@ func (e *Engine) prepareClaimRelease(ctx context.Context, claim WorktreeClaim) (
 	if !claimRunFinished(run) {
 		return nil, fault("claim_run_active", "the bound Run is unfinished or uncertain; finish it with run drive or end it with run cancel, then release its workspace; the lease is not read here")
 	}
+	if err := e.verifyClaimGitDiffs(run, claim); err != nil {
+		return nil, err
+	}
 	return nil, nil
 }

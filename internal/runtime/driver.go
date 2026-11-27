@@ -432,6 +432,9 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 		if workspaceTreeBinding(step, port) != nil {
 			continue
 		}
+		if gitDiffOutput(step, port) {
+			continue
+		}
 		manifest.Outputs[port] = OutputSlot{ArtifactID: outputArtifactID(attemptID, port), Revision: 1, Path: "outputs/" + port}
 	}
 	for _, d := range r.Definitions {
@@ -439,6 +442,9 @@ func (e *Engine) admit(ctx context.Context, r Run, v local.ReadView, p *flow.Pla
 	}
 	executor := r.Executors[executorKey(r, stage.StepRef, step.ID)]
 	assisted := isAssistedExecutor(r.Definitions, flow.Executor{AdapterRef: step.Executor.AdapterRef, Operation: step.Executor.Operation})
+	if err := validateGitDiffOutputs(step, assisted); err != nil {
+		return e.failPreparation(ctx, r, v, p, a, err, "git_diff_binding_invalid")
+	}
 	var full FullContextManifest
 	var sources []ContextSource
 	var contextArtifact Artifact
@@ -1562,7 +1568,12 @@ func (e *Engine) readResultOutputs(r Run, a *Attempt, step flow.StepDefinition, 
 		// engine produced both its identity and its bytes, and they travel
 		// beside the captured files.
 		path := capturedManifestPath(port)
-		if workspaceTreeBinding(step, port) == nil {
+		if gitDiffOutput(step, port) {
+			if ref.ArtifactID != outputArtifactID(a.ID, port) || ref.Revision != 1 || !gitDiffDigest.MatchString(ref.Digest) || a.Session == nil {
+				return nil, outputProblem("output_identity_mismatch", port, "the result does not name the comparison captured by the authority")
+			}
+			path = gitDiffCapturePath(ref)
+		} else if workspaceTreeBinding(step, port) == nil {
 			slot := a.Context.Outputs[port]
 			if ref.ArtifactID != slot.ArtifactID || ref.Revision != slot.Revision {
 				return nil, outputProblem("output_identity_mismatch", port, "the reported artifact identity differs from the admitted output slot")
@@ -1608,6 +1619,9 @@ func (e *Engine) resultOutputs(r Run, a *Attempt, step flow.StepDefinition, p *f
 	for port, ref := range result.Outputs {
 		definition := step.Outputs[port]
 		slot := a.Context.Outputs[port]
+		if gitDiffOutput(step, port) {
+			slot.ArtifactID = ref.ArtifactID
+		}
 		data := contents[port]
 		if workspaceTreeBinding(step, port) != nil {
 			if deferred {

@@ -49,6 +49,7 @@ func Capabilities() CapabilityManifest {
 		Unsupported: []string{"artifact_checks", "subscriptions", "unattended", "external_write", "destructive", "managed_isolation", "automatic_retry", "telemetry.compare", "provider_usage", "profiling"},
 	}
 	profile := &manifest.Profiles[1]
+	profile.Capabilities = append(profile.Capabilities, "git_diff_artifacts")
 	profile.Capabilities = append(profile.Capabilities, "project_call_extensions", "project_extension_points")
 	profile.Capabilities = append(profile.Capabilities, "workflow_composition", "workflow_composition_with_points", "project_compile_parameters")
 	profile.StateVersion, profile.ReadVersion = CoreNeutralStateVersion, CoreNeutralReadVersion

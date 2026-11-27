@@ -981,11 +981,16 @@ func (e *Engine) SubmitSession(ctx context.Context, submission SessionSubmission
 	// report: a step that declares trees has them captured by the runtime even
 	// when the host names no location, which is the only form it may use where
 	// the location has a single legal value.
+	if err := e.prepareGitDiffs(ctx, r, attempt, step, reported); err != nil {
+		return local.ApplyResult{}, err
+	}
 	if len(step.WorkspaceTrees) != 0 || len(submission.WorkspaceTrees) != 0 {
 		reported, err = e.captureWorkspaceTreeOutputs(attempt, step, reported, submission.WorkspaceTrees)
 		if err != nil {
 			return local.ApplyResult{}, err
 		}
+	}
+	if len(step.WorkspaceTrees) != 0 || gitDiffOutput(step, "diff") {
 		canonicalResult, err = canonical(reported)
 		if err != nil {
 			return local.ApplyResult{}, err

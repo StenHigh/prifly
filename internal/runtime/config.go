@@ -490,6 +490,7 @@ func buildBuiltins() ([]PinnedDefinition, flow.Registry, error) {
 		{"core:schema/step-result", "schema", json.RawMessage(resultSchema)},
 		{flow.AggregateSchemaID, "schema", json.RawMessage(aggregateSchema)},
 		{flow.WorkspaceTreeManifestSchemaID, "schema", workspaceTreeManifestSchema()},
+		{gitDiffSchemaID, "schema", json.RawMessage(gitDiffSchema)},
 		{"core:schema/artifact-manifest", "schema", json.RawMessage(artifactManifestSchema)},
 		{publicationHandleSchemaID, "schema", json.RawMessage(publicationHandleSchema)},
 		{publicationCursorSchemaID, "schema", json.RawMessage(publicationCursorSchema)},

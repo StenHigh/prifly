@@ -59,6 +59,7 @@ Capability без public handler описывается как contract boundary
 | `run_fork` | [Процедура](recovery.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `workspace_modes` | [Процедура](workspace.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `workspace_tree_artifacts` | [Процедура](workspace.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
+| `git_diff_artifacts` | [Процедура](observability.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `decision_catalog` | [Процедура](decisions.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `neutral_start` | [Процедура](launch.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |
 | `execution_bindings` | [Процедура](authoring.md) | [Author index](../README.md#что-умеет-движок-и-где-это-показано) |

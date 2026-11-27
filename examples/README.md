@@ -85,6 +85,7 @@
 | `run_fork` | `prifly run fork` | — |
 | `workspace_modes` | `workspace: worktree|checkout` в профиле проекта | project-profile |
 | `workspace_tree_artifacts` | `workspace_trees` с `output_port` | step |
+| `git_diff_artifacts` | выходы `diff` и `step_diff` со схемой `core:schema/git-diff@1.0.0` у assisted шага | step |
 | `decision_catalog` | `decisions` пакета; ответы проекта — `answers` | extension |
 | `neutral_start` | `project start` без RunBrief | project-profile |
 | `execution_bindings` | `execution_bindings` в корне пакета | execution-bindings |
