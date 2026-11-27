@@ -150,24 +150,54 @@ runtime contract.
 [`prioritize-readable-and-measurable-workflows`](../../changes/prioritize-readable-and-measurable-workflows/tasks.md).
 HTML — датированные аналитические снимки; актуальные статусы задаёт этот roadmap.
 
-Текущий backlog на 2026-09-23 сверён с неархивированными OpenSpec changes.
-Закрытый срез цепочки возобновлений добавлен 2026-10-02 как release/pilot evidence, а не открытая работа.
+Текущий backlog сверён 2026-11-10 с `main` (`60931dc`), всеми 21
+неархивированными OpenSpec changes и опубликованным stable
+[0.13.91](https://github.com/StenHigh/prifly/releases/tag/v0.13.91).
 Счётчик означает только отметки в `tasks.md`, а не квалификацию release или
-формальную приёмку milestone. Порядок внутри группы не устанавливает новую
-зависимость между независимыми changes.
+формальную приёмку milestone. Завершённый checklist в неархивированной папке
+не становится открытой реализацией; archive/sync остаётся отдельным действием.
+Порядок внутри группы не устанавливает новую зависимость между changes.
+Prerequisites и полные критерии каждого change сохранены в его proposal/tasks;
+таблица называет оставшуюся работу, не заменяя эти критерии.
 
-| Очередь | Change | Статус | Prerequisite | Следующий шаг |
-|---|---|---|---|---|
-| Исправление admission | [`route-worktree-claim-by-run`](../../changes/route-worktree-claim-by-run/tasks.md) | Локально проверено: 5/6 | Два отдельных worktree claims одного authority | После обновления бинарника проверить два новых Run в разных worktree |
-| Запуск и решения | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md) | 23/24; открыта 3.5 | Доступ к Codex и Claude Code | Завершить generic host guidance, связать UI evidence и сохранить отдельный commit среза |
-| Продолжение и recovery | [`continue-existing-implementation`](../../changes/continue-existing-implementation/tasks.md) | 10/12; открыты 1.4 и 3.3 | Существующие Project CLI, claims и AI Factory package | Добавить CLI integration cases и провести новый Run до terminal quality outcome |
-| Продолжение и recovery | [`retry-failed-stage-with-new-package`](../../changes/retry-failed-stage-with-new-package/tasks.md) | 5/13 | Sealed source Run, новый package edition и доказательства пригодности результатов | Реализовать recovery command/projection, проверить reuse и сквозной Run |
-| Цепочка восстановления/возобновления | [`fix-chained-workflow-resume`](../../changes/archive/2026-10-02-fix-chained-workflow-resume/tasks.md) | Закрыто: 14/14; release 0.13.75, пилот E succeeded | Immutable source ancestry, доказательства принятого пути и текущий source claim | Приёмка среза завершена; SMSPlace merge/product QA не является gate Pri-Fly |
-| Монитор | [`make-monitor-list-human-readable`](../../changes/make-monitor-list-human-readable/tasks.md) | 3/4; открыта 2.1 | Существующий read-only монитор | Выполнить приёмочные проверки |
-| Монитор | [`clarify-run-list-execution-counts`](../../changes/clarify-run-list-execution-counts/tasks.md) | 0/4 | Существующий RunSummary и read-only список | Переименовать и пояснить счётчики StepInstance/Attempt |
-| Монитор | [`explain-terminal-partial-runs`](../../changes/explain-terminal-partial-runs/tasks.md) | 0/4 | Terminal Run outcome и доказанный маршрут | Разделить terminal/live empty-state и объяснить `partial` |
-| Монитор | [`show-live-execution-ownership`](../../changes/show-live-execution-ownership/tasks.md) | 2/5 | Закреплённые Run/Attempt/Session/Process facts | Завершить read-only activity projection и проверить монитор |
-| Монитор | [`observe-running-program-progress`](../../changes/observe-running-program-progress/tasks.md) | 0/11 | Local program runner и versioned read projections | Начать с versioned progress contract и bounded fd 4 |
+| Очередь | Change | Checklist | Следующий шаг / граница |
+|---|---|---|---|
+| Исправление admission | [`route-worktree-claim-by-run`](../../changes/route-worktree-claim-by-run/tasks.md) | 5/6 | Живой допуск двух новых Runs с отдельными worktree после обновления бинарника |
+| Запуск и решения | [`make-project-launch-workflow-neutral`](../../changes/make-project-launch-workflow-neutral/tasks.md) | 23/24 | Generic host guidance и отдельные Codex/Claude UI observations: 3.5 |
+| Продолжение и recovery | [`continue-existing-implementation`](../../changes/continue-existing-implementation/tasks.md) | 12/13 | Реальный Run до terminal quality outcome: 3.3 |
+| Продолжение и recovery | [`retry-failed-stage-with-new-package`](../../changes/retry-failed-stage-with-new-package/tasks.md) | 12/13 | Адресный pilot recovery с доказанным reuse и terminal outcome: 4.3 |
+| Монитор | [`make-monitor-list-human-readable`](../../changes/make-monitor-list-human-readable/tasks.md) | 4/4 | Checklist завершён; archive/sync отдельно |
+| Монитор | [`clarify-run-list-execution-counts`](../../changes/clarify-run-list-execution-counts/tasks.md) | 4/4 | Checklist завершён; archive/sync отдельно |
+| Монитор | [`explain-terminal-partial-runs`](../../changes/explain-terminal-partial-runs/tasks.md) | 4/4 | Checklist завершён; archive/sync отдельно |
+| Монитор | [`show-live-execution-ownership`](../../changes/show-live-execution-ownership/tasks.md) | 5/5 | Checklist завершён; archive/sync отдельно |
+| Монитор | [`observe-running-program-progress`](../../changes/observe-running-program-progress/tasks.md) | 10/11 | Отдельная адаптация SMSPlace tests-worker: 3.3 |
+| Recovery | [`fix-nested-preparation-recovery`](../../changes/fix-nested-preparation-recovery/tasks.md) | 9/9 | Checklist завершён; archive/sync отдельно |
+| Recovery | [`fix-reviewed-cancelled-writer-recovery`](../../changes/fix-reviewed-cancelled-writer-recovery/tasks.md) | 8/8 | Checklist завершён; archive/sync отдельно |
+| Admission | [`fix-concurrent-named-worktree-start`](../../changes/fix-concurrent-named-worktree-start/tasks.md) | 9/9 | Checklist завершён; archive/sync отдельно |
+| Effects | [`let-a-program-step-declare-an-external-write`](../../changes/let-a-program-step-declare-an-external-write/tasks.md) | 19/20 | Сообщить выпуск и проверить настоящий Run пилота: 6.3 |
+| Проверки | [`reuse-unchanged-verification-results`](../../changes/reuse-unchanged-verification-results/tasks.md) | 13/13 | Checklist завершён; archive/sync отдельно |
+| Light | [`add-prifly-light-task-board`](../../changes/add-prifly-light-task-board/tasks.md) | 22/26 | Сверить release evidence 7.1/7.2; production/domain acceptance 7.3/7.4 не объявлена |
+| Композиция | [`add-nested-project-extension-points`](../../changes/add-nested-project-extension-points/tasks.md) | 7/8 | Capability выпущена в 0.13.83; сопоставить released replay/handoff с gate 4.2, не закрывать по наличию release |
+| Композиция | [`add-workflow-component-imports-and-layers`](../../changes/add-workflow-component-imports-and-layers/tasks.md) | 57/59 | Capability выпущена в 0.13.85; сопоставить exact-SHA gates и generic released replay с 8.1/8.2 |
+| Авторство | [`improve-workflow-authoring-readability`](../../changes/improve-workflow-authoring-readability/tasks.md) | 11/11 | Checklist завершён; пакетная поставка отдельно в workflows v1.54.0/v1.55.0 |
+| Планирование | [`prioritize-readable-and-measurable-workflows`](../../changes/prioritize-readable-and-measurable-workflows/tasks.md) | 6/6 | Checklist планирования завершён; реализации направлений не следуют из этого статуса |
+| Документация | [`refresh-author-guides-and-examples`](../../changes/refresh-author-guides-and-examples/tasks.md) | 2/10 | Выполнить оставшуюся сверку руководств и примеров, затем их проверки по tasks |
+| Host UI | [`verify-claude-launch-choice-ui`](../../changes/verify-claude-launch-choice-ui/tasks.md) | 0/7 | DEFERRED: только после отдельного запроса владельца; реальные UI observations не заменять fixture |
+
+Закрытая цепочка `fix-chained-workflow-resume`: 14/14, release 0.13.75,
+пилот E succeeded; [release/pilot evidence](../../changes/archive/2026-10-02-fix-chained-workflow-resume/evidence.md).
+Это не открытая реализация и не приёмка SMSPlace merge/product QA.
+Light поставлен в 0.13.81, nested extension points — в 0.13.83,
+imports/layers и unified composition — в 0.13.85; открытые пункты их tasks
+обозначают недосверенную приёмку, а не отсутствие выпущенной capability.
+Свежие выпуски вплоть до 0.13.91 не закрывают эти checklist автоматически.
+
+Отдельные новые capabilities уже приняты и архивированы, не являются открытым backlog:
+- 0.13.89: scoped reviewed shared-schema migration; [задачи и границы](../../changes/archive/2026-11-09-migrate-revoked-shared-schemas/tasks.md), [released evidence](../../changes/archive/2026-11-09-migrate-revoked-shared-schemas/evidence/released-v0.13.89/README.md).
+- 0.13.90: project-owned compile parameters для объявленных schema limits; [задачи](../../changes/archive/2026-11-10-add-project-owned-compile-parameters/tasks.md), [released evidence](../../changes/archive/2026-11-10-add-project-owned-compile-parameters/evidence/released-v0.13.90/README.md).
+- 0.13.91: сохранённый выбор владельца для миграции общих схем конкретного launch и точной сборки; [задачи и границы](../../changes/archive/2026-11-10-remember-launch-schema-migration/tasks.md), [выпуск и проверка опубликованного binary](https://github.com/StenHigh/prifly/releases/tag/v0.13.91). Приёмка частной authority остаётся отдельной операцией владельца.
+Эти срезы не закрывают формальные P1/P2 gates и не являются поставкой новых consumer packages.
+
 
 Завершённые changes `separate-work-time-from-human-wait`,
 `add-local-run-monitor`, `workspace-tree-preparation-rollback`,
@@ -348,7 +378,7 @@ source ownership or future plan.
 
 ### Requirement: Исправление цепочки возобновлений имеет отдельную границу приёмки
 
-Delivery backlog SHALL учитывать `fix-chained-workflow-resume` как приоритетное исправление блокирующего дефекта существующего пути. Prerequisite — доступные sealed source Runs и доказательства префикса, существующие recovery/resumable contracts и текущий claim. Следующий шаг — воспроизведение цепочки без ИИ, исправление общего planner и выпуск проверенного бинарника. Прогресс SHALL храниться в tasks этого change; закрытие MUST различать инженерную регрессию, поставку и фактическое продолжение пилота SMSPlace #163.
+Delivery backlog SHALL учитывать `fix-chained-workflow-resume` как закрытое исправление: archived tasks 14/14, release 0.13.75 и пилот E succeeded. Повторная реализация не является следующим шагом. Evidence SHALL оставаться в archived change и различать инженерную регрессию, поставку и фактическое продолжение пилота SMSPlace #163; закрытие этого среза не означает merge или product QA потребителя.
 
 Проверка документа или зелёный fixture MUST NOT объявлять SMSPlace завершённым, закрывать независимый `retry-failed-stage-with-new-package` либо формальную приёмку P1/P2. Живой pilot SHALL использовать read-only prepare от текущего владельца дерева и отдельное проверенное разрешение start; evidence MUST называть installed build, Run IDs, transferred claim и фактический outcome.
 
@@ -370,14 +400,17 @@ Roadmap SHALL показывать следующие 14 направлений 
 Внутри группы указан порядок выбора новой работы; переход к следующей группе
 требует её prerequisites, а не молчаливого расширения текущего RC. Порядок MUST
 NOT отменять активные исправления или последовательную приёмку P1/P2.
-Статус каждого направления — «Запланировано; отдельная реализация и приёмка
-не объявлены». Наличие существующей части не означает готовность всего пути.
+Направления остаются планом развития, но отдельные части уже выполнены:
+`improve-workflow-authoring-readability` имеет завершённый checklist 11/11,
+а пакетные изменения читаемости выпущены workflows v1.54.0/v1.55.0.
+Оставшаяся навигация ведётся в `refresh-author-guides-and-examples`.
+Наличие принятой части не означает готовность всего направления или измеренного ускорения.
 
 **Ближайшая полезность и измерения.**
 
 | Направление | Prerequisite | Следующий шаг | Проверяемый результат |
 |---|---|---|---|
-| Читаемое авторство сценариев | Текущий YAML contract и существующие authoring references | Использовать `refresh-author-guides-and-examples` для навигации; отдельным authoring change сравнить структуру и формы записи одинаковых сценариев | Автор находит маршрут, инструкции, данные и остановки; contracts и совместимость сохранены |
+| Читаемое авторство сценариев | Текущий YAML contract и существующие authoring references | Завершить навигацию в `refresh-author-guides-and-examples`; использовать принятое сравнение `improve-workflow-authoring-readability`, не повторяя завершённую пакетную переработку | Автор находит маршрут, инструкции, данные и остановки; contracts и совместимость сохранены |
 | Понятный путь до результата и очередь внимания владельца | Существующие launch, decisions и read-only monitor; их активные changes | Проверить полный путь; отдельным change спроектировать общую очередь вопросов, блокировок и готового review | Владелец находит требующие его участия Runs, evidence и безопасное следующее действие; скрытое подтверждение невозможно |
 | Сравнение конфигураций на одинаковых задачах | Закреплённые задачи, исходные commits, критерии и реально доступные host configurations | Оформить отдельное исследование повторяемого сравнения; задачи и skills оставить в репозитории workflows | Результаты сравнимы по качеству, времени и известным расходам; unavailable и разброс видимы |
 | Учёт результата и участия владельца | Существующие timing/telemetry и определённый полезный результат сценария | Определить минимальный состав отчёта и пробелы текущих измерений отдельным change | Активное участие отличается от ожидания; принятый результат — от успешного процесса; неизвестные расходы — от нуля |
